@@ -62,6 +62,15 @@ pub struct ChartOptions {
     pub horizontal: bool,
 }
 
+/// Escape HTML special characters to prevent XSS.
+fn escape_html(text: &str) -> String {
+    text.replace('&', "&amp;")
+        .replace('<', "&lt;")
+        .replace('>', "&gt;")
+        .replace('"', "&quot;")
+        .replace('\'', "&#39;")
+}
+
 impl ChartSpec {
     /// Create a new chart specification.
     #[must_use]
@@ -89,7 +98,12 @@ impl ChartSpec {
     /// Generate HTML with embedded Chart.js.
     #[must_use]
     pub fn to_html(&self) -> String {
-        let json = serde_json::to_string(&self).unwrap_or_default();
+        // Escape title for HTML context and JSON for script context
+        let title = escape_html(&self.title);
+        let json = serde_json::to_string(&self)
+            .unwrap_or_default()
+            .replace("</", "<\\/"); // Prevent script tag breakout
+
         let chart_type = match self.chart_type {
             ChartKind::Bar => "bar",
             ChartKind::Line => "line",
@@ -129,7 +143,7 @@ impl ChartSpec {
     </script>
 </body>
 </html>"#,
-            title = self.title,
+            title = title,
             json = json,
             chart_type = chart_type,
         )
