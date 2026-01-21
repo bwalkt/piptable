@@ -1,0 +1,228 @@
+// piptable grammar
+// Combines VBA-like syntax with SQL
+
+// =============================================================================
+// Whitespace and Comments
+// =============================================================================
+
+WHITESPACE = _{ " " | "\t" | "\r" | "\n" }
+COMMENT = _{ "'" ~ (!"\n" ~ ANY)* }
+
+// =============================================================================
+// Program Structure
+// =============================================================================
+
+program = { SOI ~ statement* ~ EOI }
+
+statement = {
+    dim_stmt
+  | assignment_stmt
+  | if_stmt
+  | for_each_stmt
+  | for_stmt
+  | while_stmt
+  | function_def
+  | sub_def
+  | return_stmt
+  | call_stmt
+  | chart_stmt
+  | export_stmt
+  | expr_stmt
+}
+
+// =============================================================================
+// VBA Statements
+// =============================================================================
+
+dim_stmt = { "dim" ~ ident ~ type_hint? ~ "=" ~ expr }
+type_hint = { ":" ~ type_name }
+
+assignment_stmt = { lvalue ~ "=" ~ expr }
+lvalue = { ident ~ (field_access | array_index)* }
+
+if_stmt = {
+    "if" ~ expr ~ "then" ~
+    statement* ~
+    elseif_clause* ~
+    else_clause? ~
+    "end" ~ "if"
+}
+elseif_clause = { "elseif" ~ expr ~ "then" ~ statement* }
+else_clause = { "else" ~ statement* }
+
+for_each_stmt = {
+    "for" ~ "each" ~ ident ~ "in" ~ expr ~
+    statement* ~
+    "next" ~ ident?
+}
+
+for_stmt = {
+    "for" ~ ident ~ "=" ~ expr ~ "to" ~ expr ~ step_clause? ~
+    statement* ~
+    "next" ~ ident?
+}
+step_clause = { "step" ~ expr }
+
+while_stmt = { "while" ~ expr ~ statement* ~ "wend" }
+
+function_def = {
+    "async"? ~ "function" ~ ident ~ "(" ~ param_list? ~ ")" ~
+    statement* ~
+    "end" ~ "function"
+}
+
+sub_def = {
+    "async"? ~ "sub" ~ ident ~ "(" ~ param_list? ~ ")" ~
+    statement* ~
+    "end" ~ "sub"
+}
+
+param_list = { ident ~ ("," ~ ident)* }
+
+return_stmt = { "return" ~ expr? }
+
+call_stmt = { "call"? ~ ident ~ "(" ~ arg_list? ~ ")" }
+
+chart_stmt = {
+    "chart" ~ chart_type ~ string ~
+    chart_option* ~
+    "end" ~ "chart"
+}
+chart_type = { "bar" | "line" | "pie" | "scatter" | "area" }
+chart_option = { ident ~ ":" ~ expr }
+
+export_stmt = { "export" ~ expr ~ "to" ~ expr ~ with_clause? }
+with_clause = { "with" ~ object_literal }
+
+expr_stmt = { expr }
+
+// =============================================================================
+// Expressions
+// =============================================================================
+
+expr = { or_expr }
+or_expr = { and_expr ~ (("or" | "OR") ~ and_expr)* }
+and_expr = { not_expr ~ (("and" | "AND") ~ not_expr)* }
+not_expr = { ("not" | "NOT")? ~ comparison_expr }
+comparison_expr = { additive_expr ~ (comparison_op ~ additive_expr)? }
+comparison_op = { "=" | "!=" | "<>" | "<=" | ">=" | "<" | ">" | ^"is" ~ ^"not"? ~ ^"null" | ^"like" | ^"in" }
+additive_expr = { multiplicative_expr ~ (("+"|"-") ~ multiplicative_expr)* }
+multiplicative_expr = { unary_expr ~ (("*"|"/"|"%") ~ unary_expr)* }
+unary_expr = { ("-"|"+")? ~ postfix_expr }
+postfix_expr = { primary_expr ~ (field_access | array_index | type_assertion | call_args)* }
+
+field_access = { "->" ~ ident }
+array_index = { "[" ~ expr ~ "]" }
+type_assertion = { "::" ~ type_name }
+call_args = { "(" ~ arg_list? ~ ")" }
+
+primary_expr = {
+    literal
+  | query_expr
+  | fetch_expr
+  | ask_expr
+  | async_for_expr
+  | parallel_expr
+  | await_expr
+  | array_literal
+  | object_literal
+  | "(" ~ expr ~ ")"
+  | ident
+}
+
+// =============================================================================
+// Literals
+// =============================================================================
+
+literal = {
+    null
+  | boolean
+  | float
+  | integer
+  | string
+  | interval
+}
+
+null = { "null" | "NULL" }
+boolean = { "true" | "false" | "TRUE" | "FALSE" }
+integer = @{ "-"? ~ ASCII_DIGIT+ }
+float = @{ "-"? ~ ASCII_DIGIT+ ~ "." ~ ASCII_DIGIT+ }
+string = @{ "\"" ~ (!"\"" ~ ANY | "\\\"")* ~ "\"" }
+interval = { ^"interval" ~ integer ~ interval_unit }
+interval_unit = { ^"millisecond" | ^"second" | ^"minute" | ^"hour" | ^"day" | ^"week" | ^"month" | ^"year" | ^"milliseconds" | ^"seconds" | ^"minutes" | ^"hours" | ^"days" | ^"weeks" | ^"months" | ^"years" }
+
+array_literal = { "[" ~ (expr ~ ("," ~ expr)*)? ~ "]" }
+object_literal = { "{" ~ (object_field ~ ("," ~ object_field)*)? ~ "}" }
+object_field = { (ident | string) ~ ":" ~ expr }
+
+// =============================================================================
+// Special Expressions
+// =============================================================================
+
+query_expr = { "query" ~ "(" ~ sql_query ~ ")" }
+fetch_expr = { "fetch" ~ "(" ~ expr ~ ("," ~ expr)? ~ ")" }
+ask_expr = { "ask" ~ string ~ "from" ~ expr ~ (^"using" ~ (^"model")? ~ string)? }
+async_for_expr = { "async" ~ "for" ~ "each" ~ ident ~ "in" ~ expr ~ statement* ~ "end" ~ "async" }
+parallel_expr = { "parallel" ~ expr ~ ("," ~ expr)* ~ "end" ~ "parallel" }
+await_expr = { "await" ~ expr }
+
+// =============================================================================
+// SQL Query
+// =============================================================================
+
+sql_query = {
+    with_clause? ~
+    select_clause ~
+    from_clause? ~
+    join_clause* ~
+    where_clause? ~
+    group_by_clause? ~
+    having_clause? ~
+    order_by_clause? ~
+    limit_clause? ~
+    trigger_clause?
+}
+
+with_clause_sql = { ^"with" ~ ^"recursive"? ~ cte ~ ("," ~ cte)* }
+cte = { ident ~ ("(" ~ ident ~ ("," ~ ident)* ~ ")")? ~ ^"as" ~ "(" ~ sql_query ~ ")" }
+
+select_clause = { ^"select" ~ ^"distinct"? ~ select_list }
+select_list = { "*" | (select_item ~ ("," ~ select_item)*) }
+select_item = { expr ~ (^"as" ~ ident)? }
+
+from_clause = { ^"from" ~ table_ref ~ (^"as"? ~ ident)? }
+table_ref = {
+    table_function
+  | qualified_name
+  | string
+  | ^"stdin"
+  | "(" ~ sql_query ~ ")"
+}
+qualified_name = { ident ~ ("." ~ ident)* }
+table_function = { ident ~ "(" ~ func_arg_list? ~ ")" }
+func_arg_list = { func_arg ~ ("," ~ func_arg)* }
+func_arg = { (ident ~ "=>")? ~ expr }
+
+join_clause = { join_type? ~ ^"join" ~ table_ref ~ (^"as"? ~ ident)? ~ (^"on" ~ expr)? }
+join_type = { ^"inner" | ^"left" ~ ^"outer"? | ^"right" ~ ^"outer"? | ^"cross" }
+
+where_clause = { ^"where" ~ expr }
+group_by_clause = { ^"group" ~ ^"by" ~ expr ~ ("," ~ expr)* }
+having_clause = { ^"having" ~ expr }
+order_by_clause = { ^"order" ~ ^"by" ~ order_item ~ ("," ~ order_item)* }
+order_item = { expr ~ (^"asc" | ^"desc")? }
+limit_clause = { ^"limit" ~ expr ~ (^"offset" ~ expr)? }
+trigger_clause = { ^"trigger" ~ (^"counting" ~ integer | ^"on" ~ ^"watermark" | ^"on" ~ ^"end" ~ ^"of" ~ ^"stream") }
+
+// =============================================================================
+// Identifiers and Types
+// =============================================================================
+
+ident = @{ (ASCII_ALPHA | "_") ~ (ASCII_ALPHANUMERIC | "_")* }
+type_name = { ^"int" | ^"float" | ^"string" | ^"bool" | ^"timestamp" | ^"duration" | ^"array" | ^"object" | ^"table" }
+
+// =============================================================================
+// Arguments
+// =============================================================================
+
+arg_list = { expr ~ ("," ~ expr)* }

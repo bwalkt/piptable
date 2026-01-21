@@ -1,0 +1,24 @@
+# Build output
+/target/
+**/*.rs.bk
+
+# Cargo (Cargo.lock is committed for reproducible builds)
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Environment
+.env
+.env.local
+*.pem
+
+# Debug
+*.log
+*.d
