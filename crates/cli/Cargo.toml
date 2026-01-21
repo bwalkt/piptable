@@ -1,0 +1,19 @@
+[package]
+name = "piptable-cli"
+description = "Command-line interface for piptable"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+
+[[bin]]
+name = "pip"
+path = "src/main.rs"
+
+[dependencies]
+tokio = { workspace = true }
+clap = { workspace = true }
+
+[lints]
+workspace = true

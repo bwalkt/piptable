@@ -1,0 +1,23 @@
+[package]
+name = "piptable-sql"
+description = "SQL execution engine using Apache DataFusion"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+
+[dependencies]
+piptable-core = { workspace = true }
+datafusion = { workspace = true }
+arrow = { workspace = true }
+tokio = { workspace = true }
+async-trait = { workspace = true }
+thiserror = { workspace = true }
+tracing = { workspace = true }
+
+[dev-dependencies]
+tempfile = { workspace = true }
+
+[lints]
+workspace = true

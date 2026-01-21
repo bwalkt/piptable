@@ -1,0 +1,86 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/core",
+    "crates/parser",
+    "crates/sql",
+    "crates/http",
+    "crates/interpreter",
+    "crates/viz",
+    "crates/cli",
+    "crates/server",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+repository = "https://github.com/bwalkt/piptable"
+authors = ["piptable contributors"]
+
+[workspace.dependencies]
+# Async runtime
+tokio = { version = "1", features = ["full"] }
+
+# SQL Engine
+datafusion = "44"
+arrow = { version = "53", features = ["prettyprint"] }
+
+# Parser
+pest = "2.7"
+pest_derive = "2.7"
+
+# HTTP client
+reqwest = { version = "0.12", features = ["json", "http2"] }
+
+# CLI
+clap = { version = "4", features = ["derive"] }
+
+# Web server
+axum = "0.7"
+tower = "0.5"
+tower-http = { version = "0.6", features = ["cors", "trace"] }
+
+# Serialization
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+serde_yaml = "0.9"
+
+# Error handling
+thiserror = "2"
+anyhow = "1"
+
+# Logging
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+# Utilities
+async-trait = "0.1"
+futures = "0.3"
+chrono = { version = "0.4", features = ["serde"] }
+uuid = { version = "1", features = ["v4", "serde"] }
+colored = "2"
+rustyline = "14"
+
+# Export formats
+rust_xlsxwriter = "0.79"
+csv = "1.3"
+
+# Testing
+wiremock = "0.6"
+tempfile = "3"
+
+# Internal crates
+piptable-core = { path = "crates/core" }
+piptable-parser = { path = "crates/parser" }
+piptable-sql = { path = "crates/sql" }
+piptable-http = { path = "crates/http" }
+piptable-interpreter = { path = "crates/interpreter" }
+piptable-viz = { path = "crates/viz" }
+
+[workspace.lints.rust]
+unsafe_code = "forbid"
+
+[workspace.lints.clippy]
+all = "warn"
+pedantic = "warn"
