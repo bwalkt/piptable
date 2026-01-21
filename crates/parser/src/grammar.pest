@@ -148,7 +148,10 @@ null = { "null" | "NULL" }
 boolean = { "true" | "false" | "TRUE" | "FALSE" }
 integer = @{ "-"? ~ ASCII_DIGIT+ }
 float = @{ "-"? ~ ASCII_DIGIT+ ~ "." ~ ASCII_DIGIT+ }
-string = @{ "\"" ~ (!"\"" ~ ANY | "\\\"")* ~ "\"" }
+string = @{ "\"" ~ string_content* ~ "\"" }
+string_content = @{ escape_seq | (!("\"" | "\\") ~ ANY) }
+escape_seq = @{ "\\" ~ ("\"" | "\\" | "/" | "n" | "r" | "t" | "b" | "f" | unicode_escape) }
+unicode_escape = @{ "u" ~ ASCII_HEX_DIGIT{4} }
 interval = { ^"interval" ~ integer ~ interval_unit }
 interval_unit = { ^"millisecond" | ^"second" | ^"minute" | ^"hour" | ^"day" | ^"week" | ^"month" | ^"year" | ^"milliseconds" | ^"seconds" | ^"minutes" | ^"hours" | ^"days" | ^"weeks" | ^"months" | ^"years" }
 
