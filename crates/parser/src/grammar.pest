@@ -171,7 +171,7 @@ await_expr = { "await" ~ expr }
 // =============================================================================
 
 sql_query = {
-    with_clause? ~
+    with_clause_sql? ~
     select_clause ~
     from_clause? ~
     join_clause* ~
