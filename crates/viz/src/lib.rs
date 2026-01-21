@@ -112,6 +112,8 @@ impl ChartSpec {
             ChartKind::Area => "line", // Area is line with fill
         };
 
+        let is_area = matches!(self.chart_type, ChartKind::Area);
+
         format!(
             r#"<!DOCTYPE html>
 <html>
@@ -123,6 +125,10 @@ impl ChartSpec {
     <canvas id="chart"></canvas>
     <script>
         const spec = {json};
+        const isArea = {is_area};
+        if (isArea) {{
+            spec.data.datasets = spec.data.datasets.map(ds => ({{ ...ds, fill: true }}));
+        }}
         const ctx = document.getElementById('chart').getContext('2d');
         new Chart(ctx, {{
             type: '{chart_type}',
@@ -146,6 +152,7 @@ impl ChartSpec {
             title = title,
             json = json,
             chart_type = chart_type,
+            is_area = is_area,
         )
     }
 }
