@@ -104,8 +104,9 @@ expr = { or_expr }
 or_expr = { and_expr ~ (("or" | "OR") ~ and_expr)* }
 and_expr = { not_expr ~ (("and" | "AND") ~ not_expr)* }
 not_expr = { ("not" | "NOT")? ~ comparison_expr }
-comparison_expr = { additive_expr ~ (comparison_op ~ additive_expr)? }
-comparison_op = { "=" | "!=" | "<>" | "<=" | ">=" | "<" | ">" | ^"is" ~ ^"not"? ~ ^"null" | ^"like" | ^"in" }
+comparison_expr = { additive_expr ~ (is_null_check | (comparison_op ~ additive_expr))? }
+is_null_check = { ^"is" ~ ^"not"? ~ ^"null" }
+comparison_op = { "=" | "!=" | "<>" | "<=" | ">=" | "<" | ">" | ^"like" | ^"in" }
 additive_expr = { multiplicative_expr ~ (("+"|"-") ~ multiplicative_expr)* }
 multiplicative_expr = { unary_expr ~ (("*"|"/"|"%") ~ unary_expr)* }
 unary_expr = { ("-"|"+")? ~ postfix_expr }
