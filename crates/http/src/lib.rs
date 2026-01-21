@@ -1,8 +1,9 @@
 //! # piptable-http
 //!
-//! HTTP/2 client for fetching data from APIs.
+//! HTTP client for fetching data from APIs.
 //!
 //! This crate provides async HTTP fetching with JSON parsing.
+//! Supports HTTP/2 via ALPN negotiation with fallback to HTTP/1.1.
 
 use piptable_core::{PipError, PipResult, Value};
 use reqwest::Client;
@@ -36,14 +37,13 @@ pub enum HttpMethod {
 }
 
 impl HttpClient {
-    /// Create a new HTTP client with HTTP/2 support.
+    /// Create a new HTTP client with HTTP/2 support via ALPN negotiation.
     ///
     /// # Errors
     ///
     /// Returns error if client creation fails.
     pub fn new() -> PipResult<Self> {
         let client = Client::builder()
-            .http2_prior_knowledge()
             .timeout(Duration::from_secs(30))
             .build()
             .map_err(|e| PipError::Http(e.to_string()))?;
