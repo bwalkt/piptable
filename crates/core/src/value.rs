@@ -264,14 +264,17 @@ impl Value {
     ///
     /// # Errors
     ///
-    /// Returns error if value contains Table or Function which cannot be serialized.
+    /// Returns error if value contains:
+    /// - Table or Function (not representable in JSON)
+    /// - Non-finite floats (NaN, Infinity)
     pub fn to_json(&self) -> Result<serde_json::Value, &'static str> {
         match self {
             Self::Null => Ok(serde_json::Value::Null),
             Self::Bool(b) => Ok(serde_json::Value::Bool(*b)),
             Self::Int(n) => Ok(serde_json::Value::Number((*n).into())),
-            Self::Float(f) => Ok(serde_json::Number::from_f64(*f)
-                .map_or(serde_json::Value::Null, serde_json::Value::Number)),
+            Self::Float(f) => serde_json::Number::from_f64(*f)
+                .map(serde_json::Value::Number)
+                .ok_or("Non-finite float values (NaN/Infinity) are not JSON-serializable"),
             Self::String(s) => Ok(serde_json::Value::String(s.clone())),
             Self::Array(a) => {
                 let items: Result<Vec<_>, _> = a.iter().map(Self::to_json).collect();
