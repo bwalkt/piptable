@@ -119,9 +119,9 @@ impl Value {
 
     /// Try to convert to array.
     #[must_use]
-    pub fn as_array(&self) -> Option<&Vec<Value>> {
+    pub fn as_array(&self) -> Option<&[Value]> {
         match self {
-            Self::Array(a) => Some(a),
+            Self::Array(a) => Some(a.as_slice()),
             _ => None,
         }
     }
@@ -137,9 +137,9 @@ impl Value {
 
     /// Try to convert to table.
     #[must_use]
-    pub fn as_table(&self) -> Option<&Vec<Arc<RecordBatch>>> {
+    pub fn as_table(&self) -> Option<&[Arc<RecordBatch>]> {
         match self {
-            Self::Table(t) => Some(t),
+            Self::Table(t) => Some(t.as_slice()),
             _ => None,
         }
     }

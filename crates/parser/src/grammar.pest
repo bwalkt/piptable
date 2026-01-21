@@ -101,9 +101,9 @@ expr_stmt = { expr }
 // =============================================================================
 
 expr = { or_expr }
-or_expr = { and_expr ~ (("or" | "OR") ~ and_expr)* }
-and_expr = { not_expr ~ (("and" | "AND") ~ not_expr)* }
-not_expr = { ("not" | "NOT")? ~ comparison_expr }
+or_expr = { and_expr ~ (^"or" ~ and_expr)* }
+and_expr = { not_expr ~ (^"and" ~ not_expr)* }
+not_expr = { ^"not"? ~ comparison_expr }
 comparison_expr = { additive_expr ~ (is_null_check | (comparison_op ~ additive_expr))? }
 is_null_check = { ^"is" ~ ^"not"? ~ ^"null" }
 comparison_op = { "=" | "!=" | "<>" | "<=" | ">=" | "<" | ">" | ^"like" | ^"in" }
