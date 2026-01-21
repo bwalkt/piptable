@@ -4,10 +4,11 @@
 //!
 //! This crate uses [pest](https://pest.rs) for parsing.
 
-use pest_derive::Parser;
-use piptable_core::{PipResult, Program};
+use pest::Parser;
+use pest_derive::Parser as PestParser;
+use piptable_core::{PipError, PipResult, Program};
 
-#[derive(Parser)]
+#[derive(PestParser)]
 #[grammar = "grammar.pest"]
 struct PiptableParser;
 
@@ -20,8 +21,12 @@ impl PipParser {
     /// # Errors
     ///
     /// Returns a `PipError::Parse` if the input is invalid.
-    pub fn parse_str(_input: &str) -> PipResult<Program> {
-        // TODO: Implement parsing logic
+    pub fn parse_str(input: &str) -> PipResult<Program> {
+        // Validate syntax against grammar
+        PiptableParser::parse(Rule::program, input)
+            .map_err(|e| PipError::parse(0, 0, e.to_string()))?;
+
+        // TODO: Build AST from pest pairs
         Ok(Program::new())
     }
 }
@@ -34,5 +39,11 @@ mod tests {
     fn test_parse_empty() {
         let result = PipParser::parse_str("");
         assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_parse_invalid_syntax() {
+        let result = PipParser::parse_str("!@#$%^ invalid");
+        assert!(result.is_err());
     }
 }
