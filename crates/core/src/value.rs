@@ -215,9 +215,9 @@ impl Serialize for Value {
             Self::Table(_) => Err(serde::ser::Error::custom(
                 "Table values are not JSON-serializable",
             )),
-            Self::Function { .. } => Err(serde::ser::Error::custom(
-                "Function values are not JSON-serializable",
-            )),
+            Self::Function { name, .. } => Err(serde::ser::Error::custom(format!(
+                "Function '{name}' is not JSON-serializable"
+            ))),
         }
     }
 }
