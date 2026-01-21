@@ -212,8 +212,12 @@ impl Serialize for Value {
             Self::String(s) => serializer.serialize_str(s),
             Self::Array(a) => a.serialize(serializer),
             Self::Object(o) => o.serialize(serializer),
-            Self::Table(_) => serializer.serialize_str("[Table]"),
-            Self::Function { name, .. } => serializer.serialize_str(&format!("[Function: {name}]")),
+            Self::Table(_) => Err(serde::ser::Error::custom(
+                "Table values are not JSON-serializable",
+            )),
+            Self::Function { .. } => Err(serde::ser::Error::custom(
+                "Function values are not JSON-serializable",
+            )),
         }
     }
 }
@@ -257,21 +261,31 @@ impl Value {
     }
 
     /// Convert to `serde_json::Value`.
-    #[must_use]
-    pub fn to_json(&self) -> serde_json::Value {
+    ///
+    /// # Errors
+    ///
+    /// Returns error if value contains Table or Function which cannot be serialized.
+    pub fn to_json(&self) -> Result<serde_json::Value, &'static str> {
         match self {
-            Self::Null => serde_json::Value::Null,
-            Self::Bool(b) => serde_json::Value::Bool(*b),
-            Self::Int(n) => serde_json::Value::Number((*n).into()),
-            Self::Float(f) => serde_json::Number::from_f64(*f)
-                .map_or(serde_json::Value::Null, |n| serde_json::Value::Number(n)),
-            Self::String(s) => serde_json::Value::String(s.clone()),
-            Self::Array(a) => serde_json::Value::Array(a.iter().map(Self::to_json).collect()),
-            Self::Object(o) => {
-                serde_json::Value::Object(o.iter().map(|(k, v)| (k.clone(), v.to_json())).collect())
+            Self::Null => Ok(serde_json::Value::Null),
+            Self::Bool(b) => Ok(serde_json::Value::Bool(*b)),
+            Self::Int(n) => Ok(serde_json::Value::Number((*n).into())),
+            Self::Float(f) => Ok(serde_json::Number::from_f64(*f)
+                .map_or(serde_json::Value::Null, serde_json::Value::Number)),
+            Self::String(s) => Ok(serde_json::Value::String(s.clone())),
+            Self::Array(a) => {
+                let items: Result<Vec<_>, _> = a.iter().map(Self::to_json).collect();
+                Ok(serde_json::Value::Array(items?))
             }
-            Self::Table(_) => serde_json::Value::String("[Table]".to_string()),
-            Self::Function { name, .. } => serde_json::Value::String(format!("[Function: {name}]")),
+            Self::Object(o) => {
+                let items: Result<serde_json::Map<_, _>, _> = o
+                    .iter()
+                    .map(|(k, v)| v.to_json().map(|val| (k.clone(), val)))
+                    .collect();
+                Ok(serde_json::Value::Object(items?))
+            }
+            Self::Table(_) => Err("Table values are not JSON-serializable"),
+            Self::Function { .. } => Err("Function values are not JSON-serializable"),
         }
     }
 }
