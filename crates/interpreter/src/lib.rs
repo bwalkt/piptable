@@ -213,6 +213,10 @@ impl Interpreter {
                     .as_int()
                     .ok_or_else(|| PipError::runtime(line, "For loop step must be integer"))?;
 
+                if step_int == 0 {
+                    return Err(PipError::runtime(line, "For loop step cannot be zero"));
+                }
+
                 self.push_scope().await;
                 let mut i = start_int;
                 while (step_int > 0 && i <= end_int) || (step_int < 0 && i >= end_int) {
@@ -398,13 +402,17 @@ impl Interpreter {
                     .as_str()
                     .ok_or_else(|| PipError::runtime(0, "Fetch URL must be a string"))?;
 
-                let opts = match options {
-                    Some(o) => Some(self.eval_expr(o).await?),
+                // TODO: Implement proper conversion from Value to FetchOptions
+                // For now, options are not fully supported
+                let fetch_opts = match options {
+                    Some(o) => {
+                        // Evaluate to catch any errors, but warn that options aren't fully implemented
+                        let _ = self.eval_expr(o).await?;
+                        tracing::warn!("Fetch options are not yet fully implemented");
+                        Some(piptable_http::FetchOptions::default())
+                    }
                     None => None,
                 };
-
-                // Convert options Value to FetchOptions if provided
-                let fetch_opts = opts.map(|_| piptable_http::FetchOptions::default());
 
                 self.http.fetch(url_str, fetch_opts).await
             }
@@ -437,7 +445,9 @@ impl Interpreter {
             }
 
             Expr::Parallel { expressions } => {
-                // Evaluate all expressions (could be parallelized with tokio::join!)
+                // TODO: Currently evaluates sequentially. Should use tokio::join! or
+                // futures::future::try_join_all for true parallel execution.
+                // This requires resolving borrow checker issues with &mut self.
                 let mut results = Vec::with_capacity(expressions.len());
                 for expr in expressions {
                     results.push(self.eval_expr(expr).await?);
@@ -1363,7 +1373,13 @@ impl Interpreter {
             }
             DataType::UInt64 => {
                 let arr = array.as_any().downcast_ref::<UInt64Array>().unwrap();
-                Value::Int(arr.value(idx) as i64)
+                let val = arr.value(idx);
+                if val > i64::MAX as u64 {
+                    // Large u64 values that don't fit in i64 are converted to float
+                    Value::Float(val as f64)
+                } else {
+                    Value::Int(val as i64)
+                }
             }
             DataType::Float32 => {
                 let arr = array.as_any().downcast_ref::<Float32Array>().unwrap();
