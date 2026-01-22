@@ -1452,7 +1452,11 @@ impl Interpreter {
                 match arr_val {
                     Value::Array(mut items) => {
                         let idx_usize = if idx_int < 0 {
-                            (items.len() as i64 + idx_int) as usize
+                            let adjusted = items.len() as i64 + idx_int;
+                            if adjusted < 0 {
+                                return Err(PipError::runtime(line, "Array index out of bounds"));
+                            }
+                            adjusted as usize
                         } else {
                             idx_int as usize
                         };
