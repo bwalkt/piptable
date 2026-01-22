@@ -195,7 +195,8 @@ sql_query = {
 with_clause_sql = { ^"with" ~ ^"recursive"? ~ cte ~ ("," ~ cte)* }
 cte = { ident ~ ("(" ~ ident ~ ("," ~ ident)* ~ ")")? ~ ^"as" ~ "(" ~ sql_query ~ ")" }
 
-select_clause = { ^"select" ~ ^"distinct"? ~ select_list }
+select_clause = { ^"select" ~ distinct_kw? ~ select_list }
+distinct_kw = { ^"distinct" }
 select_list = { "*" | (select_item ~ ("," ~ select_item)*) }
 select_item = { expr ~ (^"as" ~ ident)? }
 

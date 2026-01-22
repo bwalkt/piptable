@@ -622,17 +622,24 @@ fn build_postfix_expr(pair: Pair<Rule>) -> BuildResult<Expr> {
                 };
             }
             Rule::call_args => {
-                if let Expr::Variable(name) = expr {
-                    let mut args = Vec::new();
-                    if let Some(arg_list) = postfix.into_inner().next() {
-                        for arg in arg_list.into_inner() {
-                            args.push(build_expr(arg)?);
-                        }
+                let mut args = Vec::new();
+                if let Some(arg_list) = postfix.into_inner().next() {
+                    for arg in arg_list.into_inner() {
+                        args.push(build_expr(arg)?);
                     }
+                }
+                if let Expr::Variable(name) = expr {
                     expr = Expr::Call {
                         function: name,
                         args,
                     };
+                } else {
+                    // Chained calls like getFunc()() require AST support for callee expressions
+                    return Err(BuildError::new(
+                        0,
+                        0,
+                        "Function calls on non-identifier expressions are not yet supported",
+                    ));
                 }
             }
             _ => {}
@@ -924,19 +931,18 @@ fn build_cte(pair: Pair<Rule>) -> BuildResult<piptable_core::Cte> {
     Ok(piptable_core::Cte {
         name,
         columns,
-        query: query.unwrap(),
+        query: query.expect("CTE must contain a query"),
     })
 }
 
 fn build_select_clause(pair: Pair<Rule>) -> BuildResult<SelectClause> {
-    // Check for DISTINCT by looking at the matched text (literals don't create child pairs)
-    let text = pair.as_str().to_uppercase();
-    let distinct = text.contains("DISTINCT");
-
+    let mut distinct = false;
     let mut items = Vec::new();
 
     for inner in pair.into_inner() {
-        if inner.as_rule() == Rule::select_list {
+        if inner.as_rule() == Rule::distinct_kw {
+            distinct = true;
+        } else if inner.as_rule() == Rule::select_list {
             // Check if it's SELECT * (no child pairs for literal *)
             let list_text = inner.as_str().trim();
             if list_text == "*" {
@@ -1112,7 +1118,10 @@ fn build_order_by_item(pair: Pair<Rule>) -> BuildResult<OrderByItem> {
 fn build_fetch_expr(pair: Pair<Rule>) -> BuildResult<Expr> {
     let mut inner = pair.into_inner();
     let url = build_expr(inner.next().unwrap())?;
-    let options = inner.next().map(|p| Box::new(build_expr(p).unwrap()));
+    let options = inner
+        .next()
+        .map(|p| build_expr(p).map(Box::new))
+        .transpose()?;
 
     Ok(Expr::Fetch {
         url: Box::new(url),

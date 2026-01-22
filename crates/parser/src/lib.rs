@@ -41,17 +41,37 @@ impl PipParser {
     /// Returns a `PipError::Parse` if the SQL is invalid.
     pub fn parse_sql(input: &str) -> PipResult<SqlQuery> {
         // Wrap in query() to match grammar
+        const WRAPPER_PREFIX_LEN: usize = 6; // "query("
         let wrapped = format!("query({input})");
         let pairs = PiptableParser::parse(Rule::query_expr, &wrapped).map_err(|e| {
             let (line, col) = e.line_col.to_pos().unwrap_or((1, 1));
-            PipError::parse(line, col, e.to_string())
+            // Adjust column for the wrapper prefix on line 1
+            let adjusted_col = if line == 1 && col > WRAPPER_PREFIX_LEN {
+                col - WRAPPER_PREFIX_LEN
+            } else {
+                col.max(1)
+            };
+            PipError::parse(line, adjusted_col, e.to_string())
         })?;
 
-        let query_pair = pairs.into_iter().next().unwrap();
-        let sql_query_pair = query_pair.into_inner().next().unwrap();
+        let query_pair = pairs
+            .into_iter()
+            .next()
+            .expect("query_expr should produce at least one pair");
+        let sql_query_pair = query_pair
+            .into_inner()
+            .next()
+            .expect("query_expr should contain sql_query");
 
-        builder::build_sql_query(sql_query_pair)
-            .map_err(|e| PipError::parse(e.line, e.column, e.message))
+        builder::build_sql_query(sql_query_pair).map_err(|e| {
+            // Adjust column for builder errors on line 1
+            let adjusted_col = if e.line == 1 && e.column > WRAPPER_PREFIX_LEN {
+                e.column - WRAPPER_PREFIX_LEN
+            } else {
+                e.column.max(1)
+            };
+            PipError::parse(e.line, adjusted_col, e.message)
+        })
     }
 }
 
@@ -306,7 +326,7 @@ mod tests {
         assert!(result.is_err());
         let err = result.unwrap_err();
         // Error should have location info
-        assert!(err.to_string().len() > 0);
+        assert!(!err.to_string().is_empty());
     }
 
     // ========================================================================
