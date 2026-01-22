@@ -179,7 +179,7 @@ impl Interpreter {
                 self.push_scope().await;
                 let mut loop_result: PipResult<()> = Ok(());
                 for item in items {
-                    self.set_var(&variable, item).await;
+                    self.declare_var(&variable, item).await;
                     if let Err(e) = self.eval_block(&body).await {
                         loop_result = Err(e);
                         break;
@@ -227,7 +227,7 @@ impl Interpreter {
                 let mut loop_result: PipResult<()> = Ok(());
                 let mut i = start_int;
                 while (step_int > 0 && i <= end_int) || (step_int < 0 && i >= end_int) {
-                    self.set_var(&variable, Value::Int(i)).await;
+                    self.declare_var(&variable, Value::Int(i)).await;
                     if let Err(e) = self.eval_block(&body).await {
                         loop_result = Err(e);
                         break;
@@ -366,6 +366,19 @@ impl Interpreter {
             }
 
             Expr::Binary { left, op, right } => {
+                // Short-circuit evaluation for AND/OR
+                if matches!(op, BinaryOp::And | BinaryOp::Or) {
+                    let left_val = self.eval_expr(left).await?;
+                    if matches!(op, BinaryOp::And) {
+                        if !left_val.is_truthy() {
+                            return Ok(Value::Bool(false));
+                        }
+                    } else if left_val.is_truthy() {
+                        return Ok(Value::Bool(true));
+                    }
+                    let right_val = self.eval_expr(right).await?;
+                    return Ok(Value::Bool(right_val.is_truthy()));
+                }
                 let left_val = self.eval_expr(left).await?;
                 let right_val = self.eval_expr(right).await?;
                 self.eval_binary_op(&left_val, *op, &right_val)
@@ -983,7 +996,7 @@ impl Interpreter {
                     // Create new scope with parameters
                     self.push_scope().await;
                     for (param, arg) in func.params.iter().zip(args) {
-                        self.set_var(param, arg).await;
+                        self.declare_var(param, arg).await;
                     }
 
                     // Execute function body
@@ -1549,7 +1562,8 @@ impl Interpreter {
         }
     }
 
-    /// Set a variable in the current scope.
+    /// Set a variable, searching scopes for existing bindings first.
+    /// Use this for assignment statements where we want to update existing variables.
     pub async fn set_var(&self, name: &str, value: Value) {
         let mut scopes = self.scopes.write().await;
         // Check if variable exists in any scope (for reassignment)
@@ -1560,6 +1574,15 @@ impl Interpreter {
             }
         }
         // Otherwise, insert in current (top) scope
+        if let Some(scope) = scopes.last_mut() {
+            scope.insert(name.to_string(), value);
+        }
+    }
+
+    /// Declare a variable in the current scope only (shadows outer bindings).
+    /// Use this for loop variables and function parameters.
+    async fn declare_var(&self, name: &str, value: Value) {
+        let mut scopes = self.scopes.write().await;
         if let Some(scope) = scopes.last_mut() {
             scope.insert(name.to_string(), value);
         }
