@@ -4,9 +4,13 @@
 //!
 //! This crate uses [pest](https://pest.rs) for parsing.
 
+mod builder;
+
 use pest::Parser;
 use pest_derive::Parser as PestParser;
-use piptable_core::{PipError, PipResult, Program};
+use piptable_core::{PipError, PipResult, Program, SqlQuery};
+
+pub use builder::BuildError;
 
 #[derive(PestParser)]
 #[grammar = "grammar.pest"]
@@ -22,28 +26,367 @@ impl PipParser {
     ///
     /// Returns a `PipError::Parse` if the input is invalid.
     pub fn parse_str(input: &str) -> PipResult<Program> {
-        // Validate syntax against grammar
-        PiptableParser::parse(Rule::program, input)
-            .map_err(|e| PipError::parse(0, 0, e.to_string()))?;
+        let pairs = PiptableParser::parse(Rule::program, input).map_err(|e| {
+            let (line, col) = e.line_col.to_pos().unwrap_or((1, 1));
+            PipError::parse(line, col, e.to_string())
+        })?;
 
-        // TODO: Build AST from pest pairs
-        Ok(Program::new())
+        builder::build_program(pairs).map_err(|e| PipError::parse(e.line, e.column, e.message))
+    }
+
+    /// Parse a SQL query string into AST.
+    ///
+    /// # Errors
+    ///
+    /// Returns a `PipError::Parse` if the SQL is invalid.
+    pub fn parse_sql(input: &str) -> PipResult<SqlQuery> {
+        // Wrap in query() to match grammar
+        let wrapped = format!("query({input})");
+        let pairs = PiptableParser::parse(Rule::query_expr, &wrapped).map_err(|e| {
+            let (line, col) = e.line_col.to_pos().unwrap_or((1, 1));
+            PipError::parse(line, col, e.to_string())
+        })?;
+
+        let query_pair = pairs.into_iter().next().unwrap();
+        let sql_query_pair = query_pair.into_inner().next().unwrap();
+
+        builder::build_sql_query(sql_query_pair)
+            .map_err(|e| PipError::parse(e.line, e.column, e.message))
+    }
+}
+
+/// Extension trait for pest error line/column extraction.
+trait LineColExt {
+    fn to_pos(&self) -> Option<(usize, usize)>;
+}
+
+impl LineColExt for pest::error::LineColLocation {
+    fn to_pos(&self) -> Option<(usize, usize)> {
+        match self {
+            pest::error::LineColLocation::Pos((line, col)) => Some((*line, *col)),
+            pest::error::LineColLocation::Span((line, col), _) => Some((*line, *col)),
+        }
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use piptable_core::{BinaryOp, Expr, Literal, SortDirection, Statement, TableRef};
+
+    // ========================================================================
+    // Basic parsing tests
+    // ========================================================================
 
     #[test]
     fn test_parse_empty() {
         let result = PipParser::parse_str("");
         assert!(result.is_ok());
+        assert!(result.unwrap().statements.is_empty());
     }
 
     #[test]
     fn test_parse_invalid_syntax() {
         let result = PipParser::parse_str("!@#$%^ invalid");
         assert!(result.is_err());
+    }
+
+    // ========================================================================
+    // SELECT tests (Issue #15)
+    // ========================================================================
+
+    #[test]
+    fn parse_select_star() {
+        let sql = "SELECT * FROM users";
+        let query = PipParser::parse_sql(sql).unwrap();
+        assert_eq!(query.select.items.len(), 1);
+        assert!(matches!(
+            &query.select.items[0].expr,
+            Expr::Variable(name) if name == "*"
+        ));
+    }
+
+    #[test]
+    fn parse_select_columns() {
+        let sql = "SELECT a, b, c FROM users";
+        let query = PipParser::parse_sql(sql).unwrap();
+        assert_eq!(query.select.items.len(), 3);
+    }
+
+    #[test]
+    fn parse_select_with_alias() {
+        let sql = "SELECT a AS col_a, b AS col_b FROM t";
+        let query = PipParser::parse_sql(sql).unwrap();
+        assert_eq!(query.select.items[0].alias, Some("col_a".to_string()));
+        assert_eq!(query.select.items[1].alias, Some("col_b".to_string()));
+    }
+
+    #[test]
+    fn parse_select_expressions() {
+        let sql = "SELECT a + b, c * 2 FROM t";
+        let query = PipParser::parse_sql(sql).unwrap();
+        assert_eq!(query.select.items.len(), 2);
+        // First item should be a binary expression
+        assert!(matches!(&query.select.items[0].expr, Expr::Binary { .. }));
+    }
+
+    #[test]
+    fn parse_select_distinct() {
+        let sql = "SELECT DISTINCT a, b FROM t";
+        let query = PipParser::parse_sql(sql).unwrap();
+        assert!(query.select.distinct);
+    }
+
+    // ========================================================================
+    // FROM tests (Issue #15)
+    // ========================================================================
+
+    #[test]
+    fn parse_from_identifier() {
+        let sql = "SELECT * FROM users";
+        let query = PipParser::parse_sql(sql).unwrap();
+        let from = query.from.unwrap();
+        assert!(matches!(from.source, TableRef::Table(name) if name == "users"));
+    }
+
+    #[test]
+    fn parse_from_file_path() {
+        let sql = r#"SELECT * FROM "data.csv""#;
+        let query = PipParser::parse_sql(sql).unwrap();
+        let from = query.from.unwrap();
+        assert!(matches!(from.source, TableRef::File(path) if path == "data.csv"));
+    }
+
+    #[test]
+    fn parse_from_with_alias() {
+        let sql = "SELECT * FROM users u";
+        let query = PipParser::parse_sql(sql).unwrap();
+        let from = query.from.unwrap();
+        assert_eq!(from.alias, Some("u".to_string()));
+    }
+
+    // ========================================================================
+    // WHERE tests (Issue #15)
+    // ========================================================================
+
+    #[test]
+    fn parse_where_simple() {
+        let sql = "SELECT * FROM t WHERE x = 10";
+        let query = PipParser::parse_sql(sql).unwrap();
+        assert!(query.where_clause.is_some());
+    }
+
+    #[test]
+    fn parse_where_and() {
+        let sql = "SELECT * FROM t WHERE x > 10 AND y < 20";
+        let query = PipParser::parse_sql(sql).unwrap();
+        let where_expr = query.where_clause.unwrap();
+        assert!(matches!(
+            *where_expr,
+            Expr::Binary {
+                op: BinaryOp::And,
+                ..
+            }
+        ));
+    }
+
+    #[test]
+    fn parse_where_or() {
+        let sql = "SELECT * FROM t WHERE x = 1 OR x = 2";
+        let query = PipParser::parse_sql(sql).unwrap();
+        let where_expr = query.where_clause.unwrap();
+        assert!(matches!(
+            *where_expr,
+            Expr::Binary {
+                op: BinaryOp::Or,
+                ..
+            }
+        ));
+    }
+
+    #[test]
+    fn parse_where_comparison_ops() {
+        let cases = [
+            ("SELECT * FROM t WHERE x = 1", BinaryOp::Eq),
+            ("SELECT * FROM t WHERE x != 1", BinaryOp::Ne),
+            ("SELECT * FROM t WHERE x <> 1", BinaryOp::Ne),
+            ("SELECT * FROM t WHERE x < 1", BinaryOp::Lt),
+            ("SELECT * FROM t WHERE x <= 1", BinaryOp::Le),
+            ("SELECT * FROM t WHERE x > 1", BinaryOp::Gt),
+            ("SELECT * FROM t WHERE x >= 1", BinaryOp::Ge),
+        ];
+
+        for (sql, expected_op) in cases {
+            let query = PipParser::parse_sql(sql).unwrap();
+            let where_expr = query.where_clause.unwrap();
+            match *where_expr {
+                Expr::Binary { op, .. } => assert_eq!(op, expected_op, "Failed for: {sql}"),
+                _ => panic!("Expected binary expression for: {sql}"),
+            }
+        }
+    }
+
+    #[test]
+    fn parse_where_string_literal() {
+        let sql = r#"SELECT * FROM t WHERE name = "John""#;
+        let query = PipParser::parse_sql(sql).unwrap();
+        assert!(query.where_clause.is_some());
+    }
+
+    // ========================================================================
+    // ORDER BY tests (Issue #15)
+    // ========================================================================
+
+    #[test]
+    fn parse_order_by_single() {
+        let sql = "SELECT * FROM t ORDER BY a";
+        let query = PipParser::parse_sql(sql).unwrap();
+        let order_by = query.order_by.unwrap();
+        assert_eq!(order_by.len(), 1);
+        assert_eq!(order_by[0].direction, SortDirection::Asc);
+    }
+
+    #[test]
+    fn parse_order_by_desc() {
+        let sql = "SELECT * FROM t ORDER BY a DESC";
+        let query = PipParser::parse_sql(sql).unwrap();
+        let order_by = query.order_by.unwrap();
+        assert_eq!(order_by[0].direction, SortDirection::Desc);
+    }
+
+    #[test]
+    fn parse_order_by_multiple() {
+        let sql = "SELECT * FROM t ORDER BY a DESC, b ASC, c";
+        let query = PipParser::parse_sql(sql).unwrap();
+        let order_by = query.order_by.unwrap();
+        assert_eq!(order_by.len(), 3);
+        assert_eq!(order_by[0].direction, SortDirection::Desc);
+        assert_eq!(order_by[1].direction, SortDirection::Asc);
+        assert_eq!(order_by[2].direction, SortDirection::Asc);
+    }
+
+    // ========================================================================
+    // LIMIT tests (Issue #15)
+    // ========================================================================
+
+    #[test]
+    fn parse_limit() {
+        let sql = "SELECT * FROM t LIMIT 10";
+        let query = PipParser::parse_sql(sql).unwrap();
+        let limit = query.limit.unwrap();
+        assert!(matches!(*limit, Expr::Literal(Literal::Int(10))));
+    }
+
+    #[test]
+    fn parse_limit_offset() {
+        let sql = "SELECT * FROM t LIMIT 10 OFFSET 20";
+        let query = PipParser::parse_sql(sql).unwrap();
+
+        let limit = query.limit.unwrap();
+        assert!(matches!(*limit, Expr::Literal(Literal::Int(10))));
+
+        let offset = query.offset.unwrap();
+        assert!(matches!(*offset, Expr::Literal(Literal::Int(20))));
+    }
+
+    // ========================================================================
+    // Error tests (Issue #15)
+    // ========================================================================
+
+    #[test]
+    fn error_invalid_sql() {
+        let sql = "SELEC * FROM t"; // typo
+        let err = PipParser::parse_sql(sql);
+        assert!(err.is_err());
+    }
+
+    #[test]
+    fn error_reports_location() {
+        let result = PipParser::parse_str("dim x =");
+        assert!(result.is_err());
+        let err = result.unwrap_err();
+        // Error should have location info
+        assert!(err.to_string().len() > 0);
+    }
+
+    // ========================================================================
+    // VBA statement tests
+    // ========================================================================
+
+    #[test]
+    fn parse_dim_statement() {
+        let result = PipParser::parse_str("dim x = 42");
+        assert!(result.is_ok());
+        let program = result.unwrap();
+        assert_eq!(program.statements.len(), 1);
+        assert!(matches!(
+            &program.statements[0],
+            Statement::Dim { name, .. } if name == "x"
+        ));
+    }
+
+    #[test]
+    fn parse_dim_with_type_hint() {
+        let result = PipParser::parse_str("dim x: int = 42");
+        assert!(result.is_ok());
+        let program = result.unwrap();
+        match &program.statements[0] {
+            Statement::Dim { type_hint, .. } => {
+                assert!(type_hint.is_some());
+            }
+            _ => panic!("Expected Dim statement"),
+        }
+    }
+
+    #[test]
+    fn parse_function_definition() {
+        let code = "function add(a, b) return a + b end function";
+        let result = PipParser::parse_str(code);
+        assert!(result.is_ok());
+        let program = result.unwrap();
+        assert!(matches!(
+            &program.statements[0],
+            Statement::Function { name, params, .. } if name == "add" && params.len() == 2
+        ));
+    }
+
+    #[test]
+    fn parse_if_statement() {
+        let code = "if x > 10 then dim y = 1 else dim y = 2 end if";
+        let result = PipParser::parse_str(code);
+        assert!(result.is_ok());
+        let program = result.unwrap();
+        assert!(matches!(&program.statements[0], Statement::If { .. }));
+    }
+
+    #[test]
+    fn parse_for_each_statement() {
+        let code = "for each item in items print(item) next";
+        let result = PipParser::parse_str(code);
+        assert!(result.is_ok());
+        let program = result.unwrap();
+        assert!(matches!(
+            &program.statements[0],
+            Statement::ForEach { variable, .. } if variable == "item"
+        ));
+    }
+
+    // ========================================================================
+    // Complex query tests
+    // ========================================================================
+
+    #[test]
+    fn parse_complex_query() {
+        let sql = "SELECT u.name, COUNT(o.id) AS order_count FROM users u LEFT JOIN orders o ON u.id = o.user_id WHERE u.active = true GROUP BY u.name HAVING COUNT(o.id) > 5 ORDER BY order_count DESC LIMIT 10";
+        let query = PipParser::parse_sql(sql).unwrap();
+
+        assert_eq!(query.select.items.len(), 2);
+        assert!(query.from.is_some());
+        assert_eq!(query.joins.len(), 1);
+        assert!(query.where_clause.is_some());
+        assert!(query.group_by.is_some());
+        assert!(query.having.is_some());
+        assert!(query.order_by.is_some());
+        assert!(query.limit.is_some());
     }
 }

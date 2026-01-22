@@ -224,7 +224,7 @@ pub enum IntervalUnit {
 }
 
 /// Binary operators.
-#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum BinaryOp {
     // Arithmetic
     Add,
@@ -400,7 +400,7 @@ pub struct OrderByItem {
 }
 
 /// Sort direction.
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 pub enum SortDirection {
     #[default]
     Asc,
