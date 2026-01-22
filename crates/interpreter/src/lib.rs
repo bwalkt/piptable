@@ -122,26 +122,32 @@ impl Interpreter {
                     .map_err(|e| e.with_line(line))?;
 
                 if cond.is_truthy() {
+                    self.push_scope().await;
                     for stmt in then_body {
                         self.eval_statement(stmt).await?;
                     }
+                    self.pop_scope().await;
                 } else {
                     let mut executed = false;
                     for clause in elseif_clauses {
                         let cond = self.eval_expr(&clause.condition).await?;
                         if cond.is_truthy() {
+                            self.push_scope().await;
                             for stmt in clause.body {
                                 self.eval_statement(stmt).await?;
                             }
+                            self.pop_scope().await;
                             executed = true;
                             break;
                         }
                     }
                     if !executed {
                         if let Some(else_stmts) = else_body {
+                            self.push_scope().await;
                             for stmt in else_stmts {
                                 self.eval_statement(stmt).await?;
                             }
+                            self.pop_scope().await;
                         }
                     }
                 }
@@ -373,7 +379,11 @@ impl Interpreter {
                 match arr {
                     Value::Array(items) => {
                         let idx_usize = if idx_int < 0 {
-                            (items.len() as i64 + idx_int) as usize
+                            let adjusted = items.len() as i64 + idx_int;
+                            if adjusted < 0 {
+                                return Err(PipError::runtime(0, "Array index out of bounds"));
+                            }
+                            adjusted as usize
                         } else {
                             idx_int as usize
                         };
@@ -539,7 +549,10 @@ impl Interpreter {
 
     fn eval_add(&self, left: &Value, right: &Value) -> PipResult<Value> {
         match (left, right) {
-            (Value::Int(a), Value::Int(b)) => Ok(Value::Int(a + b)),
+            (Value::Int(a), Value::Int(b)) => a
+                .checked_add(*b)
+                .map(Value::Int)
+                .ok_or_else(|| PipError::runtime(0, "Integer overflow in addition")),
             (Value::Float(a), Value::Float(b)) => Ok(Value::Float(a + b)),
             (Value::Int(a), Value::Float(b)) => Ok(Value::Float(*a as f64 + b)),
             (Value::Float(a), Value::Int(b)) => Ok(Value::Float(a + *b as f64)),
@@ -557,7 +570,10 @@ impl Interpreter {
 
     fn eval_sub(&self, left: &Value, right: &Value) -> PipResult<Value> {
         match (left, right) {
-            (Value::Int(a), Value::Int(b)) => Ok(Value::Int(a - b)),
+            (Value::Int(a), Value::Int(b)) => a
+                .checked_sub(*b)
+                .map(Value::Int)
+                .ok_or_else(|| PipError::runtime(0, "Integer overflow in subtraction")),
             (Value::Float(a), Value::Float(b)) => Ok(Value::Float(a - b)),
             (Value::Int(a), Value::Float(b)) => Ok(Value::Float(*a as f64 - b)),
             (Value::Float(a), Value::Int(b)) => Ok(Value::Float(a - *b as f64)),
@@ -574,7 +590,10 @@ impl Interpreter {
 
     fn eval_mul(&self, left: &Value, right: &Value) -> PipResult<Value> {
         match (left, right) {
-            (Value::Int(a), Value::Int(b)) => Ok(Value::Int(a * b)),
+            (Value::Int(a), Value::Int(b)) => a
+                .checked_mul(*b)
+                .map(Value::Int)
+                .ok_or_else(|| PipError::runtime(0, "Integer overflow in multiplication")),
             (Value::Float(a), Value::Float(b)) => Ok(Value::Float(a * b)),
             (Value::Int(a), Value::Float(b)) => Ok(Value::Float(*a as f64 * b)),
             (Value::Float(a), Value::Int(b)) => Ok(Value::Float(a * *b as f64)),
