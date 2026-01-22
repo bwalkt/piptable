@@ -45,6 +45,8 @@ impl HttpClient {
     pub fn new() -> PipResult<Self> {
         let client = Client::builder()
             .timeout(Duration::from_secs(30))
+            // Disable system proxy lookup to avoid macOS system-configuration issues
+            .no_proxy()
             .build()
             .map_err(|e| PipError::Http(e.to_string()))?;
 
@@ -59,6 +61,7 @@ impl HttpClient {
     pub fn with_timeout(timeout_secs: u64) -> PipResult<Self> {
         let client = Client::builder()
             .timeout(Duration::from_secs(timeout_secs))
+            .no_proxy()
             .build()
             .map_err(|e| PipError::Http(e.to_string()))?;
 

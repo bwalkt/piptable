@@ -411,25 +411,35 @@ impl Interpreter {
             Expr::ArrayIndex { array, index } => {
                 let arr = self.eval_expr(array).await?;
                 let idx = self.eval_expr(index).await?;
-                let idx_int = idx
-                    .as_int()
-                    .ok_or_else(|| PipError::runtime(0, "Array index must be integer"))?;
 
-                match arr {
-                    Value::Array(items) => {
-                        let idx_usize = if idx_int < 0 {
+                match (&arr, &idx) {
+                    // Array indexing with integer
+                    (Value::Array(items), Value::Int(idx_int)) => {
+                        let idx_usize = if *idx_int < 0 {
                             let adjusted = items.len() as i64 + idx_int;
                             if adjusted < 0 {
                                 return Err(PipError::runtime(0, "Array index out of bounds"));
                             }
                             adjusted as usize
                         } else {
-                            idx_int as usize
+                            *idx_int as usize
                         };
                         items
                             .get(idx_usize)
                             .cloned()
                             .ok_or_else(|| PipError::runtime(0, "Array index out of bounds"))
+                    }
+                    // Object bracket access with string key
+                    (Value::Object(map), Value::String(key)) => map
+                        .get(key)
+                        .cloned()
+                        .ok_or_else(|| PipError::runtime(0, format!("Key '{}' not found", key))),
+                    // Type mismatches
+                    (Value::Array(_), _) => {
+                        Err(PipError::runtime(0, "Array index must be integer"))
+                    }
+                    (Value::Object(_), _) => {
+                        Err(PipError::runtime(0, "Object key must be string"))
                     }
                     _ => Err(PipError::runtime(
                         0,
