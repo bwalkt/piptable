@@ -232,7 +232,13 @@ impl Interpreter {
                         loop_result = Err(e);
                         break;
                     }
-                    i += step_int;
+                    match i.checked_add(step_int) {
+                        Some(next) => i = next,
+                        None => {
+                            loop_result = Err(PipError::runtime(line, "Integer overflow in for loop"));
+                            break;
+                        }
+                    }
                 }
                 self.pop_scope().await;
                 loop_result?;
@@ -353,7 +359,7 @@ impl Interpreter {
     #[async_recursion]
     async fn eval_expr(&mut self, expr: &Expr) -> PipResult<Value> {
         match expr {
-            Expr::Literal(lit) => Ok(self.eval_literal(lit)),
+            Expr::Literal(lit) => self.eval_literal(lit),
 
             Expr::Variable(name) => {
                 if name == "*" {
@@ -511,27 +517,30 @@ impl Interpreter {
     }
 
     /// Evaluate a literal to a Value.
-    fn eval_literal(&self, lit: &Literal) -> Value {
+    fn eval_literal(&self, lit: &Literal) -> PipResult<Value> {
         match lit {
-            Literal::Null => Value::Null,
-            Literal::Bool(b) => Value::Bool(*b),
-            Literal::Int(n) => Value::Int(*n),
-            Literal::Float(f) => Value::Float(*f),
-            Literal::String(s) => Value::String(s.clone()),
+            Literal::Null => Ok(Value::Null),
+            Literal::Bool(b) => Ok(Value::Bool(*b)),
+            Literal::Int(n) => Ok(Value::Int(*n)),
+            Literal::Float(f) => Ok(Value::Float(*f)),
+            Literal::String(s) => Ok(Value::String(s.clone())),
             Literal::Interval { value, unit } => {
                 // Convert to milliseconds for internal representation
                 use piptable_core::IntervalUnit;
-                let ms = match unit {
-                    IntervalUnit::Millisecond => *value,
-                    IntervalUnit::Second => *value * 1000,
-                    IntervalUnit::Minute => *value * 60 * 1000,
-                    IntervalUnit::Hour => *value * 60 * 60 * 1000,
-                    IntervalUnit::Day => *value * 24 * 60 * 60 * 1000,
-                    IntervalUnit::Week => *value * 7 * 24 * 60 * 60 * 1000,
-                    IntervalUnit::Month => *value * 30 * 24 * 60 * 60 * 1000,
-                    IntervalUnit::Year => *value * 365 * 24 * 60 * 60 * 1000,
+                let multiplier: i64 = match unit {
+                    IntervalUnit::Millisecond => 1,
+                    IntervalUnit::Second => 1000,
+                    IntervalUnit::Minute => 60 * 1000,
+                    IntervalUnit::Hour => 60 * 60 * 1000,
+                    IntervalUnit::Day => 24 * 60 * 60 * 1000,
+                    IntervalUnit::Week => 7 * 24 * 60 * 60 * 1000,
+                    IntervalUnit::Month => 30 * 24 * 60 * 60 * 1000,
+                    IntervalUnit::Year => 365 * 24 * 60 * 60 * 1000,
                 };
-                Value::Int(ms)
+                value
+                    .checked_mul(multiplier)
+                    .map(Value::Int)
+                    .ok_or_else(|| PipError::runtime(0, "Interval value overflow"))
             }
         }
     }
@@ -686,7 +695,9 @@ impl Interpreter {
                 if *b == 0 {
                     return Err(PipError::runtime(0, "Modulo by zero"));
                 }
-                Ok(Value::Int(a % b))
+                a.checked_rem(*b)
+                    .map(Value::Int)
+                    .ok_or_else(|| PipError::runtime(0, "Integer overflow in modulo"))
             }
             _ => Err(PipError::runtime(0, "Modulo requires integer operands")),
         }
