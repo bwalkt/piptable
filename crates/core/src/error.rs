@@ -1,5 +1,6 @@
 //! Error types for piptable.
 
+use crate::Value;
 use thiserror::Error;
 
 /// Result type for piptable operations.
@@ -8,6 +9,10 @@ pub type PipResult<T> = Result<T, PipError>;
 /// Errors that can occur in piptable.
 #[derive(Debug, Error)]
 pub enum PipError {
+    /// Return statement (not really an error, used for control flow).
+    #[error("Return value")]
+    Return(Value),
+
     /// Parse error with location information.
     #[error("Parse error at line {line}, column {column}: {message}")]
     Parse {
@@ -88,6 +93,60 @@ impl PipError {
         Self::Type {
             expected: expected.into(),
             got: got.into(),
+        }
+    }
+
+    /// Add line information to an error (if not already present).
+    #[must_use]
+    pub fn with_line(self, line: usize) -> Self {
+        match self {
+            // These errors already have line info or are control flow
+            Self::Parse { .. } | Self::Runtime { .. } | Self::Return(_) => self,
+            // Add line info to other errors
+            Self::Type { expected, got } => Self::Runtime {
+                line,
+                message: format!("Type error: expected {expected}, got {got}"),
+            },
+            Self::UndefinedVariable(name) => Self::Runtime {
+                line,
+                message: format!("Undefined variable: {name}"),
+            },
+            Self::UndefinedFunction(name) => Self::Runtime {
+                line,
+                message: format!("Undefined function: {name}"),
+            },
+            Self::Sql(msg) => Self::Runtime {
+                line,
+                message: format!("SQL error: {msg}"),
+            },
+            Self::Http(msg) => Self::Runtime {
+                line,
+                message: format!("HTTP error: {msg}"),
+            },
+            Self::Io(e) => Self::Runtime {
+                line,
+                message: format!("I/O error: {e}"),
+            },
+            Self::Json(e) => Self::Runtime {
+                line,
+                message: format!("JSON error: {e}"),
+            },
+            Self::Config(msg) => Self::Runtime {
+                line,
+                message: format!("Configuration error: {msg}"),
+            },
+            Self::Export(msg) => Self::Runtime {
+                line,
+                message: format!("Export error: {msg}"),
+            },
+            Self::Plugin { plugin, message } => Self::Runtime {
+                line,
+                message: format!("Plugin error in {plugin}: {message}"),
+            },
+            Self::Internal(msg) => Self::Runtime {
+                line,
+                message: format!("Internal error: {msg}"),
+            },
         }
     }
 }
