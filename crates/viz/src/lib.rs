@@ -220,7 +220,7 @@ mod tests {
     fn test_chart_to_html() {
         let chart = ChartSpec::new(ChartKind::Pie, "Pie Chart");
         let html = chart.to_html();
-        assert!(html.contains("Chart.js"));
+        assert!(html.contains("chart.js"));
         assert!(html.contains("Pie Chart"));
     }
 }

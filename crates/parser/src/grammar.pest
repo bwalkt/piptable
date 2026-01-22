@@ -42,38 +42,38 @@ lvalue = { ident ~ (field_access | array_index)* }
 
 if_stmt = {
     "if" ~ expr ~ "then" ~
-    statement* ~
+    (!("else" | "elseif" | "end") ~ statement)* ~
     elseif_clause* ~
     else_clause? ~
     "end" ~ "if"
 }
-elseif_clause = { "elseif" ~ expr ~ "then" ~ statement* }
-else_clause = { "else" ~ statement* }
+elseif_clause = { "elseif" ~ expr ~ "then" ~ (!("else" | "elseif" | "end") ~ statement)* }
+else_clause = { "else" ~ (!("end") ~ statement)* }
 
 for_each_stmt = {
     "for" ~ "each" ~ ident ~ "in" ~ expr ~
-    statement* ~
+    (!("next") ~ statement)* ~
     "next" ~ ident?
 }
 
 for_stmt = {
     "for" ~ ident ~ "=" ~ expr ~ "to" ~ expr ~ step_clause? ~
-    statement* ~
+    (!("next") ~ statement)* ~
     "next" ~ ident?
 }
 step_clause = { "step" ~ expr }
 
-while_stmt = { "while" ~ expr ~ statement* ~ "wend" }
+while_stmt = { "while" ~ expr ~ (!("wend") ~ statement)* ~ "wend" }
 
 function_def = {
     "async"? ~ "function" ~ ident ~ "(" ~ param_list? ~ ")" ~
-    statement* ~
+    (!("end") ~ statement)* ~
     "end" ~ "function"
 }
 
 sub_def = {
     "async"? ~ "sub" ~ ident ~ "(" ~ param_list? ~ ")" ~
-    statement* ~
+    (!("end") ~ statement)* ~
     "end" ~ "sub"
 }
 
@@ -101,9 +101,14 @@ expr_stmt = { expr }
 // =============================================================================
 
 expr = { or_expr }
-or_expr = { and_expr ~ (^"or" ~ and_expr)* }
-and_expr = { not_expr ~ (^"and" ~ not_expr)* }
-not_expr = { ^"not"? ~ comparison_expr }
+// Word boundaries are enforced by requiring non-alpha after the keyword
+// Must be atomic (@) to prevent automatic whitespace insertion before the lookahead
+or_kw = @{ ^"or" ~ !ASCII_ALPHA }
+and_kw = @{ ^"and" ~ !ASCII_ALPHA }
+not_kw = @{ ^"not" ~ !ASCII_ALPHA }
+or_expr = { and_expr ~ (or_kw ~ and_expr)* }
+and_expr = { not_expr ~ (and_kw ~ not_expr)* }
+not_expr = { not_kw? ~ comparison_expr }
 comparison_expr = { additive_expr ~ (is_null_check | (comparison_op ~ additive_expr))? }
 is_null_check = { ^"is" ~ ^"not"? ~ ^"null" }
 comparison_op = { "=" | "!=" | "<>" | "<=" | ">=" | "<" | ">" | ^"like" | ^"in" }
@@ -112,7 +117,7 @@ multiplicative_expr = { unary_expr ~ (("*"|"/"|"%") ~ unary_expr)* }
 unary_expr = { ("-"|"+")? ~ postfix_expr }
 postfix_expr = { primary_expr ~ (field_access | array_index | type_assertion | call_args)* }
 
-field_access = { "->" ~ ident }
+field_access = { ("->" | ".") ~ ident }
 array_index = { "[" ~ expr ~ "]" }
 type_assertion = { "::" ~ type_name }
 call_args = { "(" ~ arg_list? ~ ")" }
@@ -190,11 +195,12 @@ sql_query = {
 with_clause_sql = { ^"with" ~ ^"recursive"? ~ cte ~ ("," ~ cte)* }
 cte = { ident ~ ("(" ~ ident ~ ("," ~ ident)* ~ ")")? ~ ^"as" ~ "(" ~ sql_query ~ ")" }
 
-select_clause = { ^"select" ~ ^"distinct"? ~ select_list }
+select_clause = { ^"select" ~ distinct_kw? ~ select_list }
+distinct_kw = { ^"distinct" }
 select_list = { "*" | (select_item ~ ("," ~ select_item)*) }
 select_item = { expr ~ (^"as" ~ ident)? }
 
-from_clause = { ^"from" ~ table_ref ~ (^"as"? ~ ident)? }
+from_clause = { ^"from" ~ table_ref ~ (^"as" ~ ident | alias_ident)? }
 table_ref = {
     table_function
   | qualified_name
@@ -207,14 +213,15 @@ table_function = { ident ~ "(" ~ func_arg_list? ~ ")" }
 func_arg_list = { func_arg ~ ("," ~ func_arg)* }
 func_arg = { (ident ~ "=>")? ~ expr }
 
-join_clause = { join_type? ~ ^"join" ~ table_ref ~ (^"as"? ~ ident)? ~ (^"on" ~ expr)? }
+join_clause = { join_type? ~ ^"join" ~ table_ref ~ (^"as" ~ ident | alias_ident)? ~ (^"on" ~ expr)? }
 join_type = { ^"inner" | ^"left" ~ ^"outer"? | ^"right" ~ ^"outer"? | ^"cross" }
 
 where_clause = { ^"where" ~ expr }
 group_by_clause = { ^"group" ~ ^"by" ~ expr ~ ("," ~ expr)* }
 having_clause = { ^"having" ~ expr }
 order_by_clause = { ^"order" ~ ^"by" ~ order_item ~ ("," ~ order_item)* }
-order_item = { expr ~ (^"asc" | ^"desc")? }
+order_item = { expr ~ sort_direction? }
+sort_direction = { ^"asc" | ^"desc" }
 limit_clause = { ^"limit" ~ expr ~ (^"offset" ~ expr)? }
 trigger_clause = { ^"trigger" ~ (^"counting" ~ integer | ^"on" ~ ^"watermark" | ^"on" ~ ^"end" ~ ^"of" ~ ^"stream") }
 
@@ -222,7 +229,22 @@ trigger_clause = { ^"trigger" ~ (^"counting" ~ integer | ^"on" ~ ^"watermark" | 
 // Identifiers and Types
 // =============================================================================
 
+// SQL keywords that should not be parsed as identifiers in certain contexts
+sql_keyword = _{
+    (^"select" | ^"from" | ^"where" | ^"order" | ^"group" | ^"having" | ^"limit" | ^"offset" |
+     ^"join" | ^"inner" | ^"left" | ^"right" | ^"cross" | ^"on" | ^"as" |
+     ^"and" | ^"or" | ^"not" | ^"null" | ^"is" |
+     ^"asc" | ^"desc" | ^"distinct" | ^"with" | ^"recursive" |
+     ^"trigger" | ^"counting" | ^"watermark" | ^"stream" | ^"stdin" |
+     ^"true" | ^"false" | ^"by" | ^"outer") ~ !(ASCII_ALPHANUMERIC | "_")
+}
+
+// Regular identifier (can match keywords - used in most contexts)
 ident = @{ (ASCII_ALPHA | "_") ~ (ASCII_ALPHANUMERIC | "_")* }
+
+// Non-keyword identifier (for table aliases where keywords should not match)
+alias_ident = @{ !sql_keyword ~ (ASCII_ALPHA | "_") ~ (ASCII_ALPHANUMERIC | "_")* }
+
 type_name = { ^"int" | ^"float" | ^"string" | ^"bool" | ^"timestamp" | ^"duration" | ^"array" | ^"object" | ^"table" }
 
 // =============================================================================
