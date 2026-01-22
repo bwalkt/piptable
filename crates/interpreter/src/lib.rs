@@ -412,17 +412,20 @@ impl Interpreter {
                 let arr = self.eval_expr(array).await?;
                 let idx = self.eval_expr(index).await?;
 
-                match (&arr, &idx) {
-                    // Array indexing with integer
-                    (Value::Array(items), Value::Int(idx_int)) => {
-                        let idx_usize = if *idx_int < 0 {
+                match &arr {
+                    // Array indexing - use as_int() for consistency with assignment
+                    Value::Array(items) => {
+                        let idx_int = idx.as_int().ok_or_else(|| {
+                            PipError::runtime(0, "Array index must be integer")
+                        })?;
+                        let idx_usize = if idx_int < 0 {
                             let adjusted = items.len() as i64 + idx_int;
                             if adjusted < 0 {
                                 return Err(PipError::runtime(0, "Array index out of bounds"));
                             }
                             adjusted as usize
                         } else {
-                            *idx_int as usize
+                            idx_int as usize
                         };
                         items
                             .get(idx_usize)
@@ -430,21 +433,16 @@ impl Interpreter {
                             .ok_or_else(|| PipError::runtime(0, "Array index out of bounds"))
                     }
                     // Object bracket access with string key
-                    (Value::Object(map), Value::String(key)) => map
-                        .get(key)
-                        .cloned()
-                        .ok_or_else(|| PipError::runtime(0, format!("Key '{}' not found", key))),
-                    // Type mismatches
-                    (Value::Array(_), _) => {
-                        Err(PipError::runtime(0, "Array index must be integer"))
+                    Value::Object(map) => {
+                        let key = idx.as_str().ok_or_else(|| {
+                            PipError::runtime(0, "Object key must be string")
+                        })?;
+                        map.get(key)
+                            .cloned()
+                            .ok_or_else(|| PipError::runtime(0, format!("Key '{}' not found", key)))
                     }
-                    (Value::Object(_), _) => {
-                        Err(PipError::runtime(0, "Object key must be string"))
-                    }
-                    _ => Err(PipError::runtime(
-                        0,
-                        format!("Cannot index {}", arr.type_name()),
-                    )),
+                    // Type mismatch
+                    _ => Err(PipError::runtime(0, format!("Cannot index {}", arr.type_name())))
                 }
             }
 
@@ -1506,13 +1504,13 @@ impl Interpreter {
             }
             LValue::Index { array, index } => {
                 let idx = self.eval_expr(index).await?;
-                let idx_int = idx.as_int().ok_or_else(|| {
-                    PipError::runtime(line, "Array index must be integer")
-                })?;
+                let container = self.get_lvalue_value(array, line).await?;
 
-                let arr_val = self.get_lvalue_value(array, line).await?;
-                match arr_val {
+                match container {
                     Value::Array(mut items) => {
+                        let idx_int = idx.as_int().ok_or_else(|| {
+                            PipError::runtime(line, "Array index must be integer")
+                        })?;
                         let idx_usize = if idx_int < 0 {
                             let adjusted = items.len() as i64 + idx_int;
                             if adjusted < 0 {
@@ -1528,9 +1526,16 @@ impl Interpreter {
                         items[idx_usize] = value;
                         self.assign_lvalue(array, Value::Array(items), line).await
                     }
+                    Value::Object(mut map) => {
+                        let key = idx.as_str().ok_or_else(|| {
+                            PipError::runtime(line, "Object key must be string")
+                        })?.to_owned();
+                        map.insert(key, value);
+                        self.assign_lvalue(array, Value::Object(map), line).await
+                    }
                     _ => Err(PipError::runtime(
                         line,
-                        format!("Cannot index {}", arr_val.type_name()),
+                        format!("Cannot index {}", container.type_name()),
                     )),
                 }
             }

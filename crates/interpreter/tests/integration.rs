@@ -676,6 +676,50 @@ dim x = obj.value"#,
         .await;
         assert!(matches!(interp.get_var("x").await, Some(Value::Int(99))));
     }
+
+    #[tokio::test]
+    async fn test_object_bracket_assignment() {
+        let (interp, _) = run_script(
+            r#"dim obj = { name: "old" }
+obj["name"] = "new"
+dim x = obj["name"]"#,
+        )
+        .await;
+        assert!(matches!(interp.get_var("x").await, Some(Value::String(s)) if s == "new"));
+    }
+
+    #[tokio::test]
+    async fn test_object_bracket_assignment_new_key() {
+        let (interp, _) = run_script(
+            r#"dim obj = { a: 1 }
+obj["b"] = 2
+dim x = obj["b"]"#,
+        )
+        .await;
+        assert!(matches!(interp.get_var("x").await, Some(Value::Int(2))));
+    }
+
+    #[tokio::test]
+    async fn test_array_float_index_coercion() {
+        // Float indices are coerced to int for consistency
+        let (interp, _) = run_script(
+            r#"dim arr = [10, 20, 30]
+dim x = arr[1.0]"#,
+        )
+        .await;
+        assert!(matches!(interp.get_var("x").await, Some(Value::Int(20))));
+    }
+
+    #[tokio::test]
+    async fn test_array_float_index_assignment() {
+        let (interp, _) = run_script(
+            r#"dim arr = [10, 20, 30]
+arr[1.0] = 99
+dim x = arr[1]"#,
+        )
+        .await;
+        assert!(matches!(interp.get_var("x").await, Some(Value::Int(99))));
+    }
 }
 
 // ============================================================================
@@ -1078,12 +1122,11 @@ mod errors {
 
     #[tokio::test]
     async fn test_type_error_add_string_int() {
+        // Adding string + int is a type error (use explicit concat or conversion)
         let err = run_script_err(r#"dim x = "hello" + 42"#).await;
-        // This might concatenate or error depending on implementation
-        // If it errors, check the message
         assert!(
-            err.contains("Type error") || err.contains("Cannot") || err.is_empty(),
-            "Got unexpected error: {}",
+            err.contains("Cannot add"),
+            "Expected 'Cannot add' error, got: {}",
             err
         );
     }
