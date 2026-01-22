@@ -12,8 +12,19 @@ name = "pip"
 path = "src/main.rs"
 
 [dependencies]
+piptable-core = { workspace = true }
+piptable-parser = { workspace = true }
+piptable-interpreter = { workspace = true }
 tokio = { workspace = true }
 clap = { workspace = true }
+anyhow = { workspace = true }
+colored = { workspace = true }
+rustyline = { workspace = true }
+arrow = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+serde_json = { workspace = true }
+dirs = "5"
 
 [lints]
 workspace = true
