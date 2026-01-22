@@ -123,20 +123,18 @@ impl Interpreter {
 
                 if cond.is_truthy() {
                     self.push_scope().await;
-                    for stmt in then_body {
-                        self.eval_statement(stmt).await?;
-                    }
+                    let result = self.eval_block(&then_body).await;
                     self.pop_scope().await;
+                    result?;
                 } else {
                     let mut executed = false;
                     for clause in elseif_clauses {
                         let cond = self.eval_expr(&clause.condition).await?;
                         if cond.is_truthy() {
                             self.push_scope().await;
-                            for stmt in clause.body {
-                                self.eval_statement(stmt).await?;
-                            }
+                            let result = self.eval_block(&clause.body).await;
                             self.pop_scope().await;
+                            result?;
                             executed = true;
                             break;
                         }
@@ -144,10 +142,9 @@ impl Interpreter {
                     if !executed {
                         if let Some(else_stmts) = else_body {
                             self.push_scope().await;
-                            for stmt in else_stmts {
-                                self.eval_statement(stmt).await?;
-                            }
+                            let result = self.eval_block(&else_stmts).await;
                             self.pop_scope().await;
+                            result?;
                         }
                     }
                 }
@@ -180,13 +177,16 @@ impl Interpreter {
                 };
 
                 self.push_scope().await;
+                let mut loop_result: PipResult<()> = Ok(());
                 for item in items {
                     self.set_var(&variable, item).await;
-                    for stmt in &body {
-                        self.eval_statement(stmt.clone()).await?;
+                    if let Err(e) = self.eval_block(&body).await {
+                        loop_result = Err(e);
+                        break;
                     }
                 }
                 self.pop_scope().await;
+                loop_result?;
 
                 Ok(Value::Null)
             }
@@ -224,15 +224,18 @@ impl Interpreter {
                 }
 
                 self.push_scope().await;
+                let mut loop_result: PipResult<()> = Ok(());
                 let mut i = start_int;
                 while (step_int > 0 && i <= end_int) || (step_int < 0 && i >= end_int) {
                     self.set_var(&variable, Value::Int(i)).await;
-                    for stmt in &body {
-                        self.eval_statement(stmt.clone()).await?;
+                    if let Err(e) = self.eval_block(&body).await {
+                        loop_result = Err(e);
+                        break;
                     }
                     i += step_int;
                 }
                 self.pop_scope().await;
+                loop_result?;
 
                 Ok(Value::Null)
             }
@@ -243,19 +246,27 @@ impl Interpreter {
                 line,
             } => {
                 self.push_scope().await;
+                let mut loop_result: PipResult<()> = Ok(());
                 loop {
-                    let cond = self
-                        .eval_expr(&condition)
-                        .await
-                        .map_err(|e| e.with_line(line))?;
-                    if !cond.is_truthy() {
-                        break;
-                    }
-                    for stmt in &body {
-                        self.eval_statement(stmt.clone()).await?;
+                    let cond_result = self.eval_expr(&condition).await;
+                    match cond_result {
+                        Ok(cond) => {
+                            if !cond.is_truthy() {
+                                break;
+                            }
+                            if let Err(e) = self.eval_block(&body).await {
+                                loop_result = Err(e.with_line(line));
+                                break;
+                            }
+                        }
+                        Err(e) => {
+                            loop_result = Err(e.with_line(line));
+                            break;
+                        }
                     }
                 }
                 self.pop_scope().await;
+                loop_result?;
                 Ok(Value::Null)
             }
 
@@ -330,6 +341,15 @@ impl Interpreter {
     }
 
     /// Evaluate an expression.
+    /// Evaluate a block of statements, returning the last value or an error.
+    async fn eval_block(&mut self, stmts: &[Statement]) -> PipResult<Value> {
+        let mut result = Value::Null;
+        for stmt in stmts {
+            result = self.eval_statement(stmt.clone()).await?;
+        }
+        Ok(result)
+    }
+
     #[async_recursion]
     async fn eval_expr(&mut self, expr: &Expr) -> PipResult<Value> {
         match expr {
@@ -614,7 +634,9 @@ impl Interpreter {
                 if *b == 0 {
                     return Err(PipError::runtime(0, "Division by zero"));
                 }
-                Ok(Value::Int(a / b))
+                a.checked_div(*b)
+                    .map(Value::Int)
+                    .ok_or_else(|| PipError::runtime(0, "Integer overflow in division"))
             }
             (Value::Float(a), Value::Float(b)) => {
                 if *b == 0.0 {
@@ -745,7 +767,10 @@ impl Interpreter {
     fn eval_unary_op(&self, op: UnaryOp, val: &Value) -> PipResult<Value> {
         match op {
             UnaryOp::Neg => match val {
-                Value::Int(n) => Ok(Value::Int(-n)),
+                Value::Int(n) => n
+                    .checked_neg()
+                    .map(Value::Int)
+                    .ok_or_else(|| PipError::runtime(0, "Integer overflow in negation")),
                 Value::Float(f) => Ok(Value::Float(-f)),
                 _ => Err(PipError::runtime(
                     0,
@@ -848,7 +873,10 @@ impl Interpreter {
                     return Err(PipError::runtime(line, "abs() takes exactly 1 argument"));
                 }
                 match &args[0] {
-                    Value::Int(n) => Ok(Value::Int(n.abs())),
+                    Value::Int(n) => n
+                        .checked_abs()
+                        .map(Value::Int)
+                        .ok_or_else(|| PipError::runtime(line, "Integer overflow in abs()")),
                     Value::Float(f) => Ok(Value::Float(f.abs())),
                     _ => Err(PipError::runtime(line, "abs() requires numeric argument")),
                 }
