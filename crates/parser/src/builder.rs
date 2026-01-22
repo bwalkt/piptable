@@ -495,6 +495,23 @@ fn build_comparison_expr(pair: Pair<Rule>) -> BuildResult<Expr> {
     }
 }
 
+/// Maps a parsed comparison operator token to its corresponding `BinaryOp` variant.
+///
+/// Recognizes the operators: `=`, `==`, `!=`, `<>`, `<`, `<=`, `>`, `>=`, case-insensitive `like`, and case-insensitive `in`.
+///
+/// # Returns
+///
+/// `BinaryOp` matching the operator, or a `BuildError` when the token is unrecognized.
+///
+/// # Examples
+///
+/// ```
+/// use pest::iterators::Pair;
+/// // This example demonstrates expected mapping; constructing a real `Pair` requires the parser.
+/// // Assume `pair.as_str()` yields "==", then:
+/// // let op = build_comparison_op(&pair).unwrap();
+/// // assert_eq!(op, BinaryOp::Eq);
+/// ```
 fn build_comparison_op(pair: &Pair<Rule>) -> BuildResult<BinaryOp> {
     let s = pair.as_str();
     match s {
@@ -513,6 +530,22 @@ fn build_comparison_op(pair: &Pair<Rule>) -> BuildResult<BinaryOp> {
     }
 }
 
+/// Builds an expression AST node for a sequence of additions and subtractions.
+///
+/// Parses a `pair` containing an additive expression and folds left-to-right into
+/// nested `Expr::Binary` nodes using `BinaryOp::Add` for `"+"` and `BinaryOp::Sub` for `"-"`.
+///
+/// # Returns
+///
+/// An `Expr` representing the parsed additive expression.
+///
+/// # Examples
+///
+/// ```
+/// // Given a `pair` that matches an additive expression (e.g. from the parser),
+/// // build the corresponding AST expression.
+/// let expr = build_additive_expr(pair).unwrap();
+/// ```
 fn build_additive_expr(pair: Pair<Rule>) -> BuildResult<Expr> {
     let mut inner = pair.into_inner();
     let mut left = build_expr(inner.next().unwrap())?;
@@ -536,6 +569,29 @@ fn build_additive_expr(pair: Pair<Rule>) -> BuildResult<Expr> {
     Ok(left)
 }
 
+/// Builds an expression tree for a sequence of multiplicative operations (`*`, `/`, `%`) from a parse `pair`.
+///
+/// Operators are parsed left-to-right and combined into left-associative `Expr::Binary` nodes.
+///
+/// # Returns
+/// An `Expr` representing the parsed multiplicative expression.
+///
+/// # Examples
+///
+/// ```
+/// // Equivalent AST for the expression `a * b / c`
+/// use piptable_core::ast::{Expr, BinaryOp};
+///
+/// let expr = Expr::Binary {
+///     left: Box::new(Expr::Binary {
+///         left: Box::new(Expr::Variable("a".into())),
+///         op: BinaryOp::Mul,
+///         right: Box::new(Expr::Variable("b".into())),
+///     }),
+///     op: BinaryOp::Div,
+///     right: Box::new(Expr::Variable("c".into())),
+/// };
+/// ```
 fn build_multiplicative_expr(pair: Pair<Rule>) -> BuildResult<Expr> {
     let mut inner = pair.into_inner();
     let mut left = build_expr(inner.next().unwrap())?;
@@ -560,6 +616,19 @@ fn build_multiplicative_expr(pair: Pair<Rule>) -> BuildResult<Expr> {
     Ok(left)
 }
 
+/// Builds an AST node for a unary expression.
+///
+/// Produces `Expr::Unary` with `UnaryOp::Neg` when the operator token is `"-"`;
+/// for unary `"+"` the operand is returned unchanged.
+///
+/// # Examples
+///
+/// ```
+/// // Constructing the equivalent result directly:
+/// let operand = Expr::Literal(Literal::Int(1));
+/// let neg = Expr::Unary { op: UnaryOp::Neg, operand: Box::new(operand.clone()) };
+/// assert!(matches!(neg, Expr::Unary { .. }));
+/// ```
 fn build_unary_expr(pair: Pair<Rule>) -> BuildResult<Expr> {
     let mut inner = pair.into_inner();
     let first = inner.next().unwrap();
