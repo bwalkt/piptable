@@ -16,7 +16,6 @@ program = { SOI ~ statement* ~ EOI }
 
 statement = {
     dim_stmt
-  | assignment_stmt
   | if_stmt
   | for_each_stmt
   | for_stmt
@@ -27,6 +26,7 @@ statement = {
   | call_stmt
   | chart_stmt
   | export_stmt
+  | assignment_stmt
   | expr_stmt
 }
 
@@ -51,15 +51,15 @@ elseif_clause = { "elseif" ~ expr ~ "then" ~ (!("else" | "elseif" | "end") ~ sta
 else_clause = { "else" ~ (!("end") ~ statement)* }
 
 for_each_stmt = {
-    "for" ~ "each" ~ ident ~ "in" ~ expr ~
-    (!("next") ~ statement)* ~
-    "next" ~ ident?
+    ^"for" ~ ^"each" ~ ident ~ ^"in" ~ expr ~
+    (!(^"next") ~ statement)* ~
+    ^"next" ~ ident?
 }
 
 for_stmt = {
-    "for" ~ ident ~ "=" ~ expr ~ "to" ~ expr ~ step_clause? ~
-    (!("next") ~ statement)* ~
-    "next" ~ ident?
+    ^"for" ~ ident ~ "=" ~ expr ~ ^"to" ~ expr ~ step_clause? ~
+    (!(^"next") ~ statement)* ~
+    ^"next" ~ ident?
 }
 step_clause = { "step" ~ expr }
 
@@ -111,10 +111,13 @@ and_expr = { not_expr ~ (and_kw ~ not_expr)* }
 not_expr = { not_kw? ~ comparison_expr }
 comparison_expr = { additive_expr ~ (is_null_check | (comparison_op ~ additive_expr))? }
 is_null_check = { ^"is" ~ ^"not"? ~ ^"null" }
-comparison_op = { "=" | "!=" | "<>" | "<=" | ">=" | "<" | ">" | ^"like" | ^"in" }
-additive_expr = { multiplicative_expr ~ (("+"|"-") ~ multiplicative_expr)* }
-multiplicative_expr = { unary_expr ~ (("*"|"/"|"%") ~ unary_expr)* }
-unary_expr = { ("-"|"+")? ~ postfix_expr }
+comparison_op = { "==" | "!=" | "<>" | "<=" | ">=" | "<" | ">" | "=" | ^"like" | ^"in" }
+additive_expr = { multiplicative_expr ~ (add_op ~ multiplicative_expr)* }
+add_op = { "+" | "-" }
+multiplicative_expr = { unary_expr ~ (mul_op ~ unary_expr)* }
+mul_op = { "*" | "/" | "%" }
+unary_expr = { unary_op? ~ postfix_expr }
+unary_op = { "-" | "+" }
 postfix_expr = { primary_expr ~ (field_access | array_index | type_assertion | call_args)* }
 
 field_access = { ("->" | ".") ~ ident }

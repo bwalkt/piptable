@@ -498,7 +498,7 @@ fn build_comparison_expr(pair: Pair<Rule>) -> BuildResult<Expr> {
 fn build_comparison_op(pair: &Pair<Rule>) -> BuildResult<BinaryOp> {
     let s = pair.as_str();
     match s {
-        "=" => Ok(BinaryOp::Eq),
+        "=" | "==" => Ok(BinaryOp::Eq),
         "!=" | "<>" => Ok(BinaryOp::Ne),
         "<" => Ok(BinaryOp::Lt),
         "<=" => Ok(BinaryOp::Le),
@@ -517,29 +517,20 @@ fn build_additive_expr(pair: Pair<Rule>) -> BuildResult<Expr> {
     let mut inner = pair.into_inner();
     let mut left = build_expr(inner.next().unwrap())?;
 
-    while let Some(op_or_right) = inner.next() {
-        let op_str = op_or_right.as_str();
-        if op_str == "+" || op_str == "-" {
-            let right = build_expr(inner.next().unwrap())?;
-            let op = if op_str == "+" {
-                BinaryOp::Add
-            } else {
-                BinaryOp::Sub
-            };
-            left = Expr::Binary {
-                left: Box::new(left),
-                op,
-                right: Box::new(right),
-            };
+    while let Some(op_pair) = inner.next() {
+        // op_pair should be add_op rule
+        let op_str = op_pair.as_str();
+        let op = if op_str == "+" {
+            BinaryOp::Add
         } else {
-            // It's actually the right operand
-            let right = build_expr(op_or_right)?;
-            left = Expr::Binary {
-                left: Box::new(left),
-                op: BinaryOp::Add,
-                right: Box::new(right),
-            };
-        }
+            BinaryOp::Sub
+        };
+        let right = build_expr(inner.next().unwrap())?;
+        left = Expr::Binary {
+            left: Box::new(left),
+            op,
+            right: Box::new(right),
+        };
     }
 
     Ok(left)
@@ -549,29 +540,21 @@ fn build_multiplicative_expr(pair: Pair<Rule>) -> BuildResult<Expr> {
     let mut inner = pair.into_inner();
     let mut left = build_expr(inner.next().unwrap())?;
 
-    while let Some(op_or_right) = inner.next() {
-        let op_str = op_or_right.as_str();
-        if op_str == "*" || op_str == "/" || op_str == "%" {
-            let right = build_expr(inner.next().unwrap())?;
-            let op = match op_str {
-                "*" => BinaryOp::Mul,
-                "/" => BinaryOp::Div,
-                "%" => BinaryOp::Mod,
-                _ => unreachable!(),
-            };
-            left = Expr::Binary {
-                left: Box::new(left),
-                op,
-                right: Box::new(right),
-            };
-        } else {
-            let right = build_expr(op_or_right)?;
-            left = Expr::Binary {
-                left: Box::new(left),
-                op: BinaryOp::Mul,
-                right: Box::new(right),
-            };
-        }
+    while let Some(op_pair) = inner.next() {
+        // op_pair should be mul_op rule
+        let op_str = op_pair.as_str();
+        let op = match op_str {
+            "*" => BinaryOp::Mul,
+            "/" => BinaryOp::Div,
+            "%" => BinaryOp::Mod,
+            _ => unreachable!("unexpected mul_op: {}", op_str),
+        };
+        let right = build_expr(inner.next().unwrap())?;
+        left = Expr::Binary {
+            left: Box::new(left),
+            op,
+            right: Box::new(right),
+        };
     }
 
     Ok(left)
@@ -581,16 +564,21 @@ fn build_unary_expr(pair: Pair<Rule>) -> BuildResult<Expr> {
     let mut inner = pair.into_inner();
     let first = inner.next().unwrap();
 
-    if first.as_str() == "-" {
-        let operand = build_expr(inner.next().unwrap())?;
-        Ok(Expr::Unary {
-            op: UnaryOp::Neg,
-            operand: Box::new(operand),
-        })
-    } else if first.as_str() == "+" {
-        build_expr(inner.next().unwrap())
-    } else {
-        build_expr(first)
+    match first.as_rule() {
+        Rule::unary_op => {
+            let op_str = first.as_str();
+            let operand = build_expr(inner.next().unwrap())?;
+            if op_str == "-" {
+                Ok(Expr::Unary {
+                    op: UnaryOp::Neg,
+                    operand: Box::new(operand),
+                })
+            } else {
+                // Unary + is a no-op
+                Ok(operand)
+            }
+        }
+        _ => build_expr(first),
     }
 }
 
