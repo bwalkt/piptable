@@ -2,7 +2,7 @@ use crate::book::Book;
 use crate::cell::CellValue;
 use crate::error::{Result, SheetError};
 use crate::sheet::Sheet;
-use calamine::{open_workbook, Data, Reader, Xlsx, XlsxError};
+use calamine::{open_workbook, open_workbook_auto, Data, Error as CalamineError, Reader, Sheets, Xls, XlsError, Xlsx, XlsxError};
 use rust_xlsxwriter::{Workbook, Worksheet};
 use std::io::BufReader;
 use std::fs::File;
@@ -129,6 +129,128 @@ impl Sheet {
             .map_err(|e| SheetError::Io(std::io::Error::new(std::io::ErrorKind::Other, e.to_string())))?;
 
         Ok(())
+    }
+
+    // =========================================================================
+    // XLS (Legacy Excel 97-2003) Support
+    // =========================================================================
+
+    /// Load a sheet from a legacy Excel file (.xls) - first sheet
+    ///
+    /// # Errors
+    ///
+    /// Returns error if file cannot be opened or read.
+    pub fn from_xls<P: AsRef<Path>>(path: P) -> Result<Self> {
+        Self::from_xls_with_options(path, XlsxReadOptions::default())
+    }
+
+    /// Load a sheet from a legacy Excel file with options
+    ///
+    /// # Errors
+    ///
+    /// Returns error if file cannot be opened or read.
+    pub fn from_xls_with_options<P: AsRef<Path>>(path: P, options: XlsxReadOptions) -> Result<Self> {
+        let workbook: Xls<BufReader<File>> = open_workbook(path.as_ref())
+            .map_err(|e: XlsError| SheetError::Io(std::io::Error::new(std::io::ErrorKind::Other, e.to_string())))?;
+
+        let sheet_names = workbook.sheet_names().to_vec();
+        if sheet_names.is_empty() {
+            return Ok(Sheet::new());
+        }
+
+        Self::from_xls_sheet_with_options(path, &sheet_names[0], options)
+    }
+
+    /// Load a specific sheet from a legacy Excel file by name
+    ///
+    /// # Errors
+    ///
+    /// Returns error if file cannot be opened, sheet not found, or read fails.
+    pub fn from_xls_sheet<P: AsRef<Path>>(path: P, sheet_name: &str) -> Result<Self> {
+        Self::from_xls_sheet_with_options(path, sheet_name, XlsxReadOptions::default())
+    }
+
+    /// Load a specific sheet from a legacy Excel file with options
+    ///
+    /// # Errors
+    ///
+    /// Returns error if file cannot be opened, sheet not found, or read fails.
+    pub fn from_xls_sheet_with_options<P: AsRef<Path>>(
+        path: P,
+        sheet_name: &str,
+        options: XlsxReadOptions,
+    ) -> Result<Self> {
+        let mut workbook: Xls<BufReader<File>> = open_workbook(path.as_ref())
+            .map_err(|e: XlsError| SheetError::Io(std::io::Error::new(std::io::ErrorKind::Other, e.to_string())))?;
+
+        let range = workbook
+            .worksheet_range(sheet_name)
+            .map_err(|e: XlsError| SheetError::Io(std::io::Error::new(std::io::ErrorKind::Other, e.to_string())))?;
+
+        let mut data: Vec<Vec<CellValue>> = Vec::new();
+
+        for row in range.rows() {
+            let row_data: Vec<CellValue> = row.iter().map(data_to_cell_value).collect();
+            data.push(row_data);
+        }
+
+        let mut sheet = Sheet::with_name(sheet_name);
+        *sheet.data_mut() = data;
+
+        if options.has_headers && sheet.row_count() > 0 {
+            sheet.name_columns_by_row(0)?;
+        }
+
+        Ok(sheet)
+    }
+
+    // =========================================================================
+    // Auto-detect Excel format (XLS or XLSX)
+    // =========================================================================
+
+    /// Load a sheet from an Excel file, auto-detecting format (.xls or .xlsx)
+    ///
+    /// # Errors
+    ///
+    /// Returns error if file cannot be opened or read.
+    pub fn from_excel<P: AsRef<Path>>(path: P) -> Result<Self> {
+        Self::from_excel_with_options(path, XlsxReadOptions::default())
+    }
+
+    /// Load a sheet from an Excel file with options, auto-detecting format
+    ///
+    /// # Errors
+    ///
+    /// Returns error if file cannot be opened or read.
+    pub fn from_excel_with_options<P: AsRef<Path>>(path: P, options: XlsxReadOptions) -> Result<Self> {
+        let mut workbook: Sheets<BufReader<File>> = open_workbook_auto(path.as_ref())
+            .map_err(|e: CalamineError| SheetError::Io(std::io::Error::new(std::io::ErrorKind::Other, e.to_string())))?;
+
+        let sheet_names: Vec<String> = workbook.sheet_names().to_vec();
+        if sheet_names.is_empty() {
+            return Ok(Sheet::new());
+        }
+
+        let sheet_name = &sheet_names[0];
+        let range = workbook
+            .worksheet_range(sheet_name)
+            .map_err(|e: CalamineError| SheetError::Io(std::io::Error::new(std::io::ErrorKind::Other, e.to_string())))?;
+
+        let mut data: Vec<Vec<CellValue>> = Vec::new();
+
+        for row in range.rows() {
+            let row_data: Vec<CellValue> = row.iter().map(data_to_cell_value).collect();
+            data.push(row_data);
+        }
+
+        let mut sheet = Sheet::with_name(sheet_name);
+        *sheet.data_mut() = data;
+
+        if options.has_headers && sheet.row_count() > 0 {
+            sheet.name_columns_by_row(0)?;
+        }
+
+        Ok(sheet)
     }
 
     /// Write sheet data to a worksheet
@@ -291,6 +413,132 @@ impl Book {
             .map_err(|e: XlsxError| SheetError::Io(std::io::Error::new(std::io::ErrorKind::Other, e.to_string())))?;
 
         Ok(workbook.sheet_names().iter().map(|s| s.to_string()).collect())
+    }
+
+    // =========================================================================
+    // XLS (Legacy Excel 97-2003) Support
+    // =========================================================================
+
+    /// Load a book from a legacy Excel file (.xls) - all sheets
+    ///
+    /// # Errors
+    ///
+    /// Returns error if file cannot be opened or read.
+    pub fn from_xls<P: AsRef<Path>>(path: P) -> Result<Self> {
+        Self::from_xls_with_options(path, XlsxReadOptions::default())
+    }
+
+    /// Load a book from a legacy Excel file with options
+    ///
+    /// # Errors
+    ///
+    /// Returns error if file cannot be opened or read.
+    pub fn from_xls_with_options<P: AsRef<Path>>(path: P, options: XlsxReadOptions) -> Result<Self> {
+        let mut workbook: Xls<BufReader<File>> = open_workbook(path.as_ref())
+            .map_err(|e: XlsError| SheetError::Io(std::io::Error::new(std::io::ErrorKind::Other, e.to_string())))?;
+
+        let sheet_names: Vec<String> = workbook.sheet_names().iter().map(|s: &String| s.to_string()).collect();
+        let mut book = Book::new();
+
+        for sheet_name in sheet_names {
+            let range = workbook
+                .worksheet_range(&sheet_name)
+                .map_err(|e: XlsError| SheetError::Io(std::io::Error::new(std::io::ErrorKind::Other, e.to_string())))?;
+
+            let mut data: Vec<Vec<CellValue>> = Vec::new();
+
+            for row in range.rows() {
+                let row_data: Vec<CellValue> = row.iter().map(data_to_cell_value).collect();
+                data.push(row_data);
+            }
+
+            let mut sheet = Sheet::with_name(&sheet_name);
+            *sheet.data_mut() = data;
+
+            if options.has_headers && sheet.row_count() > 0 {
+                // Ignore duplicate column name errors when loading
+                let _ = sheet.name_columns_by_row(0);
+            }
+
+            book.add_sheet(&sheet_name, sheet)?;
+        }
+
+        Ok(book)
+    }
+
+    /// Get sheet names from a legacy Excel file without loading data
+    ///
+    /// # Errors
+    ///
+    /// Returns error if file cannot be opened.
+    pub fn xls_sheet_names<P: AsRef<Path>>(path: P) -> Result<Vec<String>> {
+        let workbook: Xls<BufReader<File>> = open_workbook(path.as_ref())
+            .map_err(|e: XlsError| SheetError::Io(std::io::Error::new(std::io::ErrorKind::Other, e.to_string())))?;
+
+        Ok(workbook.sheet_names().iter().map(|s: &String| s.to_string()).collect())
+    }
+
+    // =========================================================================
+    // Auto-detect Excel format (XLS or XLSX)
+    // =========================================================================
+
+    /// Load a book from an Excel file, auto-detecting format (.xls or .xlsx)
+    ///
+    /// # Errors
+    ///
+    /// Returns error if file cannot be opened or read.
+    pub fn from_excel<P: AsRef<Path>>(path: P) -> Result<Self> {
+        Self::from_excel_with_options(path, XlsxReadOptions::default())
+    }
+
+    /// Load a book from an Excel file with options, auto-detecting format
+    ///
+    /// # Errors
+    ///
+    /// Returns error if file cannot be opened or read.
+    pub fn from_excel_with_options<P: AsRef<Path>>(path: P, options: XlsxReadOptions) -> Result<Self> {
+        let mut workbook: Sheets<BufReader<File>> = open_workbook_auto(path.as_ref())
+            .map_err(|e: CalamineError| SheetError::Io(std::io::Error::new(std::io::ErrorKind::Other, e.to_string())))?;
+
+        let sheet_names: Vec<String> = workbook.sheet_names().to_vec();
+        let mut book = Book::new();
+
+        for sheet_name in sheet_names {
+            let range = workbook
+                .worksheet_range(&sheet_name)
+                .map_err(|e: CalamineError| SheetError::Io(std::io::Error::new(std::io::ErrorKind::Other, e.to_string())))?;
+
+            let mut data: Vec<Vec<CellValue>> = Vec::new();
+
+            for row in range.rows() {
+                let row_data: Vec<CellValue> = row.iter().map(data_to_cell_value).collect();
+                data.push(row_data);
+            }
+
+            let mut sheet = Sheet::with_name(&sheet_name);
+            *sheet.data_mut() = data;
+
+            if options.has_headers && sheet.row_count() > 0 {
+                // Ignore duplicate column name errors when loading
+                let _ = sheet.name_columns_by_row(0);
+            }
+
+            book.add_sheet(&sheet_name, sheet)?;
+        }
+
+        Ok(book)
+    }
+
+    /// Get sheet names from an Excel file without loading data, auto-detecting format
+    ///
+    /// # Errors
+    ///
+    /// Returns error if file cannot be opened.
+    pub fn excel_sheet_names<P: AsRef<Path>>(path: P) -> Result<Vec<String>> {
+        let workbook: Sheets<BufReader<File>> = open_workbook_auto(path.as_ref())
+            .map_err(|e: CalamineError| SheetError::Io(std::io::Error::new(std::io::ErrorKind::Other, e.to_string())))?;
+
+        Ok(workbook.sheet_names().to_vec())
     }
 }
 
@@ -477,5 +725,83 @@ mod tests {
 
         let prices = sheet.column_by_name("Price").unwrap();
         assert_eq!(prices.len(), 3);
+    }
+
+    // =========================================================================
+    // Auto-detect format tests (from_excel)
+    // =========================================================================
+
+    #[test]
+    fn test_sheet_from_excel_auto_detect() {
+        let dir = tempdir().unwrap();
+        let path = dir.path().join("auto.xlsx");
+
+        // Create and save as xlsx
+        let sheet = Sheet::from_data(vec![
+            vec!["Name", "Value"],
+            vec!["Test", "123"],
+        ]);
+        sheet.save_as_xlsx(&path).unwrap();
+
+        // Load using auto-detect (should recognize xlsx)
+        let loaded = Sheet::from_excel(&path).unwrap();
+        assert_eq!(loaded.row_count(), 2);
+        assert_eq!(loaded.col_count(), 2);
+    }
+
+    #[test]
+    fn test_sheet_from_excel_with_options() {
+        let dir = tempdir().unwrap();
+        let path = dir.path().join("auto_headers.xlsx");
+
+        let sheet = Sheet::from_data(vec![
+            vec!["Col1", "Col2"],
+            vec!["A", "B"],
+        ]);
+        sheet.save_as_xlsx(&path).unwrap();
+
+        let loaded = Sheet::from_excel_with_options(
+            &path,
+            XlsxReadOptions::default().with_headers(true),
+        ).unwrap();
+
+        assert!(loaded.column_names().is_some());
+        let names = loaded.column_names().unwrap();
+        assert_eq!(names[0], "Col1");
+        assert_eq!(names[1], "Col2");
+    }
+
+    #[test]
+    fn test_book_from_excel_auto_detect() {
+        let dir = tempdir().unwrap();
+        let path = dir.path().join("book_auto.xlsx");
+
+        let mut book = Book::new();
+        book.add_sheet("Sheet1", Sheet::from_data(vec![vec![1, 2]])).unwrap();
+        book.add_sheet("Sheet2", Sheet::from_data(vec![vec![3, 4]])).unwrap();
+        book.save_as_xlsx(&path).unwrap();
+
+        // Load using auto-detect
+        let loaded = Book::from_excel(&path).unwrap();
+        assert_eq!(loaded.sheet_count(), 2);
+        assert!(loaded.has_sheet("Sheet1"));
+        assert!(loaded.has_sheet("Sheet2"));
+    }
+
+    #[test]
+    fn test_book_excel_sheet_names() {
+        let dir = tempdir().unwrap();
+        let path = dir.path().join("names_auto.xlsx");
+
+        let mut book = Book::new();
+        book.add_sheet("Alpha", Sheet::new()).unwrap();
+        book.add_sheet("Beta", Sheet::new()).unwrap();
+        book.save_as_xlsx(&path).unwrap();
+
+        // Get sheet names using auto-detect
+        let names = Book::excel_sheet_names(&path).unwrap();
+        assert_eq!(names.len(), 2);
+        assert!(names.contains(&"Alpha".to_string()));
+        assert!(names.contains(&"Beta".to_string()));
     }
 }
