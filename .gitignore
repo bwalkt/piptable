@@ -19,9 +19,16 @@ Thumbs.db
 .env.local
 *.pem
 
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.so
+
 # Debug
 *.log
 *.d
 
 # Decision docs (local notes)
 docs/decisions/
+.venv/

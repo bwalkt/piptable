@@ -1,0 +1,19 @@
+[package]
+name = "piptable-python"
+description = "Python bindings for piptable Sheet/Book API"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+
+[lib]
+name = "piptable"
+crate-type = ["cdylib"]
+
+[dependencies]
+pyo3 = { workspace = true }
+piptable-sheet = { workspace = true }
+
+[lints]
+workspace = true
