@@ -569,6 +569,104 @@ impl Sheet {
         Some(dict)
     }
 
+    /// Convert to a list of records (list of dictionaries)
+    ///
+    /// Each row becomes a HashMap with column names as keys.
+    /// Returns None if columns are not named.
+    ///
+    /// # Example
+    /// ```
+    /// use piptable_sheet::Sheet;
+    ///
+    /// let mut sheet = Sheet::from_data(vec![
+    ///     vec!["name", "age"],
+    ///     vec!["Alice", "30"],
+    ///     vec!["Bob", "25"],
+    /// ]);
+    /// sheet.name_columns_by_row(0).unwrap();
+    ///
+    /// let records = sheet.to_records().unwrap();
+    /// // [{"name": "name", "age": "age"}, {"name": "Alice", "age": "30"}, ...]
+    /// ```
+    #[must_use]
+    pub fn to_records(&self) -> Option<Vec<IndexMap<String, CellValue>>> {
+        let names = self.column_names.as_ref()?;
+        let mut records = Vec::with_capacity(self.data.len());
+
+        for row in &self.data {
+            let mut record = IndexMap::new();
+            for (i, name) in names.iter().enumerate() {
+                if i < row.len() {
+                    record.insert(name.clone(), row[i].clone());
+                } else {
+                    record.insert(name.clone(), CellValue::Null);
+                }
+            }
+            records.push(record);
+        }
+
+        Some(records)
+    }
+
+    /// Create a sheet from a list of records (list of dictionaries)
+    ///
+    /// All records should have the same keys. Column order is determined
+    /// by the first record.
+    ///
+    /// # Example
+    /// ```
+    /// use piptable_sheet::{Sheet, CellValue};
+    /// use indexmap::IndexMap;
+    ///
+    /// let mut record1 = IndexMap::new();
+    /// record1.insert("name".to_string(), CellValue::String("Alice".to_string()));
+    /// record1.insert("age".to_string(), CellValue::Int(30));
+    ///
+    /// let mut record2 = IndexMap::new();
+    /// record2.insert("name".to_string(), CellValue::String("Bob".to_string()));
+    /// record2.insert("age".to_string(), CellValue::Int(25));
+    ///
+    /// let sheet = Sheet::from_records(vec![record1, record2]).unwrap();
+    /// assert_eq!(sheet.row_count(), 3); // header + 2 data rows
+    /// ```
+    pub fn from_records(records: Vec<IndexMap<String, CellValue>>) -> Result<Self> {
+        if records.is_empty() {
+            return Ok(Sheet::new());
+        }
+
+        // Get column names from first record
+        let col_names: Vec<String> = records[0].keys().cloned().collect();
+
+        // Build data with header row
+        let mut data = Vec::with_capacity(records.len() + 1);
+
+        // Add header row
+        let header: Vec<CellValue> = col_names.iter().map(|n| CellValue::String(n.clone())).collect();
+        data.push(header);
+
+        // Add data rows
+        for record in &records {
+            let row: Vec<CellValue> = col_names
+                .iter()
+                .map(|name| record.get(name).cloned().unwrap_or(CellValue::Null))
+                .collect();
+            data.push(row);
+        }
+
+        let mut sheet = Sheet {
+            name: "Sheet1".to_string(),
+            data,
+            column_names: None,
+            column_index: None,
+            row_names: None,
+        };
+
+        // Name columns by header row
+        sheet.name_columns_by_row(0)?;
+
+        Ok(sheet)
+    }
+
     /// Get rows iterator (excluding header row if named)
     pub fn rows(&self) -> impl Iterator<Item = &Vec<CellValue>> {
         self.data.iter()
@@ -691,5 +789,71 @@ mod tests {
 
         assert_eq!(sheet.get(0, 0).unwrap(), &CellValue::Int(2));
         assert_eq!(sheet.get(1, 1).unwrap(), &CellValue::Int(8));
+    }
+
+    #[test]
+    fn test_to_records() {
+        let mut sheet = Sheet::from_data(vec![
+            vec!["name", "age"],
+            vec!["Alice", "30"],
+            vec!["Bob", "25"],
+        ]);
+
+        // Without named columns, should return None
+        assert!(sheet.to_records().is_none());
+
+        // Name the columns
+        sheet.name_columns_by_row(0).unwrap();
+
+        let records = sheet.to_records().unwrap();
+        assert_eq!(records.len(), 3); // includes header row
+
+        // Check second record (first data row)
+        let alice = &records[1];
+        assert_eq!(alice.get("name").unwrap(), &CellValue::String("Alice".to_string()));
+        assert_eq!(alice.get("age").unwrap(), &CellValue::String("30".to_string()));
+    }
+
+    #[test]
+    fn test_from_records() {
+        let mut record1 = IndexMap::new();
+        record1.insert("name".to_string(), CellValue::String("Alice".to_string()));
+        record1.insert("age".to_string(), CellValue::Int(30));
+
+        let mut record2 = IndexMap::new();
+        record2.insert("name".to_string(), CellValue::String("Bob".to_string()));
+        record2.insert("age".to_string(), CellValue::Int(25));
+
+        let sheet = Sheet::from_records(vec![record1, record2]).unwrap();
+
+        assert_eq!(sheet.row_count(), 3); // header + 2 data rows
+        assert_eq!(sheet.col_count(), 2);
+        assert!(sheet.column_names().is_some());
+
+        // Check data
+        let name_col = sheet.column_by_name("name").unwrap();
+        assert_eq!(name_col[1], CellValue::String("Alice".to_string()));
+        assert_eq!(name_col[2], CellValue::String("Bob".to_string()));
+    }
+
+    #[test]
+    fn test_records_roundtrip() {
+        let mut record1 = IndexMap::new();
+        record1.insert("id".to_string(), CellValue::Int(1));
+        record1.insert("value".to_string(), CellValue::String("one".to_string()));
+
+        let mut record2 = IndexMap::new();
+        record2.insert("id".to_string(), CellValue::Int(2));
+        record2.insert("value".to_string(), CellValue::String("two".to_string()));
+
+        // Create sheet from records
+        let sheet = Sheet::from_records(vec![record1.clone(), record2.clone()]).unwrap();
+
+        // Convert back to records
+        let records = sheet.to_records().unwrap();
+
+        // Skip header row (index 0), check data rows
+        assert_eq!(records[1].get("id").unwrap(), &CellValue::Int(1));
+        assert_eq!(records[2].get("value").unwrap(), &CellValue::String("two".to_string()));
     }
 }

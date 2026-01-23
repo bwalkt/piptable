@@ -348,6 +348,83 @@ impl Sheet {
         Ok(py_dict.into())
     }
 
+    /// Convert to a list of records (list of dictionaries)
+    ///
+    /// Each row becomes a dictionary with column names as keys.
+    /// Requires columns to be named (call name_columns_by_row first or use has_headers=True).
+    ///
+    /// Returns:
+    ///     A list of dictionaries, one per row
+    ///
+    /// Example:
+    ///     >>> sheet = Sheet.from_csv("data.csv", has_headers=True)
+    ///     >>> for record in sheet.to_records():
+    ///     ...     print(f"{record['name']} is {record['age']} years old")
+    fn to_records(&self, py: Python<'_>) -> PyResult<PyObject> {
+        let records = self
+            .inner
+            .to_records()
+            .ok_or_else(|| PyRuntimeError::new_err("Columns not named"))?;
+
+        let py_list = PyList::empty(py);
+        for record in records {
+            let py_dict = PyDict::new(py);
+            for (name, value) in record {
+                py_dict.set_item(name, cell_value_to_py(py, &value))?;
+            }
+            py_list.append(py_dict)?;
+        }
+        Ok(py_list.into())
+    }
+
+    /// Create a sheet from a list of records (list of dictionaries)
+    ///
+    /// All records should have the same keys. Column order is determined
+    /// by the first record.
+    ///
+    /// Args:
+    ///     records: A list of dictionaries with the same keys
+    ///
+    /// Returns:
+    ///     A new Sheet instance with columns named after the dictionary keys
+    ///
+    /// Example:
+    ///     >>> records = [
+    ///     ...     {"name": "Alice", "age": 30},
+    ///     ...     {"name": "Bob", "age": 25}
+    ///     ... ]
+    ///     >>> sheet = Sheet.from_records(records)
+    #[staticmethod]
+    fn from_records(_py: Python<'_>, records: &Bound<'_, PyList>) -> PyResult<Self> {
+        use indexmap::IndexMap;
+
+        if records.is_empty() {
+            return Ok(Sheet {
+                inner: RustSheet::new(),
+            });
+        }
+
+        let mut rust_records: Vec<IndexMap<String, RustCellValue>> = Vec::new();
+
+        for item in records.iter() {
+            let dict = item.downcast::<PyDict>()?;
+            let mut record = IndexMap::new();
+
+            for (key, value) in dict.iter() {
+                let key_str: String = key.extract()?;
+                let cell_value = py_to_cell_value(&value)?;
+                record.insert(key_str, cell_value);
+            }
+
+            rust_records.push(record);
+        }
+
+        let inner = RustSheet::from_records(rust_records)
+            .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
+
+        Ok(Sheet { inner })
+    }
+
     /// Save the sheet to a CSV file
     #[pyo3(signature = (path, delimiter=None))]
     fn save_as_csv(&self, path: &str, delimiter: Option<char>) -> PyResult<()> {
