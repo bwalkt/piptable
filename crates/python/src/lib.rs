@@ -514,9 +514,17 @@ impl Sheet {
     ///     >>> sheet = Sheet.from_pandas(df)
     #[staticmethod]
     fn from_pandas(_py: Python<'_>, df: &Bound<'_, PyAny>) -> PyResult<Self> {
-        // Get column names
+        // Get column names (convert to strings - pandas allows non-string column names)
         let columns = df.getattr("columns")?;
-        let col_names: Vec<String> = columns.call_method0("tolist")?.extract()?;
+        let col_list = columns.call_method0("tolist")?;
+        let col_names: Vec<String> = col_list
+            .try_iter()?
+            .map(|item| {
+                let item = item?;
+                // Use Python's str() for robust string conversion
+                item.str()?.extract::<String>()
+            })
+            .collect::<PyResult<Vec<String>>>()?;
 
         // Get values as list of lists
         let values = df.getattr("values")?;
