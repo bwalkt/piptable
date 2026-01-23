@@ -512,6 +512,7 @@ fn print_help() {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use arrow::array::RecordBatch;
     use std::collections::HashMap;
 
     // ========================================================================
@@ -710,5 +711,197 @@ mod tests {
         interpreter.set_var("x", Value::Int(42)).await;
         let value = interpreter.get_var("x").await;
         assert!(matches!(value, Some(Value::Int(42))));
+    }
+
+    // ========================================================================
+    // array_value_to_json tests
+    // ========================================================================
+
+    #[test]
+    fn test_array_value_to_json_boolean() {
+        use arrow::array::BooleanArray;
+        let arr = BooleanArray::from(vec![Some(true), Some(false), None]);
+        assert_eq!(array_value_to_json(&arr, 0), serde_json::Value::Bool(true));
+        assert_eq!(array_value_to_json(&arr, 1), serde_json::Value::Bool(false));
+        assert_eq!(array_value_to_json(&arr, 2), serde_json::Value::Null);
+    }
+
+    #[test]
+    fn test_array_value_to_json_integers() {
+        use arrow::array::{Int16Array, Int32Array, Int64Array, Int8Array};
+
+        let arr = Int8Array::from(vec![42i8]);
+        assert_eq!(array_value_to_json(&arr, 0), serde_json::json!(42));
+
+        let arr = Int16Array::from(vec![1000i16]);
+        assert_eq!(array_value_to_json(&arr, 0), serde_json::json!(1000));
+
+        let arr = Int32Array::from(vec![100000i32]);
+        assert_eq!(array_value_to_json(&arr, 0), serde_json::json!(100000));
+
+        let arr = Int64Array::from(vec![9999999999i64]);
+        assert_eq!(
+            array_value_to_json(&arr, 0),
+            serde_json::json!(9999999999i64)
+        );
+    }
+
+    #[test]
+    fn test_array_value_to_json_unsigned() {
+        use arrow::array::{UInt16Array, UInt32Array, UInt64Array, UInt8Array};
+
+        let arr = UInt8Array::from(vec![255u8]);
+        assert_eq!(array_value_to_json(&arr, 0), serde_json::json!(255));
+
+        let arr = UInt16Array::from(vec![65535u16]);
+        assert_eq!(array_value_to_json(&arr, 0), serde_json::json!(65535));
+
+        let arr = UInt32Array::from(vec![4294967295u32]);
+        assert_eq!(
+            array_value_to_json(&arr, 0),
+            serde_json::json!(4294967295u64)
+        );
+
+        let arr = UInt64Array::from(vec![18446744073709551615u64]);
+        assert_eq!(
+            array_value_to_json(&arr, 0),
+            serde_json::json!(18446744073709551615u64)
+        );
+    }
+
+    #[test]
+    fn test_array_value_to_json_floats() {
+        use arrow::array::{Float32Array, Float64Array};
+
+        let arr = Float32Array::from(vec![3.14f32]);
+        let result = array_value_to_json(&arr, 0);
+        if let serde_json::Value::Number(n) = result {
+            assert!((n.as_f64().unwrap() - 3.14).abs() < 0.001);
+        } else {
+            panic!("Expected Number");
+        }
+
+        let arr = Float64Array::from(vec![2.71828f64]);
+        let result = array_value_to_json(&arr, 0);
+        if let serde_json::Value::Number(n) = result {
+            assert!((n.as_f64().unwrap() - 2.71828).abs() < 0.00001);
+        } else {
+            panic!("Expected Number");
+        }
+    }
+
+    #[test]
+    fn test_array_value_to_json_float_nan() {
+        use arrow::array::Float64Array;
+        let arr = Float64Array::from(vec![f64::NAN]);
+        // NaN should become null in JSON
+        assert_eq!(array_value_to_json(&arr, 0), serde_json::Value::Null);
+    }
+
+    #[test]
+    fn test_array_value_to_json_strings() {
+        use arrow::array::{LargeStringArray, StringArray};
+
+        let arr = StringArray::from(vec!["hello", "world"]);
+        assert_eq!(
+            array_value_to_json(&arr, 0),
+            serde_json::Value::String("hello".to_string())
+        );
+        assert_eq!(
+            array_value_to_json(&arr, 1),
+            serde_json::Value::String("world".to_string())
+        );
+
+        let arr = LargeStringArray::from(vec!["large string"]);
+        assert_eq!(
+            array_value_to_json(&arr, 0),
+            serde_json::Value::String("large string".to_string())
+        );
+    }
+
+    // ========================================================================
+    // table_to_json tests
+    // ========================================================================
+
+    #[test]
+    fn test_table_to_json_empty() {
+        let result = table_to_json(&[]).unwrap();
+        assert!(result.is_empty());
+    }
+
+    #[test]
+    fn test_table_to_json_with_data() {
+        use arrow::array::{Int64Array, StringArray};
+        use arrow::datatypes::{DataType, Field, Schema};
+
+        let schema = Schema::new(vec![
+            Field::new("id", DataType::Int64, false),
+            Field::new("name", DataType::Utf8, false),
+        ]);
+
+        let batch = RecordBatch::try_new(
+            std::sync::Arc::new(schema),
+            vec![
+                std::sync::Arc::new(Int64Array::from(vec![1, 2])),
+                std::sync::Arc::new(StringArray::from(vec!["alice", "bob"])),
+            ],
+        )
+        .unwrap();
+
+        let batches = vec![std::sync::Arc::new(batch)];
+        let result = table_to_json(&batches).unwrap();
+
+        assert_eq!(result.len(), 2);
+        assert_eq!(result[0]["id"], serde_json::json!(1));
+        assert_eq!(result[0]["name"], serde_json::json!("alice"));
+        assert_eq!(result[1]["id"], serde_json::json!(2));
+        assert_eq!(result[1]["name"], serde_json::json!("bob"));
+    }
+
+    // ========================================================================
+    // print_table_csv tests
+    // ========================================================================
+
+    #[test]
+    fn test_print_table_csv_empty() {
+        let result = print_table_csv(&[]);
+        assert!(result.is_ok());
+    }
+
+    // ========================================================================
+    // format_value Table variant test
+    // ========================================================================
+
+    #[test]
+    fn test_format_value_table() {
+        use arrow::array::Int64Array;
+        use arrow::datatypes::{DataType, Field, Schema};
+
+        let schema = Schema::new(vec![Field::new("id", DataType::Int64, false)]);
+
+        let batch = RecordBatch::try_new(
+            std::sync::Arc::new(schema),
+            vec![std::sync::Arc::new(Int64Array::from(vec![1, 2, 3]))],
+        )
+        .unwrap();
+
+        let table = Value::Table(vec![std::sync::Arc::new(batch)]);
+        assert_eq!(format_value(&table), "<Table: 3 rows>");
+    }
+
+    #[test]
+    fn test_format_value_empty_table() {
+        let table = Value::Table(vec![]);
+        assert_eq!(format_value(&table), "<Table: 0 rows>");
+    }
+
+    // ========================================================================
+    // dirs_history_path test
+    // ========================================================================
+
+    #[test]
+    fn test_dirs_history_path() {
+        // Just verify it doesn't panic - result depends on system
+        let _path = dirs_history_path();
     }
 }
