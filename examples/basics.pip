@@ -1,0 +1,34 @@
+' Basic piptable examples
+
+' Variables
+dim name = "piptable"
+dim version = 1
+dim active = true
+
+print("Welcome to " + name)
+
+' Arrays
+dim numbers = [1, 2, 3, 4, 5]
+print("Numbers: ")
+for each n in numbers
+  print(n)
+next
+
+print("Sum: " + str(sum(numbers)))
+print("Avg: " + str(avg(numbers)))
+
+' Objects
+dim config = {
+  "host": "localhost",
+  "port": 8080,
+  "debug": true
+}
+
+print("Server: " + config.host + ":" + str(config.port))
+
+' Functions
+function greet(who)
+  return "Hello, " + who + "!"
+end function
+
+print(greet("World"))
