@@ -571,7 +571,8 @@ impl Sheet {
 
     /// Convert to a list of records (list of dictionaries)
     ///
-    /// Each row becomes a HashMap with column names as keys.
+    /// Each row becomes an IndexMap with column names as keys.
+    /// Column order is preserved in each record.
     /// Returns None if columns are not named.
     ///
     /// # Example

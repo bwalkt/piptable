@@ -397,6 +397,7 @@ impl Sheet {
     #[staticmethod]
     fn from_records(_py: Python<'_>, records: &Bound<'_, PyList>) -> PyResult<Self> {
         use indexmap::IndexMap;
+        use std::collections::HashSet;
 
         if records.is_empty() {
             return Ok(Sheet {
@@ -405,15 +406,35 @@ impl Sheet {
         }
 
         let mut rust_records: Vec<IndexMap<String, RustCellValue>> = Vec::new();
+        let mut expected_keys: Option<HashSet<String>> = None;
 
-        for item in records.iter() {
+        for (idx, item) in records.iter().enumerate() {
             let dict = item.downcast::<PyDict>()?;
             let mut record = IndexMap::new();
+            let mut current_keys = HashSet::new();
 
             for (key, value) in dict.iter() {
                 let key_str: String = key.extract()?;
+                current_keys.insert(key_str.clone());
                 let cell_value = py_to_cell_value(&value)?;
                 record.insert(key_str, cell_value);
+            }
+
+            // Validate keys match the first record
+            match &expected_keys {
+                None => {
+                    expected_keys = Some(current_keys);
+                }
+                Some(expected) => {
+                    if &current_keys != expected {
+                        let missing: Vec<_> = expected.difference(&current_keys).collect();
+                        let extra: Vec<_> = current_keys.difference(expected).collect();
+                        return Err(PyValueError::new_err(format!(
+                            "Record at index {} has mismatched keys. Missing: {:?}, Extra: {:?}",
+                            idx, missing, extra
+                        )));
+                    }
+                }
             }
 
             rust_records.push(record);
