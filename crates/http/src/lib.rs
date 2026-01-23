@@ -37,11 +37,19 @@ pub enum HttpMethod {
 }
 
 impl HttpClient {
-    /// Create a new HTTP client with HTTP/2 support via ALPN negotiation.
+    /// Constructs a new `HttpClient` configured to negotiate HTTP/2 via ALPN.
+    ///
+    /// The created client uses a 30-second default timeout and is configured to bypass system proxy lookup.
     ///
     /// # Errors
     ///
-    /// Returns error if client creation fails.
+    /// Returns a `PipError::Http` if building the underlying HTTP client fails.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// let client = HttpClient::new().expect("failed to create HttpClient");
+    /// ```
     pub fn new() -> PipResult<Self> {
         let client = Client::builder()
             .timeout(Duration::from_secs(30))
@@ -53,11 +61,20 @@ impl HttpClient {
         Ok(Self { client })
     }
 
-    /// Create with custom configuration.
+    /// Constructs an HttpClient configured with a custom per-request timeout.
+    ///
+    /// Builds an underlying reqwest client with the given timeout (in seconds) and disables proxy
+    /// discovery for the process.
     ///
     /// # Errors
     ///
-    /// Returns error if client creation fails.
+    /// Returns `PipError::Http` if building the underlying HTTP client fails.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// let client = piptable_http::HttpClient::with_timeout(10).unwrap();
+    /// ```
     pub fn with_timeout(timeout_secs: u64) -> PipResult<Self> {
         let client = Client::builder()
             .timeout(Duration::from_secs(timeout_secs))
