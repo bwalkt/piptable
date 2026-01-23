@@ -180,7 +180,12 @@ class Book:
         ...
 
     def get_sheet(self, name: str) -> Sheet:
-        """Get a sheet by name."""
+        """Get a sheet by name (returns a copy).
+
+        Note: This returns a copy of the sheet. Modifications to the returned
+        sheet will not affect the book. Use `add_sheet` to replace a sheet
+        after modifications.
+        """
         ...
 
     def add_sheet(self, name: str, sheet: Sheet) -> None:

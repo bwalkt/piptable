@@ -126,6 +126,11 @@ impl Sheet {
     fn from_csv(path: &str, has_headers: bool, delimiter: Option<char>) -> PyResult<Self> {
         let mut options = RustCsvOptions::default();
         if let Some(d) = delimiter {
+            if !d.is_ascii() {
+                return Err(PyValueError::new_err(
+                    "delimiter must be a single-byte ASCII character",
+                ));
+            }
             options = options.with_delimiter(d as u8);
         }
 
@@ -351,6 +356,11 @@ impl Sheet {
     fn save_as_csv(&self, path: &str, delimiter: Option<char>) -> PyResult<()> {
         let mut options = RustCsvOptions::default();
         if let Some(d) = delimiter {
+            if !d.is_ascii() {
+                return Err(PyValueError::new_err(
+                    "delimiter must be a single-byte ASCII character",
+                ));
+            }
             options = options.with_delimiter(d as u8);
         }
         self.inner
@@ -470,7 +480,11 @@ impl Book {
         self.inner.has_sheet(name)
     }
 
-    /// Get a sheet by name
+    /// Get a sheet by name (returns a copy)
+    ///
+    /// Note: This returns a copy of the sheet. Modifications to the returned
+    /// sheet will not affect the book. Use `add_sheet` to replace a sheet
+    /// after modifications.
     fn get_sheet(&self, name: &str) -> PyResult<Sheet> {
         let sheet = self
             .inner

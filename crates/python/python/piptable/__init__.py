@@ -2,4 +2,4 @@
 
 from .piptable import Sheet, Book
 
-__all__ = ["Sheet", "Book"]
+__all__ = ["Book", "Sheet"]
