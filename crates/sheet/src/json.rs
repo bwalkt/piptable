@@ -113,10 +113,10 @@ impl Sheet {
 
         if pretty {
             serde_json::to_writer_pretty(writer, &json_array)
-                .map_err(|e| SheetError::Parse(format!("JSON write error: {e}")))?;
+                .map_err(|e| SheetError::Serialize(format!("JSON write error: {e}")))?;
         } else {
             serde_json::to_writer(writer, &json_array)
-                .map_err(|e| SheetError::Parse(format!("JSON write error: {e}")))?;
+                .map_err(|e| SheetError::Serialize(format!("JSON write error: {e}")))?;
         }
 
         Ok(())
@@ -234,7 +234,7 @@ impl Sheet {
                 .collect();
 
             serde_json::to_writer(&mut writer, &json_obj)
-                .map_err(|e| SheetError::Parse(format!("JSON write error: {e}")))?;
+                .map_err(|e| SheetError::Serialize(format!("JSON write error: {e}")))?;
             writeln!(writer)?;
         }
 

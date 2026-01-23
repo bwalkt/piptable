@@ -38,6 +38,9 @@ pub enum SheetError {
     #[error("Parse error: {0}")]
     Parse(String),
 
+    #[error("Serialize error: {0}")]
+    Serialize(String),
+
     #[error("Data length mismatch: expected {expected}, got {actual}")]
     LengthMismatch { expected: usize, actual: usize },
 
