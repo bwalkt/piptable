@@ -66,9 +66,11 @@ impl Book {
 
     /// Get a sheet by name
     pub fn get_sheet(&self, name: &str) -> Result<&Sheet> {
-        self.sheets.get(name).ok_or_else(|| SheetError::SheetNotFound {
-            name: name.to_string(),
-        })
+        self.sheets
+            .get(name)
+            .ok_or_else(|| SheetError::SheetNotFound {
+                name: name.to_string(),
+            })
     }
 
     /// Get a mutable sheet by name

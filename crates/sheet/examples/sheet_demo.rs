@@ -24,7 +24,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         vec!["Charlie", "35", "Chicago"],
     ]);
 
-    println!("Created sheet with {} rows, {} cols", sheet.row_count(), sheet.col_count());
+    println!(
+        "Created sheet with {} rows, {} cols",
+        sheet.row_count(),
+        sheet.col_count()
+    );
 
     // Name columns by first row
     sheet.name_columns_by_row(0)?;
@@ -50,7 +54,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Load from CSV
     let loaded = Sheet::from_csv(&csv_path)?;
-    println!("Loaded back: {} rows, {} cols", loaded.row_count(), loaded.col_count());
+    println!(
+        "Loaded back: {} rows, {} cols",
+        loaded.row_count(),
+        loaded.col_count()
+    );
 
     // Convert to CSV string
     let csv_string = sheet.to_csv_string()?;
@@ -75,14 +83,19 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Load from xlsx
     let xlsx_loaded = Sheet::from_xlsx(&xlsx_path)?;
-    println!("Loaded xlsx: {} rows, {} cols", xlsx_loaded.row_count(), xlsx_loaded.col_count());
+    println!(
+        "Loaded xlsx: {} rows, {} cols",
+        xlsx_loaded.row_count(),
+        xlsx_loaded.col_count()
+    );
 
     // Load with headers option
-    let xlsx_with_headers = Sheet::from_xlsx_with_options(
-        &xlsx_path,
-        XlsxReadOptions::default().with_headers(true),
-    )?;
-    println!("With headers - column names: {:?}", xlsx_with_headers.column_names());
+    let xlsx_with_headers =
+        Sheet::from_xlsx_with_options(&xlsx_path, XlsxReadOptions::default().with_headers(true))?;
+    println!(
+        "With headers - column names: {:?}",
+        xlsx_with_headers.column_names()
+    );
 
     // =========================================================================
     // Book operations (multiple sheets)
@@ -109,7 +122,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     book.add_sheet("Sales", sales)?;
     book.add_sheet("Expenses", expenses)?;
 
-    println!("Book has {} sheets: {:?}", book.sheet_count(), book.sheet_names());
+    println!(
+        "Book has {} sheets: {:?}",
+        book.sheet_count(),
+        book.sheet_names()
+    );
 
     // Save book to xlsx
     let book_xlsx_path = temp_dir.join("book_demo.xlsx");
@@ -156,12 +173,18 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     use piptable_sheet::CellValue;
 
     let mut rec1 = IndexMap::new();
-    rec1.insert("product".to_string(), CellValue::String("Widget".to_string()));
+    rec1.insert(
+        "product".to_string(),
+        CellValue::String("Widget".to_string()),
+    );
     rec1.insert("price".to_string(), CellValue::Float(19.99));
     rec1.insert("qty".to_string(), CellValue::Int(100));
 
     let mut rec2 = IndexMap::new();
-    rec2.insert("product".to_string(), CellValue::String("Gadget".to_string()));
+    rec2.insert(
+        "product".to_string(),
+        CellValue::String("Gadget".to_string()),
+    );
     rec2.insert("price".to_string(), CellValue::Float(29.99));
     rec2.insert("qty".to_string(), CellValue::Int(50));
 

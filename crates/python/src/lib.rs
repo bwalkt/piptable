@@ -28,8 +28,8 @@
 //! ```
 
 use piptable_sheet::{
-    Book as RustBook, CellValue as RustCellValue, CsvOptions as RustCsvOptions,
-    Sheet as RustSheet, XlsxReadOptions as RustXlsxReadOptions,
+    Book as RustBook, CellValue as RustCellValue, CsvOptions as RustCsvOptions, Sheet as RustSheet,
+    XlsxReadOptions as RustXlsxReadOptions,
 };
 use pyo3::exceptions::{PyImportError, PyIndexError, PyRuntimeError, PyValueError};
 use pyo3::prelude::*;
@@ -479,7 +479,9 @@ impl Sheet {
         if let Some(col_names) = self.inner.column_names() {
             let py_dict = PyDict::new(py);
             for (i, name) in col_names.iter().enumerate() {
-                let col = self.inner.column(i)
+                let col = self
+                    .inner
+                    .column(i)
                     .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
                 let list = PyList::new(py, col.iter().map(|v| cell_value_to_py(py, v)))?;
                 py_dict.set_item(name, list)?;
@@ -606,8 +608,8 @@ impl Sheet {
     ///     >>> sheet = Sheet.from_json("data.json")
     #[staticmethod]
     fn from_json(path: &str) -> PyResult<Self> {
-        let sheet = RustSheet::from_json(path)
-            .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
+        let sheet =
+            RustSheet::from_json(path).map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
         Ok(Sheet { inner: sheet })
     }
 
@@ -674,8 +676,8 @@ impl Sheet {
     ///     >>> sheet = Sheet.from_jsonl("data.jsonl")
     #[staticmethod]
     fn from_jsonl(path: &str) -> PyResult<Self> {
-        let sheet = RustSheet::from_jsonl(path)
-            .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
+        let sheet =
+            RustSheet::from_jsonl(path).map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
         Ok(Sheet { inner: sheet })
     }
 
@@ -732,8 +734,8 @@ impl Sheet {
     ///     >>> sheet = Sheet.from_toon("data.toon")
     #[staticmethod]
     fn from_toon(path: &str) -> PyResult<Self> {
-        let sheet = RustSheet::from_toon(path)
-            .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
+        let sheet =
+            RustSheet::from_toon(path).map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
         Ok(Sheet { inner: sheet })
     }
 
@@ -859,7 +861,11 @@ impl Book {
 
     /// Get all sheet names
     fn sheet_names(&self) -> Vec<String> {
-        self.inner.sheet_names().iter().map(|s| s.to_string()).collect()
+        self.inner
+            .sheet_names()
+            .iter()
+            .map(|s| s.to_string())
+            .collect()
     }
 
     /// Check if a sheet exists

@@ -183,8 +183,9 @@ impl Sheet {
                 continue;
             }
 
-            let value: Value = serde_json::from_str(trimmed)
-                .map_err(|e| SheetError::Parse(format!("Invalid JSON on line {}: {e}", line_num + 1)))?;
+            let value: Value = serde_json::from_str(trimmed).map_err(|e| {
+                SheetError::Parse(format!("Invalid JSON on line {}: {e}", line_num + 1))
+            })?;
 
             let obj = value.as_object().ok_or_else(|| {
                 SheetError::Parse(format!("Line {} must be a JSON object", line_num + 1))
@@ -319,10 +320,7 @@ mod tests {
 
     #[test]
     fn test_to_json_string() {
-        let mut sheet = Sheet::from_data(vec![
-            vec!["name", "age"],
-            vec!["Alice", "30"],
-        ]);
+        let mut sheet = Sheet::from_data(vec![vec!["name", "age"], vec!["Alice", "30"]]);
         sheet.name_columns_by_row(0).unwrap();
 
         let json = sheet.to_json_string().unwrap();
@@ -444,12 +442,14 @@ mod tests {
     fn test_json_nan_infinity() {
         // NaN and Infinity are converted to string representation in JSON
         let mut sheet = Sheet::new();
-        sheet.data_mut().push(vec![
-            CellValue::String("value".to_string()),
-        ]);
+        sheet
+            .data_mut()
+            .push(vec![CellValue::String("value".to_string())]);
         sheet.data_mut().push(vec![CellValue::Float(f64::NAN)]);
         sheet.data_mut().push(vec![CellValue::Float(f64::INFINITY)]);
-        sheet.data_mut().push(vec![CellValue::Float(f64::NEG_INFINITY)]);
+        sheet
+            .data_mut()
+            .push(vec![CellValue::Float(f64::NEG_INFINITY)]);
         sheet.name_columns_by_row(0).unwrap();
 
         let json = sheet.to_json_string().unwrap();

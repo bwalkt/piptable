@@ -667,10 +667,7 @@ mod control_flow {
         "#,
         )
         .await;
-        assert!(matches!(
-            interp.get_var("sum").await,
-            Some(Value::Int(15))
-        ));
+        assert!(matches!(interp.get_var("sum").await, Some(Value::Int(15))));
     }
 
     #[tokio::test]
@@ -685,10 +682,7 @@ mod control_flow {
         )
         .await;
         // 0 + 2 + 4 + 6 + 8 + 10 = 30
-        assert!(matches!(
-            interp.get_var("sum").await,
-            Some(Value::Int(30))
-        ));
+        assert!(matches!(interp.get_var("sum").await, Some(Value::Int(30))));
     }
 
     #[tokio::test]
@@ -703,10 +697,7 @@ mod control_flow {
         )
         .await;
         // 5 + 4 + 3 + 2 + 1 = 15
-        assert!(matches!(
-            interp.get_var("sum").await,
-            Some(Value::Int(15))
-        ));
+        assert!(matches!(interp.get_var("sum").await, Some(Value::Int(15))));
     }
 
     #[tokio::test]
@@ -721,10 +712,7 @@ mod control_flow {
         "#,
         )
         .await;
-        assert!(matches!(
-            interp.get_var("sum").await,
-            Some(Value::Int(15))
-        ));
+        assert!(matches!(interp.get_var("sum").await, Some(Value::Int(15))));
     }
 
     #[tokio::test]
@@ -1099,8 +1087,7 @@ mod collections {
     /// ```
     #[tokio::test]
     async fn test_nested_array() {
-        let (interp, _) =
-            run_script("dim arr = [[1, 2], [3, 4]]\ndim x = arr[0][1]").await;
+        let (interp, _) = run_script("dim arr = [[1, 2], [3, 4]]\ndim x = arr[0][1]").await;
         assert!(matches!(interp.get_var("x").await, Some(Value::Int(2))));
     }
 
@@ -1380,13 +1367,15 @@ mod sql {
     #[tokio::test]
     async fn test_simple_query() {
         let (interp, _) = run_script("dim result = query(SELECT 1 + 1 as sum)").await;
-        assert!(matches!(interp.get_var("result").await, Some(Value::Table(_))));
+        assert!(matches!(
+            interp.get_var("result").await,
+            Some(Value::Table(_))
+        ));
     }
 
     #[tokio::test]
     async fn test_query_multiple_columns() {
-        let (interp, _) =
-            run_script("dim result = query(SELECT 1 as a, 2 as b, 3 as c)").await;
+        let (interp, _) = run_script("dim result = query(SELECT 1 as a, 2 as b, 3 as c)").await;
         match interp.get_var("result").await {
             Some(Value::Table(batches)) => {
                 assert!(!batches.is_empty());
@@ -1592,13 +1581,10 @@ mod http {
 
         Mock::given(method("GET"))
             .and(path("/api/items"))
-            .respond_with(
-                ResponseTemplate::new(200)
-                    .set_body_json(serde_json::json!([
-                        {"id": 1, "name": "item1"},
-                        {"id": 2, "name": "item2"}
-                    ])),
-            )
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!([
+                {"id": 1, "name": "item1"},
+                {"id": 2, "name": "item2"}
+            ])))
             .mount(&server)
             .await;
 
@@ -1667,8 +1653,7 @@ mod http {
         Mock::given(method("GET"))
             .and(path("/api/numbers"))
             .respond_with(
-                ResponseTemplate::new(200)
-                    .set_body_json(serde_json::json!([1, 2, 3, 4, 5])),
+                ResponseTemplate::new(200).set_body_json(serde_json::json!([1, 2, 3, 4, 5])),
             )
             .mount(&server)
             .await;
@@ -1685,10 +1670,7 @@ mod http {
         );
         let (interp, _) = run_script(&script).await;
 
-        assert!(matches!(
-            interp.get_var("sum").await,
-            Some(Value::Int(15))
-        ));
+        assert!(matches!(interp.get_var("sum").await, Some(Value::Int(15))));
     }
 }
 
@@ -1882,10 +1864,7 @@ mod edge_cases {
         )
         .await;
         // With default step 1, 10 to 1 should not execute
-        assert!(matches!(
-            interp.get_var("count").await,
-            Some(Value::Int(0))
-        ));
+        assert!(matches!(interp.get_var("count").await, Some(Value::Int(0))));
     }
 
     /// Verifies that a `for each` loop over an empty array never executes its body (counter remains 0).
@@ -1919,10 +1898,7 @@ mod edge_cases {
         "#,
         )
         .await;
-        assert!(matches!(
-            interp.get_var("count").await,
-            Some(Value::Int(0))
-        ));
+        assert!(matches!(interp.get_var("count").await, Some(Value::Int(0))));
     }
 
     /// Verifies that adding 1 to the maximum 64-bit integer produces an overflow error.
@@ -1974,9 +1950,7 @@ mod edge_cases {
     #[tokio::test]
     async fn test_string_concatenation() {
         let (interp, _) = run_script(r#"dim x = "hello" + " " + "world""#).await;
-        assert!(
-            matches!(interp.get_var("x").await, Some(Value::String(s)) if s == "hello world")
-        );
+        assert!(matches!(interp.get_var("x").await, Some(Value::String(s)) if s == "hello world"));
     }
 
     #[tokio::test]

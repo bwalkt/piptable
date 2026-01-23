@@ -111,10 +111,8 @@ impl Sheet {
         if records.is_empty() {
             // Return sheet with just column names
             let mut sheet = Sheet::new();
-            let header_row: Vec<CellValue> = column_names
-                .into_iter()
-                .map(CellValue::String)
-                .collect();
+            let header_row: Vec<CellValue> =
+                column_names.into_iter().map(CellValue::String).collect();
             *sheet.data_mut() = vec![header_row];
             sheet.name_columns_by_row(0)?;
             return Ok(sheet);
@@ -143,7 +141,11 @@ impl Sheet {
         })?;
 
         // Exclude header row from count (from_records includes it)
-        let data_rows = if records.is_empty() { 0 } else { records.len() - 1 };
+        let data_rows = if records.is_empty() {
+            0
+        } else {
+            records.len() - 1
+        };
 
         // Write header: rows[count]{field1,field2,...}:
         write!(writer, "{}[{}]{{", DEFAULT_ARRAY_NAME, data_rows)?;
@@ -224,9 +226,11 @@ fn parse_toon_header(line: &str) -> Result<(Vec<String>, Option<usize>)> {
     let count = if count_str.is_empty() {
         None
     } else {
-        Some(count_str.parse::<usize>().map_err(|_| {
-            SheetError::Parse(format!("Invalid row count: '{count_str}'"))
-        })?)
+        Some(
+            count_str
+                .parse::<usize>()
+                .map_err(|_| SheetError::Parse(format!("Invalid row count: '{count_str}'")))?,
+        )
     };
 
     // Parse field names
@@ -234,7 +238,10 @@ fn parse_toon_header(line: &str) -> Result<(Vec<String>, Option<usize>)> {
     let fields: Vec<String> = if fields_str.is_empty() {
         Vec::new()
     } else {
-        fields_str.split(',').map(|s| s.trim().to_string()).collect()
+        fields_str
+            .split(',')
+            .map(|s| s.trim().to_string())
+            .collect()
     };
 
     Ok((fields, count))
@@ -430,7 +437,10 @@ mod tests {
         let sheet = Sheet::from_toon_str(toon).unwrap();
         let records = sheet.to_records().unwrap();
         let desc = records[1].get("description").unwrap();
-        assert_eq!(desc, &CellValue::String("A great, wonderful item".to_string()));
+        assert_eq!(
+            desc,
+            &CellValue::String("A great, wonderful item".to_string())
+        );
     }
 
     #[test]
@@ -470,9 +480,7 @@ mod tests {
 
     #[test]
     fn test_toon_value_formatting() {
-        let mut sheet = Sheet::from_data(vec![
-            vec!["name", "value"],
-        ]);
+        let mut sheet = Sheet::from_data(vec![vec!["name", "value"]]);
         sheet.name_columns_by_row(0).unwrap();
 
         // Add a row with a comma in string

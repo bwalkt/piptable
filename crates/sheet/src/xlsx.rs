@@ -2,10 +2,13 @@ use crate::book::Book;
 use crate::cell::CellValue;
 use crate::error::{Result, SheetError};
 use crate::sheet::Sheet;
-use calamine::{open_workbook, open_workbook_auto, Data, Error as CalamineError, Reader, Sheets, Xls, XlsError, Xlsx, XlsxError};
+use calamine::{
+    open_workbook, open_workbook_auto, Data, Error as CalamineError, Reader, Sheets, Xls, XlsError,
+    Xlsx, XlsxError,
+};
 use rust_xlsxwriter::{Workbook, Worksheet};
-use std::io::BufReader;
 use std::fs::File;
+use std::io::BufReader;
 use std::path::Path;
 
 /// Options for reading Excel files
@@ -99,9 +102,17 @@ impl Sheet {
     /// # Errors
     ///
     /// Returns error if file cannot be opened or read.
-    pub fn from_xlsx_with_options<P: AsRef<Path>>(path: P, options: XlsxReadOptions) -> Result<Self> {
-        let workbook: Xlsx<BufReader<File>> = open_workbook(path.as_ref())
-            .map_err(|e: XlsxError| SheetError::Io(std::io::Error::new(std::io::ErrorKind::Other, e.to_string())))?;
+    pub fn from_xlsx_with_options<P: AsRef<Path>>(
+        path: P,
+        options: XlsxReadOptions,
+    ) -> Result<Self> {
+        let workbook: Xlsx<BufReader<File>> =
+            open_workbook(path.as_ref()).map_err(|e: XlsxError| {
+                SheetError::Io(std::io::Error::new(
+                    std::io::ErrorKind::Other,
+                    e.to_string(),
+                ))
+            })?;
 
         let sheet_names = workbook.sheet_names().to_vec();
         if sheet_names.is_empty() {
@@ -130,12 +141,22 @@ impl Sheet {
         sheet_name: &str,
         options: XlsxReadOptions,
     ) -> Result<Self> {
-        let mut workbook: Xlsx<BufReader<File>> = open_workbook(path.as_ref())
-            .map_err(|e: XlsxError| SheetError::Io(std::io::Error::new(std::io::ErrorKind::Other, e.to_string())))?;
+        let mut workbook: Xlsx<BufReader<File>> =
+            open_workbook(path.as_ref()).map_err(|e: XlsxError| {
+                SheetError::Io(std::io::Error::new(
+                    std::io::ErrorKind::Other,
+                    e.to_string(),
+                ))
+            })?;
 
         let range = workbook
             .worksheet_range(sheet_name)
-            .map_err(|e: XlsxError| SheetError::Io(std::io::Error::new(std::io::ErrorKind::Other, e.to_string())))?;
+            .map_err(|e: XlsxError| {
+                SheetError::Io(std::io::Error::new(
+                    std::io::ErrorKind::Other,
+                    e.to_string(),
+                ))
+            })?;
 
         let data: Vec<Vec<CellValue>> = range
             .rows()
@@ -156,9 +177,12 @@ impl Sheet {
 
         self.write_to_worksheet(worksheet)?;
 
-        workbook
-            .save(path.as_ref())
-            .map_err(|e| SheetError::Io(std::io::Error::new(std::io::ErrorKind::Other, e.to_string())))?;
+        workbook.save(path.as_ref()).map_err(|e| {
+            SheetError::Io(std::io::Error::new(
+                std::io::ErrorKind::Other,
+                e.to_string(),
+            ))
+        })?;
 
         Ok(())
     }
@@ -181,9 +205,17 @@ impl Sheet {
     /// # Errors
     ///
     /// Returns error if file cannot be opened or read.
-    pub fn from_xls_with_options<P: AsRef<Path>>(path: P, options: XlsxReadOptions) -> Result<Self> {
-        let workbook: Xls<BufReader<File>> = open_workbook(path.as_ref())
-            .map_err(|e: XlsError| SheetError::Io(std::io::Error::new(std::io::ErrorKind::Other, e.to_string())))?;
+    pub fn from_xls_with_options<P: AsRef<Path>>(
+        path: P,
+        options: XlsxReadOptions,
+    ) -> Result<Self> {
+        let workbook: Xls<BufReader<File>> =
+            open_workbook(path.as_ref()).map_err(|e: XlsError| {
+                SheetError::Io(std::io::Error::new(
+                    std::io::ErrorKind::Other,
+                    e.to_string(),
+                ))
+            })?;
 
         let sheet_names = workbook.sheet_names().to_vec();
         if sheet_names.is_empty() {
@@ -212,12 +244,22 @@ impl Sheet {
         sheet_name: &str,
         options: XlsxReadOptions,
     ) -> Result<Self> {
-        let mut workbook: Xls<BufReader<File>> = open_workbook(path.as_ref())
-            .map_err(|e: XlsError| SheetError::Io(std::io::Error::new(std::io::ErrorKind::Other, e.to_string())))?;
+        let mut workbook: Xls<BufReader<File>> =
+            open_workbook(path.as_ref()).map_err(|e: XlsError| {
+                SheetError::Io(std::io::Error::new(
+                    std::io::ErrorKind::Other,
+                    e.to_string(),
+                ))
+            })?;
 
         let range = workbook
             .worksheet_range(sheet_name)
-            .map_err(|e: XlsError| SheetError::Io(std::io::Error::new(std::io::ErrorKind::Other, e.to_string())))?;
+            .map_err(|e: XlsError| {
+                SheetError::Io(std::io::Error::new(
+                    std::io::ErrorKind::Other,
+                    e.to_string(),
+                ))
+            })?;
 
         let data: Vec<Vec<CellValue>> = range
             .rows()
@@ -245,9 +287,17 @@ impl Sheet {
     /// # Errors
     ///
     /// Returns error if file cannot be opened or read.
-    pub fn from_excel_with_options<P: AsRef<Path>>(path: P, options: XlsxReadOptions) -> Result<Self> {
-        let mut workbook: Sheets<BufReader<File>> = open_workbook_auto(path.as_ref())
-            .map_err(|e: CalamineError| SheetError::Io(std::io::Error::new(std::io::ErrorKind::Other, e.to_string())))?;
+    pub fn from_excel_with_options<P: AsRef<Path>>(
+        path: P,
+        options: XlsxReadOptions,
+    ) -> Result<Self> {
+        let mut workbook: Sheets<BufReader<File>> =
+            open_workbook_auto(path.as_ref()).map_err(|e: CalamineError| {
+                SheetError::Io(std::io::Error::new(
+                    std::io::ErrorKind::Other,
+                    e.to_string(),
+                ))
+            })?;
 
         let sheet_names: Vec<String> = workbook.sheet_names().to_vec();
         if sheet_names.is_empty() {
@@ -257,7 +307,12 @@ impl Sheet {
         let sheet_name = &sheet_names[0];
         let range = workbook
             .worksheet_range(sheet_name)
-            .map_err(|e: CalamineError| SheetError::Io(std::io::Error::new(std::io::ErrorKind::Other, e.to_string())))?;
+            .map_err(|e: CalamineError| {
+                SheetError::Io(std::io::Error::new(
+                    std::io::ErrorKind::Other,
+                    e.to_string(),
+                ))
+            })?;
 
         let data: Vec<Vec<CellValue>> = range
             .rows()
@@ -269,40 +324,65 @@ impl Sheet {
 
     /// Write sheet data to a worksheet
     fn write_to_worksheet(&self, worksheet: &mut Worksheet) -> Result<()> {
-        worksheet
-            .set_name(self.name())
-            .map_err(|e| SheetError::Io(std::io::Error::new(std::io::ErrorKind::Other, e.to_string())))?;
+        worksheet.set_name(self.name()).map_err(|e| {
+            SheetError::Io(std::io::Error::new(
+                std::io::ErrorKind::Other,
+                e.to_string(),
+            ))
+        })?;
 
         for (row_idx, row) in self.data().iter().enumerate() {
             for (col_idx, cell) in row.iter().enumerate() {
-                let row_num = u32::try_from(row_idx)
-                    .map_err(|_| SheetError::Io(std::io::Error::new(std::io::ErrorKind::Other, "Row index overflow")))?;
-                let col_num = u16::try_from(col_idx)
-                    .map_err(|_| SheetError::Io(std::io::Error::new(std::io::ErrorKind::Other, "Column index overflow")))?;
+                let row_num = u32::try_from(row_idx).map_err(|_| {
+                    SheetError::Io(std::io::Error::new(
+                        std::io::ErrorKind::Other,
+                        "Row index overflow",
+                    ))
+                })?;
+                let col_num = u16::try_from(col_idx).map_err(|_| {
+                    SheetError::Io(std::io::Error::new(
+                        std::io::ErrorKind::Other,
+                        "Column index overflow",
+                    ))
+                })?;
 
                 match cell {
                     CellValue::Null => {} // Leave empty
                     CellValue::Bool(b) => {
-                        worksheet
-                            .write_boolean(row_num, col_num, *b)
-                            .map_err(|e| SheetError::Io(std::io::Error::new(std::io::ErrorKind::Other, e.to_string())))?;
+                        worksheet.write_boolean(row_num, col_num, *b).map_err(|e| {
+                            SheetError::Io(std::io::Error::new(
+                                std::io::ErrorKind::Other,
+                                e.to_string(),
+                            ))
+                        })?;
                     }
                     CellValue::Int(i) => {
                         // Note: Excel stores all numbers as f64, so integers > 2^53
                         // (9,007,199,254,740,992) may lose precision
                         worksheet
                             .write_number(row_num, col_num, *i as f64)
-                            .map_err(|e| SheetError::Io(std::io::Error::new(std::io::ErrorKind::Other, e.to_string())))?;
+                            .map_err(|e| {
+                                SheetError::Io(std::io::Error::new(
+                                    std::io::ErrorKind::Other,
+                                    e.to_string(),
+                                ))
+                            })?;
                     }
                     CellValue::Float(f) => {
-                        worksheet
-                            .write_number(row_num, col_num, *f)
-                            .map_err(|e| SheetError::Io(std::io::Error::new(std::io::ErrorKind::Other, e.to_string())))?;
+                        worksheet.write_number(row_num, col_num, *f).map_err(|e| {
+                            SheetError::Io(std::io::Error::new(
+                                std::io::ErrorKind::Other,
+                                e.to_string(),
+                            ))
+                        })?;
                     }
                     CellValue::String(s) => {
-                        worksheet
-                            .write_string(row_num, col_num, s)
-                            .map_err(|e| SheetError::Io(std::io::Error::new(std::io::ErrorKind::Other, e.to_string())))?;
+                        worksheet.write_string(row_num, col_num, s).map_err(|e| {
+                            SheetError::Io(std::io::Error::new(
+                                std::io::ErrorKind::Other,
+                                e.to_string(),
+                            ))
+                        })?;
                     }
                 }
             }
@@ -327,17 +407,34 @@ impl Book {
     /// # Errors
     ///
     /// Returns error if file cannot be opened or read.
-    pub fn from_xlsx_with_options<P: AsRef<Path>>(path: P, options: XlsxReadOptions) -> Result<Self> {
-        let mut workbook: Xlsx<BufReader<File>> = open_workbook(path.as_ref())
-            .map_err(|e: XlsxError| SheetError::Io(std::io::Error::new(std::io::ErrorKind::Other, e.to_string())))?;
+    pub fn from_xlsx_with_options<P: AsRef<Path>>(
+        path: P,
+        options: XlsxReadOptions,
+    ) -> Result<Self> {
+        let mut workbook: Xlsx<BufReader<File>> =
+            open_workbook(path.as_ref()).map_err(|e: XlsxError| {
+                SheetError::Io(std::io::Error::new(
+                    std::io::ErrorKind::Other,
+                    e.to_string(),
+                ))
+            })?;
 
-        let sheet_names: Vec<String> = workbook.sheet_names().iter().map(|s| s.to_string()).collect();
+        let sheet_names: Vec<String> = workbook
+            .sheet_names()
+            .iter()
+            .map(|s| s.to_string())
+            .collect();
         let mut book = Book::new();
 
         for sheet_name in sheet_names {
             let range = workbook
                 .worksheet_range(&sheet_name)
-                .map_err(|e: XlsxError| SheetError::Io(std::io::Error::new(std::io::ErrorKind::Other, e.to_string())))?;
+                .map_err(|e: XlsxError| {
+                    SheetError::Io(std::io::Error::new(
+                        std::io::ErrorKind::Other,
+                        e.to_string(),
+                    ))
+                })?;
 
             let data: Vec<Vec<CellValue>> = range
                 .rows()
@@ -361,49 +458,77 @@ impl Book {
 
         for (name, sheet) in self.sheets() {
             let worksheet = workbook.add_worksheet();
-            worksheet
-                .set_name(name)
-                .map_err(|e| SheetError::Io(std::io::Error::new(std::io::ErrorKind::Other, e.to_string())))?;
+            worksheet.set_name(name).map_err(|e| {
+                SheetError::Io(std::io::Error::new(
+                    std::io::ErrorKind::Other,
+                    e.to_string(),
+                ))
+            })?;
 
             for (row_idx, row) in sheet.data().iter().enumerate() {
                 for (col_idx, cell) in row.iter().enumerate() {
-                    let row_num = u32::try_from(row_idx)
-                        .map_err(|_| SheetError::Io(std::io::Error::new(std::io::ErrorKind::Other, "Row index overflow")))?;
-                    let col_num = u16::try_from(col_idx)
-                        .map_err(|_| SheetError::Io(std::io::Error::new(std::io::ErrorKind::Other, "Column index overflow")))?;
+                    let row_num = u32::try_from(row_idx).map_err(|_| {
+                        SheetError::Io(std::io::Error::new(
+                            std::io::ErrorKind::Other,
+                            "Row index overflow",
+                        ))
+                    })?;
+                    let col_num = u16::try_from(col_idx).map_err(|_| {
+                        SheetError::Io(std::io::Error::new(
+                            std::io::ErrorKind::Other,
+                            "Column index overflow",
+                        ))
+                    })?;
 
                     match cell {
                         CellValue::Null => {}
                         CellValue::Bool(b) => {
-                            worksheet
-                                .write_boolean(row_num, col_num, *b)
-                                .map_err(|e| SheetError::Io(std::io::Error::new(std::io::ErrorKind::Other, e.to_string())))?;
+                            worksheet.write_boolean(row_num, col_num, *b).map_err(|e| {
+                                SheetError::Io(std::io::Error::new(
+                                    std::io::ErrorKind::Other,
+                                    e.to_string(),
+                                ))
+                            })?;
                         }
                         CellValue::Int(i) => {
                             // Note: Excel stores all numbers as f64, so integers > 2^53
                             // (9,007,199,254,740,992) may lose precision
                             worksheet
                                 .write_number(row_num, col_num, *i as f64)
-                                .map_err(|e| SheetError::Io(std::io::Error::new(std::io::ErrorKind::Other, e.to_string())))?;
+                                .map_err(|e| {
+                                    SheetError::Io(std::io::Error::new(
+                                        std::io::ErrorKind::Other,
+                                        e.to_string(),
+                                    ))
+                                })?;
                         }
                         CellValue::Float(f) => {
-                            worksheet
-                                .write_number(row_num, col_num, *f)
-                                .map_err(|e| SheetError::Io(std::io::Error::new(std::io::ErrorKind::Other, e.to_string())))?;
+                            worksheet.write_number(row_num, col_num, *f).map_err(|e| {
+                                SheetError::Io(std::io::Error::new(
+                                    std::io::ErrorKind::Other,
+                                    e.to_string(),
+                                ))
+                            })?;
                         }
                         CellValue::String(s) => {
-                            worksheet
-                                .write_string(row_num, col_num, s)
-                                .map_err(|e| SheetError::Io(std::io::Error::new(std::io::ErrorKind::Other, e.to_string())))?;
+                            worksheet.write_string(row_num, col_num, s).map_err(|e| {
+                                SheetError::Io(std::io::Error::new(
+                                    std::io::ErrorKind::Other,
+                                    e.to_string(),
+                                ))
+                            })?;
                         }
                     }
                 }
             }
         }
 
-        workbook
-            .save(path.as_ref())
-            .map_err(|e| SheetError::Io(std::io::Error::new(std::io::ErrorKind::Other, e.to_string())))?;
+        workbook.save(path.as_ref()).map_err(|e| {
+            SheetError::Io(std::io::Error::new(
+                std::io::ErrorKind::Other,
+                e.to_string(),
+            ))
+        })?;
 
         Ok(())
     }
@@ -414,10 +539,19 @@ impl Book {
     ///
     /// Returns error if file cannot be opened.
     pub fn xlsx_sheet_names<P: AsRef<Path>>(path: P) -> Result<Vec<String>> {
-        let workbook: Xlsx<BufReader<File>> = open_workbook(path.as_ref())
-            .map_err(|e: XlsxError| SheetError::Io(std::io::Error::new(std::io::ErrorKind::Other, e.to_string())))?;
+        let workbook: Xlsx<BufReader<File>> =
+            open_workbook(path.as_ref()).map_err(|e: XlsxError| {
+                SheetError::Io(std::io::Error::new(
+                    std::io::ErrorKind::Other,
+                    e.to_string(),
+                ))
+            })?;
 
-        Ok(workbook.sheet_names().iter().map(|s| s.to_string()).collect())
+        Ok(workbook
+            .sheet_names()
+            .iter()
+            .map(|s| s.to_string())
+            .collect())
     }
 
     // =========================================================================
@@ -438,17 +572,34 @@ impl Book {
     /// # Errors
     ///
     /// Returns error if file cannot be opened or read.
-    pub fn from_xls_with_options<P: AsRef<Path>>(path: P, options: XlsxReadOptions) -> Result<Self> {
-        let mut workbook: Xls<BufReader<File>> = open_workbook(path.as_ref())
-            .map_err(|e: XlsError| SheetError::Io(std::io::Error::new(std::io::ErrorKind::Other, e.to_string())))?;
+    pub fn from_xls_with_options<P: AsRef<Path>>(
+        path: P,
+        options: XlsxReadOptions,
+    ) -> Result<Self> {
+        let mut workbook: Xls<BufReader<File>> =
+            open_workbook(path.as_ref()).map_err(|e: XlsError| {
+                SheetError::Io(std::io::Error::new(
+                    std::io::ErrorKind::Other,
+                    e.to_string(),
+                ))
+            })?;
 
-        let sheet_names: Vec<String> = workbook.sheet_names().iter().map(|s: &String| s.to_string()).collect();
+        let sheet_names: Vec<String> = workbook
+            .sheet_names()
+            .iter()
+            .map(|s: &String| s.to_string())
+            .collect();
         let mut book = Book::new();
 
         for sheet_name in sheet_names {
             let range = workbook
                 .worksheet_range(&sheet_name)
-                .map_err(|e: XlsError| SheetError::Io(std::io::Error::new(std::io::ErrorKind::Other, e.to_string())))?;
+                .map_err(|e: XlsError| {
+                    SheetError::Io(std::io::Error::new(
+                        std::io::ErrorKind::Other,
+                        e.to_string(),
+                    ))
+                })?;
 
             let data: Vec<Vec<CellValue>> = range
                 .rows()
@@ -468,10 +619,19 @@ impl Book {
     ///
     /// Returns error if file cannot be opened.
     pub fn xls_sheet_names<P: AsRef<Path>>(path: P) -> Result<Vec<String>> {
-        let workbook: Xls<BufReader<File>> = open_workbook(path.as_ref())
-            .map_err(|e: XlsError| SheetError::Io(std::io::Error::new(std::io::ErrorKind::Other, e.to_string())))?;
+        let workbook: Xls<BufReader<File>> =
+            open_workbook(path.as_ref()).map_err(|e: XlsError| {
+                SheetError::Io(std::io::Error::new(
+                    std::io::ErrorKind::Other,
+                    e.to_string(),
+                ))
+            })?;
 
-        Ok(workbook.sheet_names().iter().map(|s: &String| s.to_string()).collect())
+        Ok(workbook
+            .sheet_names()
+            .iter()
+            .map(|s: &String| s.to_string())
+            .collect())
     }
 
     // =========================================================================
@@ -492,9 +652,17 @@ impl Book {
     /// # Errors
     ///
     /// Returns error if file cannot be opened or read.
-    pub fn from_excel_with_options<P: AsRef<Path>>(path: P, options: XlsxReadOptions) -> Result<Self> {
-        let mut workbook: Sheets<BufReader<File>> = open_workbook_auto(path.as_ref())
-            .map_err(|e: CalamineError| SheetError::Io(std::io::Error::new(std::io::ErrorKind::Other, e.to_string())))?;
+    pub fn from_excel_with_options<P: AsRef<Path>>(
+        path: P,
+        options: XlsxReadOptions,
+    ) -> Result<Self> {
+        let mut workbook: Sheets<BufReader<File>> =
+            open_workbook_auto(path.as_ref()).map_err(|e: CalamineError| {
+                SheetError::Io(std::io::Error::new(
+                    std::io::ErrorKind::Other,
+                    e.to_string(),
+                ))
+            })?;
 
         let sheet_names: Vec<String> = workbook.sheet_names().to_vec();
         let mut book = Book::new();
@@ -502,7 +670,12 @@ impl Book {
         for sheet_name in sheet_names {
             let range = workbook
                 .worksheet_range(&sheet_name)
-                .map_err(|e: CalamineError| SheetError::Io(std::io::Error::new(std::io::ErrorKind::Other, e.to_string())))?;
+                .map_err(|e: CalamineError| {
+                    SheetError::Io(std::io::Error::new(
+                        std::io::ErrorKind::Other,
+                        e.to_string(),
+                    ))
+                })?;
 
             let data: Vec<Vec<CellValue>> = range
                 .rows()
@@ -522,8 +695,13 @@ impl Book {
     ///
     /// Returns error if file cannot be opened.
     pub fn excel_sheet_names<P: AsRef<Path>>(path: P) -> Result<Vec<String>> {
-        let workbook: Sheets<BufReader<File>> = open_workbook_auto(path.as_ref())
-            .map_err(|e: CalamineError| SheetError::Io(std::io::Error::new(std::io::ErrorKind::Other, e.to_string())))?;
+        let workbook: Sheets<BufReader<File>> =
+            open_workbook_auto(path.as_ref()).map_err(|e: CalamineError| {
+                SheetError::Io(std::io::Error::new(
+                    std::io::ErrorKind::Other,
+                    e.to_string(),
+                ))
+            })?;
 
         Ok(workbook.sheet_names().to_vec())
     }
@@ -581,10 +759,14 @@ mod tests {
         assert!(matches!(loaded.get(0, 0).unwrap(), CellValue::String(s) if s == "text"));
 
         // Verify number (Int becomes Float in Excel)
-        assert!(matches!(loaded.get(0, 1).unwrap(), CellValue::Float(f) if (*f - 42.0).abs() < 0.01));
+        assert!(
+            matches!(loaded.get(0, 1).unwrap(), CellValue::Float(f) if (*f - 42.0).abs() < 0.01)
+        );
 
         // Verify float
-        assert!(matches!(loaded.get(0, 2).unwrap(), CellValue::Float(f) if (*f - 3.14).abs() < 0.01));
+        assert!(
+            matches!(loaded.get(0, 2).unwrap(), CellValue::Float(f) if (*f - 3.14).abs() < 0.01)
+        );
 
         // Verify bool
         assert!(matches!(loaded.get(0, 3).unwrap(), CellValue::Bool(true)));
@@ -639,8 +821,10 @@ mod tests {
         let path = dir.path().join("specific.xlsx");
 
         let mut book = Book::new();
-        book.add_sheet("Data", Sheet::from_data(vec![vec![1, 2, 3]])).unwrap();
-        book.add_sheet("Other", Sheet::from_data(vec![vec![4, 5, 6]])).unwrap();
+        book.add_sheet("Data", Sheet::from_data(vec![vec![1, 2, 3]]))
+            .unwrap();
+        book.add_sheet("Other", Sheet::from_data(vec![vec![4, 5, 6]]))
+            .unwrap();
 
         book.save_as_xlsx(&path).unwrap();
 
@@ -670,10 +854,9 @@ mod tests {
         assert!(no_headers.column_names().is_none());
 
         // Load with headers option - first row becomes column names
-        let with_headers = Sheet::from_xlsx_with_options(
-            &path,
-            XlsxReadOptions::default().with_headers(true),
-        ).unwrap();
+        let with_headers =
+            Sheet::from_xlsx_with_options(&path, XlsxReadOptions::default().with_headers(true))
+                .unwrap();
 
         assert!(with_headers.column_names().is_some());
         let names = with_headers.column_names().unwrap();
@@ -693,19 +876,22 @@ mod tests {
         let path = dir.path().join("book_headers.xlsx");
 
         let mut book = Book::new();
-        book.add_sheet("Data", Sheet::from_data(vec![
-            vec!["Product", "Price"],
-            vec!["Widget", "10"],
-            vec!["Gadget", "20"],
-        ])).unwrap();
+        book.add_sheet(
+            "Data",
+            Sheet::from_data(vec![
+                vec!["Product", "Price"],
+                vec!["Widget", "10"],
+                vec!["Gadget", "20"],
+            ]),
+        )
+        .unwrap();
 
         book.save_as_xlsx(&path).unwrap();
 
         // Load book with headers
-        let loaded = Book::from_xlsx_with_options(
-            &path,
-            XlsxReadOptions::default().with_headers(true),
-        ).unwrap();
+        let loaded =
+            Book::from_xlsx_with_options(&path, XlsxReadOptions::default().with_headers(true))
+                .unwrap();
 
         let sheet = loaded.get_sheet("Data").unwrap();
         assert!(sheet.column_names().is_some());
@@ -724,10 +910,7 @@ mod tests {
         let path = dir.path().join("auto.xlsx");
 
         // Create and save as xlsx
-        let sheet = Sheet::from_data(vec![
-            vec!["Name", "Value"],
-            vec!["Test", "123"],
-        ]);
+        let sheet = Sheet::from_data(vec![vec!["Name", "Value"], vec!["Test", "123"]]);
         sheet.save_as_xlsx(&path).unwrap();
 
         // Load using auto-detect (should recognize xlsx)
@@ -741,16 +924,12 @@ mod tests {
         let dir = tempdir().unwrap();
         let path = dir.path().join("auto_headers.xlsx");
 
-        let sheet = Sheet::from_data(vec![
-            vec!["Col1", "Col2"],
-            vec!["A", "B"],
-        ]);
+        let sheet = Sheet::from_data(vec![vec!["Col1", "Col2"], vec!["A", "B"]]);
         sheet.save_as_xlsx(&path).unwrap();
 
-        let loaded = Sheet::from_excel_with_options(
-            &path,
-            XlsxReadOptions::default().with_headers(true),
-        ).unwrap();
+        let loaded =
+            Sheet::from_excel_with_options(&path, XlsxReadOptions::default().with_headers(true))
+                .unwrap();
 
         assert!(loaded.column_names().is_some());
         let names = loaded.column_names().unwrap();
@@ -764,8 +943,10 @@ mod tests {
         let path = dir.path().join("book_auto.xlsx");
 
         let mut book = Book::new();
-        book.add_sheet("Sheet1", Sheet::from_data(vec![vec![1, 2]])).unwrap();
-        book.add_sheet("Sheet2", Sheet::from_data(vec![vec![3, 4]])).unwrap();
+        book.add_sheet("Sheet1", Sheet::from_data(vec![vec![1, 2]]))
+            .unwrap();
+        book.add_sheet("Sheet2", Sheet::from_data(vec![vec![3, 4]]))
+            .unwrap();
         book.save_as_xlsx(&path).unwrap();
 
         // Load using auto-detect
@@ -823,10 +1004,9 @@ mod tests {
     #[test]
     fn test_xls_with_headers() {
         let path = xls_fixture_path();
-        let sheet = Sheet::from_xls_with_options(
-            &path,
-            XlsxReadOptions::default().with_headers(true),
-        ).unwrap();
+        let sheet =
+            Sheet::from_xls_with_options(&path, XlsxReadOptions::default().with_headers(true))
+                .unwrap();
 
         assert!(sheet.column_names().is_some());
         let names = sheet.column_names().unwrap();

@@ -100,10 +100,7 @@ impl Interpreter {
     pub async fn eval_statement(&mut self, statement: Statement) -> PipResult<Value> {
         match statement {
             Statement::Dim {
-                name,
-                value,
-                line,
-                ..
+                name, value, line, ..
             } => {
                 let val = self
                     .eval_expr(&value)
@@ -252,7 +249,8 @@ impl Interpreter {
                     match i.checked_add(step_int) {
                         Some(next) => i = next,
                         None => {
-                            loop_result = Err(PipError::runtime(line, "Integer overflow in for loop"));
+                            loop_result =
+                                Err(PipError::runtime(line, "Integer overflow in for loop"));
                             break;
                         }
                     }
@@ -371,10 +369,16 @@ impl Interpreter {
                 }
 
                 // Evaluate source to get data
-                let data = self.eval_expr(&source).await.map_err(|e| e.with_line(line))?;
+                let data = self
+                    .eval_expr(&source)
+                    .await
+                    .map_err(|e| e.with_line(line))?;
 
                 // Evaluate destination to get file path
-                let dest = self.eval_expr(&destination).await.map_err(|e| e.with_line(line))?;
+                let dest = self
+                    .eval_expr(&destination)
+                    .await
+                    .map_err(|e| e.with_line(line))?;
                 let path = match &dest {
                     Value::String(s) => s.clone(),
                     _ => {
@@ -387,14 +391,12 @@ impl Interpreter {
                 };
 
                 // Convert Value to Sheet and export
-                let sheet = value_to_sheet(&data).map_err(|e| {
-                    PipError::Export(format!("Line {}: {}", line, e))
-                })?;
+                let sheet = value_to_sheet(&data)
+                    .map_err(|e| PipError::Export(format!("Line {}: {}", line, e)))?;
 
                 // Determine format from file extension and export
-                export_sheet(&sheet, &path).map_err(|e| {
-                    PipError::Export(format!("Line {}: {}", line, e))
-                })?;
+                export_sheet(&sheet, &path)
+                    .map_err(|e| PipError::Export(format!("Line {}: {}", line, e)))?;
 
                 Ok(Value::Null)
             }
@@ -443,9 +445,9 @@ impl Interpreter {
                     // Special case for SELECT *
                     return Ok(Value::String("*".to_string()));
                 }
-                self.get_var(name).await.ok_or_else(|| {
-                    PipError::runtime(0, format!("Undefined variable: {name}"))
-                })
+                self.get_var(name)
+                    .await
+                    .ok_or_else(|| PipError::runtime(0, format!("Undefined variable: {name}")))
             }
 
             Expr::Binary { left, op, right } => {
@@ -475,9 +477,10 @@ impl Interpreter {
             Expr::FieldAccess { object, field } => {
                 let obj = self.eval_expr(object).await?;
                 match obj {
-                    Value::Object(map) => map.get(field).cloned().ok_or_else(|| {
-                        PipError::runtime(0, format!("Field not found: {field}"))
-                    }),
+                    Value::Object(map) => map
+                        .get(field)
+                        .cloned()
+                        .ok_or_else(|| PipError::runtime(0, format!("Field not found: {field}"))),
                     _ => Err(PipError::runtime(
                         0,
                         format!("Cannot access field on {}", obj.type_name()),
@@ -515,9 +518,7 @@ impl Interpreter {
                     (Value::Array(_), _) => {
                         Err(PipError::runtime(0, "Array index must be integer"))
                     }
-                    (Value::Object(_), _) => {
-                        Err(PipError::runtime(0, "Object key must be string"))
-                    }
+                    (Value::Object(_), _) => Err(PipError::runtime(0, "Object key must be string")),
                     _ => Err(PipError::runtime(
                         0,
                         format!("Cannot index {}", arr.type_name()),
@@ -688,11 +689,7 @@ impl Interpreter {
             (Value::String(a), Value::String(b)) => Ok(Value::String(format!("{a}{b}"))),
             _ => Err(PipError::runtime(
                 0,
-                format!(
-                    "Cannot add {} and {}",
-                    left.type_name(),
-                    right.type_name()
-                ),
+                format!("Cannot add {} and {}", left.type_name(), right.type_name()),
             )),
         }
     }
@@ -952,10 +949,9 @@ impl Interpreter {
                 match &args[0] {
                     Value::Int(n) => Ok(Value::Int(*n)),
                     Value::Float(f) => Ok(Value::Int(*f as i64)),
-                    Value::String(s) => s
-                        .parse::<i64>()
-                        .map(Value::Int)
-                        .map_err(|_| PipError::runtime(line, format!("Cannot convert '{s}' to int"))),
+                    Value::String(s) => s.parse::<i64>().map(Value::Int).map_err(|_| {
+                        PipError::runtime(line, format!("Cannot convert '{s}' to int"))
+                    }),
                     Value::Bool(b) => Ok(Value::Int(if *b { 1 } else { 0 })),
                     _ => Err(PipError::runtime(
                         line,
@@ -1018,9 +1014,9 @@ impl Interpreter {
                     Value::Array(arr) => {
                         let mut total = 0.0;
                         for v in arr {
-                            total += self
-                                .value_to_number(v)
-                                .ok_or_else(|| PipError::runtime(line, "sum() requires numeric array"))?;
+                            total += self.value_to_number(v).ok_or_else(|| {
+                                PipError::runtime(line, "sum() requires numeric array")
+                            })?;
                         }
                         if arr.iter().all(|v| matches!(v, Value::Int(_))) {
                             Ok(Value::Int(total as i64))
@@ -1042,9 +1038,9 @@ impl Interpreter {
                         }
                         let mut total = 0.0;
                         for v in arr {
-                            total += self
-                                .value_to_number(v)
-                                .ok_or_else(|| PipError::runtime(line, "avg() requires numeric array"))?;
+                            total += self.value_to_number(v).ok_or_else(|| {
+                                PipError::runtime(line, "avg() requires numeric array")
+                            })?;
                         }
                         Ok(Value::Float(total / arr.len() as f64))
                     }
@@ -1056,9 +1052,9 @@ impl Interpreter {
                     return Err(PipError::runtime(line, "keys() takes exactly 1 argument"));
                 }
                 match &args[0] {
-                    Value::Object(obj) => {
-                        Ok(Value::Array(obj.keys().map(|k| Value::String(k.clone())).collect()))
-                    }
+                    Value::Object(obj) => Ok(Value::Array(
+                        obj.keys().map(|k| Value::String(k.clone())).collect(),
+                    )),
                     _ => Err(PipError::runtime(line, "keys() requires object argument")),
                 }
             }
@@ -1075,9 +1071,10 @@ impl Interpreter {
             "register_python" => {
                 // register_python("name", "lambda x: x * 2")
                 // register_python("name", "file.py", "function_name")
-                let runtime = self.python_runtime.as_ref().ok_or_else(|| {
-                    PipError::runtime(line, "Python runtime not available")
-                })?;
+                let runtime = self
+                    .python_runtime
+                    .as_ref()
+                    .ok_or_else(|| PipError::runtime(line, "Python runtime not available"))?;
 
                 match args.len() {
                     2 => {
@@ -1163,10 +1160,7 @@ impl Interpreter {
                         }
                     }
 
-                    Err(PipError::runtime(
-                        line,
-                        format!("Unknown function: {name}"),
-                    ))
+                    Err(PipError::runtime(line, format!("Unknown function: {name}")))
                 }
             }
         }
@@ -1187,9 +1181,9 @@ impl Interpreter {
             return Ok(Value::Null);
         }
 
-        let mut result = self.value_to_number(&values[0]).ok_or_else(|| {
-            PipError::runtime(line, "min/max requires numeric values")
-        })?;
+        let mut result = self
+            .value_to_number(&values[0])
+            .ok_or_else(|| PipError::runtime(line, "min/max requires numeric values"))?;
 
         for v in &values[1..] {
             let n = self
@@ -1320,12 +1314,14 @@ impl Interpreter {
     async fn table_ref_to_string(&mut self, table_ref: &TableRef) -> PipResult<String> {
         match table_ref {
             TableRef::Table(name) => Ok(name.clone()),
-            TableRef::Qualified { database, schema, table } => {
-                Ok(match schema {
-                    Some(s) => format!("{database}.{s}.{table}"),
-                    None => format!("{database}.{table}"),
-                })
-            }
+            TableRef::Qualified {
+                database,
+                schema,
+                table,
+            } => Ok(match schema {
+                Some(s) => format!("{database}.{s}.{table}"),
+                None => format!("{database}.{table}"),
+            }),
             TableRef::File(path) => {
                 // Register the file and return table name
                 let table_name = self.register_file(path).await?;
@@ -1510,10 +1506,7 @@ impl Interpreter {
     }
 
     /// Convert table batches to array of objects.
-    fn table_to_array(
-        &self,
-        batches: &[Arc<arrow::array::RecordBatch>],
-    ) -> PipResult<Vec<Value>> {
+    fn table_to_array(&self, batches: &[Arc<arrow::array::RecordBatch>]) -> PipResult<Vec<Value>> {
         let mut rows = Vec::new();
 
         for batch in batches {
@@ -1631,9 +1624,9 @@ impl Interpreter {
             }
             LValue::Index { array, index } => {
                 let idx = self.eval_expr(index).await?;
-                let idx_int = idx.as_int().ok_or_else(|| {
-                    PipError::runtime(line, "Array index must be integer")
-                })?;
+                let idx_int = idx
+                    .as_int()
+                    .ok_or_else(|| PipError::runtime(line, "Array index must be integer"))?;
 
                 let arr_val = self.get_lvalue_value(array, line).await?;
                 match arr_val {
@@ -1673,10 +1666,9 @@ impl Interpreter {
             LValue::Field { object, field } => {
                 let obj = self.get_lvalue_value(object, line).await?;
                 match obj {
-                    Value::Object(map) => map
-                        .get(field)
-                        .cloned()
-                        .ok_or_else(|| PipError::runtime(line, format!("Field not found: {field}"))),
+                    Value::Object(map) => map.get(field).cloned().ok_or_else(|| {
+                        PipError::runtime(line, format!("Field not found: {field}"))
+                    }),
                     _ => Err(PipError::runtime(
                         line,
                         format!("Cannot access field on {}", obj.type_name()),
@@ -1784,11 +1776,15 @@ impl Default for Interpreter {
 fn value_to_sheet(value: &Value) -> Result<Sheet, String> {
     match value {
         // Array of objects -> records (all elements must be objects)
-        Value::Array(arr) if !arr.is_empty() && arr.iter().all(|v| matches!(v, Value::Object(_))) => {
+        Value::Array(arr)
+            if !arr.is_empty() && arr.iter().all(|v| matches!(v, Value::Object(_))) =>
+        {
             let records: Vec<indexmap::IndexMap<String, CellValue>> = arr
                 .iter()
                 .map(|v| {
-                    let Value::Object(map) = v else { unreachable!() };
+                    let Value::Object(map) = v else {
+                        unreachable!()
+                    };
                     map.iter()
                         .map(|(k, v)| (k.clone(), value_to_cell(v)))
                         .collect()
@@ -1823,9 +1819,7 @@ fn value_to_sheet(value: &Value) -> Result<Sheet, String> {
             Sheet::from_records(vec![record]).map_err(|e| e.to_string())
         }
         // Table (Arrow RecordBatches) -> convert to Sheet
-        Value::Table(batches) => {
-            arrow_batches_to_sheet(batches)
-        }
+        Value::Table(batches) => arrow_batches_to_sheet(batches),
         _ => Err(format!(
             "Cannot export {} to file. Expected array, object, or table.",
             value.type_name()
@@ -1852,7 +1846,9 @@ fn value_to_cell(value: &Value) -> CellValue {
 }
 
 /// Convert Arrow RecordBatches to a Sheet
-fn arrow_batches_to_sheet(batches: &[Arc<arrow::record_batch::RecordBatch>]) -> Result<Sheet, String> {
+fn arrow_batches_to_sheet(
+    batches: &[Arc<arrow::record_batch::RecordBatch>],
+) -> Result<Sheet, String> {
     if batches.is_empty() {
         return Ok(Sheet::new());
     }
@@ -2062,7 +2058,8 @@ mod tests {
     #[tokio::test]
     async fn test_eval_if_false() {
         let mut interp = Interpreter::new();
-        let program = PipParser::parse_str("dim x = 0\nif false then x = 1 else x = 2 end if").unwrap();
+        let program =
+            PipParser::parse_str("dim x = 0\nif false then x = 1 else x = 2 end if").unwrap();
         interp.eval(program).await.unwrap();
         let value = interp.get_var("x").await;
         assert!(matches!(value, Some(Value::Int(2))));
@@ -2071,7 +2068,8 @@ mod tests {
     #[tokio::test]
     async fn test_eval_for_loop() {
         let mut interp = Interpreter::new();
-        let program = PipParser::parse_str("dim sum = 0\nfor i = 1 to 5\nsum = sum + i\nnext").unwrap();
+        let program =
+            PipParser::parse_str("dim sum = 0\nfor i = 1 to 5\nsum = sum + i\nnext").unwrap();
         interp.eval(program).await.unwrap();
         let value = interp.get_var("sum").await;
         assert!(matches!(value, Some(Value::Int(15))));
@@ -2167,10 +2165,7 @@ mod tests {
     #[tokio::test]
     async fn test_scope_isolation() {
         let mut interp = Interpreter::new();
-        let program = PipParser::parse_str(
-            "dim x = 1\nfor i = 1 to 1\ndim y = 2\nnext",
-        )
-        .unwrap();
+        let program = PipParser::parse_str("dim x = 1\nfor i = 1 to 1\ndim y = 2\nnext").unwrap();
         interp.eval(program).await.unwrap();
         // x should be accessible
         assert!(interp.get_var("x").await.is_some());

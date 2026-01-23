@@ -119,8 +119,8 @@ impl PythonRuntime {
 
         let callable = Python::with_gil(|py| -> PyResult<PyObject> {
             // Create CStrings for PyModule::from_code
-            let code_cstr =
-                CString::new(code.as_str()).map_err(|e| PyErr::new::<pyo3::exceptions::PyValueError, _>(e.to_string()))?;
+            let code_cstr = CString::new(code.as_str())
+                .map_err(|e| PyErr::new::<pyo3::exceptions::PyValueError, _>(e.to_string()))?;
             let file_cstr = CString::new(file_path_owned.as_str())
                 .map_err(|e| PyErr::new::<pyo3::exceptions::PyValueError, _>(e.to_string()))?;
             let module_cstr = CString::new("piptable_udf")
@@ -327,55 +327,120 @@ fn arrow_value_to_py(py: Python<'_>, array: &dyn Array, row: usize) -> PyResult<
     match array.data_type() {
         DataType::Boolean => {
             let arr = array.as_boolean();
-            Ok(arr.value(row).into_pyobject(py)?.to_owned().into_any().unbind())
+            Ok(arr
+                .value(row)
+                .into_pyobject(py)?
+                .to_owned()
+                .into_any()
+                .unbind())
         }
         DataType::Int8 => {
             let arr = array.as_primitive::<arrow::datatypes::Int8Type>();
-            Ok(arr.value(row).into_pyobject(py)?.to_owned().into_any().unbind())
+            Ok(arr
+                .value(row)
+                .into_pyobject(py)?
+                .to_owned()
+                .into_any()
+                .unbind())
         }
         DataType::Int16 => {
             let arr = array.as_primitive::<arrow::datatypes::Int16Type>();
-            Ok(arr.value(row).into_pyobject(py)?.to_owned().into_any().unbind())
+            Ok(arr
+                .value(row)
+                .into_pyobject(py)?
+                .to_owned()
+                .into_any()
+                .unbind())
         }
         DataType::Int32 => {
             let arr = array.as_primitive::<arrow::datatypes::Int32Type>();
-            Ok(arr.value(row).into_pyobject(py)?.to_owned().into_any().unbind())
+            Ok(arr
+                .value(row)
+                .into_pyobject(py)?
+                .to_owned()
+                .into_any()
+                .unbind())
         }
         DataType::Int64 => {
             let arr = array.as_primitive::<arrow::datatypes::Int64Type>();
-            Ok(arr.value(row).into_pyobject(py)?.to_owned().into_any().unbind())
+            Ok(arr
+                .value(row)
+                .into_pyobject(py)?
+                .to_owned()
+                .into_any()
+                .unbind())
         }
         DataType::UInt8 => {
             let arr = array.as_primitive::<arrow::datatypes::UInt8Type>();
-            Ok(arr.value(row).into_pyobject(py)?.to_owned().into_any().unbind())
+            Ok(arr
+                .value(row)
+                .into_pyobject(py)?
+                .to_owned()
+                .into_any()
+                .unbind())
         }
         DataType::UInt16 => {
             let arr = array.as_primitive::<arrow::datatypes::UInt16Type>();
-            Ok(arr.value(row).into_pyobject(py)?.to_owned().into_any().unbind())
+            Ok(arr
+                .value(row)
+                .into_pyobject(py)?
+                .to_owned()
+                .into_any()
+                .unbind())
         }
         DataType::UInt32 => {
             let arr = array.as_primitive::<arrow::datatypes::UInt32Type>();
-            Ok(arr.value(row).into_pyobject(py)?.to_owned().into_any().unbind())
+            Ok(arr
+                .value(row)
+                .into_pyobject(py)?
+                .to_owned()
+                .into_any()
+                .unbind())
         }
         DataType::UInt64 => {
             let arr = array.as_primitive::<arrow::datatypes::UInt64Type>();
-            Ok(arr.value(row).into_pyobject(py)?.to_owned().into_any().unbind())
+            Ok(arr
+                .value(row)
+                .into_pyobject(py)?
+                .to_owned()
+                .into_any()
+                .unbind())
         }
         DataType::Float32 => {
             let arr = array.as_primitive::<arrow::datatypes::Float32Type>();
-            Ok(arr.value(row).into_pyobject(py)?.to_owned().into_any().unbind())
+            Ok(arr
+                .value(row)
+                .into_pyobject(py)?
+                .to_owned()
+                .into_any()
+                .unbind())
         }
         DataType::Float64 => {
             let arr = array.as_primitive::<arrow::datatypes::Float64Type>();
-            Ok(arr.value(row).into_pyobject(py)?.to_owned().into_any().unbind())
+            Ok(arr
+                .value(row)
+                .into_pyobject(py)?
+                .to_owned()
+                .into_any()
+                .unbind())
         }
         DataType::Utf8 => {
             let arr = array.as_string::<i32>();
-            Ok(arr.value(row).into_pyobject(py)?.to_owned().into_any().unbind())
+            Ok(arr
+                .value(row)
+                .into_pyobject(py)?
+                .to_owned()
+                .into_any()
+                .unbind())
         }
         DataType::LargeUtf8 => {
             let arr = array.as_string::<i64>();
-            Ok(arr.value(row).into_pyobject(py)?.to_owned().into_any().unbind())
+            Ok(arr
+                .value(row)
+                .into_pyobject(py)?
+                .to_owned()
+                .into_any()
+                .unbind())
         }
         _ => {
             // Fallback: convert to string representation
@@ -446,7 +511,10 @@ mod tests {
             .await
             .unwrap();
 
-        let result = runtime.call("make_dict", vec![Value::Int(5)]).await.unwrap();
+        let result = runtime
+            .call("make_dict", vec![Value::Int(5)])
+            .await
+            .unwrap();
 
         if let Value::Object(map) = result {
             match map.get("value") {
