@@ -30,6 +30,7 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-cargo-
 
+      # piptable-python excluded: requires Python/PyO3 setup
       - name: Run tests
         run: cargo test --workspace --exclude piptable-python
 
@@ -58,11 +59,9 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-cargo-cov-
 
+      # piptable-python excluded: requires Python/PyO3 setup
       - name: Generate coverage report
         run: cargo llvm-cov --workspace --exclude piptable-python --html
-
-      - name: Print coverage summary
-        run: cargo llvm-cov --workspace --exclude piptable-python --no-run
 
       - name: Upload coverage artifact
         uses: actions/upload-artifact@v4
@@ -85,5 +84,6 @@ jobs:
       - name: Check formatting
         run: cargo fmt --all -- --check
 
+      # piptable-python excluded: requires Python/PyO3 setup
       - name: Run clippy
         run: cargo clippy --workspace --exclude piptable-python -- -D warnings
