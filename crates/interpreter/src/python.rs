@@ -105,7 +105,9 @@ impl PythonRuntime {
             });
         }
 
-        let code = std::fs::read_to_string(path).map_err(PipError::Io)?;
+        let code = tokio::fs::read_to_string(path)
+            .await
+            .map_err(PipError::Io)?;
         let name_owned = name.to_string();
         let file_path_owned = file_path.to_string();
         let function_name_owned = function_name.to_string();
@@ -203,6 +205,11 @@ impl PythonRuntime {
 }
 
 impl Default for PythonRuntime {
+    /// Creates a new Python runtime with default settings.
+    ///
+    /// # Panics
+    ///
+    /// Panics if Python interpreter initialization fails.
     fn default() -> Self {
         Self::new().expect("Failed to initialize Python runtime")
     }
@@ -229,6 +236,7 @@ fn value_to_py(py: Python<'_>, value: &Value) -> PyObject {
         }
         Value::Table(_) => {
             // TODO: Convert to pandas DataFrame or list of dicts
+            tracing::warn!("Value::Table conversion to Python is not yet implemented, returning None");
             py.None()
         }
         Value::Function { name, .. } => {
