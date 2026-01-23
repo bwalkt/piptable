@@ -359,14 +359,22 @@ impl Interpreter {
             Statement::Export {
                 source,
                 destination,
-                options: _options,
+                options,
                 line,
             } => {
+                // Reject export options until they are implemented
+                if options.is_some() {
+                    return Err(PipError::Export(format!(
+                        "Line {}: export options are not supported yet",
+                        line
+                    )));
+                }
+
                 // Evaluate source to get data
-                let data = self.eval_expr(&source).await?;
+                let data = self.eval_expr(&source).await.map_err(|e| e.with_line(line))?;
 
                 // Evaluate destination to get file path
-                let dest = self.eval_expr(&destination).await?;
+                let dest = self.eval_expr(&destination).await.map_err(|e| e.with_line(line))?;
                 let path = match &dest {
                     Value::String(s) => s.clone(),
                     _ => {
@@ -1775,23 +1783,22 @@ impl Default for Interpreter {
 /// Convert a piptable Value to a Sheet for export
 fn value_to_sheet(value: &Value) -> Result<Sheet, String> {
     match value {
-        // Array of objects -> records
-        Value::Array(arr) if !arr.is_empty() && matches!(arr[0], Value::Object(_)) => {
+        // Array of objects -> records (all elements must be objects)
+        Value::Array(arr) if !arr.is_empty() && arr.iter().all(|v| matches!(v, Value::Object(_))) => {
             let records: Vec<indexmap::IndexMap<String, CellValue>> = arr
                 .iter()
-                .filter_map(|v| {
-                    if let Value::Object(map) = v {
-                        let record: indexmap::IndexMap<String, CellValue> = map
-                            .iter()
-                            .map(|(k, v)| (k.clone(), value_to_cell(v)))
-                            .collect();
-                        Some(record)
-                    } else {
-                        None
-                    }
+                .map(|v| {
+                    let Value::Object(map) = v else { unreachable!() };
+                    map.iter()
+                        .map(|(k, v)| (k.clone(), value_to_cell(v)))
+                        .collect()
                 })
                 .collect();
             Sheet::from_records(records).map_err(|e| e.to_string())
+        }
+        // Error on mixed array types (some objects, some not)
+        Value::Array(arr) if arr.iter().any(|v| matches!(v, Value::Object(_))) => {
+            Err("Cannot export mixed array types; expected all objects".to_string())
         }
         // Array of arrays -> rows
         Value::Array(arr) => {
@@ -1835,8 +1842,11 @@ fn value_to_cell(value: &Value) -> CellValue {
         Value::Float(f) => CellValue::Float(*f),
         Value::String(s) => CellValue::String(s.clone()),
         Value::Array(_) | Value::Object(_) | Value::Table(_) | Value::Function { .. } => {
-            // Convert complex types to JSON string
-            CellValue::String(format!("{:?}", value))
+            // Convert complex types to JSON string, fall back to Debug for non-serializable types
+            match value.to_json() {
+                Ok(json) => CellValue::String(json.to_string()),
+                Err(_) => CellValue::String(format!("{:?}", value)),
+            }
         }
     }
 }
@@ -1850,29 +1860,31 @@ fn arrow_batches_to_sheet(batches: &[Arc<arrow::record_batch::RecordBatch>]) -> 
     let schema = batches[0].schema();
     let col_names: Vec<String> = schema.fields().iter().map(|f| f.name().clone()).collect();
 
-    let mut sheet = Sheet::new();
+    // Build records from batches (column names become keys, avoiding header duplication)
+    let mut records: Vec<indexmap::IndexMap<String, CellValue>> = Vec::new();
 
-    // Add header row
-    let header: Vec<CellValue> = col_names.iter().map(|s| CellValue::String(s.clone())).collect();
-    sheet.data_mut().push(header);
-
-    // Add data rows
     for batch in batches {
         for row_idx in 0..batch.num_rows() {
-            let mut row = Vec::with_capacity(batch.num_columns());
-            for col_idx in 0..batch.num_columns() {
+            let mut record = indexmap::IndexMap::new();
+            for (col_idx, col_name) in col_names.iter().enumerate() {
                 let col = batch.column(col_idx);
                 let cell = arrow_value_to_cell(col, row_idx);
-                row.push(cell);
+                record.insert(col_name.clone(), cell);
             }
-            sheet.data_mut().push(row);
+            records.push(record);
         }
     }
 
-    // Name columns by first row
-    sheet.name_columns_by_row(0).map_err(|e| e.to_string())?;
+    if records.is_empty() {
+        // Return sheet with just column names
+        let mut sheet = Sheet::new();
+        let header: Vec<CellValue> = col_names.into_iter().map(CellValue::String).collect();
+        sheet.data_mut().push(header);
+        sheet.name_columns_by_row(0).map_err(|e| e.to_string())?;
+        return Ok(sheet);
+    }
 
-    Ok(sheet)
+    Sheet::from_records(records).map_err(|e| e.to_string())
 }
 
 /// Extract a cell value from an Arrow array
@@ -1919,7 +1931,12 @@ fn arrow_value_to_cell(array: &Arc<dyn arrow::array::Array>, row: usize) -> Cell
         }
         DataType::UInt64 => {
             let arr = array.as_any().downcast_ref::<UInt64Array>().unwrap();
-            CellValue::Int(arr.value(row) as i64)
+            let val = arr.value(row);
+            if val > i64::MAX as u64 {
+                CellValue::Float(val as f64)
+            } else {
+                CellValue::Int(val as i64)
+            }
         }
         DataType::Float32 => {
             let arr = array.as_any().downcast_ref::<Float32Array>().unwrap();
