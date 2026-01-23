@@ -184,7 +184,10 @@ impl PythonRuntime {
 
         Python::with_gil(|py| {
             // Convert arguments to Python objects
-            let py_args: Vec<PyObject> = args.iter().map(|v| value_to_py(py, v)).collect();
+            let py_args: Vec<PyObject> = args
+                .iter()
+                .map(|v| value_to_py(py, v))
+                .collect::<PyResult<Vec<_>>>()?;
 
             // Create tuple of arguments
             let args_tuple = PyTuple::new(py, py_args)?;
@@ -210,23 +213,27 @@ impl PythonRuntime {
 }
 
 /// Convert a piptable Value to a Python object.
-fn value_to_py(py: Python<'_>, value: &Value) -> PyObject {
+fn value_to_py(py: Python<'_>, value: &Value) -> PyResult<PyObject> {
     match value {
-        Value::Null => py.None(),
-        Value::Bool(b) => b.into_pyobject(py).unwrap().to_owned().into_any().unbind(),
-        Value::Int(i) => i.into_pyobject(py).unwrap().to_owned().into_any().unbind(),
-        Value::Float(f) => f.into_pyobject(py).unwrap().to_owned().into_any().unbind(),
-        Value::String(s) => s.into_pyobject(py).unwrap().to_owned().into_any().unbind(),
+        Value::Null => Ok(py.None()),
+        Value::Bool(b) => Ok(b.into_pyobject(py)?.to_owned().into_any().unbind()),
+        Value::Int(i) => Ok(i.into_pyobject(py)?.to_owned().into_any().unbind()),
+        Value::Float(f) => Ok(f.into_pyobject(py)?.to_owned().into_any().unbind()),
+        Value::String(s) => Ok(s.into_pyobject(py)?.to_owned().into_any().unbind()),
         Value::Array(arr) => {
-            let list = PyList::new(py, arr.iter().map(|v| value_to_py(py, v))).unwrap();
-            list.into_any().unbind()
+            let items: Vec<PyObject> = arr
+                .iter()
+                .map(|v| value_to_py(py, v))
+                .collect::<PyResult<Vec<_>>>()?;
+            let list = PyList::new(py, items)?;
+            Ok(list.into_any().unbind())
         }
         Value::Object(obj) => {
             let dict = PyDict::new(py);
             for (k, v) in obj {
-                dict.set_item(k, value_to_py(py, v)).unwrap();
+                dict.set_item(k, value_to_py(py, v)?)?;
             }
-            dict.into_any().unbind()
+            Ok(dict.into_any().unbind())
         }
         Value::Table(batches) => {
             // Convert Arrow RecordBatches to list of dicts
@@ -239,17 +246,17 @@ fn value_to_py(py: Python<'_>, value: &Value) -> PyObject {
                     let dict = PyDict::new(py);
                     for (col_idx, field) in schema.fields().iter().enumerate() {
                         let col = batch.column(col_idx);
-                        let py_value = arrow_value_to_py(py, col.as_ref(), row_idx);
-                        dict.set_item(field.name(), py_value).unwrap();
+                        let py_value = arrow_value_to_py(py, col.as_ref(), row_idx)?;
+                        dict.set_item(field.name(), py_value)?;
                     }
-                    list.append(dict).unwrap();
+                    list.append(dict)?;
                 }
             }
-            list.into_any().unbind()
+            Ok(list.into_any().unbind())
         }
         Value::Function { name, .. } => {
             // Return function name as string
-            name.into_pyobject(py).unwrap().to_owned().into_any().unbind()
+            Ok(name.into_pyobject(py)?.to_owned().into_any().unbind())
         }
     }
 }
@@ -303,128 +310,63 @@ fn py_to_value(py: Python<'_>, obj: &Bound<'_, PyAny>) -> PyResult<Value> {
 }
 
 /// Convert an Arrow array value at a given row index to a Python object.
-fn arrow_value_to_py(py: Python<'_>, array: &dyn Array, row: usize) -> PyObject {
+fn arrow_value_to_py(py: Python<'_>, array: &dyn Array, row: usize) -> PyResult<PyObject> {
     if array.is_null(row) {
-        return py.None();
+        return Ok(py.None());
     }
 
     match array.data_type() {
         DataType::Boolean => {
             let arr = array.as_boolean();
-            arr.value(row)
-                .into_pyobject(py)
-                .unwrap()
-                .to_owned()
-                .into_any()
-                .unbind()
+            Ok(arr.value(row).into_pyobject(py)?.to_owned().into_any().unbind())
         }
         DataType::Int8 => {
             let arr = array.as_primitive::<arrow::datatypes::Int8Type>();
-            arr.value(row)
-                .into_pyobject(py)
-                .unwrap()
-                .to_owned()
-                .into_any()
-                .unbind()
+            Ok(arr.value(row).into_pyobject(py)?.to_owned().into_any().unbind())
         }
         DataType::Int16 => {
             let arr = array.as_primitive::<arrow::datatypes::Int16Type>();
-            arr.value(row)
-                .into_pyobject(py)
-                .unwrap()
-                .to_owned()
-                .into_any()
-                .unbind()
+            Ok(arr.value(row).into_pyobject(py)?.to_owned().into_any().unbind())
         }
         DataType::Int32 => {
             let arr = array.as_primitive::<arrow::datatypes::Int32Type>();
-            arr.value(row)
-                .into_pyobject(py)
-                .unwrap()
-                .to_owned()
-                .into_any()
-                .unbind()
+            Ok(arr.value(row).into_pyobject(py)?.to_owned().into_any().unbind())
         }
         DataType::Int64 => {
             let arr = array.as_primitive::<arrow::datatypes::Int64Type>();
-            arr.value(row)
-                .into_pyobject(py)
-                .unwrap()
-                .to_owned()
-                .into_any()
-                .unbind()
+            Ok(arr.value(row).into_pyobject(py)?.to_owned().into_any().unbind())
         }
         DataType::UInt8 => {
             let arr = array.as_primitive::<arrow::datatypes::UInt8Type>();
-            arr.value(row)
-                .into_pyobject(py)
-                .unwrap()
-                .to_owned()
-                .into_any()
-                .unbind()
+            Ok(arr.value(row).into_pyobject(py)?.to_owned().into_any().unbind())
         }
         DataType::UInt16 => {
             let arr = array.as_primitive::<arrow::datatypes::UInt16Type>();
-            arr.value(row)
-                .into_pyobject(py)
-                .unwrap()
-                .to_owned()
-                .into_any()
-                .unbind()
+            Ok(arr.value(row).into_pyobject(py)?.to_owned().into_any().unbind())
         }
         DataType::UInt32 => {
             let arr = array.as_primitive::<arrow::datatypes::UInt32Type>();
-            arr.value(row)
-                .into_pyobject(py)
-                .unwrap()
-                .to_owned()
-                .into_any()
-                .unbind()
+            Ok(arr.value(row).into_pyobject(py)?.to_owned().into_any().unbind())
         }
         DataType::UInt64 => {
             let arr = array.as_primitive::<arrow::datatypes::UInt64Type>();
-            arr.value(row)
-                .into_pyobject(py)
-                .unwrap()
-                .to_owned()
-                .into_any()
-                .unbind()
+            Ok(arr.value(row).into_pyobject(py)?.to_owned().into_any().unbind())
         }
         DataType::Float32 => {
             let arr = array.as_primitive::<arrow::datatypes::Float32Type>();
-            arr.value(row)
-                .into_pyobject(py)
-                .unwrap()
-                .to_owned()
-                .into_any()
-                .unbind()
+            Ok(arr.value(row).into_pyobject(py)?.to_owned().into_any().unbind())
         }
         DataType::Float64 => {
             let arr = array.as_primitive::<arrow::datatypes::Float64Type>();
-            arr.value(row)
-                .into_pyobject(py)
-                .unwrap()
-                .to_owned()
-                .into_any()
-                .unbind()
+            Ok(arr.value(row).into_pyobject(py)?.to_owned().into_any().unbind())
         }
         DataType::Utf8 => {
             let arr = array.as_string::<i32>();
-            arr.value(row)
-                .into_pyobject(py)
-                .unwrap()
-                .to_owned()
-                .into_any()
-                .unbind()
+            Ok(arr.value(row).into_pyobject(py)?.to_owned().into_any().unbind())
         }
         DataType::LargeUtf8 => {
             let arr = array.as_string::<i64>();
-            arr.value(row)
-                .into_pyobject(py)
-                .unwrap()
-                .to_owned()
-                .into_any()
-                .unbind()
+            Ok(arr.value(row).into_pyobject(py)?.to_owned().into_any().unbind())
         }
         _ => {
             // Fallback: convert to string representation
@@ -432,12 +374,11 @@ fn arrow_value_to_py(py: Python<'_>, array: &dyn Array, row: usize) -> PyObject 
                 "Unsupported Arrow type {:?}, converting to string",
                 array.data_type()
             );
-            format!("{:?}", array.data_type())
-                .into_pyobject(py)
-                .unwrap()
+            Ok(format!("{:?}", array.data_type())
+                .into_pyobject(py)?
                 .to_owned()
                 .into_any()
-                .unbind()
+                .unbind())
         }
     }
 }
