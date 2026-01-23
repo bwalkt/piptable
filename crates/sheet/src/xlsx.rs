@@ -152,6 +152,8 @@ impl Sheet {
                             .map_err(|e| SheetError::Io(std::io::Error::new(std::io::ErrorKind::Other, e.to_string())))?;
                     }
                     CellValue::Int(i) => {
+                        // Note: Excel stores all numbers as f64, so integers > 2^53
+                        // (9,007,199,254,740,992) may lose precision
                         worksheet
                             .write_number(row_num, col_num, *i as f64)
                             .map_err(|e| SheetError::Io(std::io::Error::new(std::io::ErrorKind::Other, e.to_string())))?;
@@ -251,6 +253,8 @@ impl Book {
                                 .map_err(|e| SheetError::Io(std::io::Error::new(std::io::ErrorKind::Other, e.to_string())))?;
                         }
                         CellValue::Int(i) => {
+                            // Note: Excel stores all numbers as f64, so integers > 2^53
+                            // (9,007,199,254,740,992) may lose precision
                             worksheet
                                 .write_number(row_num, col_num, *i as f64)
                                 .map_err(|e| SheetError::Io(std::io::Error::new(std::io::ErrorKind::Other, e.to_string())))?;
@@ -410,5 +414,68 @@ mod tests {
 
         assert_eq!(sheet.name(), "Other");
         assert_eq!(sheet.row_count(), 1);
+    }
+
+    #[test]
+    fn test_xlsx_with_headers() {
+        let dir = tempdir().unwrap();
+        let path = dir.path().join("headers.xlsx");
+
+        // Create sheet with header row
+        let sheet = Sheet::from_data(vec![
+            vec!["Name", "Age", "City"],
+            vec!["Alice", "30", "NYC"],
+            vec!["Bob", "25", "LA"],
+        ]);
+
+        sheet.save_as_xlsx(&path).unwrap();
+
+        // Load without headers option - columns should not be named
+        let no_headers = Sheet::from_xlsx(&path).unwrap();
+        assert!(no_headers.column_names().is_none());
+
+        // Load with headers option - first row becomes column names
+        let with_headers = Sheet::from_xlsx_with_options(
+            &path,
+            XlsxReadOptions::default().with_headers(true),
+        ).unwrap();
+
+        assert!(with_headers.column_names().is_some());
+        let names = with_headers.column_names().unwrap();
+        assert_eq!(names.len(), 3);
+        assert_eq!(names[0], "Name");
+        assert_eq!(names[1], "Age");
+        assert_eq!(names[2], "City");
+
+        // Verify column access by name works
+        let ages = with_headers.column_by_name("Age").unwrap();
+        assert_eq!(ages.len(), 3); // includes header row in data
+    }
+
+    #[test]
+    fn test_book_xlsx_with_headers() {
+        let dir = tempdir().unwrap();
+        let path = dir.path().join("book_headers.xlsx");
+
+        let mut book = Book::new();
+        book.add_sheet("Data", Sheet::from_data(vec![
+            vec!["Product", "Price"],
+            vec!["Widget", "10"],
+            vec!["Gadget", "20"],
+        ])).unwrap();
+
+        book.save_as_xlsx(&path).unwrap();
+
+        // Load book with headers
+        let loaded = Book::from_xlsx_with_options(
+            &path,
+            XlsxReadOptions::default().with_headers(true),
+        ).unwrap();
+
+        let sheet = loaded.get_sheet("Data").unwrap();
+        assert!(sheet.column_names().is_some());
+
+        let prices = sheet.column_by_name("Price").unwrap();
+        assert_eq!(prices.len(), 3);
     }
 }
