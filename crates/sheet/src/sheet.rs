@@ -520,8 +520,8 @@ impl Sheet {
         self.invalidate_row_names();
     }
 
-    /// Filter columns by indices
-    pub fn filter_columns(&mut self, indices: &[usize]) -> Result<()> {
+    /// Remove columns at the specified indices
+    pub fn remove_columns_at(&mut self, indices: &[usize]) -> Result<()> {
         for &index in indices {
             if index >= self.col_count() {
                 return Err(SheetError::ColumnIndexOutOfBounds {

@@ -190,12 +190,18 @@ impl Book {
     }
 
     /// Load a book from a directory of CSV files with custom options
+    ///
+    /// Files are loaded in sorted order by filename for deterministic results.
     pub fn from_csv_dir_with_options<P: AsRef<Path>>(path: P, options: CsvOptions) -> Result<Self> {
         let mut book = Book::new();
-        let dir = std::fs::read_dir(path)?;
 
-        for entry in dir {
-            let entry = entry?;
+        // Collect and sort entries for deterministic ordering
+        let mut entries: Vec<_> = std::fs::read_dir(path)?
+            .filter_map(|e| e.ok())
+            .collect();
+        entries.sort_by_key(|e| e.path());
+
+        for entry in entries {
             let file_path = entry.path();
 
             if let Some(ext) = file_path.extension() {

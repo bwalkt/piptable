@@ -169,7 +169,7 @@ impl Book {
         Ok(sheet)
     }
 
-    /// Rename a sheet
+    /// Rename a sheet (preserves position in sheet order)
     pub fn rename_sheet(&mut self, old_name: &str, new_name: &str) -> Result<()> {
         if !self.sheets.contains_key(old_name) {
             return Err(SheetError::SheetNotFound {
@@ -183,10 +183,11 @@ impl Book {
             });
         }
 
-        // Get the sheet, update its name, and reinsert with new key
-        if let Some(mut sheet) = self.sheets.shift_remove(old_name) {
+        // Get the index to preserve position
+        if let Some(index) = self.sheets.get_index_of(old_name) {
+            let (_, mut sheet) = self.sheets.shift_remove_index(index).unwrap();
             sheet.set_name(new_name);
-            self.sheets.insert(new_name.to_string(), sheet);
+            self.sheets.shift_insert(index, new_name.to_string(), sheet);
 
             // Update active sheet reference
             if self.active_sheet.as_deref() == Some(old_name) {

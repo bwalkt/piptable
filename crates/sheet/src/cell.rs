@@ -78,10 +78,10 @@ impl CellValue {
             return CellValue::Null;
         }
 
-        // Check for boolean
+        // Check for boolean (note: "1"/"0" are parsed as Int, not Bool)
         match trimmed.to_lowercase().as_str() {
-            "true" | "yes" | "1" => return CellValue::Bool(true),
-            "false" | "no" | "0" => return CellValue::Bool(false),
+            "true" | "yes" => return CellValue::Bool(true),
+            "false" | "no" => return CellValue::Bool(false),
             _ => {}
         }
 
