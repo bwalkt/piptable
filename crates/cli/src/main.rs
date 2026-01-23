@@ -115,9 +115,16 @@ fn parse_cli_value(s: &str) -> Value {
 }
 
 /// Run a piptable script.
-async fn run_script(interpreter: &mut Interpreter, source: &str, format: OutputFormat) -> Result<()> {
+async fn run_script(
+    interpreter: &mut Interpreter,
+    source: &str,
+    format: OutputFormat,
+) -> Result<()> {
     let program = PipParser::parse_str(source).map_err(|e| anyhow::anyhow!("{e}"))?;
-    let result = interpreter.eval(program).await.map_err(|e| anyhow::anyhow!("{e}"))?;
+    let result = interpreter
+        .eval(program)
+        .await
+        .map_err(|e| anyhow::anyhow!("{e}"))?;
 
     // Print output buffer
     for line in interpreter.output().await {
@@ -139,7 +146,11 @@ async fn run_repl(interpreter: &mut Interpreter, format: OutputFormat) -> Result
         "piptable".cyan().bold(),
         env!("CARGO_PKG_VERSION")
     );
-    println!("Type {} for help, {} to exit\n", ":help".yellow(), ":quit".yellow());
+    println!(
+        "Type {} for help, {} to exit\n",
+        ":help".yellow(),
+        ":quit".yellow()
+    );
 
     let mut rl = DefaultEditor::new()?;
     let history_path = dirs_history_path();
@@ -272,39 +283,40 @@ fn print_value(value: &Value, format: OutputFormat) -> Result<()> {
                 }
             }
         }
-        Value::Array(items) => {
-            match format {
-                OutputFormat::Json => {
-                    let json_items: Result<Vec<_>, _> = items.iter().map(|v| v.to_json()).collect();
-                    match json_items {
-                        Ok(arr) => println!("{}", serde_json::to_string_pretty(&arr)?),
-                        Err(e) => println!("{}", e),
-                    }
-                }
-                OutputFormat::Csv | OutputFormat::Table => {
-                    for item in items {
-                        println!("{}", format_value(item));
-                    }
+        Value::Array(items) => match format {
+            OutputFormat::Json => {
+                let json_items: Result<Vec<_>, _> = items.iter().map(|v| v.to_json()).collect();
+                match json_items {
+                    Ok(arr) => println!("{}", serde_json::to_string_pretty(&arr)?),
+                    Err(e) => println!("{}", e),
                 }
             }
-        }
-        Value::Object(obj) => {
-            match format {
-                OutputFormat::Json => {
-                    let json_obj: Result<serde_json::Map<String, serde_json::Value>, _> =
-                        obj.iter().map(|(k, v)| v.to_json().map(|jv| (k.clone(), jv))).collect();
-                    match json_obj {
-                        Ok(map) => println!("{}", serde_json::to_string_pretty(&serde_json::Value::Object(map))?),
-                        Err(e) => println!("{}", e),
-                    }
-                }
-                OutputFormat::Csv | OutputFormat::Table => {
-                    for (k, v) in obj {
-                        println!("{}: {}", k, format_value(v));
-                    }
+            OutputFormat::Csv | OutputFormat::Table => {
+                for item in items {
+                    println!("{}", format_value(item));
                 }
             }
-        }
+        },
+        Value::Object(obj) => match format {
+            OutputFormat::Json => {
+                let json_obj: Result<serde_json::Map<String, serde_json::Value>, _> = obj
+                    .iter()
+                    .map(|(k, v)| v.to_json().map(|jv| (k.clone(), jv)))
+                    .collect();
+                match json_obj {
+                    Ok(map) => println!(
+                        "{}",
+                        serde_json::to_string_pretty(&serde_json::Value::Object(map))?
+                    ),
+                    Err(e) => println!("{}", e),
+                }
+            }
+            OutputFormat::Csv | OutputFormat::Table => {
+                for (k, v) in obj {
+                    println!("{}: {}", k, format_value(v));
+                }
+            }
+        },
         _ => {
             println!("{}", format_value(value));
         }
@@ -326,7 +338,10 @@ fn format_value(value: &Value) -> String {
             format!("[{}]", formatted.join(", "))
         }
         Value::Object(obj) => {
-            let formatted: Vec<_> = obj.iter().map(|(k, v)| format!("{k}: {}", format_value(v))).collect();
+            let formatted: Vec<_> = obj
+                .iter()
+                .map(|(k, v)| format!("{k}: {}", format_value(v)))
+                .collect();
             format!("{{{}}}", formatted.join(", "))
         }
         Value::Table(batches) => {
@@ -340,7 +355,9 @@ fn format_value(value: &Value) -> String {
 }
 
 /// Convert Arrow batches to JSON.
-fn table_to_json(batches: &[std::sync::Arc<arrow::array::RecordBatch>]) -> Result<Vec<serde_json::Value>> {
+fn table_to_json(
+    batches: &[std::sync::Arc<arrow::array::RecordBatch>],
+) -> Result<Vec<serde_json::Value>> {
     let mut rows = Vec::new();
 
     for batch in batches {

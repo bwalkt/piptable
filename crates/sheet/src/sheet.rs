@@ -440,7 +440,9 @@ impl Sheet {
     fn column_index_by_name(&self, name: &str) -> Result<usize> {
         self.column_index
             .as_ref()
-            .ok_or_else(|| SheetError::ColumnsNotNamed("Call name_columns_by_row() first".to_string()))?
+            .ok_or_else(|| {
+                SheetError::ColumnsNotNamed("Call name_columns_by_row() first".to_string())
+            })?
             .get(name)
             .copied()
             .ok_or_else(|| SheetError::ColumnNotFound {
@@ -642,7 +644,10 @@ impl Sheet {
         let mut data = Vec::with_capacity(records.len() + 1);
 
         // Add header row
-        let header: Vec<CellValue> = col_names.iter().map(|n| CellValue::String(n.clone())).collect();
+        let header: Vec<CellValue> = col_names
+            .iter()
+            .map(|n| CellValue::String(n.clone()))
+            .collect();
         data.push(header);
 
         // Add data rows
@@ -811,8 +816,14 @@ mod tests {
 
         // Check second record (first data row)
         let alice = &records[1];
-        assert_eq!(alice.get("name").unwrap(), &CellValue::String("Alice".to_string()));
-        assert_eq!(alice.get("age").unwrap(), &CellValue::String("30".to_string()));
+        assert_eq!(
+            alice.get("name").unwrap(),
+            &CellValue::String("Alice".to_string())
+        );
+        assert_eq!(
+            alice.get("age").unwrap(),
+            &CellValue::String("30".to_string())
+        );
     }
 
     #[test]
@@ -855,6 +866,9 @@ mod tests {
 
         // Skip header row (index 0), check data rows
         assert_eq!(records[1].get("id").unwrap(), &CellValue::Int(1));
-        assert_eq!(records[2].get("value").unwrap(), &CellValue::String("two".to_string()));
+        assert_eq!(
+            records[2].get("value").unwrap(),
+            &CellValue::String("two".to_string())
+        );
     }
 }

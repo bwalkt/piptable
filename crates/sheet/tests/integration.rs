@@ -120,10 +120,7 @@ fn test_column_by_name() {
 
 #[test]
 fn test_named_columns() {
-    let mut sheet = Sheet::from_data(vec![
-        vec!["A", "B", "C"],
-        vec!["1", "2", "3"],
-    ]);
+    let mut sheet = Sheet::from_data(vec![vec!["A", "B", "C"], vec!["1", "2", "3"]]);
 
     sheet.name_columns_by_row(0).unwrap();
 
@@ -151,7 +148,10 @@ fn test_duplicate_column_names_error() {
     ]);
 
     let result = sheet.name_columns_by_row(0);
-    assert!(matches!(result, Err(SheetError::DuplicateColumnName { .. })));
+    assert!(matches!(
+        result,
+        Err(SheetError::DuplicateColumnName { .. })
+    ));
 }
 
 // ===== Transformation Tests =====
@@ -177,9 +177,7 @@ fn test_column_map() {
     let mut sheet = Sheet::from_data(vec![vec![1, 2], vec![3, 4]]);
 
     sheet
-        .column_map(0, |cell| {
-            CellValue::Int(cell.as_int().unwrap_or(0) * 2)
-        })
+        .column_map(0, |cell| CellValue::Int(cell.as_int().unwrap_or(0) * 2))
         .unwrap();
 
     assert_eq!(sheet.get(0, 0).unwrap(), &CellValue::Int(2));
@@ -202,10 +200,7 @@ fn test_filter_rows() {
 
 #[test]
 fn test_csv_roundtrip() {
-    let original = Sheet::from_data(vec![
-        vec!["name", "value"],
-        vec!["test", "42"],
-    ]);
+    let original = Sheet::from_data(vec![vec!["name", "value"], vec!["test", "42"]]);
 
     let csv = original.to_csv_string().unwrap();
     let restored = Sheet::from_csv_str(&csv).unwrap();
@@ -352,11 +347,7 @@ fn test_to_array() {
 
 #[test]
 fn test_to_dict() {
-    let mut sheet = Sheet::from_data(vec![
-        vec!["A", "B"],
-        vec!["1", "2"],
-        vec!["3", "4"],
-    ]);
+    let mut sheet = Sheet::from_data(vec![vec!["A", "B"], vec!["1", "2"], vec!["3", "4"]]);
 
     // Without naming, returns None
     assert!(sheet.to_dict().is_none());

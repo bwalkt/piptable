@@ -196,9 +196,7 @@ impl Book {
         let mut book = Book::new();
 
         // Collect and sort entries for deterministic ordering
-        let mut entries: Vec<_> = std::fs::read_dir(path)?
-            .filter_map(|e| e.ok())
-            .collect();
+        let mut entries: Vec<_> = std::fs::read_dir(path)?.filter_map(|e| e.ok()).collect();
         entries.sort_by_key(|e| e.path());
 
         for entry in entries {
@@ -306,10 +304,7 @@ mod tests {
 
     #[test]
     fn test_csv_roundtrip() {
-        let original = Sheet::from_data(vec![
-            vec!["name", "value"],
-            vec!["test", "42"],
-        ]);
+        let original = Sheet::from_data(vec![vec!["name", "value"], vec!["test", "42"]]);
 
         let csv = original.to_csv_string().unwrap();
         let restored = Sheet::from_csv_str(&csv).unwrap();
@@ -354,12 +349,8 @@ mod tests {
         let sheet1 = Sheet::from_data(vec![vec![1, 2]]);
         let sheet2 = Sheet::from_data(vec![vec![3, 4]]);
 
-        sheet1
-            .save_as_csv(dir.path().join("sheet1.csv"))
-            .unwrap();
-        sheet2
-            .save_as_csv(dir.path().join("sheet2.csv"))
-            .unwrap();
+        sheet1.save_as_csv(dir.path().join("sheet1.csv")).unwrap();
+        sheet2.save_as_csv(dir.path().join("sheet2.csv")).unwrap();
 
         // Load as book
         let book = Book::from_csv_dir(dir.path()).unwrap();
