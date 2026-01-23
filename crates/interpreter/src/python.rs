@@ -206,17 +206,6 @@ impl PythonRuntime {
     }
 }
 
-impl Default for PythonRuntime {
-    /// Creates a new Python runtime with default settings.
-    ///
-    /// # Panics
-    ///
-    /// Panics if Python interpreter initialization fails.
-    fn default() -> Self {
-        Self::new().expect("Failed to initialize Python runtime")
-    }
-}
-
 /// Convert a piptable Value to a Python object.
 fn value_to_py(py: Python<'_>, value: &Value) -> PyObject {
     match value {
