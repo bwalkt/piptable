@@ -297,6 +297,22 @@ impl Value {
 mod tests {
     use super::*;
 
+    // ========================================================================
+    // is_null tests
+    // ========================================================================
+
+    #[test]
+    fn test_is_null() {
+        assert!(Value::Null.is_null());
+        assert!(!Value::Bool(false).is_null());
+        assert!(!Value::Int(0).is_null());
+        assert!(!Value::String(String::new()).is_null());
+    }
+
+    // ========================================================================
+    // is_truthy tests
+    // ========================================================================
+
     #[test]
     fn test_value_is_truthy() {
         assert!(!Value::Null.is_truthy());
@@ -304,9 +320,29 @@ mod tests {
         assert!(Value::Bool(true).is_truthy());
         assert!(!Value::Int(0).is_truthy());
         assert!(Value::Int(1).is_truthy());
+        assert!(Value::Int(-1).is_truthy());
+        assert!(!Value::Float(0.0).is_truthy());
+        assert!(Value::Float(0.1).is_truthy());
         assert!(!Value::String(String::new()).is_truthy());
         assert!(Value::String("hello".to_string()).is_truthy());
+        assert!(!Value::Array(vec![]).is_truthy());
+        assert!(Value::Array(vec![Value::Int(1)]).is_truthy());
+        assert!(!Value::Object(HashMap::new()).is_truthy());
+        let mut map = HashMap::new();
+        map.insert("k".to_string(), Value::Int(1));
+        assert!(Value::Object(map).is_truthy());
+        assert!(!Value::Table(vec![]).is_truthy());
+        assert!(Value::Function {
+            name: "f".to_string(),
+            params: vec![],
+            is_async: false
+        }
+        .is_truthy());
     }
+
+    // ========================================================================
+    // type_name tests
+    // ========================================================================
 
     #[test]
     fn test_value_type_name() {
@@ -315,7 +351,97 @@ mod tests {
         assert_eq!(Value::Int(42).type_name(), "Int");
         assert_eq!(Value::Float(3.14).type_name(), "Float");
         assert_eq!(Value::String("test".to_string()).type_name(), "String");
+        assert_eq!(Value::Array(vec![]).type_name(), "Array");
+        assert_eq!(Value::Object(HashMap::new()).type_name(), "Object");
+        assert_eq!(Value::Table(vec![]).type_name(), "Table");
+        assert_eq!(
+            Value::Function {
+                name: "f".to_string(),
+                params: vec![],
+                is_async: false
+            }
+            .type_name(),
+            "Function"
+        );
     }
+
+    // ========================================================================
+    // as_* accessor tests
+    // ========================================================================
+
+    #[test]
+    fn test_as_bool() {
+        assert_eq!(Value::Bool(true).as_bool(), Some(true));
+        assert_eq!(Value::Bool(false).as_bool(), Some(false));
+        assert_eq!(Value::Int(1).as_bool(), None);
+        assert_eq!(Value::Null.as_bool(), None);
+    }
+
+    #[test]
+    fn test_as_int() {
+        assert_eq!(Value::Int(42).as_int(), Some(42));
+        assert_eq!(Value::Float(3.7).as_int(), Some(3)); // truncates
+        assert_eq!(Value::String("42".to_string()).as_int(), None);
+        assert_eq!(Value::Null.as_int(), None);
+    }
+
+    #[test]
+    fn test_as_float() {
+        assert_eq!(Value::Float(3.14).as_float(), Some(3.14));
+        assert_eq!(Value::Int(42).as_float(), Some(42.0));
+        assert_eq!(Value::String("3.14".to_string()).as_float(), None);
+        assert_eq!(Value::Null.as_float(), None);
+    }
+
+    #[test]
+    fn test_as_str() {
+        assert_eq!(Value::String("hello".to_string()).as_str(), Some("hello"));
+        assert_eq!(Value::Int(42).as_str(), None);
+        assert_eq!(Value::Null.as_str(), None);
+    }
+
+    #[test]
+    fn test_as_array() {
+        let arr = vec![Value::Int(1), Value::Int(2)];
+        let v = Value::Array(arr.clone());
+        assert!(v.as_array().is_some());
+        assert_eq!(v.as_array().unwrap().len(), 2);
+        assert!(Value::Int(42).as_array().is_none());
+    }
+
+    #[test]
+    fn test_as_object() {
+        let mut map = HashMap::new();
+        map.insert("key".to_string(), Value::Int(42));
+        let v = Value::Object(map);
+        assert!(v.as_object().is_some());
+        assert_eq!(
+            v.as_object().unwrap().get("key").unwrap().as_int(),
+            Some(42)
+        );
+        assert!(Value::Int(42).as_object().is_none());
+    }
+
+    #[test]
+    fn test_as_table() {
+        let v = Value::Table(vec![]);
+        assert!(v.as_table().is_some());
+        assert!(Value::Int(42).as_table().is_none());
+    }
+
+    // ========================================================================
+    // Default impl test
+    // ========================================================================
+
+    #[test]
+    fn test_default() {
+        let v = Value::default();
+        assert!(v.is_null());
+    }
+
+    // ========================================================================
+    // From conversions tests
+    // ========================================================================
 
     #[test]
     fn test_value_from_conversions() {
@@ -325,7 +451,161 @@ mod tests {
         let v: Value = 42i64.into();
         assert!(matches!(v, Value::Int(42)));
 
+        let v: Value = 42i32.into();
+        assert!(matches!(v, Value::Int(42)));
+
+        let v: Value = 3.14f64.into();
+        assert!(matches!(v, Value::Float(f) if (f - 3.14).abs() < f64::EPSILON));
+
         let v: Value = "hello".into();
         assert!(matches!(v, Value::String(s) if s == "hello"));
+
+        let v: Value = String::from("world").into();
+        assert!(matches!(v, Value::String(s) if s == "world"));
+
+        let v: Value = vec![1i64, 2i64, 3i64].into();
+        assert!(matches!(v, Value::Array(arr) if arr.len() == 3));
+
+        let mut map = HashMap::new();
+        map.insert("key".to_string(), Value::Int(42));
+        let v: Value = map.into();
+        assert!(matches!(v, Value::Object(_)));
+    }
+
+    // ========================================================================
+    // JSON conversion tests
+    // ========================================================================
+
+    #[test]
+    fn test_from_json() {
+        assert!(Value::from_json(serde_json::Value::Null).is_null());
+        assert!(matches!(
+            Value::from_json(serde_json::Value::Bool(true)),
+            Value::Bool(true)
+        ));
+        assert!(matches!(
+            Value::from_json(serde_json::json!(42)),
+            Value::Int(42)
+        ));
+        assert!(matches!(
+            Value::from_json(serde_json::json!(3.14)),
+            Value::Float(f) if (f - 3.14).abs() < f64::EPSILON
+        ));
+        assert!(matches!(
+            Value::from_json(serde_json::json!("hello")),
+            Value::String(s) if s == "hello"
+        ));
+        assert!(matches!(
+            Value::from_json(serde_json::json!([1, 2, 3])),
+            Value::Array(arr) if arr.len() == 3
+        ));
+        assert!(matches!(
+            Value::from_json(serde_json::json!({"key": "value"})),
+            Value::Object(_)
+        ));
+    }
+
+    #[test]
+    fn test_to_json() {
+        assert_eq!(Value::Null.to_json().unwrap(), serde_json::Value::Null);
+        assert_eq!(
+            Value::Bool(true).to_json().unwrap(),
+            serde_json::Value::Bool(true)
+        );
+        assert_eq!(Value::Int(42).to_json().unwrap(), serde_json::json!(42));
+        assert_eq!(
+            Value::Float(3.14).to_json().unwrap(),
+            serde_json::json!(3.14)
+        );
+        assert_eq!(
+            Value::String("hello".to_string()).to_json().unwrap(),
+            serde_json::json!("hello")
+        );
+
+        // Array
+        let arr = Value::Array(vec![Value::Int(1), Value::Int(2)]);
+        assert_eq!(arr.to_json().unwrap(), serde_json::json!([1, 2]));
+
+        // Object
+        let mut map = HashMap::new();
+        map.insert("key".to_string(), Value::Int(42));
+        let obj = Value::Object(map);
+        assert_eq!(obj.to_json().unwrap(), serde_json::json!({"key": 42}));
+    }
+
+    #[test]
+    fn test_to_json_errors() {
+        // Table is not JSON-serializable
+        let table = Value::Table(vec![]);
+        assert!(table.to_json().is_err());
+
+        // Function is not JSON-serializable
+        let func = Value::Function {
+            name: "f".to_string(),
+            params: vec![],
+            is_async: false,
+        };
+        assert!(func.to_json().is_err());
+
+        // NaN is not JSON-serializable
+        let nan = Value::Float(f64::NAN);
+        assert!(nan.to_json().is_err());
+
+        // Infinity is not JSON-serializable
+        let inf = Value::Float(f64::INFINITY);
+        assert!(inf.to_json().is_err());
+    }
+
+    // ========================================================================
+    // Serialize/Deserialize tests
+    // ========================================================================
+
+    #[test]
+    fn test_serialize() {
+        let v = Value::Int(42);
+        let json = serde_json::to_string(&v).unwrap();
+        assert_eq!(json, "42");
+
+        let v = Value::String("hello".to_string());
+        let json = serde_json::to_string(&v).unwrap();
+        assert_eq!(json, "\"hello\"");
+
+        let v = Value::Array(vec![Value::Int(1), Value::Int(2)]);
+        let json = serde_json::to_string(&v).unwrap();
+        assert_eq!(json, "[1,2]");
+
+        let v = Value::Null;
+        let json = serde_json::to_string(&v).unwrap();
+        assert_eq!(json, "null");
+    }
+
+    #[test]
+    fn test_serialize_errors() {
+        // Table cannot be serialized
+        let v = Value::Table(vec![]);
+        assert!(serde_json::to_string(&v).is_err());
+
+        // Function cannot be serialized
+        let v = Value::Function {
+            name: "f".to_string(),
+            params: vec![],
+            is_async: false,
+        };
+        assert!(serde_json::to_string(&v).is_err());
+    }
+
+    #[test]
+    fn test_deserialize() {
+        let v: Value = serde_json::from_str("42").unwrap();
+        assert!(matches!(v, Value::Int(42)));
+
+        let v: Value = serde_json::from_str("\"hello\"").unwrap();
+        assert!(matches!(v, Value::String(s) if s == "hello"));
+
+        let v: Value = serde_json::from_str("[1, 2, 3]").unwrap();
+        assert!(matches!(v, Value::Array(arr) if arr.len() == 3));
+
+        let v: Value = serde_json::from_str("null").unwrap();
+        assert!(v.is_null());
     }
 }

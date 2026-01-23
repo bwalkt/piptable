@@ -162,11 +162,117 @@ impl Default for HttpClient {
 mod tests {
     use super::*;
 
+    // ========================================================================
+    // FetchOptions tests
+    // ========================================================================
+
     #[test]
     fn test_fetch_options_default() {
         let opts = FetchOptions::default();
         assert!(matches!(opts.method, HttpMethod::Get));
         assert!(opts.headers.is_empty());
         assert!(opts.body.is_none());
+        assert!(opts.timeout_secs.is_none());
+    }
+
+    #[test]
+    fn test_fetch_options_with_values() {
+        let mut headers = HashMap::new();
+        headers.insert("Content-Type".to_string(), "application/json".to_string());
+
+        let opts = FetchOptions {
+            method: HttpMethod::Post,
+            headers,
+            body: Some("{\"key\": \"value\"}".to_string()),
+            timeout_secs: Some(60),
+        };
+
+        assert!(matches!(opts.method, HttpMethod::Post));
+        assert_eq!(opts.headers.len(), 1);
+        assert!(opts.body.is_some());
+        assert_eq!(opts.timeout_secs, Some(60));
+    }
+
+    // ========================================================================
+    // HttpMethod tests
+    // ========================================================================
+
+    #[test]
+    fn test_http_method_default() {
+        let method = HttpMethod::default();
+        assert!(matches!(method, HttpMethod::Get));
+    }
+
+    #[test]
+    fn test_http_method_variants() {
+        // Just ensure all variants are accessible
+        let _ = HttpMethod::Get;
+        let _ = HttpMethod::Post;
+        let _ = HttpMethod::Put;
+        let _ = HttpMethod::Delete;
+        let _ = HttpMethod::Patch;
+    }
+
+    #[test]
+    fn test_http_method_debug() {
+        let method = HttpMethod::Get;
+        let debug = format!("{:?}", method);
+        assert_eq!(debug, "Get");
+    }
+
+    #[test]
+    fn test_http_method_clone() {
+        let method = HttpMethod::Post;
+        let cloned = method.clone();
+        assert!(matches!(cloned, HttpMethod::Post));
+    }
+
+    // ========================================================================
+    // HttpClient construction tests
+    // ========================================================================
+
+    #[test]
+    fn test_http_client_new() {
+        let client = HttpClient::new();
+        assert!(client.is_ok());
+    }
+
+    #[test]
+    fn test_http_client_with_timeout() {
+        let client = HttpClient::with_timeout(10);
+        assert!(client.is_ok());
+
+        let client = HttpClient::with_timeout(120);
+        assert!(client.is_ok());
+    }
+
+    #[test]
+    fn test_http_client_default() {
+        // Default impl should succeed
+        let _client = HttpClient::default();
+    }
+
+    // ========================================================================
+    // FetchOptions Clone/Debug tests
+    // ========================================================================
+
+    #[test]
+    fn test_fetch_options_clone() {
+        let opts = FetchOptions {
+            method: HttpMethod::Put,
+            headers: HashMap::new(),
+            body: Some("test".to_string()),
+            timeout_secs: Some(30),
+        };
+        let cloned = opts.clone();
+        assert!(matches!(cloned.method, HttpMethod::Put));
+        assert_eq!(cloned.body, Some("test".to_string()));
+    }
+
+    #[test]
+    fn test_fetch_options_debug() {
+        let opts = FetchOptions::default();
+        let debug = format!("{:?}", opts);
+        assert!(debug.contains("FetchOptions"));
     }
 }
