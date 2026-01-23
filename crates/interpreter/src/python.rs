@@ -47,11 +47,14 @@ impl PythonRuntime {
         })
     }
 
-    /// Register a Python function from inline code (lambda or def).
+    /// Register a Python function from inline code (callable expression, e.g. lambda).
+    ///
+    /// Note: Only Python expressions are supported, not statements like `def`.
+    /// Use `register_from_file` for multi-line function definitions.
     ///
     /// # Arguments
     /// * `name` - The name to register the function under
-    /// * `code` - Python code (e.g., "lambda x: x * 2")
+    /// * `code` - Python callable expression (e.g., "lambda x: x * 2")
     pub async fn register_inline(&self, name: &str, code: &str) -> PipResult<()> {
         let name_owned = name.to_string();
         let code_owned = code.to_string();
