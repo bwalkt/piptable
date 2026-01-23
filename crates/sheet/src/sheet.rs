@@ -440,7 +440,7 @@ impl Sheet {
     fn column_index_by_name(&self, name: &str) -> Result<usize> {
         self.column_index
             .as_ref()
-            .ok_or(SheetError::ColumnsNotNamed)?
+            .ok_or_else(|| SheetError::ColumnsNotNamed("Call name_columns_by_row() first".to_string()))?
             .get(name)
             .copied()
             .ok_or_else(|| SheetError::ColumnNotFound {

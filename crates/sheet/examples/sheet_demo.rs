@@ -171,6 +171,59 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("  Rows: {}", from_recs.row_count());
     println!("  CSV:\n{}", from_recs.to_csv_string()?);
 
+    // =========================================================================
+    // Issue #78: JSON, JSONL, and TOON Support
+    // =========================================================================
+    println!("\n--- Issue #78: JSON, JSONL, and TOON Support ---\n");
+
+    // Create a sheet for JSON/JSONL/TOON demo
+    let mut data_sheet = Sheet::from_data(vec![
+        vec!["name", "age", "city"],
+        vec!["Alice", "30", "NYC"],
+        vec!["Bob", "25", "LA"],
+    ]);
+    data_sheet.name_columns_by_row(0)?;
+
+    // JSON output
+    let json = data_sheet.to_json_string_pretty()?;
+    println!("JSON output:");
+    println!("{}", json);
+
+    // JSONL output
+    let jsonl = data_sheet.to_jsonl_string()?;
+    println!("\nJSONL output:");
+    println!("{}", jsonl);
+
+    // TOON output (Token-Oriented Object Notation - LLM friendly)
+    let toon = data_sheet.to_toon_string()?;
+    println!("TOON output:");
+    println!("{}", toon);
+
+    // Roundtrip: JSON -> Sheet -> JSON
+    let json_sheet = Sheet::from_json_str(&data_sheet.to_json_string()?)?;
+    println!("JSON roundtrip: {} rows", json_sheet.row_count());
+
+    // Roundtrip: JSONL -> Sheet -> JSONL
+    let jsonl_sheet = Sheet::from_jsonl_str(&data_sheet.to_jsonl_string()?)?;
+    println!("JSONL roundtrip: {} rows", jsonl_sheet.row_count());
+
+    // Roundtrip: TOON -> Sheet -> TOON
+    let toon_sheet = Sheet::from_toon_str(&data_sheet.to_toon_string()?)?;
+    println!("TOON roundtrip: {} rows", toon_sheet.row_count());
+
+    // Save to files
+    let json_path = temp_dir.join("demo.json");
+    let jsonl_path = temp_dir.join("demo.jsonl");
+    let toon_path = temp_dir.join("demo.toon");
+
+    data_sheet.save_as_json_pretty(&json_path)?;
+    data_sheet.save_as_jsonl(&jsonl_path)?;
+    data_sheet.save_as_toon(&toon_path)?;
+    println!("\nSaved to:");
+    println!("  JSON:  {}", json_path.display());
+    println!("  JSONL: {}", jsonl_path.display());
+    println!("  TOON:  {}", toon_path.display());
+
     println!("\n=== Demo Complete ===");
     Ok(())
 }

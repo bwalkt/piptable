@@ -57,7 +57,9 @@ mod book;
 mod cell;
 mod csv;
 mod error;
+mod json;
 mod sheet;
+mod toon;
 mod xlsx;
 
 pub use book::Book;
