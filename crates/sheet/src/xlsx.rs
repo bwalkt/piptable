@@ -783,4 +783,103 @@ mod tests {
         assert!(names.contains(&"Alpha".to_string()));
         assert!(names.contains(&"Beta".to_string()));
     }
+
+    // =========================================================================
+    // XLS (Legacy Excel 97-2003) format tests
+    // =========================================================================
+
+    /// Path to the XLS test fixture
+    fn xls_fixture_path() -> std::path::PathBuf {
+        std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("tests")
+            .join("fixtures")
+            .join("sample.xls")
+    }
+
+    #[test]
+    fn test_xls_read() {
+        let path = xls_fixture_path();
+        if !path.exists() {
+            eprintln!("Skipping XLS test: fixture not found at {:?}", path);
+            return;
+        }
+
+        let sheet = Sheet::from_xls(&path).unwrap();
+        assert_eq!(sheet.row_count(), 3);
+        assert_eq!(sheet.col_count(), 3);
+        assert_eq!(sheet.name(), "Data");
+    }
+
+    #[test]
+    fn test_xls_with_headers() {
+        let path = xls_fixture_path();
+        if !path.exists() {
+            return;
+        }
+
+        let sheet = Sheet::from_xls_with_options(
+            &path,
+            XlsxReadOptions::default().with_headers(true),
+        ).unwrap();
+
+        assert!(sheet.column_names().is_some());
+        let names = sheet.column_names().unwrap();
+        assert_eq!(names[0], "Name");
+        assert_eq!(names[1], "Age");
+        assert_eq!(names[2], "City");
+    }
+
+    #[test]
+    fn test_xls_specific_sheet() {
+        let path = xls_fixture_path();
+        if !path.exists() {
+            return;
+        }
+
+        let sheet = Sheet::from_xls_sheet(&path, "Numbers").unwrap();
+        assert_eq!(sheet.name(), "Numbers");
+        assert_eq!(sheet.row_count(), 1);
+        assert_eq!(sheet.col_count(), 3);
+    }
+
+    #[test]
+    fn test_book_from_xls() {
+        let path = xls_fixture_path();
+        if !path.exists() {
+            return;
+        }
+
+        let book = Book::from_xls(&path).unwrap();
+        assert_eq!(book.sheet_count(), 2);
+        assert!(book.has_sheet("Data"));
+        assert!(book.has_sheet("Numbers"));
+    }
+
+    #[test]
+    fn test_xls_sheet_names() {
+        let path = xls_fixture_path();
+        if !path.exists() {
+            return;
+        }
+
+        let names = Book::xls_sheet_names(&path).unwrap();
+        assert_eq!(names.len(), 2);
+        assert!(names.contains(&"Data".to_string()));
+        assert!(names.contains(&"Numbers".to_string()));
+    }
+
+    #[test]
+    fn test_xls_auto_detect() {
+        let path = xls_fixture_path();
+        if !path.exists() {
+            return;
+        }
+
+        // Auto-detect should work with .xls files
+        let sheet = Sheet::from_excel(&path).unwrap();
+        assert_eq!(sheet.row_count(), 3);
+
+        let book = Book::from_excel(&path).unwrap();
+        assert_eq!(book.sheet_count(), 2);
+    }
 }
