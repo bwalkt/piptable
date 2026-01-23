@@ -182,22 +182,31 @@ impl PythonRuntime {
 
         let name_owned = name.to_string();
 
-        Python::with_gil(|py| {
-            // Convert arguments to Python objects
-            let py_args: Vec<PyObject> = args
-                .iter()
-                .map(|v| value_to_py(py, v))
-                .collect::<PyResult<Vec<_>>>()?;
+        // Run Python code in a blocking task to avoid starving the async runtime.
+        // The GIL blocks the thread, so we offload to tokio's blocking thread pool.
+        tokio::task::spawn_blocking(move || {
+            Python::with_gil(|py| {
+                // Convert arguments to Python objects
+                let py_args: Vec<PyObject> = args
+                    .iter()
+                    .map(|v| value_to_py(py, v))
+                    .collect::<PyResult<Vec<_>>>()?;
 
-            // Create tuple of arguments
-            let args_tuple = PyTuple::new(py, py_args)?;
+                // Create tuple of arguments
+                let args_tuple = PyTuple::new(py, py_args)?;
 
-            // Call the function
-            let result = callable.call1(py, args_tuple)?;
+                // Call the function
+                let result = callable.call1(py, args_tuple)?;
 
-            // Convert result back to Value
-            py_to_value(py, result.bind(py))
+                // Convert result back to Value
+                py_to_value(py, result.bind(py))
+            })
         })
+        .await
+        .map_err(|e| PipError::Plugin {
+            plugin: "python".to_string(),
+            message: format!("Python task panicked: {}", e),
+        })?
         .map_err(|e: PyErr| PipError::Plugin {
             plugin: "python".to_string(),
             message: format!("Error calling '{}': {}", name_owned, e),

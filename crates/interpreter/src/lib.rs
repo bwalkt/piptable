@@ -61,7 +61,13 @@ impl Interpreter {
             output: Arc::new(RwLock::new(Vec::new())),
             functions: Arc::new(RwLock::new(HashMap::new())),
             #[cfg(feature = "python")]
-            python_runtime: python::PythonRuntime::new().ok(),
+            python_runtime: match python::PythonRuntime::new() {
+                Ok(rt) => Some(rt),
+                Err(e) => {
+                    tracing::warn!("Failed to initialize Python runtime: {}", e);
+                    None
+                }
+            },
         }
     }
 
