@@ -1,6 +1,7 @@
 //! Python bindings for piptable Sheet/Book API
 //!
 //! Provides a pyexcel-like interface for working with tabular data from Python.
+//! Integrates seamlessly with pandas for data analysis and visualization.
 //!
 //! # Example
 //!
@@ -8,24 +9,29 @@
 //! from piptable import Sheet, Book
 //!
 //! # Load from CSV
-//! sheet = Sheet.from_csv("data.csv")
-//! print(f"Rows: {sheet.row_count()}, Cols: {sheet.col_count()}")
+//! sheet = Sheet.from_csv("data.csv", has_headers=True)
 //!
-//! # Access data
-//! sheet.name_columns_by_row(0)
-//! ages = sheet.column_by_name("Age")
+//! # Convert to pandas for analysis
+//! df = sheet.to_pandas()
+//! df.describe()
 //!
-//! # Load from Excel
-//! book = Book.from_xlsx("workbook.xlsx")
-//! for name in book.sheet_names():
-//!     print(name)
+//! # Use with matplotlib/plotly
+//! import matplotlib.pyplot as plt
+//! df.plot.bar(x="region", y="sales")
+//! plt.show()
+//!
+//! # Create from pandas
+//! import pandas as pd
+//! df = pd.DataFrame({"name": ["Alice", "Bob"], "age": [30, 25]})
+//! sheet = Sheet.from_pandas(df)
+//! sheet.save_as_xlsx("output.xlsx")
 //! ```
 
 use piptable_sheet::{
     Book as RustBook, CellValue as RustCellValue, CsvOptions as RustCsvOptions,
     Sheet as RustSheet, XlsxReadOptions as RustXlsxReadOptions,
 };
-use pyo3::exceptions::{PyIndexError, PyRuntimeError, PyValueError};
+use pyo3::exceptions::{PyImportError, PyIndexError, PyRuntimeError, PyValueError};
 use pyo3::prelude::*;
 use pyo3::types::{PyDict, PyList};
 
@@ -444,6 +450,112 @@ impl Sheet {
             .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
 
         Ok(Sheet { inner })
+    }
+
+    /// Convert to a pandas DataFrame
+    ///
+    /// Requires pandas to be installed. If columns are named, they will be
+    /// used as DataFrame column names.
+    ///
+    /// Returns:
+    ///     A pandas DataFrame
+    ///
+    /// Raises:
+    ///     ImportError: If pandas is not installed
+    ///
+    /// Example:
+    ///     >>> sheet = Sheet.from_csv("data.csv", has_headers=True)
+    ///     >>> df = sheet.to_pandas()
+    ///     >>> df.plot.bar(x="region", y="sales")
+    fn to_pandas(&self, py: Python<'_>) -> PyResult<PyObject> {
+        // Import pandas
+        let pd = py.import("pandas").map_err(|_| {
+            PyImportError::new_err(
+                "pandas is required for to_pandas(). Install with: pip install pandas",
+            )
+        })?;
+
+        // If columns are named, use to_dict for proper column names
+        if let Some(col_names) = self.inner.column_names() {
+            let py_dict = PyDict::new(py);
+            for (i, name) in col_names.iter().enumerate() {
+                let col = self.inner.column(i)
+                    .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
+                let list = PyList::new(py, col.iter().map(|v| cell_value_to_py(py, v)))?;
+                py_dict.set_item(name, list)?;
+            }
+            pd.call_method1("DataFrame", (py_dict,))
+                .map(|obj| obj.unbind())
+        } else {
+            // No column names - use row data directly
+            let data = self.inner.to_array();
+            let mut rows: Vec<PyObject> = Vec::with_capacity(data.len());
+            for row in data.iter() {
+                let inner = PyList::new(py, row.iter().map(|v| cell_value_to_py(py, v)))?;
+                rows.push(inner.into_any().unbind());
+            }
+            let py_list = PyList::new(py, rows)?;
+            pd.call_method1("DataFrame", (py_list,))
+                .map(|obj| obj.unbind())
+        }
+    }
+
+    /// Create a sheet from a pandas DataFrame
+    ///
+    /// Args:
+    ///     df: A pandas DataFrame
+    ///
+    /// Returns:
+    ///     A new Sheet instance with DataFrame columns as named columns
+    ///
+    // TODO(#86): Add support for pandas-specific types (NaT, Timestamp, Timedelta, etc.)
+    ///
+    /// Example:
+    ///     >>> import pandas as pd
+    ///     >>> df = pd.DataFrame({"name": ["Alice", "Bob"], "age": [30, 25]})
+    ///     >>> sheet = Sheet.from_pandas(df)
+    #[staticmethod]
+    fn from_pandas(_py: Python<'_>, df: &Bound<'_, PyAny>) -> PyResult<Self> {
+        // Get column names (convert to strings - pandas allows non-string column names)
+        let columns = df.getattr("columns")?;
+        let col_list = columns.call_method0("tolist")?;
+        let col_names: Vec<String> = col_list
+            .try_iter()?
+            .map(|item| {
+                let item = item?;
+                // Use Python's str() for robust string conversion
+                item.str()?.extract::<String>()
+            })
+            .collect::<PyResult<Vec<String>>>()?;
+
+        // Get values as list of lists
+        let values = df.getattr("values")?;
+        let rows_list = values.call_method0("tolist")?;
+
+        // Create sheet with data
+        let mut sheet = RustSheet::new();
+
+        // Add header row
+        let header_row: Vec<RustCellValue> = col_names
+            .iter()
+            .map(|s| RustCellValue::String(s.clone()))
+            .collect();
+        sheet.data_mut().push(header_row);
+
+        // Add data rows
+        for row in rows_list.try_iter()? {
+            let row = row?;
+            let row_list = row.downcast::<PyList>()?;
+            let converted = py_list_to_row(row_list)?;
+            sheet.data_mut().push(converted);
+        }
+
+        // Name columns by first row
+        sheet
+            .name_columns_by_row(0)
+            .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
+
+        Ok(Sheet { inner: sheet })
     }
 
     /// Save the sheet to a CSV file
