@@ -75,7 +75,7 @@ wiremock = "0.6"
 tempfile = "3"
 
 # Python bindings
-pyo3 = { version = "0.23", features = ["extension-module"] }
+pyo3 = { version = "0.23" }
 
 # Internal crates
 piptable-core = { path = "crates/core" }

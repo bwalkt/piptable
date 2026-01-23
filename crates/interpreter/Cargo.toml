@@ -7,6 +7,10 @@ license.workspace = true
 repository.workspace = true
 authors.workspace = true
 
+[features]
+default = []
+python = ["pyo3"]
+
 [dependencies]
 piptable-core = { workspace = true }
 piptable-parser = { workspace = true }
@@ -20,6 +24,7 @@ serde = { workspace = true }
 serde_json = { workspace = true }
 arrow = { workspace = true }
 async-recursion = "1"
+pyo3 = { workspace = true, optional = true }
 
 [dev-dependencies]
 tempfile = { workspace = true }
