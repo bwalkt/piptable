@@ -43,6 +43,39 @@ fn data_to_cell_value(data: &Data) -> CellValue {
     }
 }
 
+/// Build a Sheet from raw data with optional header handling
+fn build_sheet(
+    sheet_name: &str,
+    data: Vec<Vec<CellValue>>,
+    options: &XlsxReadOptions,
+) -> Result<Sheet> {
+    let mut sheet = Sheet::with_name(sheet_name);
+    *sheet.data_mut() = data;
+
+    if options.has_headers && sheet.row_count() > 0 {
+        sheet.name_columns_by_row(0)?;
+    }
+
+    Ok(sheet)
+}
+
+/// Build a Sheet from raw data, ignoring header naming errors (for Book loading)
+fn build_sheet_lenient(
+    sheet_name: &str,
+    data: Vec<Vec<CellValue>>,
+    options: &XlsxReadOptions,
+) -> Sheet {
+    let mut sheet = Sheet::with_name(sheet_name);
+    *sheet.data_mut() = data;
+
+    if options.has_headers && sheet.row_count() > 0 {
+        // Ignore duplicate column name errors when loading books
+        let _ = sheet.name_columns_by_row(0);
+    }
+
+    sheet
+}
+
 impl Sheet {
     /// Load a sheet from an Excel file (first sheet)
     ///
@@ -96,21 +129,12 @@ impl Sheet {
             .worksheet_range(sheet_name)
             .map_err(|e: XlsxError| SheetError::Io(std::io::Error::new(std::io::ErrorKind::Other, e.to_string())))?;
 
-        let mut data: Vec<Vec<CellValue>> = Vec::new();
+        let data: Vec<Vec<CellValue>> = range
+            .rows()
+            .map(|row| row.iter().map(data_to_cell_value).collect())
+            .collect();
 
-        for row in range.rows() {
-            let row_data: Vec<CellValue> = row.iter().map(data_to_cell_value).collect();
-            data.push(row_data);
-        }
-
-        let mut sheet = Sheet::with_name(sheet_name);
-        *sheet.data_mut() = data;
-
-        if options.has_headers && sheet.row_count() > 0 {
-            sheet.name_columns_by_row(0)?;
-        }
-
-        Ok(sheet)
+        build_sheet(sheet_name, data, &options)
     }
 
     /// Save the sheet to an Excel file
@@ -187,21 +211,12 @@ impl Sheet {
             .worksheet_range(sheet_name)
             .map_err(|e: XlsError| SheetError::Io(std::io::Error::new(std::io::ErrorKind::Other, e.to_string())))?;
 
-        let mut data: Vec<Vec<CellValue>> = Vec::new();
+        let data: Vec<Vec<CellValue>> = range
+            .rows()
+            .map(|row| row.iter().map(data_to_cell_value).collect())
+            .collect();
 
-        for row in range.rows() {
-            let row_data: Vec<CellValue> = row.iter().map(data_to_cell_value).collect();
-            data.push(row_data);
-        }
-
-        let mut sheet = Sheet::with_name(sheet_name);
-        *sheet.data_mut() = data;
-
-        if options.has_headers && sheet.row_count() > 0 {
-            sheet.name_columns_by_row(0)?;
-        }
-
-        Ok(sheet)
+        build_sheet(sheet_name, data, &options)
     }
 
     // =========================================================================
@@ -236,21 +251,12 @@ impl Sheet {
             .worksheet_range(sheet_name)
             .map_err(|e: CalamineError| SheetError::Io(std::io::Error::new(std::io::ErrorKind::Other, e.to_string())))?;
 
-        let mut data: Vec<Vec<CellValue>> = Vec::new();
+        let data: Vec<Vec<CellValue>> = range
+            .rows()
+            .map(|row| row.iter().map(data_to_cell_value).collect())
+            .collect();
 
-        for row in range.rows() {
-            let row_data: Vec<CellValue> = row.iter().map(data_to_cell_value).collect();
-            data.push(row_data);
-        }
-
-        let mut sheet = Sheet::with_name(sheet_name);
-        *sheet.data_mut() = data;
-
-        if options.has_headers && sheet.row_count() > 0 {
-            sheet.name_columns_by_row(0)?;
-        }
-
-        Ok(sheet)
+        build_sheet(sheet_name, data, &options)
     }
 
     /// Write sheet data to a worksheet
@@ -325,21 +331,12 @@ impl Book {
                 .worksheet_range(&sheet_name)
                 .map_err(|e: XlsxError| SheetError::Io(std::io::Error::new(std::io::ErrorKind::Other, e.to_string())))?;
 
-            let mut data: Vec<Vec<CellValue>> = Vec::new();
+            let data: Vec<Vec<CellValue>> = range
+                .rows()
+                .map(|row| row.iter().map(data_to_cell_value).collect())
+                .collect();
 
-            for row in range.rows() {
-                let row_data: Vec<CellValue> = row.iter().map(data_to_cell_value).collect();
-                data.push(row_data);
-            }
-
-            let mut sheet = Sheet::with_name(&sheet_name);
-            *sheet.data_mut() = data;
-
-            if options.has_headers && sheet.row_count() > 0 {
-                // Ignore duplicate column name errors when loading
-                let _ = sheet.name_columns_by_row(0);
-            }
-
+            let sheet = build_sheet_lenient(&sheet_name, data, &options);
             book.add_sheet(&sheet_name, sheet)?;
         }
 
@@ -445,21 +442,12 @@ impl Book {
                 .worksheet_range(&sheet_name)
                 .map_err(|e: XlsError| SheetError::Io(std::io::Error::new(std::io::ErrorKind::Other, e.to_string())))?;
 
-            let mut data: Vec<Vec<CellValue>> = Vec::new();
+            let data: Vec<Vec<CellValue>> = range
+                .rows()
+                .map(|row| row.iter().map(data_to_cell_value).collect())
+                .collect();
 
-            for row in range.rows() {
-                let row_data: Vec<CellValue> = row.iter().map(data_to_cell_value).collect();
-                data.push(row_data);
-            }
-
-            let mut sheet = Sheet::with_name(&sheet_name);
-            *sheet.data_mut() = data;
-
-            if options.has_headers && sheet.row_count() > 0 {
-                // Ignore duplicate column name errors when loading
-                let _ = sheet.name_columns_by_row(0);
-            }
-
+            let sheet = build_sheet_lenient(&sheet_name, data, &options);
             book.add_sheet(&sheet_name, sheet)?;
         }
 
@@ -508,21 +496,12 @@ impl Book {
                 .worksheet_range(&sheet_name)
                 .map_err(|e: CalamineError| SheetError::Io(std::io::Error::new(std::io::ErrorKind::Other, e.to_string())))?;
 
-            let mut data: Vec<Vec<CellValue>> = Vec::new();
+            let data: Vec<Vec<CellValue>> = range
+                .rows()
+                .map(|row| row.iter().map(data_to_cell_value).collect())
+                .collect();
 
-            for row in range.rows() {
-                let row_data: Vec<CellValue> = row.iter().map(data_to_cell_value).collect();
-                data.push(row_data);
-            }
-
-            let mut sheet = Sheet::with_name(&sheet_name);
-            *sheet.data_mut() = data;
-
-            if options.has_headers && sheet.row_count() > 0 {
-                // Ignore duplicate column name errors when loading
-                let _ = sheet.name_columns_by_row(0);
-            }
-
+            let sheet = build_sheet_lenient(&sheet_name, data, &options);
             book.add_sheet(&sheet_name, sheet)?;
         }
 
