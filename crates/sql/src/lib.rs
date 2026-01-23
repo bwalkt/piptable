@@ -348,7 +348,12 @@ mod tests {
     #[tokio::test]
     async fn test_register_csv_nonexistent() {
         let engine = SqlEngine::new();
-        let result = engine.register_csv("data", "/nonexistent/path.csv").await;
+        // Use OS-agnostic path that doesn't exist
+        let temp_dir = tempfile::tempdir().unwrap();
+        let nonexistent_path = temp_dir.path().join("nonexistent.csv");
+        let result = engine
+            .register_csv("data", nonexistent_path.to_str().unwrap())
+            .await;
         assert!(result.is_err());
     }
 
@@ -374,7 +379,12 @@ mod tests {
     #[tokio::test]
     async fn test_register_json_nonexistent() {
         let engine = SqlEngine::new();
-        let result = engine.register_json("data", "/nonexistent/path.json").await;
+        // Use OS-agnostic path that doesn't exist
+        let temp_dir = tempfile::tempdir().unwrap();
+        let nonexistent_path = temp_dir.path().join("nonexistent.json");
+        let result = engine
+            .register_json("data", nonexistent_path.to_str().unwrap())
+            .await;
         assert!(result.is_err());
     }
 
@@ -383,8 +393,11 @@ mod tests {
     #[tokio::test]
     async fn test_register_parquet_nonexistent() {
         let engine = SqlEngine::new();
+        // Use OS-agnostic path that doesn't exist
+        let temp_dir = tempfile::tempdir().unwrap();
+        let nonexistent_path = temp_dir.path().join("nonexistent.parquet");
         let result = engine
-            .register_parquet("data", "/nonexistent/path.parquet")
+            .register_parquet("data", nonexistent_path.to_str().unwrap())
             .await;
         assert!(result.is_err());
     }
