@@ -508,7 +508,7 @@ impl Sheet {
     /// Returns:
     ///     A new Sheet instance with DataFrame columns as named columns
     ///
-    // TODO: Add support for pandas-specific types (NaT, Timestamp, Timedelta, etc.)
+    // TODO(#86): Add support for pandas-specific types (NaT, Timestamp, Timedelta, etc.)
     ///
     /// Example:
     ///     >>> import pandas as pd
