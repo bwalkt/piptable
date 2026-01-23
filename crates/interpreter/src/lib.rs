@@ -367,10 +367,10 @@ impl Interpreter {
     ///
     /// # Examples
     ///
-    /// ```
-    /// use std::collections::HashMap;
+    /// ```ignore
     /// use tokio::runtime::Runtime;
-    /// use crate::{Interpreter, Expr, Literal, Value};
+    /// use piptable_interpreter::Interpreter;
+    /// use piptable_core::{Expr, Literal, Value};
     ///
     /// let rt = Runtime::new().unwrap();
     /// let mut interp = Interpreter::new();

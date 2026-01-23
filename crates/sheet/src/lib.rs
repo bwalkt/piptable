@@ -58,9 +58,11 @@ mod cell;
 mod csv;
 mod error;
 mod sheet;
+mod xlsx;
 
 pub use book::Book;
 pub use cell::CellValue;
 pub use csv::CsvOptions;
 pub use error::{Result, SheetError};
 pub use sheet::Sheet;
+pub use xlsx::XlsxReadOptions;
