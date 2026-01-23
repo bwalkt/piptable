@@ -130,14 +130,16 @@ impl Sheet {
     pub fn to_json_string(&self) -> Result<String> {
         let mut buffer = Vec::new();
         self.write_json(&mut buffer, false)?;
-        Ok(String::from_utf8_lossy(&buffer).to_string())
+        // Safe: serde_json always outputs valid UTF-8
+        Ok(String::from_utf8(buffer).expect("JSON output is always valid UTF-8"))
     }
 
     /// Convert the sheet to a pretty-printed JSON string
     pub fn to_json_string_pretty(&self) -> Result<String> {
         let mut buffer = Vec::new();
         self.write_json(&mut buffer, true)?;
-        Ok(String::from_utf8_lossy(&buffer).to_string())
+        // Safe: serde_json always outputs valid UTF-8
+        Ok(String::from_utf8(buffer).expect("JSON output is always valid UTF-8"))
     }
 
     // =========================================================================
@@ -247,7 +249,8 @@ impl Sheet {
     pub fn to_jsonl_string(&self) -> Result<String> {
         let mut buffer = Vec::new();
         self.write_jsonl(&mut buffer)?;
-        Ok(String::from_utf8_lossy(&buffer).to_string())
+        // Safe: serde_json always outputs valid UTF-8
+        Ok(String::from_utf8(buffer).expect("JSONL output is always valid UTF-8"))
     }
 }
 
@@ -278,9 +281,11 @@ fn cell_to_json_value(cell: &CellValue) -> Value {
         CellValue::Bool(b) => Value::Bool(*b),
         CellValue::Int(i) => Value::Number((*i).into()),
         CellValue::Float(f) => {
+            // from_f64 returns None for NaN and Infinity
+            // Fall back to string representation to preserve data
             serde_json::Number::from_f64(*f)
                 .map(Value::Number)
-                .unwrap_or(Value::Null)
+                .unwrap_or_else(|| Value::String(f.to_string()))
         }
         CellValue::String(s) => Value::String(s.clone()),
     }
@@ -433,5 +438,24 @@ mod tests {
 
         assert!(matches!(row.get("bool"), Some(CellValue::Bool(true))));
         assert!(matches!(row.get("int"), Some(CellValue::Int(42))));
+    }
+
+    #[test]
+    fn test_json_nan_infinity() {
+        // NaN and Infinity are converted to string representation in JSON
+        let mut sheet = Sheet::new();
+        sheet.data_mut().push(vec![
+            CellValue::String("value".to_string()),
+        ]);
+        sheet.data_mut().push(vec![CellValue::Float(f64::NAN)]);
+        sheet.data_mut().push(vec![CellValue::Float(f64::INFINITY)]);
+        sheet.data_mut().push(vec![CellValue::Float(f64::NEG_INFINITY)]);
+        sheet.name_columns_by_row(0).unwrap();
+
+        let json = sheet.to_json_string().unwrap();
+
+        // NaN and Infinity should be represented as strings, not null
+        assert!(json.contains("\"NaN\"") || json.contains("\"nan\""));
+        assert!(json.contains("\"inf\"") || json.contains("\"Infinity\""));
     }
 }

@@ -151,7 +151,7 @@ impl Sheet {
             if i > 0 {
                 write!(writer, ",")?;
             }
-            write!(writer, "{}", escape_toon_field(name))?;
+            write!(writer, "{}", validate_toon_field(name)?)?;
         }
         writeln!(writer, "}}:")?;
 
@@ -179,7 +179,8 @@ impl Sheet {
     pub fn to_toon_string(&self) -> Result<String> {
         let mut buffer = Vec::new();
         self.write_toon(&mut buffer)?;
-        Ok(String::from_utf8_lossy(&buffer).to_string())
+        // Safe: we only write ASCII-compatible UTF-8 content
+        Ok(String::from_utf8(buffer).expect("TOON output is always valid UTF-8"))
     }
 }
 
@@ -330,10 +331,17 @@ fn format_toon_value(value: &CellValue) -> String {
     }
 }
 
-/// Escape a field name for TOON header (field names shouldn't contain special chars)
-fn escape_toon_field(name: &str) -> String {
-    // For now, just return as-is. Field names shouldn't contain commas or braces
-    name.to_string()
+/// Validate and return a field name for TOON header
+/// Field names cannot contain special characters: [ ] { } , :
+fn validate_toon_field(name: &str) -> Result<&str> {
+    const INVALID_CHARS: &[char] = &['[', ']', '{', '}', ',', ':'];
+    if name.chars().any(|c| INVALID_CHARS.contains(&c)) {
+        return Err(SheetError::Parse(format!(
+            "TOON field name '{}' contains unsupported characters (cannot contain [ ] {{ }} , :)",
+            name
+        )));
+    }
+    Ok(name)
 }
 
 #[cfg(test)]
@@ -476,5 +484,25 @@ mod tests {
         let toon = sheet.to_toon_string().unwrap();
         // String with comma should be quoted
         assert!(toon.contains("\"test, with comma\""));
+    }
+
+    #[test]
+    fn test_toon_invalid_field_names() {
+        // Field names containing special characters should fail
+        let mut sheet = Sheet::new();
+        sheet.data_mut().push(vec![
+            CellValue::String("name[0]".to_string()),
+            CellValue::String("value".to_string()),
+        ]);
+        sheet.data_mut().push(vec![
+            CellValue::String("test".to_string()),
+            CellValue::Int(42),
+        ]);
+        sheet.name_columns_by_row(0).unwrap();
+
+        let result = sheet.to_toon_string();
+        assert!(result.is_err());
+        let err = result.unwrap_err().to_string();
+        assert!(err.contains("unsupported characters"));
     }
 }
