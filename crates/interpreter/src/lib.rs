@@ -19,8 +19,10 @@ use piptable_core::{
     UnaryOp, Value,
 };
 use piptable_http::HttpClient;
+use piptable_sheet::{CellValue, Sheet};
 use piptable_sql::SqlEngine;
 use std::collections::HashMap;
+use std::path::Path;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 
@@ -354,8 +356,38 @@ impl Interpreter {
                 Ok(Value::Null)
             }
 
-            Statement::Export { .. } => {
-                // TODO: Implement export
+            Statement::Export {
+                source,
+                destination,
+                options: _options,
+                line,
+            } => {
+                // Evaluate source to get data
+                let data = self.eval_expr(&source).await?;
+
+                // Evaluate destination to get file path
+                let dest = self.eval_expr(&destination).await?;
+                let path = match &dest {
+                    Value::String(s) => s.clone(),
+                    _ => {
+                        return Err(PipError::Export(format!(
+                            "Line {}: export destination must be a string, got {}",
+                            line,
+                            dest.type_name()
+                        )));
+                    }
+                };
+
+                // Convert Value to Sheet and export
+                let sheet = value_to_sheet(&data).map_err(|e| {
+                    PipError::Export(format!("Line {}: {}", line, e))
+                })?;
+
+                // Determine format from file extension and export
+                export_sheet(&sheet, &path).map_err(|e| {
+                    PipError::Export(format!("Line {}: {}", line, e))
+                })?;
+
                 Ok(Value::Null)
             }
         }
@@ -1736,6 +1768,206 @@ impl Default for Interpreter {
     }
 }
 
+// ============================================================================
+// Export helpers
+// ============================================================================
+
+/// Convert a piptable Value to a Sheet for export
+fn value_to_sheet(value: &Value) -> Result<Sheet, String> {
+    match value {
+        // Array of objects -> records
+        Value::Array(arr) if !arr.is_empty() && matches!(arr[0], Value::Object(_)) => {
+            let records: Vec<indexmap::IndexMap<String, CellValue>> = arr
+                .iter()
+                .filter_map(|v| {
+                    if let Value::Object(map) = v {
+                        let record: indexmap::IndexMap<String, CellValue> = map
+                            .iter()
+                            .map(|(k, v)| (k.clone(), value_to_cell(v)))
+                            .collect();
+                        Some(record)
+                    } else {
+                        None
+                    }
+                })
+                .collect();
+            Sheet::from_records(records).map_err(|e| e.to_string())
+        }
+        // Array of arrays -> rows
+        Value::Array(arr) => {
+            let data: Vec<Vec<CellValue>> = arr
+                .iter()
+                .map(|row| {
+                    if let Value::Array(cols) = row {
+                        cols.iter().map(value_to_cell).collect()
+                    } else {
+                        vec![value_to_cell(row)]
+                    }
+                })
+                .collect();
+            Ok(Sheet::from_data(data))
+        }
+        // Single object -> single record
+        Value::Object(map) => {
+            let record: indexmap::IndexMap<String, CellValue> = map
+                .iter()
+                .map(|(k, v)| (k.clone(), value_to_cell(v)))
+                .collect();
+            Sheet::from_records(vec![record]).map_err(|e| e.to_string())
+        }
+        // Table (Arrow RecordBatches) -> convert to Sheet
+        Value::Table(batches) => {
+            arrow_batches_to_sheet(batches)
+        }
+        _ => Err(format!(
+            "Cannot export {} to file. Expected array, object, or table.",
+            value.type_name()
+        )),
+    }
+}
+
+/// Convert a Value to a CellValue
+fn value_to_cell(value: &Value) -> CellValue {
+    match value {
+        Value::Null => CellValue::Null,
+        Value::Bool(b) => CellValue::Bool(*b),
+        Value::Int(i) => CellValue::Int(*i),
+        Value::Float(f) => CellValue::Float(*f),
+        Value::String(s) => CellValue::String(s.clone()),
+        Value::Array(_) | Value::Object(_) | Value::Table(_) | Value::Function { .. } => {
+            // Convert complex types to JSON string
+            CellValue::String(format!("{:?}", value))
+        }
+    }
+}
+
+/// Convert Arrow RecordBatches to a Sheet
+fn arrow_batches_to_sheet(batches: &[Arc<arrow::record_batch::RecordBatch>]) -> Result<Sheet, String> {
+    if batches.is_empty() {
+        return Ok(Sheet::new());
+    }
+
+    let schema = batches[0].schema();
+    let col_names: Vec<String> = schema.fields().iter().map(|f| f.name().clone()).collect();
+
+    let mut sheet = Sheet::new();
+
+    // Add header row
+    let header: Vec<CellValue> = col_names.iter().map(|s| CellValue::String(s.clone())).collect();
+    sheet.data_mut().push(header);
+
+    // Add data rows
+    for batch in batches {
+        for row_idx in 0..batch.num_rows() {
+            let mut row = Vec::with_capacity(batch.num_columns());
+            for col_idx in 0..batch.num_columns() {
+                let col = batch.column(col_idx);
+                let cell = arrow_value_to_cell(col, row_idx);
+                row.push(cell);
+            }
+            sheet.data_mut().push(row);
+        }
+    }
+
+    // Name columns by first row
+    sheet.name_columns_by_row(0).map_err(|e| e.to_string())?;
+
+    Ok(sheet)
+}
+
+/// Extract a cell value from an Arrow array
+fn arrow_value_to_cell(array: &Arc<dyn arrow::array::Array>, row: usize) -> CellValue {
+    use arrow::array::*;
+    use arrow::datatypes::DataType;
+
+    if array.is_null(row) {
+        return CellValue::Null;
+    }
+
+    match array.data_type() {
+        DataType::Boolean => {
+            let arr = array.as_any().downcast_ref::<BooleanArray>().unwrap();
+            CellValue::Bool(arr.value(row))
+        }
+        DataType::Int8 => {
+            let arr = array.as_any().downcast_ref::<Int8Array>().unwrap();
+            CellValue::Int(i64::from(arr.value(row)))
+        }
+        DataType::Int16 => {
+            let arr = array.as_any().downcast_ref::<Int16Array>().unwrap();
+            CellValue::Int(i64::from(arr.value(row)))
+        }
+        DataType::Int32 => {
+            let arr = array.as_any().downcast_ref::<Int32Array>().unwrap();
+            CellValue::Int(i64::from(arr.value(row)))
+        }
+        DataType::Int64 => {
+            let arr = array.as_any().downcast_ref::<Int64Array>().unwrap();
+            CellValue::Int(arr.value(row))
+        }
+        DataType::UInt8 => {
+            let arr = array.as_any().downcast_ref::<UInt8Array>().unwrap();
+            CellValue::Int(i64::from(arr.value(row)))
+        }
+        DataType::UInt16 => {
+            let arr = array.as_any().downcast_ref::<UInt16Array>().unwrap();
+            CellValue::Int(i64::from(arr.value(row)))
+        }
+        DataType::UInt32 => {
+            let arr = array.as_any().downcast_ref::<UInt32Array>().unwrap();
+            CellValue::Int(i64::from(arr.value(row)))
+        }
+        DataType::UInt64 => {
+            let arr = array.as_any().downcast_ref::<UInt64Array>().unwrap();
+            CellValue::Int(arr.value(row) as i64)
+        }
+        DataType::Float32 => {
+            let arr = array.as_any().downcast_ref::<Float32Array>().unwrap();
+            CellValue::Float(f64::from(arr.value(row)))
+        }
+        DataType::Float64 => {
+            let arr = array.as_any().downcast_ref::<Float64Array>().unwrap();
+            CellValue::Float(arr.value(row))
+        }
+        DataType::Utf8 => {
+            let arr = array.as_any().downcast_ref::<StringArray>().unwrap();
+            CellValue::String(arr.value(row).to_string())
+        }
+        DataType::LargeUtf8 => {
+            let arr = array.as_any().downcast_ref::<LargeStringArray>().unwrap();
+            CellValue::String(arr.value(row).to_string())
+        }
+        _ => CellValue::String(format!("<{}>", array.data_type())),
+    }
+}
+
+/// Export a Sheet to a file, auto-detecting format from extension
+fn export_sheet(sheet: &Sheet, path: &str) -> Result<(), String> {
+    use piptable_sheet::CsvOptions;
+
+    let path = Path::new(path);
+    let ext = path
+        .extension()
+        .and_then(|e| e.to_str())
+        .map(|s| s.to_lowercase())
+        .unwrap_or_default();
+
+    match ext.as_str() {
+        "csv" => sheet.save_as_csv(path).map_err(|e| e.to_string()),
+        "tsv" => sheet
+            .save_as_csv_with_options(path, CsvOptions::tsv())
+            .map_err(|e| e.to_string()),
+        "xlsx" | "xls" => sheet.save_as_xlsx(path).map_err(|e| e.to_string()),
+        "json" => sheet.save_as_json(path).map_err(|e| e.to_string()),
+        "jsonl" | "ndjson" => sheet.save_as_jsonl(path).map_err(|e| e.to_string()),
+        "toon" => sheet.save_as_toon(path).map_err(|e| e.to_string()),
+        _ => Err(format!(
+            "Unsupported export format: '{}'. Supported: csv, tsv, xlsx, json, jsonl, toon",
+            ext
+        )),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1927,5 +2159,45 @@ mod tests {
         assert!(interp.get_var("x").await.is_some());
         // y should be cleaned up (scope isolation)
         // Note: current implementation doesn't clean up, but that's ok for now
+    }
+
+    #[tokio::test]
+    async fn test_export_csv() {
+        let dir = tempfile::tempdir().unwrap();
+        let file_path = dir.path().join("test.csv");
+
+        let mut interp = Interpreter::new();
+        let script = format!(
+            r#"dim data = [{{"name": "Alice", "age": 30}}, {{"name": "Bob", "age": 25}}]
+export data to "{}""#,
+            file_path.display()
+        );
+        let program = PipParser::parse_str(&script).unwrap();
+        interp.eval(program).await.unwrap();
+
+        // Verify file was created and has content
+        let content = std::fs::read_to_string(&file_path).unwrap();
+        assert!(content.contains("Alice"));
+        assert!(content.contains("Bob"));
+    }
+
+    #[tokio::test]
+    async fn test_export_json() {
+        let dir = tempfile::tempdir().unwrap();
+        let file_path = dir.path().join("test.json");
+
+        let mut interp = Interpreter::new();
+        let script = format!(
+            r#"dim data = [{{"name": "Alice", "age": 30}}, {{"name": "Bob", "age": 25}}]
+export data to "{}""#,
+            file_path.display()
+        );
+        let program = PipParser::parse_str(&script).unwrap();
+        interp.eval(program).await.unwrap();
+
+        // Verify file was created and has valid JSON
+        let content = std::fs::read_to_string(&file_path).unwrap();
+        let parsed: serde_json::Value = serde_json::from_str(&content).unwrap();
+        assert!(parsed.is_array());
     }
 }

@@ -16,6 +16,8 @@ piptable-core = { workspace = true }
 piptable-parser = { workspace = true }
 piptable-sql = { workspace = true }
 piptable-http = { workspace = true }
+piptable-sheet = { workspace = true }
+indexmap = { workspace = true }
 tokio = { workspace = true }
 async-trait = { workspace = true }
 thiserror = { workspace = true }
