@@ -11,6 +11,10 @@ authors.workspace = true
 name = "pip"
 path = "src/main.rs"
 
+[features]
+default = []
+python = ["piptable-interpreter/python"]
+
 [dependencies]
 piptable-core = { workspace = true }
 piptable-parser = { workspace = true }

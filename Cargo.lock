@@ -2694,6 +2694,7 @@ dependencies = [
  "piptable-http",
  "piptable-parser",
  "piptable-sql",
+ "pyo3",
  "serde",
  "serde_json",
  "tempfile",

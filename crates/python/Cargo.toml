@@ -12,7 +12,7 @@ name = "piptable"
 crate-type = ["cdylib"]
 
 [dependencies]
-pyo3 = { workspace = true }
+pyo3 = { workspace = true, features = ["extension-module"] }
 piptable-sheet = { workspace = true }
 
 [lints]

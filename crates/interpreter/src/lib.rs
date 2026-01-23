@@ -7,6 +7,10 @@
 //! - Variable scope management
 //! - Built-in functions
 //! - Integration with SQL and HTTP engines
+//! - Python UDF support (with `python` feature)
+
+#[cfg(feature = "python")]
+mod python;
 
 use async_recursion::async_recursion;
 use piptable_core::{
@@ -32,6 +36,9 @@ pub struct Interpreter {
     output: Arc<RwLock<Vec<String>>>,
     /// Function definitions
     functions: Arc<RwLock<HashMap<String, FunctionDef>>>,
+    /// Python runtime (optional, with `python` feature)
+    #[cfg(feature = "python")]
+    python_runtime: Option<python::PythonRuntime>,
 }
 
 /// Function definition stored at runtime.
@@ -53,6 +60,14 @@ impl Interpreter {
             http: HttpClient::new().expect("Failed to create HTTP client"),
             output: Arc::new(RwLock::new(Vec::new())),
             functions: Arc::new(RwLock::new(HashMap::new())),
+            #[cfg(feature = "python")]
+            python_runtime: match python::PythonRuntime::new() {
+                Ok(rt) => Some(rt),
+                Err(e) => {
+                    tracing::warn!("Failed to initialize Python runtime: {}", e);
+                    None
+                }
+            },
         }
     }
 
@@ -1016,6 +1031,46 @@ impl Interpreter {
                     _ => Err(PipError::runtime(line, "values() requires object argument")),
                 }
             }
+            #[cfg(feature = "python")]
+            "register_python" => {
+                // register_python("name", "lambda x: x * 2")
+                // register_python("name", "file.py", "function_name")
+                let runtime = self.python_runtime.as_ref().ok_or_else(|| {
+                    PipError::runtime(line, "Python runtime not available")
+                })?;
+
+                match args.len() {
+                    2 => {
+                        // Inline lambda/def
+                        let name = args[0].as_str().ok_or_else(|| {
+                            PipError::runtime(line, "register_python: first argument must be string (name)")
+                        })?;
+                        let code = args[1].as_str().ok_or_else(|| {
+                            PipError::runtime(line, "register_python: second argument must be string (code)")
+                        })?;
+                        runtime.register_inline(name, code).await?;
+                        Ok(Value::Null)
+                    }
+                    3 => {
+                        // From file
+                        let name = args[0].as_str().ok_or_else(|| {
+                            PipError::runtime(line, "register_python: first argument must be string (name)")
+                        })?;
+                        let file_path = args[1].as_str().ok_or_else(|| {
+                            PipError::runtime(line, "register_python: second argument must be string (file path)")
+                        })?;
+                        let func_name = args[2].as_str().ok_or_else(|| {
+                            PipError::runtime(line, "register_python: third argument must be string (function name)")
+                        })?;
+                        runtime.register_from_file(name, file_path, func_name).await?;
+                        Ok(Value::Null)
+                    }
+                    _ => Err(PipError::runtime(
+                        line,
+                        "register_python() takes 2 or 3 arguments: (name, code) or (name, file, function)",
+                    )),
+                }
+            }
             _ => {
                 // Check user-defined functions
                 let func = {
@@ -1060,6 +1115,14 @@ impl Interpreter {
                     self.pop_scope().await;
                     Ok(result)
                 } else {
+                    // Check Python functions if feature is enabled
+                    #[cfg(feature = "python")]
+                    if let Some(runtime) = &self.python_runtime {
+                        if runtime.has_function(name).await {
+                            return runtime.call(name, args).await;
+                        }
+                    }
+
                     Err(PipError::runtime(
                         line,
                         format!("Unknown function: {name}"),
