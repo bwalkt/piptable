@@ -47,6 +47,12 @@ pub enum SheetError {
     #[error("Duplicate column name: {name}")]
     DuplicateColumnName { name: String },
 
+    #[error("Column mismatch: sheets have different column counts ({left} vs {right})")]
+    ColumnCountMismatch { left: usize, right: usize },
+
+    #[error("Key column '{key}' not found in {sheet}")]
+    JoinKeyNotFound { key: String, sheet: String },
+
     #[error("CSV error: {0}")]
     Csv(#[from] csv::Error),
 
