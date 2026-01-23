@@ -152,7 +152,10 @@ mod tests {
         let name_array = StringArray::from(vec!["alice", "bob", "charlie"]);
         RecordBatch::try_new(
             std::sync::Arc::new(schema),
-            vec![std::sync::Arc::new(id_array), std::sync::Arc::new(name_array)],
+            vec![
+                std::sync::Arc::new(id_array),
+                std::sync::Arc::new(name_array),
+            ],
         )
         .unwrap()
     }
@@ -438,7 +441,10 @@ mod tests {
         let amt_array = Int64Array::from(vec![100, 200, 150, 50]);
         let batch = RecordBatch::try_new(
             std::sync::Arc::new(schema),
-            vec![std::sync::Arc::new(cat_array), std::sync::Arc::new(amt_array)],
+            vec![
+                std::sync::Arc::new(cat_array),
+                std::sync::Arc::new(amt_array),
+            ],
         )
         .unwrap();
 
