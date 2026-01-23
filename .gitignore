@@ -22,3 +22,6 @@ Thumbs.db
 # Debug
 *.log
 *.d
+
+# Decision docs (local notes)
+docs/decisions/
