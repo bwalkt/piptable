@@ -29,11 +29,14 @@ pub enum SheetError {
     #[error("Sheet already exists: {name}")]
     SheetAlreadyExists { name: String },
 
-    #[error("Columns not named. Call name_columns_by_row() first")]
-    ColumnsNotNamed,
+    #[error("Columns not named: {0}")]
+    ColumnsNotNamed(String),
 
     #[error("Rows not named. Call name_rows_by_column() first")]
     RowsNotNamed,
+
+    #[error("Parse error: {0}")]
+    Parse(String),
 
     #[error("Data length mismatch: expected {expected}, got {actual}")]
     LengthMismatch { expected: usize, actual: usize },

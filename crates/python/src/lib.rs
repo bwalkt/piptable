@@ -477,6 +477,186 @@ impl Sheet {
             .map_err(|e| PyRuntimeError::new_err(e.to_string()))
     }
 
+    // =========================================================================
+    // JSON Support
+    // =========================================================================
+
+    /// Load a sheet from a JSON file containing an array of objects
+    ///
+    /// Args:
+    ///     path: Path to the JSON file
+    ///
+    /// Returns:
+    ///     A new Sheet instance
+    ///
+    /// Example:
+    ///     >>> # File contains: [{"name": "Alice", "age": 30}, {"name": "Bob", "age": 25}]
+    ///     >>> sheet = Sheet.from_json("data.json")
+    #[staticmethod]
+    fn from_json(path: &str) -> PyResult<Self> {
+        let sheet = RustSheet::from_json(path)
+            .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
+        Ok(Sheet { inner: sheet })
+    }
+
+    /// Load a sheet from a JSON string containing an array of objects
+    ///
+    /// Args:
+    ///     content: JSON string
+    ///
+    /// Returns:
+    ///     A new Sheet instance
+    #[staticmethod]
+    fn from_json_str(content: &str) -> PyResult<Self> {
+        let sheet = RustSheet::from_json_str(content)
+            .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
+        Ok(Sheet { inner: sheet })
+    }
+
+    /// Save the sheet to a JSON file as an array of objects
+    ///
+    /// Requires columns to be named.
+    fn save_as_json(&self, path: &str) -> PyResult<()> {
+        self.inner
+            .save_as_json(path)
+            .map_err(|e| PyRuntimeError::new_err(e.to_string()))
+    }
+
+    /// Save the sheet to a JSON file as a pretty-printed array of objects
+    fn save_as_json_pretty(&self, path: &str) -> PyResult<()> {
+        self.inner
+            .save_as_json_pretty(path)
+            .map_err(|e| PyRuntimeError::new_err(e.to_string()))
+    }
+
+    /// Get JSON string representation
+    fn to_json_string(&self) -> PyResult<String> {
+        self.inner
+            .to_json_string()
+            .map_err(|e| PyRuntimeError::new_err(e.to_string()))
+    }
+
+    /// Get pretty-printed JSON string representation
+    fn to_json_string_pretty(&self) -> PyResult<String> {
+        self.inner
+            .to_json_string_pretty()
+            .map_err(|e| PyRuntimeError::new_err(e.to_string()))
+    }
+
+    // =========================================================================
+    // JSONL (JSON Lines) Support
+    // =========================================================================
+
+    /// Load a sheet from a JSONL file (one JSON object per line)
+    ///
+    /// Args:
+    ///     path: Path to the JSONL file
+    ///
+    /// Returns:
+    ///     A new Sheet instance
+    ///
+    /// Example:
+    ///     >>> # File contains:
+    ///     >>> # {"name": "Alice", "age": 30}
+    ///     >>> # {"name": "Bob", "age": 25}
+    ///     >>> sheet = Sheet.from_jsonl("data.jsonl")
+    #[staticmethod]
+    fn from_jsonl(path: &str) -> PyResult<Self> {
+        let sheet = RustSheet::from_jsonl(path)
+            .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
+        Ok(Sheet { inner: sheet })
+    }
+
+    /// Load a sheet from a JSONL string
+    ///
+    /// Args:
+    ///     content: JSONL string (one JSON object per line)
+    ///
+    /// Returns:
+    ///     A new Sheet instance
+    #[staticmethod]
+    fn from_jsonl_str(content: &str) -> PyResult<Self> {
+        let sheet = RustSheet::from_jsonl_str(content)
+            .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
+        Ok(Sheet { inner: sheet })
+    }
+
+    /// Save the sheet to a JSONL file (one JSON object per line)
+    ///
+    /// Requires columns to be named.
+    fn save_as_jsonl(&self, path: &str) -> PyResult<()> {
+        self.inner
+            .save_as_jsonl(path)
+            .map_err(|e| PyRuntimeError::new_err(e.to_string()))
+    }
+
+    /// Get JSONL string representation
+    fn to_jsonl_string(&self) -> PyResult<String> {
+        self.inner
+            .to_jsonl_string()
+            .map_err(|e| PyRuntimeError::new_err(e.to_string()))
+    }
+
+    // =========================================================================
+    // TOON (Token-Oriented Object Notation) Support
+    // =========================================================================
+
+    /// Load a sheet from a TOON file
+    ///
+    /// TOON is a compact, LLM-friendly format that is ~40% more token-efficient than JSON.
+    /// See: https://github.com/toon-format/toon
+    ///
+    /// Args:
+    ///     path: Path to the TOON file
+    ///
+    /// Returns:
+    ///     A new Sheet instance
+    ///
+    /// Example:
+    ///     >>> # File contains:
+    ///     >>> # rows[2]{name,age}:
+    ///     >>> #   Alice,30
+    ///     >>> #   Bob,25
+    ///     >>> sheet = Sheet.from_toon("data.toon")
+    #[staticmethod]
+    fn from_toon(path: &str) -> PyResult<Self> {
+        let sheet = RustSheet::from_toon(path)
+            .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
+        Ok(Sheet { inner: sheet })
+    }
+
+    /// Load a sheet from a TOON string
+    ///
+    /// Args:
+    ///     content: TOON string
+    ///
+    /// Returns:
+    ///     A new Sheet instance
+    #[staticmethod]
+    fn from_toon_str(content: &str) -> PyResult<Self> {
+        let sheet = RustSheet::from_toon_str(content)
+            .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
+        Ok(Sheet { inner: sheet })
+    }
+
+    /// Save the sheet to a TOON file
+    ///
+    /// Requires columns to be named.
+    fn save_as_toon(&self, path: &str) -> PyResult<()> {
+        self.inner
+            .save_as_toon(path)
+            .map_err(|e| PyRuntimeError::new_err(e.to_string()))
+    }
+
+    /// Get TOON string representation
+    ///
+    /// Returns a compact, LLM-friendly representation of the sheet.
+    fn to_toon_string(&self) -> PyResult<String> {
+        self.inner
+            .to_toon_string()
+            .map_err(|e| PyRuntimeError::new_err(e.to_string()))
+    }
+
     fn __repr__(&self) -> String {
         format!(
             "Sheet(name='{}', rows={}, cols={})",

@@ -140,7 +140,7 @@ fn test_columns_not_named_error() {
     let sheet = Sheet::from_data(vec![vec![1, 2]]);
 
     let result = sheet.column_by_name("A");
-    assert!(matches!(result, Err(SheetError::ColumnsNotNamed)));
+    assert!(matches!(result, Err(SheetError::ColumnsNotNamed(_))));
 }
 
 #[test]
