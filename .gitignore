@@ -24,6 +24,7 @@ __pycache__/
 *.pyc
 *.pyo
 *.so
+.venv/
 
 # Debug
 *.log
@@ -31,4 +32,3 @@ __pycache__/
 
 # Decision docs (local notes)
 docs/decisions/
-.venv/

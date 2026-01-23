@@ -325,15 +325,12 @@ impl Sheet {
     /// Convert to a 2D list
     fn to_list(&self, py: Python<'_>) -> PyResult<PyObject> {
         let data = self.inner.to_array();
-        let outer = PyList::new(
-            py,
-            data.iter().map(|row| {
-                PyList::new(py, row.iter().map(|v| cell_value_to_py(py, v)))
-                    .unwrap()
-                    .into_any()
-            }),
-        )?;
-        Ok(outer.into())
+        let mut rows: Vec<PyObject> = Vec::with_capacity(data.len());
+        for row in data.iter() {
+            let inner = PyList::new(py, row.iter().map(|v| cell_value_to_py(py, v)))?;
+            rows.push(inner.into_any().unbind());
+        }
+        Ok(PyList::new(py, rows)?.into())
     }
 
     /// Convert to a dictionary (column name -> values)
