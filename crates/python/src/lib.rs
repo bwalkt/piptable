@@ -508,11 +508,7 @@ impl Sheet {
     /// Returns:
     ///     A new Sheet instance with DataFrame columns as named columns
     ///
-    /// Note:
-    ///     Only basic Python types (bool, int, float, str, None) are supported.
-    ///     Datetime columns with missing values (pd.NaT) or other pandas-specific
-    ///     types must be converted to supported types before calling this method
-    ///     (e.g., `df['date_col'] = df['date_col'].astype(str)`).
+    // TODO: Add support for pandas-specific types (NaT, Timestamp, Timedelta, etc.)
     ///
     /// Example:
     ///     >>> import pandas as pd

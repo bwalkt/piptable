@@ -144,6 +144,11 @@ class Sheet:
 
         Returns:
             A new Sheet instance with DataFrame columns as named columns
+
+        Note:
+            Only basic Python types (bool, int, float, str, None) are supported.
+            Datetime columns with missing values (pd.NaT) or other pandas-specific
+            types must be converted first (e.g., ``df['col'] = df['col'].astype(str)``).
         """
         ...
 
