@@ -59,7 +59,15 @@ fn build_sheet(
     Ok(sheet)
 }
 
-/// Build a Sheet from raw data, ignoring header naming errors (for Book loading)
+/// Build a Sheet from raw data, ignoring header naming errors.
+///
+/// This is used for Book loading where we don't want a single sheet's
+/// duplicate column names to fail the entire book load. The asymmetry
+/// with `build_sheet` (which propagates errors) is intentional:
+/// - Single Sheet loading: caller expects to work with that specific sheet,
+///   so header errors should be reported
+/// - Book loading: caller wants all sheets, and some may have duplicate
+///   headers that don't affect their use case
 fn build_sheet_lenient(
     sheet_name: &str,
     data: Vec<Vec<CellValue>>,
@@ -788,22 +796,24 @@ mod tests {
     // XLS (Legacy Excel 97-2003) format tests
     // =========================================================================
 
-    /// Path to the XLS test fixture
+    /// Path to the XLS test fixture.
+    /// Panics if the fixture file is missing (it should be committed to the repo).
     fn xls_fixture_path() -> std::path::PathBuf {
-        std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        let path = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
             .join("tests")
             .join("fixtures")
-            .join("sample.xls")
+            .join("sample.xls");
+        assert!(
+            path.exists(),
+            "XLS test fixture not found at {:?}. This file should be committed to the repo.",
+            path
+        );
+        path
     }
 
     #[test]
     fn test_xls_read() {
         let path = xls_fixture_path();
-        if !path.exists() {
-            eprintln!("Skipping XLS test: fixture not found at {:?}", path);
-            return;
-        }
-
         let sheet = Sheet::from_xls(&path).unwrap();
         assert_eq!(sheet.row_count(), 3);
         assert_eq!(sheet.col_count(), 3);
@@ -813,10 +823,6 @@ mod tests {
     #[test]
     fn test_xls_with_headers() {
         let path = xls_fixture_path();
-        if !path.exists() {
-            return;
-        }
-
         let sheet = Sheet::from_xls_with_options(
             &path,
             XlsxReadOptions::default().with_headers(true),
@@ -832,10 +838,6 @@ mod tests {
     #[test]
     fn test_xls_specific_sheet() {
         let path = xls_fixture_path();
-        if !path.exists() {
-            return;
-        }
-
         let sheet = Sheet::from_xls_sheet(&path, "Numbers").unwrap();
         assert_eq!(sheet.name(), "Numbers");
         assert_eq!(sheet.row_count(), 1);
@@ -845,10 +847,6 @@ mod tests {
     #[test]
     fn test_book_from_xls() {
         let path = xls_fixture_path();
-        if !path.exists() {
-            return;
-        }
-
         let book = Book::from_xls(&path).unwrap();
         assert_eq!(book.sheet_count(), 2);
         assert!(book.has_sheet("Data"));
@@ -858,10 +856,6 @@ mod tests {
     #[test]
     fn test_xls_sheet_names() {
         let path = xls_fixture_path();
-        if !path.exists() {
-            return;
-        }
-
         let names = Book::xls_sheet_names(&path).unwrap();
         assert_eq!(names.len(), 2);
         assert!(names.contains(&"Data".to_string()));
@@ -871,10 +865,6 @@ mod tests {
     #[test]
     fn test_xls_auto_detect() {
         let path = xls_fixture_path();
-        if !path.exists() {
-            return;
-        }
-
         // Auto-detect should work with .xls files
         let sheet = Sheet::from_excel(&path).unwrap();
         assert_eq!(sheet.row_count(), 3);
