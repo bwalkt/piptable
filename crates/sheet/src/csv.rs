@@ -153,23 +153,31 @@ impl Sheet {
     }
 
     /// Convert the sheet to a CSV string
-    #[must_use]
-    pub fn to_csv_string(&self) -> String {
+    ///
+    /// # Errors
+    ///
+    /// Returns error if CSV writing fails.
+    pub fn to_csv_string(&self) -> Result<String> {
         self.to_csv_string_with_options(CsvOptions::default())
     }
 
     /// Convert the sheet to a CSV string with custom options
-    #[must_use]
-    pub fn to_csv_string_with_options(&self, options: CsvOptions) -> String {
+    ///
+    /// # Errors
+    ///
+    /// Returns error if CSV writing fails.
+    pub fn to_csv_string_with_options(&self, options: CsvOptions) -> Result<String> {
         let mut buffer = Vec::new();
-        // Ignore errors for string conversion
-        let _ = self.write_csv(&mut buffer, options);
-        String::from_utf8_lossy(&buffer).to_string()
+        self.write_csv(&mut buffer, options)?;
+        Ok(String::from_utf8_lossy(&buffer).to_string())
     }
 
     /// Convert the sheet to a TSV string
-    #[must_use]
-    pub fn to_tsv_string(&self) -> String {
+    ///
+    /// # Errors
+    ///
+    /// Returns error if TSV writing fails.
+    pub fn to_tsv_string(&self) -> Result<String> {
         self.to_csv_string_with_options(CsvOptions::tsv())
     }
 }
@@ -285,7 +293,7 @@ mod tests {
     fn test_to_csv_string() {
         let sheet = Sheet::from_data(vec![vec![1, 2, 3], vec![4, 5, 6]]);
 
-        let csv = sheet.to_csv_string();
+        let csv = sheet.to_csv_string().unwrap();
         assert!(csv.contains("1,2,3"));
         assert!(csv.contains("4,5,6"));
     }
@@ -297,7 +305,7 @@ mod tests {
             vec!["test", "42"],
         ]);
 
-        let csv = original.to_csv_string();
+        let csv = original.to_csv_string().unwrap();
         let restored = Sheet::from_csv_str(&csv).unwrap();
 
         assert_eq!(original.row_count(), restored.row_count());
@@ -328,7 +336,7 @@ mod tests {
             &CellValue::String("name".to_string())
         );
 
-        let output = sheet.to_tsv_string();
+        let output = sheet.to_tsv_string().unwrap();
         assert!(output.contains("name\tage"));
     }
 

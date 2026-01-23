@@ -143,6 +143,17 @@ fn test_columns_not_named_error() {
     assert!(matches!(result, Err(SheetError::ColumnsNotNamed)));
 }
 
+#[test]
+fn test_duplicate_column_names_error() {
+    let mut sheet = Sheet::from_data(vec![
+        vec!["A", "B", "A"], // Duplicate "A"
+        vec!["1", "2", "3"],
+    ]);
+
+    let result = sheet.name_columns_by_row(0);
+    assert!(matches!(result, Err(SheetError::DuplicateColumnName { .. })));
+}
+
 // ===== Transformation Tests =====
 
 #[test]
@@ -196,7 +207,7 @@ fn test_csv_roundtrip() {
         vec!["test", "42"],
     ]);
 
-    let csv = original.to_csv_string();
+    let csv = original.to_csv_string().unwrap();
     let restored = Sheet::from_csv_str(&csv).unwrap();
 
     assert_eq!(original.row_count(), restored.row_count());
@@ -234,7 +245,7 @@ fn test_csv_file_io() {
 #[test]
 fn test_tsv() {
     let sheet = Sheet::from_data(vec![vec!["a", "b"], vec!["c", "d"]]);
-    let tsv = sheet.to_tsv_string();
+    let tsv = sheet.to_tsv_string().unwrap();
 
     assert!(tsv.contains('\t'));
     assert!(!tsv.contains(','));

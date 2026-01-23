@@ -38,6 +38,9 @@ pub enum SheetError {
     #[error("Data length mismatch: expected {expected}, got {actual}")]
     LengthMismatch { expected: usize, actual: usize },
 
+    #[error("Duplicate column name: {name}")]
+    DuplicateColumnName { name: String },
+
     #[error("CSV error: {0}")]
     Csv(#[from] csv::Error),
 

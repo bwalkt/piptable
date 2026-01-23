@@ -396,12 +396,19 @@ impl Sheet {
     // ===== Named Access =====
 
     /// Use the specified row as column headers
+    ///
+    /// # Errors
+    ///
+    /// Returns `SheetError::DuplicateColumnName` if the header row contains duplicate names.
     pub fn name_columns_by_row(&mut self, row_index: usize) -> Result<()> {
         let header_row = self.row(row_index)?;
         let names: Vec<String> = header_row.iter().map(|c| c.as_str()).collect();
 
         let mut index_map = HashMap::new();
         for (i, name) in names.iter().enumerate() {
+            if index_map.contains_key(name) {
+                return Err(SheetError::DuplicateColumnName { name: name.clone() });
+            }
             index_map.insert(name.clone(), i);
         }
 
