@@ -121,6 +121,32 @@ class Sheet:
         """Convert to a dictionary (column name -> values)."""
         ...
 
+    def to_pandas(self) -> Any:
+        """Convert to a pandas DataFrame.
+
+        Requires pandas to be installed. If columns are named, they will be
+        used as DataFrame column names.
+
+        Returns:
+            A pandas DataFrame
+
+        Raises:
+            ImportError: If pandas is not installed
+        """
+        ...
+
+    @staticmethod
+    def from_pandas(df: Any) -> Sheet:
+        """Create a sheet from a pandas DataFrame.
+
+        Args:
+            df: A pandas DataFrame
+
+        Returns:
+            A new Sheet instance with DataFrame columns as named columns
+        """
+        ...
+
     def save_as_csv(self, path: str, delimiter: Optional[str] = None) -> None:
         """Save the sheet to a CSV file."""
         ...

@@ -31,7 +31,7 @@ use piptable_sheet::{
     Book as RustBook, CellValue as RustCellValue, CsvOptions as RustCsvOptions,
     Sheet as RustSheet, XlsxReadOptions as RustXlsxReadOptions,
 };
-use pyo3::exceptions::{PyIndexError, PyRuntimeError, PyValueError};
+use pyo3::exceptions::{PyImportError, PyIndexError, PyRuntimeError, PyValueError};
 use pyo3::prelude::*;
 use pyo3::types::{PyDict, PyList};
 
@@ -372,7 +372,7 @@ impl Sheet {
     fn to_pandas(&self, py: Python<'_>) -> PyResult<PyObject> {
         // Import pandas
         let pd = py.import("pandas").map_err(|_| {
-            PyRuntimeError::new_err(
+            PyImportError::new_err(
                 "pandas is required for to_pandas(). Install with: pip install pandas",
             )
         })?;
@@ -381,10 +381,10 @@ impl Sheet {
         if let Some(col_names) = self.inner.column_names() {
             let py_dict = PyDict::new(py);
             for (i, name) in col_names.iter().enumerate() {
-                if let Ok(col) = self.inner.column(i) {
-                    let list = PyList::new(py, col.iter().map(|v| cell_value_to_py(py, v)))?;
-                    py_dict.set_item(name, list)?;
-                }
+                let col = self.inner.column(i)
+                    .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
+                let list = PyList::new(py, col.iter().map(|v| cell_value_to_py(py, v)))?;
+                py_dict.set_item(name, list)?;
             }
             pd.call_method1("DataFrame", (py_dict,))
                 .map(|obj| obj.unbind())
