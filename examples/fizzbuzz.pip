@@ -1,0 +1,13 @@
+' Classic FizzBuzz
+print("FizzBuzz 1-20:")
+for i = 1 to 20
+  if i % 15 == 0 then
+    print("FizzBuzz")
+  elseif i % 3 == 0 then
+    print("Fizz")
+  elseif i % 5 == 0 then
+    print("Buzz")
+  else
+    print(i)
+  end if
+next
