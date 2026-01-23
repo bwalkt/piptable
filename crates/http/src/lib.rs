@@ -48,6 +48,7 @@ impl HttpClient {
     /// # Examples
     ///
     /// ```
+    /// use piptable_http::HttpClient;
     /// let client = HttpClient::new().expect("failed to create HttpClient");
     /// ```
     pub fn new() -> PipResult<Self> {

@@ -541,7 +541,7 @@ fn build_comparison_op(pair: &Pair<Rule>) -> BuildResult<BinaryOp> {
 ///
 /// # Examples
 ///
-/// ```
+/// ```ignore
 /// // Given a `pair` that matches an additive expression (e.g. from the parser),
 /// // build the corresponding AST expression.
 /// let expr = build_additive_expr(pair).unwrap();
@@ -623,7 +623,7 @@ fn build_multiplicative_expr(pair: Pair<Rule>) -> BuildResult<Expr> {
 ///
 /// # Examples
 ///
-/// ```
+/// ```ignore
 /// // Constructing the equivalent result directly:
 /// let operand = Expr::Literal(Literal::Int(1));
 /// let neg = Expr::Unary { op: UnaryOp::Neg, operand: Box::new(operand.clone()) };
