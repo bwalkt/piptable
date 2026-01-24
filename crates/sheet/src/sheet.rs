@@ -787,21 +787,21 @@ impl Sheet {
             })?;
 
         // Build right key -> row indices map (skip header row if present)
-        let right_start = if right_names.iter().any(|n| {
-            other
-                .data
-                .first()
-                .is_some_and(|r| r.iter().any(|c| c.as_str() == *n))
-        }) {
+        // Use strict matching: first row must match ALL column names in order
+        let right_start = if other
+            .data
+            .first()
+            .is_some_and(|r| r.iter().zip(right_names.iter()).all(|(c, n)| c.as_str() == *n))
+        {
             1
         } else {
             0
         };
-        let left_start = if left_names.iter().any(|n| {
-            self.data
-                .first()
-                .is_some_and(|r| r.iter().any(|c| c.as_str() == *n))
-        }) {
+        let left_start = if self
+            .data
+            .first()
+            .is_some_and(|r| r.iter().zip(left_names.iter()).all(|(c, n)| c.as_str() == *n))
+        {
             1
         } else {
             0

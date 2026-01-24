@@ -575,6 +575,38 @@ fn test_left_join_empty_right() {
     assert_eq!(result.row_count(), 3); // header + 2 employees
 }
 
+#[test]
+fn test_join_data_value_matches_column_name() {
+    // Edge case: first data row has a value that matches a column name
+    // The stricter header detection should NOT skip this row
+    let mut left = Sheet::from_data(vec![
+        vec!["id", "name"],
+        vec!["name", "alice"], // "name" value matches column name
+        vec!["2", "bob"],
+    ]);
+    left.name_columns_by_row(0).unwrap();
+
+    let mut right = Sheet::from_data(vec![
+        vec!["id", "title"],
+        vec!["name", "manager"], // "name" value matches column name
+        vec!["2", "developer"],
+    ]);
+    right.name_columns_by_row(0).unwrap();
+
+    let result = left.inner_join(&right, "id").unwrap();
+
+    // Header + 2 data rows (not 1 - both rows should be included)
+    assert_eq!(result.row_count(), 3);
+    assert_eq!(
+        result.get_by_name(1, "name").unwrap(),
+        &CellValue::String("alice".to_string())
+    );
+    assert_eq!(
+        result.get_by_name(1, "title").unwrap(),
+        &CellValue::String("manager".to_string())
+    );
+}
+
 // ===== Append/Upsert Operations Tests =====
 
 #[test]
