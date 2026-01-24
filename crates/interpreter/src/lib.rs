@@ -447,6 +447,14 @@ impl Interpreter {
                     None
                 };
 
+                // Defensive check: ensure at least one path
+                if paths.is_empty() {
+                    return Err(PipError::Import(format!(
+                        "Line {}: import requires at least one file path",
+                        line
+                    )));
+                }
+
                 // Multi-file or single file import
                 let value = if paths.len() > 1 {
                     // Multi-file import: use Book::from_files_with_options
