@@ -174,8 +174,8 @@ fn arrow_array_to_cell(array: &ArrayRef, idx: usize) -> CellValue {
             if let Some(arr) = array.as_any().downcast_ref::<arrow::array::UInt64Array>() {
                 let val = arr.value(idx);
                 // Check for overflow: u64 values > i64::MAX cannot be represented as i64
-                if val <= i64::MAX as u64 {
-                    CellValue::Int(val as i64)
+                if let Ok(i) = i64::try_from(val) {
+                    CellValue::Int(i)
                 } else {
                     // Preserve large unsigned values as strings to avoid data corruption
                     CellValue::String(val.to_string())
@@ -417,7 +417,11 @@ mod tests {
         let file_path = dir.path().join("uint64.parquet");
 
         // Create a parquet file with UInt64 values that exceed i64::MAX
-        let schema = Arc::new(Schema::new(vec![Field::new("big_id", DataType::UInt64, false)]));
+        let schema = Arc::new(Schema::new(vec![Field::new(
+            "big_id",
+            DataType::UInt64,
+            false,
+        )]));
 
         let large_value: u64 = (i64::MAX as u64) + 1000; // Value that would overflow i64
         let safe_value: u64 = 42;
