@@ -104,12 +104,12 @@ pub enum Statement {
         line: usize,
     },
 
-    /// Import statement: `import "file.csv" into data`
+    /// Import statement: `import "file.csv" into data` or `import "a.csv", "b.csv" into book`
     Import {
-        source: Expr,
+        sources: Vec<Expr>,
         target: String,
         sheet_name: Option<Expr>,
-        options: Option<Expr>,
+        options: ImportOptions,
         line: usize,
     },
 
@@ -298,6 +298,27 @@ pub enum ChartType {
 pub struct ChartOption {
     pub key: String,
     pub value: Expr,
+}
+
+/// Import options for the import statement.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct ImportOptions {
+    /// Whether files have headers (default: true)
+    pub has_headers: Option<bool>,
+}
+
+impl ImportOptions {
+    /// Create new import options with headers enabled
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Create options without headers
+    pub fn without_headers() -> Self {
+        Self {
+            has_headers: Some(false),
+        }
+    }
 }
 
 /// SQL query AST.

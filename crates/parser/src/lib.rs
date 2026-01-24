@@ -404,7 +404,8 @@ mod tests {
         assert_eq!(program.statements.len(), 1);
         assert!(matches!(
             &program.statements[0],
-            Statement::Import { target, sheet_name, .. } if target == "myData" && sheet_name.is_none()
+            Statement::Import { sources, target, sheet_name, .. }
+            if sources.len() == 1 && target == "myData" && sheet_name.is_none()
         ));
     }
 
@@ -416,7 +417,47 @@ mod tests {
         let program = result.unwrap();
         assert!(matches!(
             &program.statements[0],
-            Statement::Import { target, sheet_name, .. } if target == "salesData" && sheet_name.is_some()
+            Statement::Import { sources, target, sheet_name, .. }
+            if sources.len() == 1 && target == "salesData" && sheet_name.is_some()
+        ));
+    }
+
+    #[test]
+    fn parse_import_multi_file() {
+        let code = r#"import "q1.csv", "q2.csv", "q3.csv" into quarterly"#;
+        let result = PipParser::parse_str(code);
+        assert!(result.is_ok(), "Parse error: {:?}", result.err());
+        let program = result.unwrap();
+        assert!(matches!(
+            &program.statements[0],
+            Statement::Import { sources, target, .. }
+            if sources.len() == 3 && target == "quarterly"
+        ));
+    }
+
+    #[test]
+    fn parse_import_without_headers() {
+        let code = r#"import "data.csv" into raw without headers"#;
+        let result = PipParser::parse_str(code);
+        assert!(result.is_ok(), "Parse error: {:?}", result.err());
+        let program = result.unwrap();
+        assert!(matches!(
+            &program.statements[0],
+            Statement::Import { sources, target, options, .. }
+            if sources.len() == 1 && target == "raw" && options.has_headers == Some(false)
+        ));
+    }
+
+    #[test]
+    fn parse_import_named_params() {
+        let code = r#"import "data.csv" into raw (headers = false)"#;
+        let result = PipParser::parse_str(code);
+        assert!(result.is_ok(), "Parse error: {:?}", result.err());
+        let program = result.unwrap();
+        assert!(matches!(
+            &program.statements[0],
+            Statement::Import { sources, target, options, .. }
+            if sources.len() == 1 && target == "raw" && options.has_headers == Some(false)
         ));
     }
 

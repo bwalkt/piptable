@@ -2,8 +2,8 @@
 
 use pest::iterators::{Pair, Pairs};
 use piptable_core::{
-    BinaryOp, Expr, FromClause, Literal, OrderByItem, Program, SelectClause, SelectItem,
-    SortDirection, SqlQuery, Statement, TableRef, UnaryOp,
+    BinaryOp, Expr, FromClause, ImportOptions, Literal, OrderByItem, Program, SelectClause,
+    SelectItem, SortDirection, SqlQuery, Statement, TableRef, UnaryOp,
 };
 
 use crate::Rule;
@@ -361,12 +361,18 @@ fn build_export_stmt(pair: Pair<Rule>, line: usize) -> BuildResult<Statement> {
 
 fn build_import_stmt(pair: Pair<Rule>, line: usize) -> BuildResult<Statement> {
     let mut inner = pair.into_inner();
-    let source = build_expr(inner.next().unwrap())?;
 
-    // Parse optional sheet clause and target identifier
+    // Parse file_list (comma-separated expressions)
+    let file_list = inner.next().unwrap();
+    let sources: Vec<Expr> = file_list
+        .into_inner()
+        .map(build_expr)
+        .collect::<BuildResult<Vec<_>>>()?;
+
+    // Parse optional sheet clause, target identifier, and options
     let mut sheet_name = None;
     let mut target = String::new();
-    let mut options = None;
+    let mut options = ImportOptions::default();
 
     for p in inner {
         match p.as_rule() {
@@ -377,21 +383,60 @@ fn build_import_stmt(pair: Pair<Rule>, line: usize) -> BuildResult<Statement> {
             Rule::ident => {
                 target = p.as_str().to_string();
             }
-            Rule::with_clause => {
-                let obj = p.into_inner().next().unwrap();
-                options = Some(build_expr(obj)?);
+            Rule::import_options => {
+                options = build_import_options(p)?;
             }
             _ => {}
         }
     }
 
     Ok(Statement::Import {
-        source,
+        sources,
         target,
         sheet_name,
         options,
         line,
     })
+}
+
+fn build_import_options(pair: Pair<Rule>) -> BuildResult<ImportOptions> {
+    let inner = pair.into_inner().next().unwrap();
+
+    match inner.as_rule() {
+        Rule::without_headers => Ok(ImportOptions::without_headers()),
+        Rule::named_params => {
+            let mut options = ImportOptions::default();
+            for param in inner.into_inner() {
+                let mut param_inner = param.into_inner();
+                let key = param_inner.next().unwrap().as_str();
+                let value_pair = param_inner.next().unwrap();
+                let value = build_expr(value_pair)?;
+
+                match key {
+                    "headers" => {
+                        if let Expr::Literal(Literal::Bool(b)) = value {
+                            options.has_headers = Some(b);
+                        } else {
+                            return Err(BuildError::new(
+                                0,
+                                0,
+                                "headers option must be a boolean (true or false)",
+                            ));
+                        }
+                    }
+                    _ => {
+                        return Err(BuildError::new(
+                            0,
+                            0,
+                            format!("Unknown import option: {key}"),
+                        ));
+                    }
+                }
+            }
+            Ok(options)
+        }
+        _ => Ok(ImportOptions::default()),
+    }
 }
 
 /// Build an expression from a pest pair.

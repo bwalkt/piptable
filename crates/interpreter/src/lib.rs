@@ -14,9 +14,9 @@ mod python;
 
 use async_recursion::async_recursion;
 use piptable_core::{
-    BinaryOp, Expr, FromClause, JoinClause, JoinType, LValue, Literal, OrderByItem, PipError,
-    PipResult, Program, SelectClause, SelectItem, SortDirection, SqlQuery, Statement, TableRef,
-    UnaryOp, Value,
+    BinaryOp, Expr, FromClause, ImportOptions, JoinClause, JoinType, LValue, Literal, OrderByItem,
+    PipError, PipResult, Program, SelectClause, SelectItem, SortDirection, SqlQuery, Statement,
+    TableRef, UnaryOp, Value,
 };
 use piptable_http::HttpClient;
 use piptable_sheet::{CellValue, Sheet};
@@ -402,40 +402,35 @@ impl Interpreter {
             }
 
             Statement::Import {
-                source,
+                sources,
                 target,
                 sheet_name,
                 options,
                 line,
             } => {
-                // Reject import options until they are implemented
-                if options.is_some() {
-                    return Err(PipError::Import(format!(
-                        "Line {}: import options are not supported yet",
-                        line
-                    )));
+                // Evaluate all source paths
+                let mut paths: Vec<String> = Vec::new();
+                for source in &sources {
+                    let src = self
+                        .eval_expr(source)
+                        .await
+                        .map_err(|e| e.with_line(line))?;
+                    match &src {
+                        Value::String(s) => paths.push(s.clone()),
+                        _ => {
+                            return Err(PipError::Import(format!(
+                                "Line {}: import source must be a string, got {}",
+                                line,
+                                src.type_name()
+                            )));
+                        }
+                    }
                 }
 
-                // Evaluate source to get file path
-                let src = self
-                    .eval_expr(&source)
-                    .await
-                    .map_err(|e| e.with_line(line))?;
-                let path = match &src {
-                    Value::String(s) => s.clone(),
-                    _ => {
-                        return Err(PipError::Import(format!(
-                            "Line {}: import source must be a string, got {}",
-                            line,
-                            src.type_name()
-                        )));
-                    }
-                };
-
                 // Evaluate optional sheet name for Excel files
-                let sheet_name_str = if let Some(sheet_expr) = sheet_name {
+                let sheet_name_str = if let Some(ref sheet_expr) = sheet_name {
                     let val = self
-                        .eval_expr(&sheet_expr)
+                        .eval_expr(sheet_expr)
                         .await
                         .map_err(|e| e.with_line(line))?;
                     match val {
@@ -452,11 +447,24 @@ impl Interpreter {
                     None
                 };
 
-                // Load the file and convert to Value
-                let sheet = import_sheet(&path, sheet_name_str.as_deref())
-                    .map_err(|e| PipError::Import(format!("Line {}: {}", line, e)))?;
-
-                let value = sheet_to_value(&sheet);
+                // Multi-file or single file import
+                let value = if paths.len() > 1 {
+                    // Multi-file import: use Book::from_files_with_options
+                    if sheet_name_str.is_some() {
+                        return Err(PipError::Import(format!(
+                            "Line {}: sheet clause is not supported for multi-file import",
+                            line
+                        )));
+                    }
+                    import_multi_files(&paths, &options)
+                        .map_err(|e| PipError::Import(format!("Line {}: {}", line, e)))?
+                } else {
+                    // Single file import
+                    let has_headers = options.has_headers.unwrap_or(true);
+                    let sheet = import_sheet(&paths[0], sheet_name_str.as_deref(), has_headers)
+                        .map_err(|e| PipError::Import(format!("Line {}: {}", line, e)))?;
+                    sheet_to_value(&sheet)
+                };
 
                 // Store in target variable
                 self.set_var(&target, value).await;
@@ -1128,6 +1136,31 @@ impl Interpreter {
                 match &args[0] {
                     Value::Object(obj) => Ok(Value::Array(obj.values().cloned().collect())),
                     _ => Err(PipError::runtime(line, "values() requires object argument")),
+                }
+            }
+            "consolidate" => {
+                // consolidate(book) or consolidate(book, source = "_source")
+                if args.is_empty() || args.len() > 2 {
+                    return Err(PipError::runtime(
+                        line,
+                        "consolidate() takes 1 or 2 arguments: consolidate(book) or consolidate(book, source_column_name)",
+                    ));
+                }
+                match &args[0] {
+                    Value::Object(book_obj) => {
+                        // Convert object (book) to consolidated array
+                        let source_col = if args.len() == 2 {
+                            args[1].as_str().map(|s| s.to_string())
+                        } else {
+                            None
+                        };
+                        consolidate_book(book_obj, source_col.as_deref())
+                            .map_err(|e| PipError::runtime(line, e))
+                    }
+                    _ => Err(PipError::runtime(
+                        line,
+                        "consolidate() requires a book object (from multi-file import)",
+                    )),
                 }
             }
             #[cfg(feature = "python")]
@@ -2046,7 +2079,7 @@ fn export_sheet(sheet: &Sheet, path: &str) -> Result<(), String> {
 }
 
 /// Import a Sheet from a file, auto-detecting format from extension
-fn import_sheet(path: &str, sheet_name: Option<&str>) -> Result<Sheet, String> {
+fn import_sheet(path: &str, sheet_name: Option<&str>, has_headers: bool) -> Result<Sheet, String> {
     use piptable_sheet::Book;
 
     let path = Path::new(path);
@@ -2067,8 +2100,9 @@ fn import_sheet(path: &str, sheet_name: Option<&str>) -> Result<Sheet, String> {
     match ext.as_str() {
         "csv" => {
             let mut sheet = Sheet::from_csv(path).map_err(|e| e.to_string())?;
-            // Treat first row as headers
-            sheet.name_columns_by_row(0).map_err(|e| e.to_string())?;
+            if has_headers {
+                sheet.name_columns_by_row(0).map_err(|e| e.to_string())?;
+            }
             Ok(sheet)
         }
         "tsv" => {
@@ -2076,8 +2110,9 @@ fn import_sheet(path: &str, sheet_name: Option<&str>) -> Result<Sheet, String> {
             let content = std::fs::read_to_string(path).map_err(|e| e.to_string())?;
             let mut sheet = Sheet::from_csv_str_with_options(&content, CsvOptions::tsv())
                 .map_err(|e| e.to_string())?;
-            // Treat first row as headers
-            sheet.name_columns_by_row(0).map_err(|e| e.to_string())?;
+            if has_headers {
+                sheet.name_columns_by_row(0).map_err(|e| e.to_string())?;
+            }
             Ok(sheet)
         }
         "xlsx" | "xls" => {
@@ -2089,8 +2124,9 @@ fn import_sheet(path: &str, sheet_name: Option<&str>) -> Result<Sheet, String> {
                 // Load first sheet
                 Sheet::from_excel(path).map_err(|e| e.to_string())?
             };
-            // Treat first row as headers (consistent with CSV/TSV)
-            sheet.name_columns_by_row(0).map_err(|e| e.to_string())?;
+            if has_headers {
+                sheet.name_columns_by_row(0).map_err(|e| e.to_string())?;
+            }
             Ok(sheet)
         }
         "json" => Sheet::from_json(path).map_err(|e| e.to_string()),
@@ -2102,6 +2138,23 @@ fn import_sheet(path: &str, sheet_name: Option<&str>) -> Result<Sheet, String> {
             ext
         )),
     }
+}
+
+/// Import multiple files into a Book and return as a Value (object with sheet names as keys)
+fn import_multi_files(paths: &[String], options: &ImportOptions) -> Result<Value, String> {
+    use piptable_sheet::{Book, FileLoadOptions};
+
+    let file_opts = FileLoadOptions::default().with_headers(options.has_headers.unwrap_or(true));
+    let book = Book::from_files_with_options(paths, file_opts).map_err(|e| e.to_string())?;
+
+    // Convert Book to Value (object with sheet names as keys, each value is array of records)
+    let mut sheets_map: HashMap<String, Value> = HashMap::new();
+    for (name, sheet) in book.sheets() {
+        let sheet_value = sheet_to_value(sheet);
+        sheets_map.insert(name.to_string(), sheet_value);
+    }
+
+    Ok(Value::Object(sheets_map))
 }
 
 /// Convert a Sheet to a piptable Value (array of objects)
@@ -2160,6 +2213,78 @@ fn cell_to_value(cell: CellValue) -> Value {
         CellValue::Float(f) => Value::Float(f),
         CellValue::String(s) => Value::String(s),
     }
+}
+
+/// Consolidate a book (object of arrays) into a single array
+fn consolidate_book(
+    book_obj: &HashMap<String, Value>,
+    source_col: Option<&str>,
+) -> Result<Value, String> {
+    use indexmap::IndexSet;
+
+    // Collect all column names across all sheets
+    let mut all_columns: IndexSet<String> = IndexSet::new();
+
+    // Validate all values are arrays of objects and collect column names
+    for (sheet_name, value) in book_obj {
+        match value {
+            Value::Array(rows) => {
+                for row in rows {
+                    match row {
+                        Value::Object(obj) => {
+                            for key in obj.keys() {
+                                all_columns.insert(key.clone());
+                            }
+                        }
+                        _ => {
+                            return Err(format!("Sheet '{}' contains non-object rows", sheet_name));
+                        }
+                    }
+                }
+            }
+            _ => {
+                return Err(format!("Sheet '{}' is not an array", sheet_name));
+            }
+        }
+    }
+
+    // Check for source column conflict
+    if let Some(col) = source_col {
+        if all_columns.contains(col) {
+            return Err(format!(
+                "Source column name '{}' conflicts with existing column",
+                col
+            ));
+        }
+    }
+
+    // Build consolidated result
+    let mut result: Vec<Value> = Vec::new();
+
+    for (sheet_name, value) in book_obj {
+        if let Value::Array(rows) = value {
+            for row in rows {
+                if let Value::Object(obj) = row {
+                    let mut new_row: HashMap<String, Value> = HashMap::new();
+
+                    // Add source column if requested
+                    if let Some(col) = source_col {
+                        new_row.insert(col.to_string(), Value::String(sheet_name.clone()));
+                    }
+
+                    // Add all columns (with nulls for missing)
+                    for col_name in &all_columns {
+                        let val = obj.get(col_name).cloned().unwrap_or(Value::Null);
+                        new_row.insert(col_name.clone(), val);
+                    }
+
+                    result.push(Value::Object(new_row));
+                }
+            }
+        }
+    }
+
+    Ok(Value::Array(result))
 }
 
 #[cfg(test)]
