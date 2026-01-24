@@ -979,7 +979,7 @@ impl Sheet {
 
         // Build set of existing keys (skip header row if columns are named)
         let start_idx = if self.column_names.is_some() { 1 } else { 0 };
-        let existing_keys: std::collections::HashSet<String> = self
+        let mut existing_keys: std::collections::HashSet<String> = self
             .data
             .iter()
             .skip(start_idx)
@@ -1021,10 +1021,12 @@ impl Sheet {
                             }
                         }
                         self.data.push(new_row);
+                        existing_keys.insert(other_key_val);
                         continue;
                     }
                 }
                 self.data.push(other_row.clone());
+                existing_keys.insert(other_key_val);
             }
         }
 

@@ -641,6 +641,32 @@ fn test_append_distinct() {
 }
 
 #[test]
+fn test_append_distinct_duplicates_in_other() {
+    let mut sheet1 = Sheet::from_data(vec![vec!["id", "name"], vec!["1", "alice"]]);
+    sheet1.name_columns_by_row(0).unwrap();
+
+    // other has duplicate keys (two rows with id=2)
+    let mut sheet2 = Sheet::from_data(vec![
+        vec!["id", "name"],
+        vec!["2", "bob"],
+        vec!["2", "bob_duplicate"], // same key, should be skipped
+        vec!["3", "charlie"],
+    ]);
+    sheet2.name_columns_by_row(0).unwrap();
+
+    sheet1.append_distinct(&sheet2, "id").unwrap();
+
+    // Header + alice + bob + charlie = 4 (bob_duplicate skipped)
+    assert_eq!(sheet1.row_count(), 4);
+
+    // First bob was added
+    assert_eq!(
+        sheet1.get_by_name(2, "name").unwrap(),
+        &CellValue::String("bob".to_string())
+    );
+}
+
+#[test]
 fn test_upsert() {
     let mut sheet1 = Sheet::from_data(vec![
         vec!["id", "name", "salary"],
