@@ -82,6 +82,7 @@ fn build_statement(pair: Pair<Rule>) -> BuildResult<Statement> {
         Rule::return_stmt => build_return_stmt(inner, line),
         Rule::call_stmt => build_call_stmt(inner, line),
         Rule::export_stmt => build_export_stmt(inner, line),
+        Rule::import_stmt => build_import_stmt(inner, line),
         _ => Err(BuildError::from_pair(
             &inner,
             format!("Unexpected statement rule: {:?}", inner.as_rule()),
@@ -353,6 +354,41 @@ fn build_export_stmt(pair: Pair<Rule>, line: usize) -> BuildResult<Statement> {
     Ok(Statement::Export {
         source,
         destination,
+        options,
+        line,
+    })
+}
+
+fn build_import_stmt(pair: Pair<Rule>, line: usize) -> BuildResult<Statement> {
+    let mut inner = pair.into_inner();
+    let source = build_expr(inner.next().unwrap())?;
+
+    // Parse optional sheet clause and target identifier
+    let mut sheet_name = None;
+    let mut target = String::new();
+    let mut options = None;
+
+    for p in inner {
+        match p.as_rule() {
+            Rule::sheet_clause => {
+                let sheet_expr = p.into_inner().next().unwrap();
+                sheet_name = Some(build_expr(sheet_expr)?);
+            }
+            Rule::ident => {
+                target = p.as_str().to_string();
+            }
+            Rule::with_clause => {
+                let obj = p.into_inner().next().unwrap();
+                options = Some(build_expr(obj)?);
+            }
+            _ => {}
+        }
+    }
+
+    Ok(Statement::Import {
+        source,
+        target,
+        sheet_name,
         options,
         line,
     })

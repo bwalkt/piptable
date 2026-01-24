@@ -61,6 +61,10 @@ pub enum PipError {
     #[error("Export error: {0}")]
     Export(String),
 
+    /// Import error.
+    #[error("Import error: {0}")]
+    Import(String),
+
     /// Plugin error.
     #[error("Plugin error in {plugin}: {message}")]
     Plugin { plugin: String, message: String },
@@ -138,6 +142,10 @@ impl PipError {
             Self::Export(msg) => Self::Runtime {
                 line,
                 message: format!("Export error: {msg}"),
+            },
+            Self::Import(msg) => Self::Runtime {
+                line,
+                message: format!("Import error: {msg}"),
             },
             Self::Plugin { plugin, message } => Self::Runtime {
                 line,

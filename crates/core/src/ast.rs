@@ -104,6 +104,15 @@ pub enum Statement {
         line: usize,
     },
 
+    /// Import statement: `import "file.csv" into data`
+    Import {
+        source: Expr,
+        target: String,
+        sheet_name: Option<Expr>,
+        options: Option<Expr>,
+        line: usize,
+    },
+
     /// Expression statement (for side effects)
     Expr { expr: Expr, line: usize },
 }

@@ -400,6 +400,69 @@ impl Interpreter {
 
                 Ok(Value::Null)
             }
+
+            Statement::Import {
+                source,
+                target,
+                sheet_name,
+                options,
+                line,
+            } => {
+                // Reject import options until they are implemented
+                if options.is_some() {
+                    return Err(PipError::Import(format!(
+                        "Line {}: import options are not supported yet",
+                        line
+                    )));
+                }
+
+                // Evaluate source to get file path
+                let src = self
+                    .eval_expr(&source)
+                    .await
+                    .map_err(|e| e.with_line(line))?;
+                let path = match &src {
+                    Value::String(s) => s.clone(),
+                    _ => {
+                        return Err(PipError::Import(format!(
+                            "Line {}: import source must be a string, got {}",
+                            line,
+                            src.type_name()
+                        )));
+                    }
+                };
+
+                // Evaluate optional sheet name for Excel files
+                let sheet_name_str = if let Some(sheet_expr) = sheet_name {
+                    let val = self
+                        .eval_expr(&sheet_expr)
+                        .await
+                        .map_err(|e| e.with_line(line))?;
+                    match val {
+                        Value::String(s) => Some(s),
+                        _ => {
+                            return Err(PipError::Import(format!(
+                                "Line {}: sheet name must be a string, got {}",
+                                line,
+                                val.type_name()
+                            )));
+                        }
+                    }
+                } else {
+                    None
+                };
+
+                // Load the file and convert to Value
+                let sheet = import_sheet(&path, sheet_name_str.as_deref())
+                    .map_err(|e| PipError::Import(format!("Line {}: {}", line, e)))?;
+
+                let value = sheet_to_value(&sheet);
+
+                // Store in target variable
+                self.set_var(&target, value).await;
+
+                Ok(Value::Null)
+            }
         }
     }
 
@@ -1981,6 +2044,122 @@ fn export_sheet(sheet: &Sheet, path: &str) -> Result<(), String> {
     }
 }
 
+/// Import a Sheet from a file, auto-detecting format from extension
+fn import_sheet(path: &str, sheet_name: Option<&str>) -> Result<Sheet, String> {
+    use piptable_sheet::Book;
+
+    let path = Path::new(path);
+    let ext = path
+        .extension()
+        .and_then(|e| e.to_str())
+        .map(|s| s.to_lowercase())
+        .unwrap_or_default();
+
+    // Validate sheet_name is only used for Excel files
+    if sheet_name.is_some() && !matches!(ext.as_str(), "xlsx" | "xls") {
+        return Err(format!(
+            "sheet clause is only supported for Excel files (.xlsx/.xls), not '.{}'",
+            ext
+        ));
+    }
+
+    match ext.as_str() {
+        "csv" => {
+            let mut sheet = Sheet::from_csv(path).map_err(|e| e.to_string())?;
+            // Treat first row as headers
+            sheet.name_columns_by_row(0).map_err(|e| e.to_string())?;
+            Ok(sheet)
+        }
+        "tsv" => {
+            use piptable_sheet::CsvOptions;
+            let content = std::fs::read_to_string(path).map_err(|e| e.to_string())?;
+            let mut sheet = Sheet::from_csv_str_with_options(&content, CsvOptions::tsv())
+                .map_err(|e| e.to_string())?;
+            // Treat first row as headers
+            sheet.name_columns_by_row(0).map_err(|e| e.to_string())?;
+            Ok(sheet)
+        }
+        "xlsx" | "xls" => {
+            let mut sheet = if let Some(name) = sheet_name {
+                // Load specific sheet by name
+                let book = Book::from_excel(path).map_err(|e| e.to_string())?;
+                book.get_sheet(name).map_err(|e| e.to_string())?.clone()
+            } else {
+                // Load first sheet
+                Sheet::from_excel(path).map_err(|e| e.to_string())?
+            };
+            // Treat first row as headers (consistent with CSV/TSV)
+            sheet.name_columns_by_row(0).map_err(|e| e.to_string())?;
+            Ok(sheet)
+        }
+        "json" => Sheet::from_json(path).map_err(|e| e.to_string()),
+        "jsonl" | "ndjson" => Sheet::from_jsonl(path).map_err(|e| e.to_string()),
+        "toon" => Sheet::from_toon(path).map_err(|e| e.to_string()),
+        _ => Err(format!(
+            "Unsupported import format: '{}'. Supported: csv, tsv, xlsx, xls, json, jsonl, toon",
+            ext
+        )),
+    }
+}
+
+/// Convert a Sheet to a piptable Value (array of objects)
+fn sheet_to_value(sheet: &Sheet) -> Value {
+    // Convert to records (array of objects) if columns are named
+    if let Some(records) = sheet.to_records() {
+        // Skip first record if it's the header row (matches column names).
+        // Note: This could theoretically drop a data row that exactly matches
+        // headers, but this is extremely unlikely in practice.
+        let skip_header = if let Some(first) = records.first() {
+            sheet
+                .column_names()
+                .map(|names| {
+                    names
+                        .iter()
+                        .zip(first.values())
+                        .all(|(n, v)| v.as_str() == *n)
+                })
+                .unwrap_or(false)
+        } else {
+            false
+        };
+
+        let arr: Vec<Value> = records
+            .into_iter()
+            .skip(if skip_header { 1 } else { 0 })
+            .map(|record: indexmap::IndexMap<String, CellValue>| {
+                let obj: HashMap<String, Value> = record
+                    .into_iter()
+                    .map(|(k, v)| (k, cell_to_value(v)))
+                    .collect();
+                Value::Object(obj)
+            })
+            .collect();
+        Value::Array(arr)
+    } else {
+        // Fall back to array of arrays
+        let arr: Vec<Value> = sheet
+            .to_array()
+            .into_iter()
+            .map(|row| {
+                let row_arr: Vec<Value> = row.into_iter().map(cell_to_value).collect();
+                Value::Array(row_arr)
+            })
+            .collect();
+        Value::Array(arr)
+    }
+}
+
+/// Convert a CellValue to a Value
+fn cell_to_value(cell: CellValue) -> Value {
+    match cell {
+        CellValue::Null => Value::Null,
+        CellValue::Bool(b) => Value::Bool(b),
+        CellValue::Int(i) => Value::Int(i),
+        CellValue::Float(f) => Value::Float(f),
+        CellValue::String(s) => Value::String(s),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -2211,5 +2390,30 @@ export data to "{}""#,
         let content = std::fs::read_to_string(&file_path).unwrap();
         let parsed: serde_json::Value = serde_json::from_str(&content).unwrap();
         assert!(parsed.is_array());
+    }
+
+    #[tokio::test]
+    async fn test_import_csv() {
+        let dir = tempfile::tempdir().unwrap();
+        let file_path = dir.path().join("test.csv");
+
+        // Create a test CSV file
+        std::fs::write(&file_path, "name,age\nalice,30\nbob,25").unwrap();
+
+        let mut interp = Interpreter::new();
+        let script = format!(r#"import "{}" into data"#, file_path.display());
+        let program = PipParser::parse_str(&script).unwrap();
+        interp.eval(program).await.unwrap();
+
+        // Verify data was loaded
+        let data = interp.get_var("data").await.unwrap();
+        assert!(matches!(&data, Value::Array(arr) if arr.len() == 2));
+
+        // Check first record has the right name
+        if let Value::Array(arr) = &data {
+            if let Value::Object(obj) = &arr[0] {
+                assert!(matches!(obj.get("name"), Some(Value::String(s)) if s == "alice"));
+            }
+        }
     }
 }
