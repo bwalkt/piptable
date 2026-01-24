@@ -2741,9 +2741,11 @@ dependencies = [
 name = "piptable-sheet"
 version = "0.1.0"
 dependencies = [
+ "arrow",
  "calamine",
  "csv",
  "indexmap",
+ "parquet",
  "rust_xlsxwriter",
  "serde",
  "serde_json",

@@ -743,3 +743,85 @@ fn test_upsert_key_not_found() {
     let result = sheet1.upsert(&sheet2, "id");
     assert!(result.is_err());
 }
+
+// ===== Parquet Tests =====
+
+#[test]
+fn test_parquet_file_io() {
+    let dir = tempdir().unwrap();
+    let file_path = dir.path().join("test.parquet");
+
+    let mut sheet = Sheet::from_data(vec![
+        vec!["id", "name", "score"],
+        vec!["1", "Alice", "95.5"],
+        vec!["2", "Bob", "87.3"],
+    ]);
+    sheet.name_columns_by_row(0).unwrap();
+
+    sheet.save_as_parquet(&file_path).unwrap();
+
+    let loaded = Sheet::from_parquet(&file_path).unwrap();
+    assert_eq!(loaded.row_count(), sheet.row_count());
+    assert_eq!(loaded.col_count(), sheet.col_count());
+    assert!(loaded.column_names().is_some());
+}
+
+#[test]
+fn test_parquet_typed_data() {
+    let dir = tempdir().unwrap();
+    let file_path = dir.path().join("typed.parquet");
+
+    // Create sheet with typed data
+    let mut sheet = Sheet::new();
+    sheet.data_mut().push(vec![
+        CellValue::String("id".to_string()),
+        CellValue::String("score".to_string()),
+        CellValue::String("active".to_string()),
+    ]);
+    sheet.data_mut().push(vec![
+        CellValue::Int(1),
+        CellValue::Float(95.5),
+        CellValue::Bool(true),
+    ]);
+    sheet.data_mut().push(vec![
+        CellValue::Int(2),
+        CellValue::Float(87.3),
+        CellValue::Bool(false),
+    ]);
+    sheet.name_columns_by_row(0).unwrap();
+
+    sheet.save_as_parquet(&file_path).unwrap();
+
+    let loaded = Sheet::from_parquet(&file_path).unwrap();
+
+    // Types should be preserved
+    assert!(matches!(loaded.get(1, 0).unwrap(), CellValue::Int(1)));
+    assert!(matches!(loaded.get(1, 2).unwrap(), CellValue::Bool(true)));
+}
+
+#[test]
+fn test_parquet_roundtrip_with_nulls() {
+    let dir = tempdir().unwrap();
+    let file_path = dir.path().join("nulls.parquet");
+
+    let mut sheet = Sheet::new();
+    sheet.data_mut().push(vec![
+        CellValue::String("a".to_string()),
+        CellValue::String("b".to_string()),
+    ]);
+    sheet
+        .data_mut()
+        .push(vec![CellValue::Int(1), CellValue::Null]);
+    sheet.data_mut().push(vec![
+        CellValue::Null,
+        CellValue::String("hello".to_string()),
+    ]);
+    sheet.name_columns_by_row(0).unwrap();
+
+    sheet.save_as_parquet(&file_path).unwrap();
+    let loaded = Sheet::from_parquet(&file_path).unwrap();
+
+    // Nulls should be preserved
+    assert!(loaded.get(1, 1).unwrap().is_null());
+    assert!(loaded.get(2, 0).unwrap().is_null());
+}
