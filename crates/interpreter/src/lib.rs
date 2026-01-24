@@ -1158,7 +1158,15 @@ impl Interpreter {
                     Value::Object(book_obj) => {
                         // Convert object (book) to consolidated array
                         let source_col = if args.len() == 2 {
-                            args[1].as_str().map(|s| s.to_string())
+                            match args[1].as_str() {
+                                Some(s) => Some(s.to_string()),
+                                None => {
+                                    return Err(PipError::runtime(
+                                        line,
+                                        "consolidate() source_column_name must be a string",
+                                    ));
+                                }
+                            }
                         } else {
                             None
                         };
