@@ -339,10 +339,11 @@ impl Book {
             let sheet_col_names = sheet.column_names().unwrap(); // Already validated
 
             // Determine start row (skip header if present in data)
+            // Only match String cells to avoid treating data rows like [1, 2] as headers
             let start_row = if sheet.data().first().is_some_and(|r| {
                 r.iter()
                     .zip(sheet_col_names.iter())
-                    .all(|(c, n)| c.as_str() == *n)
+                    .all(|(c, n)| matches!(c, CellValue::String(s) if s == n))
             }) {
                 1
             } else {
