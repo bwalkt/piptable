@@ -2039,7 +2039,7 @@ fn export_sheet(sheet: &Sheet, path: &str) -> Result<(), String> {
         "toon" => sheet.save_as_toon(path).map_err(|e| e.to_string()),
         "parquet" => sheet.save_as_parquet(path).map_err(|e| e.to_string()),
         _ => Err(format!(
-            "Unsupported export format: '{}'. Supported: csv, tsv, xlsx, json, jsonl, toon, parquet",
+            "Unsupported export format: '{}'. Supported: csv, tsv, xlsx, xls, json, jsonl, toon, parquet",
             ext
         )),
     }
