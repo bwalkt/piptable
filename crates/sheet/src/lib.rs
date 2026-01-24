@@ -63,7 +63,7 @@ mod sheet;
 mod toon;
 mod xlsx;
 
-pub use book::Book;
+pub use book::{Book, ConsolidateOptions, FileLoadOptions};
 pub use cell::CellValue;
 pub use csv::CsvOptions;
 pub use error::{Result, SheetError};

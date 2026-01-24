@@ -1,6 +1,9 @@
+use crate::cell::CellValue;
 use crate::error::{Result, SheetError};
 use crate::sheet::Sheet;
-use indexmap::IndexMap;
+use indexmap::{IndexMap, IndexSet};
+use std::collections::HashMap;
+use std::path::Path;
 
 /// A book containing multiple sheets (preserves insertion order)
 #[derive(Debug, Clone)]
@@ -225,6 +228,181 @@ impl Book {
         }
     }
 
+    // ===== Multi-File Loading =====
+
+    /// Load multiple files into a single book.
+    ///
+    /// Each file becomes a sheet named after its filename (without extension).
+    /// Supports: csv, tsv, xlsx, xls, json, jsonl, toon, parquet
+    ///
+    /// # Example
+    /// ```no_run
+    /// use piptable_sheet::Book;
+    ///
+    /// let book = Book::from_files(&["sales_q1.csv", "sales_q2.csv"]).unwrap();
+    /// // Creates book with sheets: "sales_q1", "sales_q2"
+    /// ```
+    pub fn from_files<P: AsRef<Path>>(paths: &[P]) -> Result<Self> {
+        Self::from_files_with_options(paths, FileLoadOptions::default())
+    }
+
+    /// Load multiple files into a single book with options.
+    ///
+    /// # Example
+    /// ```no_run
+    /// use piptable_sheet::{Book, FileLoadOptions};
+    ///
+    /// // Load headerless CSV files
+    /// let book = Book::from_files_with_options(
+    ///     &["data1.csv", "data2.csv"],
+    ///     FileLoadOptions::without_headers()
+    /// ).unwrap();
+    /// ```
+    pub fn from_files_with_options<P: AsRef<Path>>(
+        paths: &[P],
+        options: FileLoadOptions,
+    ) -> Result<Self> {
+        let mut book = Book::new();
+
+        for path in paths {
+            let path_ref = path.as_ref();
+
+            // Extract sheet name from filename stem
+            let sheet_name = path_ref
+                .file_stem()
+                .and_then(|s| s.to_str())
+                .ok_or_else(|| {
+                    SheetError::Parse(format!("Invalid filename: {}", path_ref.display()))
+                })?
+                .to_string();
+
+            // Load sheet based on extension
+            let sheet = load_sheet_by_extension(path_ref, &options)?;
+
+            // Handle duplicate names with suffix
+            let final_name = get_unique_name(&book, &sheet_name);
+
+            book.add_sheet(&final_name, sheet)?;
+        }
+
+        Ok(book)
+    }
+
+    // ===== Consolidation =====
+
+    /// Consolidate all sheets into a single sheet by stacking rows vertically.
+    ///
+    /// All sheets must have named columns. Columns are aligned by name.
+    /// Missing columns in a sheet are filled with Null.
+    ///
+    /// # Example
+    /// ```no_run
+    /// use piptable_sheet::Book;
+    ///
+    /// let book = Book::from_files(&["q1.csv", "q2.csv", "q3.csv"]).unwrap();
+    /// let combined = book.consolidate().unwrap();
+    /// ```
+    pub fn consolidate(&self) -> Result<Sheet> {
+        self.consolidate_with_options(ConsolidateOptions::default())
+    }
+
+    /// Consolidate with options (e.g., add source column)
+    pub fn consolidate_with_options(&self, options: ConsolidateOptions) -> Result<Sheet> {
+        if self.is_empty() {
+            return Ok(Sheet::new());
+        }
+
+        // Collect all unique column names across all sheets (preserving order)
+        let mut all_columns: IndexSet<String> = IndexSet::new();
+
+        // Validate all sheets have named columns
+        for (name, sheet) in self.sheets() {
+            let col_names = sheet.column_names().ok_or_else(|| {
+                SheetError::ColumnsNotNamed(format!(
+                    "Sheet '{}' does not have named columns. All sheets must have named columns for consolidate.",
+                    name
+                ))
+            })?;
+
+            for col in col_names {
+                all_columns.insert(col.clone());
+            }
+        }
+
+        // Build final column list
+        let final_columns: Vec<String> = if options.add_source_column {
+            // Check for conflict
+            if all_columns.contains(&options.source_column_name) {
+                return Err(SheetError::DuplicateColumnName {
+                    name: options.source_column_name,
+                });
+            }
+            std::iter::once(options.source_column_name.clone())
+                .chain(all_columns.iter().cloned())
+                .collect()
+        } else {
+            all_columns.iter().cloned().collect()
+        };
+
+        let mut result = Sheet::with_name("consolidated");
+
+        // Add header row
+        let header: Vec<CellValue> = final_columns
+            .iter()
+            .map(|n| CellValue::String(n.clone()))
+            .collect();
+        result.data_mut().push(header);
+
+        // Add data from each sheet
+        for (sheet_name, sheet) in self.sheets() {
+            let sheet_col_names = sheet.column_names().unwrap(); // Already validated
+
+            // Determine start row (skip header if present in data)
+            // Only match String cells to avoid treating data rows like [1, 2] as headers
+            let start_row = if sheet.data().first().is_some_and(|r| {
+                r.iter()
+                    .zip(sheet_col_names.iter())
+                    .all(|(c, n)| matches!(c, CellValue::String(s) if s == n))
+            }) {
+                1
+            } else {
+                0
+            };
+
+            // Build column index for this sheet
+            let col_idx: HashMap<&str, usize> = sheet_col_names
+                .iter()
+                .enumerate()
+                .map(|(i, n)| (n.as_str(), i))
+                .collect();
+
+            for row in sheet.data().iter().skip(start_row) {
+                let mut new_row = Vec::with_capacity(final_columns.len());
+
+                for (i, col_name) in final_columns.iter().enumerate() {
+                    if options.add_source_column && i == 0 {
+                        // Source column
+                        new_row.push(CellValue::String(sheet_name.to_string()));
+                    } else {
+                        // Data column - look up in source sheet
+                        if let Some(&idx) = col_idx.get(col_name.as_str()) {
+                            new_row.push(row.get(idx).cloned().unwrap_or(CellValue::Null));
+                        } else {
+                            new_row.push(CellValue::Null);
+                        }
+                    }
+                }
+
+                result.data_mut().push(new_row);
+            }
+        }
+
+        // Name columns
+        result.name_columns_by_row(0)?;
+
+        Ok(result)
+    }
+
     // ===== Iteration =====
 
     /// Iterate over sheets
@@ -235,6 +413,117 @@ impl Book {
     /// Iterate over sheets mutably
     pub fn sheets_mut(&mut self) -> impl Iterator<Item = (&str, &mut Sheet)> {
         self.sheets.iter_mut().map(|(k, v)| (k.as_str(), v))
+    }
+}
+
+/// Options for consolidating sheets
+#[derive(Debug, Clone)]
+pub struct ConsolidateOptions {
+    /// Add a column with the source sheet name
+    pub add_source_column: bool,
+    /// Name of the source column (default: "_source")
+    pub source_column_name: String,
+}
+
+/// Options for loading files
+#[derive(Debug, Clone)]
+pub struct FileLoadOptions {
+    /// Whether files have headers (default: true)
+    /// Only affects CSV and TSV files.
+    pub has_headers: bool,
+}
+
+impl Default for ConsolidateOptions {
+    fn default() -> Self {
+        Self {
+            add_source_column: false,
+            source_column_name: "_source".to_string(),
+        }
+    }
+}
+
+impl ConsolidateOptions {
+    /// Enable adding a source column with a custom name
+    #[must_use]
+    pub fn with_source_column(mut self, name: &str) -> Self {
+        self.add_source_column = true;
+        self.source_column_name = name.to_string();
+        self
+    }
+}
+
+impl Default for FileLoadOptions {
+    fn default() -> Self {
+        Self { has_headers: true }
+    }
+}
+
+impl FileLoadOptions {
+    /// Create options for files without headers
+    #[must_use]
+    pub fn without_headers() -> Self {
+        Self { has_headers: false }
+    }
+
+    /// Set whether files have headers
+    #[must_use]
+    pub fn with_headers(mut self, has_headers: bool) -> Self {
+        self.has_headers = has_headers;
+        self
+    }
+}
+
+/// Load a sheet by auto-detecting format from file extension
+fn load_sheet_by_extension(path: &Path, options: &FileLoadOptions) -> Result<Sheet> {
+    use crate::csv::CsvOptions;
+    use crate::xlsx::XlsxReadOptions;
+
+    let ext = path
+        .extension()
+        .and_then(|e| e.to_str())
+        .map(|e| e.to_lowercase())
+        .unwrap_or_default();
+
+    let mut sheet = match ext.as_str() {
+        "csv" => Sheet::from_csv(path)?,
+        "tsv" => Sheet::from_csv_with_options(path, CsvOptions::tsv())?,
+        "xlsx" => Sheet::from_xlsx_with_options(path, XlsxReadOptions::default().with_headers(options.has_headers))?,
+        "xls" => Sheet::from_xls_with_options(path, XlsxReadOptions::default().with_headers(options.has_headers))?,
+        "json" => Sheet::from_json(path)?,
+        "jsonl" | "ndjson" => Sheet::from_jsonl(path)?,
+        "toon" => Sheet::from_toon(path)?,
+        "parquet" => Sheet::from_parquet(path)?,
+        _ => {
+            return Err(SheetError::Parse(format!(
+                "Unsupported file format: '{}'. Supported: csv, tsv, xlsx, xls, json, jsonl, toon, parquet",
+                ext
+            )))
+        }
+    };
+
+    // Ensure columns are named for CSV/TSV (first row as header) when has_headers is true
+    if options.has_headers
+        && matches!(ext.as_str(), "csv" | "tsv")
+        && sheet.column_names().is_none()
+    {
+        sheet.name_columns_by_row(0)?;
+    }
+
+    Ok(sheet)
+}
+
+/// Generate a unique sheet name by appending _1, _2, etc.
+fn get_unique_name(book: &Book, base_name: &str) -> String {
+    if !book.has_sheet(base_name) {
+        return base_name.to_string();
+    }
+    let mut suffix = 1;
+    loop {
+        let new_name = format!("{base_name}_{suffix}");
+        if !book.has_sheet(&new_name) {
+            return new_name;
+        }
+        suffix += 1;
     }
 }
 
@@ -341,5 +630,152 @@ mod tests {
 
         let result = book.add_sheet("Sheet1", Sheet::new());
         assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_consolidate() {
+        let mut book = Book::new();
+
+        let mut sheet1 = Sheet::from_data(vec![vec!["name", "value"], vec!["a", "1"]]);
+        sheet1.name_columns_by_row(0).unwrap();
+
+        let mut sheet2 = Sheet::from_data(vec![vec!["name", "value"], vec!["b", "2"]]);
+        sheet2.name_columns_by_row(0).unwrap();
+
+        book.add_sheet("Sheet1", sheet1).unwrap();
+        book.add_sheet("Sheet2", sheet2).unwrap();
+
+        let consolidated = book.consolidate().unwrap();
+
+        assert_eq!(consolidated.row_count(), 3); // header + 2 data rows
+        assert_eq!(consolidated.col_count(), 2);
+        assert_eq!(
+            consolidated.column_names(),
+            Some(&vec!["name".to_string(), "value".to_string()])
+        );
+    }
+
+    #[test]
+    fn test_consolidate_with_source_column() {
+        let mut book = Book::new();
+
+        let mut sheet1 = Sheet::from_data(vec![vec!["name"], vec!["a"]]);
+        sheet1.name_columns_by_row(0).unwrap();
+
+        let mut sheet2 = Sheet::from_data(vec![vec!["name"], vec!["b"]]);
+        sheet2.name_columns_by_row(0).unwrap();
+
+        book.add_sheet("Q1", sheet1).unwrap();
+        book.add_sheet("Q2", sheet2).unwrap();
+
+        let consolidated = book
+            .consolidate_with_options(ConsolidateOptions::default().with_source_column("_source"))
+            .unwrap();
+
+        assert_eq!(consolidated.row_count(), 3);
+        assert_eq!(consolidated.col_count(), 2);
+
+        // Check source column values
+        assert_eq!(
+            consolidated.get(1, 0).unwrap(),
+            &CellValue::String("Q1".to_string())
+        );
+        assert_eq!(
+            consolidated.get(2, 0).unwrap(),
+            &CellValue::String("Q2".to_string())
+        );
+    }
+
+    #[test]
+    fn test_consolidate_different_columns() {
+        let mut book = Book::new();
+
+        let mut sheet1 = Sheet::from_data(vec![vec!["a", "b"], vec!["1", "2"]]);
+        sheet1.name_columns_by_row(0).unwrap();
+
+        let mut sheet2 = Sheet::from_data(vec![vec!["b", "c"], vec!["3", "4"]]);
+        sheet2.name_columns_by_row(0).unwrap();
+
+        book.add_sheet("Sheet1", sheet1).unwrap();
+        book.add_sheet("Sheet2", sheet2).unwrap();
+
+        let consolidated = book.consolidate().unwrap();
+
+        // Should have all columns: a, b, c
+        assert_eq!(consolidated.col_count(), 3);
+        assert_eq!(
+            consolidated.column_names(),
+            Some(&vec!["a".to_string(), "b".to_string(), "c".to_string()])
+        );
+
+        // Row from sheet1: a=1, b=2, c=null
+        assert_eq!(
+            consolidated.get(1, 0).unwrap(),
+            &CellValue::String("1".to_string())
+        );
+        assert_eq!(
+            consolidated.get(1, 1).unwrap(),
+            &CellValue::String("2".to_string())
+        );
+        assert!(consolidated.get(1, 2).unwrap().is_null());
+
+        // Row from sheet2: a=null, b=3, c=4
+        assert!(consolidated.get(2, 0).unwrap().is_null());
+        assert_eq!(
+            consolidated.get(2, 1).unwrap(),
+            &CellValue::String("3".to_string())
+        );
+        assert_eq!(
+            consolidated.get(2, 2).unwrap(),
+            &CellValue::String("4".to_string())
+        );
+    }
+
+    #[test]
+    fn test_consolidate_empty_book() {
+        let book = Book::new();
+        let result = book.consolidate().unwrap();
+        assert!(result.is_empty());
+    }
+
+    #[test]
+    fn test_consolidate_columns_not_named_error() {
+        let mut book = Book::new();
+        let sheet = Sheet::from_data(vec![vec!["a", "b"]]); // No named columns
+        book.add_sheet("Sheet1", sheet).unwrap();
+
+        let result = book.consolidate();
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_get_unique_name() {
+        let mut book = Book::new();
+        book.add_sheet("data", Sheet::new()).unwrap();
+        book.add_sheet("data_1", Sheet::new()).unwrap();
+
+        assert_eq!(get_unique_name(&book, "data"), "data_2");
+        assert_eq!(get_unique_name(&book, "other"), "other");
+    }
+
+    #[test]
+    fn test_file_load_options_default() {
+        let opts = FileLoadOptions::default();
+        assert!(opts.has_headers);
+    }
+
+    #[test]
+    fn test_file_load_options_without_headers() {
+        let opts = FileLoadOptions::without_headers();
+        assert!(!opts.has_headers);
+    }
+
+    #[test]
+    fn test_file_load_options_builder() {
+        let opts = FileLoadOptions::default().with_headers(false);
+        assert!(!opts.has_headers);
+
+        let opts = FileLoadOptions::without_headers().with_headers(true);
+        assert!(opts.has_headers);
     }
 }
