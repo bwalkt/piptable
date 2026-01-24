@@ -408,8 +408,10 @@ fn build_import_options(pair: Pair<Rule>) -> BuildResult<ImportOptions> {
             let mut options = ImportOptions::default();
             for param in inner.into_inner() {
                 let mut param_inner = param.into_inner();
-                let key = param_inner.next().unwrap().as_str();
+                let key_pair = param_inner.next().unwrap();
+                let key = key_pair.as_str();
                 let value_pair = param_inner.next().unwrap();
+                let (line, col) = value_pair.line_col();
                 let value = build_expr(value_pair)?;
 
                 match key {
@@ -418,16 +420,15 @@ fn build_import_options(pair: Pair<Rule>) -> BuildResult<ImportOptions> {
                             options.has_headers = Some(b);
                         } else {
                             return Err(BuildError::new(
-                                0,
-                                0,
+                                line,
+                                col,
                                 "headers option must be a boolean (true or false)",
                             ));
                         }
                     }
                     _ => {
-                        return Err(BuildError::new(
-                            0,
-                            0,
+                        return Err(BuildError::from_pair(
+                            &key_pair,
                             format!("Unknown import option: {key}"),
                         ));
                     }
