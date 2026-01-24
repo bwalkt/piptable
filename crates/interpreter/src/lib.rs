@@ -2072,15 +2072,17 @@ fn import_sheet(path: &str, sheet_name: Option<&str>) -> Result<Sheet, String> {
             Ok(sheet)
         }
         "xlsx" | "xls" => {
-            if let Some(name) = sheet_name {
+            let mut sheet = if let Some(name) = sheet_name {
                 // Load specific sheet by name
                 let book = Book::from_excel(path).map_err(|e| e.to_string())?;
-                let sheet = book.get_sheet(name).map_err(|e| e.to_string())?;
-                Ok(sheet.clone())
+                book.get_sheet(name).map_err(|e| e.to_string())?.clone()
             } else {
                 // Load first sheet
-                Sheet::from_excel(path).map_err(|e| e.to_string())
-            }
+                Sheet::from_excel(path).map_err(|e| e.to_string())?
+            };
+            // Treat first row as headers (consistent with CSV/TSV)
+            sheet.name_columns_by_row(0).map_err(|e| e.to_string())?;
+            Ok(sheet)
         }
         "json" => Sheet::from_json(path).map_err(|e| e.to_string()),
         "jsonl" | "ndjson" => Sheet::from_jsonl(path).map_err(|e| e.to_string()),
@@ -2096,7 +2098,9 @@ fn import_sheet(path: &str, sheet_name: Option<&str>) -> Result<Sheet, String> {
 fn sheet_to_value(sheet: &Sheet) -> Value {
     // Convert to records (array of objects) if columns are named
     if let Some(records) = sheet.to_records() {
-        // Skip first record if it's the header row (matches column names)
+        // Skip first record if it's the header row (matches column names).
+        // Note: This could theoretically drop a data row that exactly matches
+        // headers, but this is extremely unlikely in practice.
         let skip_header = if let Some(first) = records.first() {
             sheet
                 .column_names()
