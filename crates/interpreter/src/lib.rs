@@ -2055,6 +2055,14 @@ fn import_sheet(path: &str, sheet_name: Option<&str>) -> Result<Sheet, String> {
         .map(|s| s.to_lowercase())
         .unwrap_or_default();
 
+    // Validate sheet_name is only used for Excel files
+    if sheet_name.is_some() && !matches!(ext.as_str(), "xlsx" | "xls") {
+        return Err(format!(
+            "sheet clause is only supported for Excel files (.xlsx/.xls), not '.{}'",
+            ext
+        ));
+    }
+
     match ext.as_str() {
         "csv" => {
             let mut sheet = Sheet::from_csv(path).map_err(|e| e.to_string())?;
