@@ -39,12 +39,23 @@ impl Sheet {
             batches.push(batch);
         }
 
-        if batches.is_empty() {
-            return Ok(Sheet::new());
-        }
-
         // Extract column names from schema
         let column_names: Vec<String> = schema.fields().iter().map(|f| f.name().clone()).collect();
+
+        if batches.is_empty() {
+            // Preserve schema even for empty files
+            if column_names.is_empty() {
+                return Ok(Sheet::new());
+            }
+            let header: Vec<CellValue> = column_names
+                .iter()
+                .map(|n| CellValue::String(n.clone()))
+                .collect();
+            let mut sheet = Sheet::with_name("Sheet1");
+            *sheet.data_mut() = vec![header];
+            sheet.name_columns_by_row(0)?;
+            return Ok(sheet);
+        }
 
         // Build data rows with header
         let mut data: Vec<Vec<CellValue>> = Vec::new();
@@ -404,8 +415,12 @@ mod tests {
         sheet.save_as_parquet(&file_path).unwrap();
         let loaded = Sheet::from_parquet(&file_path).unwrap();
 
-        // Empty sheet should still have schema
-        assert_eq!(loaded.row_count(), 0);
+        // Empty sheet should preserve schema (header row only)
+        assert_eq!(loaded.row_count(), 1);
+        assert_eq!(
+            loaded.column_names(),
+            Some(&vec!["col1".to_string(), "col2".to_string()])
+        );
     }
 
     #[test]
