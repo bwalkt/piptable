@@ -693,6 +693,459 @@ impl Sheet {
     pub fn data_mut(&mut self) -> &mut Vec<Vec<CellValue>> {
         &mut self.data
     }
+
+    // ===== Join Operations =====
+
+    /// Inner join with another sheet on a key column.
+    ///
+    /// Returns only rows where the key exists in both sheets.
+    /// Both sheets must have named columns.
+    ///
+    /// # Errors
+    ///
+    /// Returns error if columns are not named or key column not found.
+    pub fn inner_join(&self, other: &Sheet, key: &str) -> Result<Sheet> {
+        self.join_impl(other, key, key, JoinType::Inner)
+    }
+
+    /// Inner join with different column names for the key.
+    pub fn inner_join_on(&self, other: &Sheet, left_key: &str, right_key: &str) -> Result<Sheet> {
+        self.join_impl(other, left_key, right_key, JoinType::Inner)
+    }
+
+    /// Left outer join with another sheet on a key column.
+    ///
+    /// Returns all rows from the left sheet, with matching rows from right.
+    /// Non-matching rows have null values for right columns.
+    pub fn left_join(&self, other: &Sheet, key: &str) -> Result<Sheet> {
+        self.join_impl(other, key, key, JoinType::Left)
+    }
+
+    /// Left outer join with different column names for the key.
+    pub fn left_join_on(&self, other: &Sheet, left_key: &str, right_key: &str) -> Result<Sheet> {
+        self.join_impl(other, left_key, right_key, JoinType::Left)
+    }
+
+    /// Right outer join with another sheet on a key column.
+    ///
+    /// Returns all rows from the right sheet, with matching rows from left.
+    /// Non-matching rows have null values for left columns.
+    pub fn right_join(&self, other: &Sheet, key: &str) -> Result<Sheet> {
+        self.join_impl(other, key, key, JoinType::Right)
+    }
+
+    /// Right outer join with different column names for the key.
+    pub fn right_join_on(&self, other: &Sheet, left_key: &str, right_key: &str) -> Result<Sheet> {
+        self.join_impl(other, left_key, right_key, JoinType::Right)
+    }
+
+    /// Full outer join with another sheet on a key column.
+    ///
+    /// Returns all rows from both sheets.
+    /// Non-matching rows have null values for missing columns.
+    pub fn full_join(&self, other: &Sheet, key: &str) -> Result<Sheet> {
+        self.join_impl(other, key, key, JoinType::Full)
+    }
+
+    /// Full outer join with different column names for the key.
+    pub fn full_join_on(&self, other: &Sheet, left_key: &str, right_key: &str) -> Result<Sheet> {
+        self.join_impl(other, left_key, right_key, JoinType::Full)
+    }
+
+    /// Internal join implementation
+    fn join_impl(
+        &self,
+        other: &Sheet,
+        left_key: &str,
+        right_key: &str,
+        join_type: JoinType,
+    ) -> Result<Sheet> {
+        // Validate both sheets have named columns
+        let left_names = self.column_names.as_ref().ok_or_else(|| {
+            SheetError::ColumnsNotNamed("Left sheet columns not named".to_string())
+        })?;
+        let right_names = other.column_names.as_ref().ok_or_else(|| {
+            SheetError::ColumnsNotNamed("Right sheet columns not named".to_string())
+        })?;
+
+        // Find key column indices
+        let left_key_idx = self
+            .column_index
+            .as_ref()
+            .and_then(|m| m.get(left_key).copied())
+            .ok_or_else(|| SheetError::JoinKeyNotFound {
+                key: left_key.to_string(),
+                sheet: "left".to_string(),
+            })?;
+        let right_key_idx = other
+            .column_index
+            .as_ref()
+            .and_then(|m| m.get(right_key).copied())
+            .ok_or_else(|| SheetError::JoinKeyNotFound {
+                key: right_key.to_string(),
+                sheet: "right".to_string(),
+            })?;
+
+        // Build right key -> row indices map (skip header row if present)
+        // Use strict matching: first row must match ALL column names in order
+        let right_start = if other.data.first().is_some_and(|r| {
+            r.iter()
+                .zip(right_names.iter())
+                .all(|(c, n)| c.as_str() == *n)
+        }) {
+            1
+        } else {
+            0
+        };
+        let left_start = if self.data.first().is_some_and(|r| {
+            r.iter()
+                .zip(left_names.iter())
+                .all(|(c, n)| c.as_str() == *n)
+        }) {
+            1
+        } else {
+            0
+        };
+
+        let mut right_map: HashMap<String, Vec<usize>> = HashMap::new();
+        for (i, row) in other.data.iter().enumerate().skip(right_start) {
+            if let Some(cell) = row.get(right_key_idx) {
+                let key_val = cell.as_str();
+                right_map.entry(key_val).or_default().push(i);
+            }
+        }
+
+        // Build result columns (left cols + right cols except key)
+        let mut result_names: Vec<String> = left_names.clone();
+        let right_cols_to_add: Vec<(usize, String)> = right_names
+            .iter()
+            .enumerate()
+            .filter(|(i, _)| *i != right_key_idx)
+            .map(|(i, name)| {
+                let final_name = if result_names.contains(name) {
+                    format!("{}_right", name)
+                } else {
+                    name.clone()
+                };
+                (i, final_name)
+            })
+            .collect();
+
+        for (_, name) in &right_cols_to_add {
+            result_names.push(name.clone());
+        }
+
+        // Build result data
+        let mut result_data: Vec<Vec<CellValue>> = Vec::new();
+
+        // Add header row
+        let header: Vec<CellValue> = result_names
+            .iter()
+            .map(|n| CellValue::String(n.clone()))
+            .collect();
+        result_data.push(header);
+
+        let left_col_count = left_names.len();
+        let right_col_count = right_cols_to_add.len();
+        let mut matched_right: std::collections::HashSet<usize> = std::collections::HashSet::new();
+
+        // Process left rows
+        for left_row in self.data.iter().skip(left_start) {
+            let left_key_val = left_row
+                .get(left_key_idx)
+                .map(|c| c.as_str())
+                .unwrap_or_default();
+
+            if let Some(right_indices) = right_map.get(&left_key_val) {
+                // Matching rows found
+                for &right_idx in right_indices {
+                    matched_right.insert(right_idx);
+                    let right_row = &other.data[right_idx];
+                    let mut new_row = left_row.clone();
+                    for (col_idx, _) in &right_cols_to_add {
+                        new_row.push(right_row.get(*col_idx).cloned().unwrap_or(CellValue::Null));
+                    }
+                    result_data.push(new_row);
+                }
+            } else if matches!(join_type, JoinType::Left | JoinType::Full) {
+                // No match - include left row with nulls for right
+                let mut new_row = left_row.clone();
+                for _ in 0..right_col_count {
+                    new_row.push(CellValue::Null);
+                }
+                result_data.push(new_row);
+            }
+        }
+
+        // For right/full join, add unmatched right rows
+        if matches!(join_type, JoinType::Right | JoinType::Full) {
+            for (i, right_row) in other.data.iter().enumerate().skip(right_start) {
+                if !matched_right.contains(&i) {
+                    let mut new_row: Vec<CellValue> = vec![CellValue::Null; left_col_count];
+                    // Set the key column value from right
+                    if left_key_idx < new_row.len() {
+                        new_row[left_key_idx] = right_row
+                            .get(right_key_idx)
+                            .cloned()
+                            .unwrap_or(CellValue::Null);
+                    }
+                    for (col_idx, _) in &right_cols_to_add {
+                        new_row.push(right_row.get(*col_idx).cloned().unwrap_or(CellValue::Null));
+                    }
+                    result_data.push(new_row);
+                }
+            }
+        }
+
+        let mut result = Sheet {
+            name: format!("{}_joined", self.name),
+            data: result_data,
+            column_names: None,
+            column_index: None,
+            row_names: None,
+        };
+        result.name_columns_by_row(0)?;
+
+        Ok(result)
+    }
+
+    // ===== Append/Upsert Operations =====
+
+    /// Append all rows from another sheet (like SQL UNION ALL).
+    ///
+    /// Rows are stacked vertically. Column count must match or columns
+    /// must be named to align by name.
+    pub fn append(&mut self, other: &Sheet) -> Result<()> {
+        if self.is_empty() {
+            self.data.clone_from(&other.data);
+            self.column_names.clone_from(&other.column_names);
+            self.column_index.clone_from(&other.column_index);
+            return Ok(());
+        }
+
+        // If both have named columns, align by name
+        if let (Some(self_names), Some(other_names)) = (&self.column_names, &other.column_names) {
+            let start_row = if other.data.first().is_some_and(|r| {
+                r.iter()
+                    .zip(other_names.iter())
+                    .all(|(c, n)| c.as_str() == *n)
+            }) {
+                1 // Skip header row
+            } else {
+                0
+            };
+
+            for other_row in other.data.iter().skip(start_row) {
+                let mut new_row = vec![CellValue::Null; self_names.len()];
+                for (i, name) in other_names.iter().enumerate() {
+                    if let Some(self_idx) = self.column_index.as_ref().and_then(|m| m.get(name)) {
+                        if let Some(val) = other_row.get(i) {
+                            new_row[*self_idx] = val.clone();
+                        }
+                    }
+                }
+                self.data.push(new_row);
+            }
+        } else {
+            // No named columns - must have same column count
+            if self.col_count() != other.col_count() {
+                return Err(SheetError::ColumnCountMismatch {
+                    left: self.col_count(),
+                    right: other.col_count(),
+                });
+            }
+            for row in &other.data {
+                self.data.push(row.clone());
+            }
+        }
+
+        self.invalidate_row_names();
+        Ok(())
+    }
+
+    /// Append rows, skipping duplicates by key column (like SQL UNION).
+    ///
+    /// Only adds rows from `other` whose key value doesn't exist in self.
+    pub fn append_distinct(&mut self, other: &Sheet, key: &str) -> Result<()> {
+        let self_key_idx = self.column_index_by_name(key)?;
+        let other_key_idx = other
+            .column_index
+            .as_ref()
+            .and_then(|m| m.get(key).copied())
+            .ok_or_else(|| SheetError::JoinKeyNotFound {
+                key: key.to_string(),
+                sheet: "other".to_string(),
+            })?;
+
+        // Build set of existing keys (skip header row if columns are named)
+        let start_idx = if self.column_names.is_some() { 1 } else { 0 };
+        let mut existing_keys: std::collections::HashSet<String> = self
+            .data
+            .iter()
+            .skip(start_idx)
+            .filter_map(|row| row.get(self_key_idx).map(|c| c.as_str()))
+            .collect();
+
+        let other_names = other.column_names.as_ref();
+        let start_row = if let Some(names) = other_names {
+            if other
+                .data
+                .first()
+                .is_some_and(|r| r.iter().zip(names.iter()).all(|(c, n)| c.as_str() == *n))
+            {
+                1
+            } else {
+                0
+            }
+        } else {
+            0
+        };
+
+        for other_row in other.data.iter().skip(start_row) {
+            let other_key_val = other_row
+                .get(other_key_idx)
+                .map(|c| c.as_str())
+                .unwrap_or_default();
+            if !existing_keys.contains(&other_key_val) {
+                // Align columns if named
+                if let Some(self_names) = &self.column_names {
+                    if let Some(other_names) = &other.column_names {
+                        let mut new_row = vec![CellValue::Null; self_names.len()];
+                        for (i, name) in other_names.iter().enumerate() {
+                            if let Some(self_idx) =
+                                self.column_index.as_ref().and_then(|m| m.get(name))
+                            {
+                                if let Some(val) = other_row.get(i) {
+                                    new_row[*self_idx] = val.clone();
+                                }
+                            }
+                        }
+                        self.data.push(new_row);
+                        existing_keys.insert(other_key_val);
+                        continue;
+                    }
+                }
+                self.data.push(other_row.clone());
+                existing_keys.insert(other_key_val);
+            }
+        }
+
+        self.invalidate_row_names();
+        Ok(())
+    }
+
+    /// Upsert rows from another sheet by key column.
+    ///
+    /// Updates existing rows (by key) and inserts new rows.
+    /// Both sheets must have named columns.
+    ///
+    /// # Errors
+    ///
+    /// Returns error if columns are not named or key column not found.
+    pub fn upsert(&mut self, other: &Sheet, key: &str) -> Result<()> {
+        // Require both sheets to have named columns
+        if self.column_names.is_none() {
+            return Err(SheetError::ColumnsNotNamed(
+                "Self sheet columns not named".to_string(),
+            ));
+        }
+        if other.column_names.is_none() {
+            return Err(SheetError::ColumnsNotNamed(
+                "Other sheet columns not named".to_string(),
+            ));
+        }
+
+        let self_key_idx = self.column_index_by_name(key)?;
+        let other_key_idx = other
+            .column_index
+            .as_ref()
+            .and_then(|m| m.get(key).copied())
+            .ok_or_else(|| SheetError::JoinKeyNotFound {
+                key: key.to_string(),
+                sheet: "other".to_string(),
+            })?;
+
+        // Build map of existing keys to row indices (skip header row)
+        let mut key_to_row: HashMap<String, usize> = HashMap::new();
+        for (i, row) in self.data.iter().enumerate().skip(1) {
+            if let Some(cell) = row.get(self_key_idx) {
+                key_to_row.insert(cell.as_str(), i);
+            }
+        }
+
+        let other_names = other.column_names.as_ref();
+        let start_row = if let Some(names) = other_names {
+            if other
+                .data
+                .first()
+                .is_some_and(|r| r.iter().zip(names.iter()).all(|(c, n)| c.as_str() == *n))
+            {
+                1
+            } else {
+                0
+            }
+        } else {
+            0
+        };
+
+        for other_row in other.data.iter().skip(start_row) {
+            let other_key_val = other_row
+                .get(other_key_idx)
+                .map(|c| c.as_str())
+                .unwrap_or_default();
+
+            if let Some(&existing_idx) = key_to_row.get(&other_key_val) {
+                // Update existing row
+                if self.column_names.is_some() {
+                    if let Some(other_names) = &other.column_names {
+                        for (i, name) in other_names.iter().enumerate() {
+                            if let Some(self_idx) =
+                                self.column_index.as_ref().and_then(|m| m.get(name))
+                            {
+                                if let Some(val) = other_row.get(i) {
+                                    self.data[existing_idx][*self_idx] = val.clone();
+                                }
+                            }
+                        }
+                    }
+                }
+            } else {
+                // Insert new row
+                if let Some(self_names) = &self.column_names {
+                    if let Some(other_names) = &other.column_names {
+                        let mut new_row = vec![CellValue::Null; self_names.len()];
+                        for (i, name) in other_names.iter().enumerate() {
+                            if let Some(self_idx) =
+                                self.column_index.as_ref().and_then(|m| m.get(name))
+                            {
+                                if let Some(val) = other_row.get(i) {
+                                    new_row[*self_idx] = val.clone();
+                                }
+                            }
+                        }
+                        self.data.push(new_row.clone());
+                        // Update key map for subsequent duplicates in other
+                        key_to_row.insert(other_key_val, self.data.len() - 1);
+                        continue;
+                    }
+                }
+                self.data.push(other_row.clone());
+                key_to_row.insert(other_key_val, self.data.len() - 1);
+            }
+        }
+
+        self.invalidate_row_names();
+        Ok(())
+    }
+}
+
+/// Join type for internal use
+#[derive(Clone, Copy)]
+enum JoinType {
+    Inner,
+    Left,
+    Right,
+    Full,
 }
 
 impl Default for Sheet {

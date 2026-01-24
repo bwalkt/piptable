@@ -383,3 +383,363 @@ fn test_cell_value_parse() {
         CellValue::String("hello".to_string())
     );
 }
+
+// ===== Join Operations Tests =====
+
+fn create_employees_sheet() -> Sheet {
+    let mut sheet = Sheet::from_data(vec![
+        vec!["name", "salary"],
+        vec!["joe", "100"],
+        vec!["alice", "150"],
+    ]);
+    sheet.name_columns_by_row(0).unwrap();
+    sheet
+}
+
+fn create_titles_sheet() -> Sheet {
+    let mut sheet = Sheet::from_data(vec![
+        vec!["name", "title"],
+        vec!["joe", "developer"],
+        vec!["bob", "analyst"],
+    ]);
+    sheet.name_columns_by_row(0).unwrap();
+    sheet
+}
+
+#[test]
+fn test_inner_join() {
+    let employees = create_employees_sheet();
+    let titles = create_titles_sheet();
+
+    let result = employees.inner_join(&titles, "name").unwrap();
+
+    // Only joe matches in both
+    assert_eq!(result.row_count(), 2); // header + 1 data row
+    assert_eq!(result.col_count(), 3); // name, salary, title
+
+    // Check the joined row
+    assert_eq!(
+        result.get_by_name(1, "name").unwrap(),
+        &CellValue::String("joe".to_string())
+    );
+    assert_eq!(
+        result.get_by_name(1, "salary").unwrap(),
+        &CellValue::String("100".to_string())
+    );
+    assert_eq!(
+        result.get_by_name(1, "title").unwrap(),
+        &CellValue::String("developer".to_string())
+    );
+}
+
+#[test]
+fn test_left_join() {
+    let employees = create_employees_sheet();
+    let titles = create_titles_sheet();
+
+    let result = employees.left_join(&titles, "name").unwrap();
+
+    // Both employees included
+    assert_eq!(result.row_count(), 3); // header + 2 data rows
+
+    // joe has title
+    assert_eq!(
+        result.get_by_name(1, "title").unwrap(),
+        &CellValue::String("developer".to_string())
+    );
+
+    // alice has null title (no match)
+    assert_eq!(result.get_by_name(2, "title").unwrap(), &CellValue::Null);
+}
+
+#[test]
+fn test_right_join() {
+    let employees = create_employees_sheet();
+    let titles = create_titles_sheet();
+
+    let result = employees.right_join(&titles, "name").unwrap();
+
+    // Both title holders included
+    assert_eq!(result.row_count(), 3); // header + 2 data rows
+
+    // joe has salary
+    // bob has null salary (no match in employees)
+    let has_null_salary = (1..result.row_count())
+        .any(|i| result.get_by_name(i, "salary").unwrap() == &CellValue::Null);
+    assert!(has_null_salary);
+}
+
+#[test]
+fn test_full_join() {
+    let employees = create_employees_sheet();
+    let titles = create_titles_sheet();
+
+    let result = employees.full_join(&titles, "name").unwrap();
+
+    // joe, alice, bob all included
+    assert_eq!(result.row_count(), 4); // header + 3 data rows
+}
+
+#[test]
+fn test_join_key_not_found() {
+    let employees = create_employees_sheet();
+    let titles = create_titles_sheet();
+
+    let result = employees.inner_join(&titles, "nonexistent");
+    assert!(result.is_err());
+}
+
+#[test]
+fn test_join_columns_not_named() {
+    let sheet1 = Sheet::from_data(vec![vec![1, 2], vec![3, 4]]);
+    let sheet2 = Sheet::from_data(vec![vec![5, 6], vec![7, 8]]);
+
+    let result = sheet1.inner_join(&sheet2, "key");
+    assert!(result.is_err());
+}
+
+#[test]
+fn test_join_one_to_many() {
+    // Test duplicate keys producing cartesian product
+    let mut orders = Sheet::from_data(vec![
+        vec!["customer", "order_id"],
+        vec!["alice", "1"],
+        vec!["alice", "2"],
+        vec!["bob", "3"],
+    ]);
+    orders.name_columns_by_row(0).unwrap();
+
+    let mut customers = Sheet::from_data(vec![
+        vec!["customer", "city"],
+        vec!["alice", "NYC"],
+        vec!["bob", "LA"],
+    ]);
+    customers.name_columns_by_row(0).unwrap();
+
+    let result = orders.inner_join(&customers, "customer").unwrap();
+
+    // alice has 2 orders, bob has 1 = 3 data rows + header
+    assert_eq!(result.row_count(), 4);
+}
+
+#[test]
+fn test_join_with_different_key_names() {
+    let mut employees = Sheet::from_data(vec![vec!["emp_name", "salary"], vec!["joe", "100"]]);
+    employees.name_columns_by_row(0).unwrap();
+
+    let mut titles = Sheet::from_data(vec![vec!["person", "title"], vec!["joe", "developer"]]);
+    titles.name_columns_by_row(0).unwrap();
+
+    let result = employees
+        .inner_join_on(&titles, "emp_name", "person")
+        .unwrap();
+
+    assert_eq!(result.row_count(), 2); // header + 1 data row
+    assert_eq!(
+        result.get_by_name(1, "title").unwrap(),
+        &CellValue::String("developer".to_string())
+    );
+}
+
+#[test]
+fn test_join_empty_left_sheet() {
+    let mut empty = Sheet::from_data(vec![vec!["name", "value"]]);
+    empty.name_columns_by_row(0).unwrap();
+
+    let titles = create_titles_sheet();
+
+    let result = empty.inner_join(&titles, "name").unwrap();
+    assert_eq!(result.row_count(), 1); // header only, no data rows
+}
+
+#[test]
+fn test_join_empty_right_sheet() {
+    let employees = create_employees_sheet();
+
+    let mut empty = Sheet::from_data(vec![vec!["name", "title"]]);
+    empty.name_columns_by_row(0).unwrap();
+
+    let result = employees.inner_join(&empty, "name").unwrap();
+    assert_eq!(result.row_count(), 1); // header only, no data rows
+}
+
+#[test]
+fn test_left_join_empty_right() {
+    let employees = create_employees_sheet();
+
+    let mut empty = Sheet::from_data(vec![vec!["name", "title"]]);
+    empty.name_columns_by_row(0).unwrap();
+
+    let result = employees.left_join(&empty, "name").unwrap();
+    // All left rows preserved with null right values
+    assert_eq!(result.row_count(), 3); // header + 2 employees
+}
+
+#[test]
+fn test_join_data_value_matches_column_name() {
+    // Edge case: first data row has a value that matches a column name
+    // The stricter header detection should NOT skip this row
+    let mut left = Sheet::from_data(vec![
+        vec!["id", "name"],
+        vec!["name", "alice"], // "name" value matches column name
+        vec!["2", "bob"],
+    ]);
+    left.name_columns_by_row(0).unwrap();
+
+    let mut right = Sheet::from_data(vec![
+        vec!["id", "title"],
+        vec!["name", "manager"], // "name" value matches column name
+        vec!["2", "developer"],
+    ]);
+    right.name_columns_by_row(0).unwrap();
+
+    let result = left.inner_join(&right, "id").unwrap();
+
+    // Header + 2 data rows (not 1 - both rows should be included)
+    assert_eq!(result.row_count(), 3);
+    assert_eq!(
+        result.get_by_name(1, "name").unwrap(),
+        &CellValue::String("alice".to_string())
+    );
+    assert_eq!(
+        result.get_by_name(1, "title").unwrap(),
+        &CellValue::String("manager".to_string())
+    );
+}
+
+// ===== Append/Upsert Operations Tests =====
+
+#[test]
+fn test_append_basic() {
+    let mut sheet1 = Sheet::from_data(vec![vec![1, 2], vec![3, 4]]);
+    let sheet2 = Sheet::from_data(vec![vec![5, 6], vec![7, 8]]);
+
+    sheet1.append(&sheet2).unwrap();
+
+    assert_eq!(sheet1.row_count(), 4);
+    assert_eq!(sheet1.get(2, 0).unwrap(), &CellValue::Int(5));
+    assert_eq!(sheet1.get(3, 1).unwrap(), &CellValue::Int(8));
+}
+
+#[test]
+fn test_append_with_named_columns() {
+    let mut sheet1 = Sheet::from_data(vec![vec!["id", "name"], vec!["1", "alice"]]);
+    sheet1.name_columns_by_row(0).unwrap();
+
+    let mut sheet2 = Sheet::from_data(vec![vec!["id", "name"], vec!["2", "bob"]]);
+    sheet2.name_columns_by_row(0).unwrap();
+
+    sheet1.append(&sheet2).unwrap();
+
+    // Header + alice + bob
+    assert_eq!(sheet1.row_count(), 3);
+}
+
+#[test]
+fn test_append_column_mismatch_error() {
+    let mut sheet1 = Sheet::from_data(vec![vec![1, 2, 3]]);
+    let sheet2 = Sheet::from_data(vec![vec![4, 5]]);
+
+    let result = sheet1.append(&sheet2);
+    assert!(result.is_err());
+}
+
+#[test]
+fn test_append_distinct() {
+    let mut sheet1 = Sheet::from_data(vec![
+        vec!["id", "name"],
+        vec!["1", "alice"],
+        vec!["2", "bob"],
+    ]);
+    sheet1.name_columns_by_row(0).unwrap();
+
+    let mut sheet2 = Sheet::from_data(vec![
+        vec!["id", "name"],
+        vec!["2", "bob_updated"], // duplicate id=2
+        vec!["3", "charlie"],     // new
+    ]);
+    sheet2.name_columns_by_row(0).unwrap();
+
+    sheet1.append_distinct(&sheet2, "id").unwrap();
+
+    // Header + alice + bob + charlie (bob_updated skipped)
+    assert_eq!(sheet1.row_count(), 4);
+
+    // Original bob unchanged
+    assert_eq!(
+        sheet1.get_by_name(2, "name").unwrap(),
+        &CellValue::String("bob".to_string())
+    );
+}
+
+#[test]
+fn test_append_distinct_duplicates_in_other() {
+    let mut sheet1 = Sheet::from_data(vec![vec!["id", "name"], vec!["1", "alice"]]);
+    sheet1.name_columns_by_row(0).unwrap();
+
+    // other has duplicate keys (two rows with id=2)
+    let mut sheet2 = Sheet::from_data(vec![
+        vec!["id", "name"],
+        vec!["2", "bob"],
+        vec!["2", "bob_duplicate"], // same key, should be skipped
+        vec!["3", "charlie"],
+    ]);
+    sheet2.name_columns_by_row(0).unwrap();
+
+    sheet1.append_distinct(&sheet2, "id").unwrap();
+
+    // Header + alice + bob + charlie = 4 (bob_duplicate skipped)
+    assert_eq!(sheet1.row_count(), 4);
+
+    // First bob was added
+    assert_eq!(
+        sheet1.get_by_name(2, "name").unwrap(),
+        &CellValue::String("bob".to_string())
+    );
+}
+
+#[test]
+fn test_upsert() {
+    let mut sheet1 = Sheet::from_data(vec![
+        vec!["id", "name", "salary"],
+        vec!["1", "joe", "100"],
+        vec!["2", "alice", "150"],
+    ]);
+    sheet1.name_columns_by_row(0).unwrap();
+
+    let mut sheet2 = Sheet::from_data(vec![
+        vec!["id", "name", "salary"],
+        vec!["2", "alice", "200"], // update alice's salary
+        vec!["3", "bob", "120"],   // insert bob
+    ]);
+    sheet2.name_columns_by_row(0).unwrap();
+
+    sheet1.upsert(&sheet2, "id").unwrap();
+
+    // Header + joe + alice (updated) + bob (inserted)
+    assert_eq!(sheet1.row_count(), 4);
+
+    // Alice's salary updated
+    assert_eq!(
+        sheet1.get_by_name(2, "salary").unwrap(),
+        &CellValue::String("200".to_string())
+    );
+
+    // Bob inserted
+    assert_eq!(
+        sheet1.get_by_name(3, "name").unwrap(),
+        &CellValue::String("bob".to_string())
+    );
+}
+
+#[test]
+fn test_upsert_key_not_found() {
+    let mut sheet1 = Sheet::from_data(vec![vec!["id", "name"], vec!["1", "alice"]]);
+    sheet1.name_columns_by_row(0).unwrap();
+
+    let mut sheet2 = Sheet::from_data(vec![vec!["other_id", "name"], vec!["2", "bob"]]);
+    sheet2.name_columns_by_row(0).unwrap();
+
+    let result = sheet1.upsert(&sheet2, "id");
+    assert!(result.is_err());
+}
