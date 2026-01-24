@@ -977,10 +977,12 @@ impl Sheet {
                 sheet: "other".to_string(),
             })?;
 
-        // Build set of existing keys
+        // Build set of existing keys (skip header row if columns are named)
+        let start_idx = if self.column_names.is_some() { 1 } else { 0 };
         let existing_keys: std::collections::HashSet<String> = self
             .data
             .iter()
+            .skip(start_idx)
             .filter_map(|row| row.get(self_key_idx).map(|c| c.as_str()))
             .collect();
 
@@ -1033,7 +1035,24 @@ impl Sheet {
     /// Upsert rows from another sheet by key column.
     ///
     /// Updates existing rows (by key) and inserts new rows.
+    /// Both sheets must have named columns.
+    ///
+    /// # Errors
+    ///
+    /// Returns error if columns are not named or key column not found.
     pub fn upsert(&mut self, other: &Sheet, key: &str) -> Result<()> {
+        // Require both sheets to have named columns
+        if self.column_names.is_none() {
+            return Err(SheetError::ColumnsNotNamed(
+                "Self sheet columns not named".to_string(),
+            ));
+        }
+        if other.column_names.is_none() {
+            return Err(SheetError::ColumnsNotNamed(
+                "Other sheet columns not named".to_string(),
+            ));
+        }
+
         let self_key_idx = self.column_index_by_name(key)?;
         let other_key_idx = other
             .column_index
@@ -1044,9 +1063,9 @@ impl Sheet {
                 sheet: "other".to_string(),
             })?;
 
-        // Build map of existing keys to row indices
+        // Build map of existing keys to row indices (skip header row)
         let mut key_to_row: HashMap<String, usize> = HashMap::new();
-        for (i, row) in self.data.iter().enumerate() {
+        for (i, row) in self.data.iter().enumerate().skip(1) {
             if let Some(cell) = row.get(self_key_idx) {
                 key_to_row.insert(cell.as_str(), i);
             }

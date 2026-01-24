@@ -498,6 +498,83 @@ fn test_join_columns_not_named() {
     assert!(result.is_err());
 }
 
+#[test]
+fn test_join_one_to_many() {
+    // Test duplicate keys producing cartesian product
+    let mut orders = Sheet::from_data(vec![
+        vec!["customer", "order_id"],
+        vec!["alice", "1"],
+        vec!["alice", "2"],
+        vec!["bob", "3"],
+    ]);
+    orders.name_columns_by_row(0).unwrap();
+
+    let mut customers = Sheet::from_data(vec![
+        vec!["customer", "city"],
+        vec!["alice", "NYC"],
+        vec!["bob", "LA"],
+    ]);
+    customers.name_columns_by_row(0).unwrap();
+
+    let result = orders.inner_join(&customers, "customer").unwrap();
+
+    // alice has 2 orders, bob has 1 = 3 data rows + header
+    assert_eq!(result.row_count(), 4);
+}
+
+#[test]
+fn test_join_with_different_key_names() {
+    let mut employees = Sheet::from_data(vec![vec!["emp_name", "salary"], vec!["joe", "100"]]);
+    employees.name_columns_by_row(0).unwrap();
+
+    let mut titles = Sheet::from_data(vec![vec!["person", "title"], vec!["joe", "developer"]]);
+    titles.name_columns_by_row(0).unwrap();
+
+    let result = employees
+        .inner_join_on(&titles, "emp_name", "person")
+        .unwrap();
+
+    assert_eq!(result.row_count(), 2); // header + 1 data row
+    assert_eq!(
+        result.get_by_name(1, "title").unwrap(),
+        &CellValue::String("developer".to_string())
+    );
+}
+
+#[test]
+fn test_join_empty_left_sheet() {
+    let mut empty = Sheet::from_data(vec![vec!["name", "value"]]);
+    empty.name_columns_by_row(0).unwrap();
+
+    let titles = create_titles_sheet();
+
+    let result = empty.inner_join(&titles, "name").unwrap();
+    assert_eq!(result.row_count(), 1); // header only, no data rows
+}
+
+#[test]
+fn test_join_empty_right_sheet() {
+    let employees = create_employees_sheet();
+
+    let mut empty = Sheet::from_data(vec![vec!["name", "title"]]);
+    empty.name_columns_by_row(0).unwrap();
+
+    let result = employees.inner_join(&empty, "name").unwrap();
+    assert_eq!(result.row_count(), 1); // header only, no data rows
+}
+
+#[test]
+fn test_left_join_empty_right() {
+    let employees = create_employees_sheet();
+
+    let mut empty = Sheet::from_data(vec![vec!["name", "title"]]);
+    empty.name_columns_by_row(0).unwrap();
+
+    let result = employees.left_join(&empty, "name").unwrap();
+    // All left rows preserved with null right values
+    assert_eq!(result.row_count(), 3); // header + 2 employees
+}
+
 // ===== Append/Upsert Operations Tests =====
 
 #[test]
