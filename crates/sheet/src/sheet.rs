@@ -788,7 +788,8 @@ impl Sheet {
 
         // Build right key -> row indices map (skip header row if present)
         let right_start = if right_names.iter().any(|n| {
-            self.data
+            other
+                .data
                 .first()
                 .is_some_and(|r| r.iter().any(|c| c.as_str() == *n))
         }) {
@@ -797,8 +798,7 @@ impl Sheet {
             0
         };
         let left_start = if left_names.iter().any(|n| {
-            other
-                .data
+            self.data
                 .first()
                 .is_some_and(|r| r.iter().any(|c| c.as_str() == *n))
         }) {
