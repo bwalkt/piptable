@@ -243,6 +243,25 @@ impl Book {
     /// // Creates book with sheets: "sales_q1", "sales_q2"
     /// ```
     pub fn from_files<P: AsRef<Path>>(paths: &[P]) -> Result<Self> {
+        Self::from_files_with_options(paths, FileLoadOptions::default())
+    }
+
+    /// Load multiple files into a single book with options.
+    ///
+    /// # Example
+    /// ```no_run
+    /// use piptable_sheet::{Book, FileLoadOptions};
+    ///
+    /// // Load headerless CSV files
+    /// let book = Book::from_files_with_options(
+    ///     &["data1.csv", "data2.csv"],
+    ///     FileLoadOptions::without_headers()
+    /// ).unwrap();
+    /// ```
+    pub fn from_files_with_options<P: AsRef<Path>>(
+        paths: &[P],
+        options: FileLoadOptions,
+    ) -> Result<Self> {
         let mut book = Book::new();
 
         for path in paths {
@@ -258,7 +277,7 @@ impl Book {
                 .to_string();
 
             // Load sheet based on extension
-            let sheet = load_sheet_by_extension(path_ref)?;
+            let sheet = load_sheet_by_extension(path_ref, &options)?;
 
             // Handle duplicate names with suffix
             let final_name = get_unique_name(&book, &sheet_name);
@@ -406,6 +425,14 @@ pub struct ConsolidateOptions {
     pub source_column_name: String,
 }
 
+/// Options for loading files
+#[derive(Debug, Clone)]
+pub struct FileLoadOptions {
+    /// Whether files have headers (default: true)
+    /// Only affects CSV and TSV files.
+    pub has_headers: bool,
+}
+
 impl Default for ConsolidateOptions {
     fn default() -> Self {
         Self {
@@ -425,8 +452,29 @@ impl ConsolidateOptions {
     }
 }
 
+impl Default for FileLoadOptions {
+    fn default() -> Self {
+        Self { has_headers: true }
+    }
+}
+
+impl FileLoadOptions {
+    /// Create options for files without headers
+    #[must_use]
+    pub fn without_headers() -> Self {
+        Self { has_headers: false }
+    }
+
+    /// Set whether files have headers
+    #[must_use]
+    pub fn with_headers(mut self, has_headers: bool) -> Self {
+        self.has_headers = has_headers;
+        self
+    }
+}
+
 /// Load a sheet by auto-detecting format from file extension
-fn load_sheet_by_extension(path: &Path) -> Result<Sheet> {
+fn load_sheet_by_extension(path: &Path, options: &FileLoadOptions) -> Result<Sheet> {
     use crate::csv::CsvOptions;
     use crate::xlsx::XlsxReadOptions;
 
@@ -439,8 +487,8 @@ fn load_sheet_by_extension(path: &Path) -> Result<Sheet> {
     let mut sheet = match ext.as_str() {
         "csv" => Sheet::from_csv(path)?,
         "tsv" => Sheet::from_csv_with_options(path, CsvOptions::tsv())?,
-        "xlsx" => Sheet::from_xlsx_with_options(path, XlsxReadOptions::default().with_headers(true))?,
-        "xls" => Sheet::from_xls_with_options(path, XlsxReadOptions::default().with_headers(true))?,
+        "xlsx" => Sheet::from_xlsx_with_options(path, XlsxReadOptions::default().with_headers(options.has_headers))?,
+        "xls" => Sheet::from_xls_with_options(path, XlsxReadOptions::default().with_headers(options.has_headers))?,
         "json" => Sheet::from_json(path)?,
         "jsonl" | "ndjson" => Sheet::from_jsonl(path)?,
         "toon" => Sheet::from_toon(path)?,
@@ -453,8 +501,11 @@ fn load_sheet_by_extension(path: &Path) -> Result<Sheet> {
         }
     };
 
-    // Ensure columns are named for CSV/TSV (first row as header)
-    if matches!(ext.as_str(), "csv" | "tsv") && sheet.column_names().is_none() {
+    // Ensure columns are named for CSV/TSV (first row as header) when has_headers is true
+    if options.has_headers
+        && matches!(ext.as_str(), "csv" | "tsv")
+        && sheet.column_names().is_none()
+    {
         sheet.name_columns_by_row(0)?;
     }
 
@@ -705,5 +756,26 @@ mod tests {
 
         assert_eq!(get_unique_name(&book, "data"), "data_2");
         assert_eq!(get_unique_name(&book, "other"), "other");
+    }
+
+    #[test]
+    fn test_file_load_options_default() {
+        let opts = FileLoadOptions::default();
+        assert!(opts.has_headers);
+    }
+
+    #[test]
+    fn test_file_load_options_without_headers() {
+        let opts = FileLoadOptions::without_headers();
+        assert!(!opts.has_headers);
+    }
+
+    #[test]
+    fn test_file_load_options_builder() {
+        let opts = FileLoadOptions::default().with_headers(false);
+        assert!(!opts.has_headers);
+
+        let opts = FileLoadOptions::without_headers().with_headers(true);
+        assert!(opts.has_headers);
     }
 }
