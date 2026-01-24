@@ -26,6 +26,7 @@ statement = {
   | call_stmt
   | chart_stmt
   | export_stmt
+  | import_stmt
   | assignment_stmt
   | expr_stmt
 }
@@ -92,6 +93,8 @@ chart_type = { "bar" | "line" | "pie" | "scatter" | "area" }
 chart_option = { ident ~ ":" ~ expr }
 
 export_stmt = { "export" ~ expr ~ "to" ~ expr ~ with_clause? }
+import_stmt = { "import" ~ expr ~ sheet_clause? ~ "into" ~ ident ~ with_clause? }
+sheet_clause = { "sheet" ~ expr }
 with_clause = { "with" ~ object_literal }
 
 expr_stmt = { expr }
@@ -111,7 +114,9 @@ and_expr = { not_expr ~ (and_kw ~ not_expr)* }
 not_expr = { not_kw? ~ comparison_expr }
 comparison_expr = { additive_expr ~ (is_null_check | (comparison_op ~ additive_expr))? }
 is_null_check = { ^"is" ~ ^"not"? ~ ^"null" }
-comparison_op = { "==" | "!=" | "<>" | "<=" | ">=" | "<" | ">" | "=" | ^"like" | ^"in" }
+in_kw = @{ ^"in" ~ !ASCII_ALPHA }
+like_kw = @{ ^"like" ~ !ASCII_ALPHA }
+comparison_op = { "==" | "!=" | "<>" | "<=" | ">=" | "<" | ">" | "=" | like_kw | in_kw }
 additive_expr = { multiplicative_expr ~ (add_op ~ multiplicative_expr)* }
 add_op = { "+" | "-" }
 multiplicative_expr = { unary_expr ~ (mul_op ~ unary_expr)* }

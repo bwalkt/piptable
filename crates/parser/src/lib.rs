@@ -392,6 +392,35 @@ mod tests {
     }
 
     // ========================================================================
+    // Import statement tests (Issue #90)
+    // ========================================================================
+
+    #[test]
+    fn parse_import_basic() {
+        let code = r#"import "data.csv" into myData"#;
+        let result = PipParser::parse_str(code);
+        assert!(result.is_ok(), "Parse error: {:?}", result.err());
+        let program = result.unwrap();
+        assert_eq!(program.statements.len(), 1);
+        assert!(matches!(
+            &program.statements[0],
+            Statement::Import { target, sheet_name, .. } if target == "myData" && sheet_name.is_none()
+        ));
+    }
+
+    #[test]
+    fn parse_import_with_sheet() {
+        let code = r#"import "workbook.xlsx" sheet "Sales" into salesData"#;
+        let result = PipParser::parse_str(code);
+        assert!(result.is_ok());
+        let program = result.unwrap();
+        assert!(matches!(
+            &program.statements[0],
+            Statement::Import { target, sheet_name, .. } if target == "salesData" && sheet_name.is_some()
+        ));
+    }
+
+    // ========================================================================
     // Complex query tests
     // ========================================================================
 
