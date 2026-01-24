@@ -2266,10 +2266,15 @@ fn consolidate_book(
         }
     }
 
+    // Sort sheet names for deterministic output order
+    let mut sheet_names: Vec<_> = book_obj.keys().collect();
+    sheet_names.sort();
+
     // Build consolidated result
     let mut result: Vec<Value> = Vec::new();
 
-    for (sheet_name, value) in book_obj {
+    for sheet_name in sheet_names {
+        let value = &book_obj[sheet_name];
         if let Value::Array(rows) = value {
             for row in rows {
                 if let Value::Object(obj) = row {
@@ -2277,7 +2282,7 @@ fn consolidate_book(
 
                     // Add source column if requested
                     if let Some(col) = source_col {
-                        new_row.insert(col.to_string(), Value::String(sheet_name.clone()));
+                        new_row.insert(col.to_string(), Value::String(sheet_name.to_string()));
                     }
 
                     // Add all columns (with nulls for missing)
