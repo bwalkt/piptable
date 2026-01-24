@@ -825,3 +825,132 @@ fn test_parquet_roundtrip_with_nulls() {
     assert!(loaded.get(1, 1).unwrap().is_null());
     assert!(loaded.get(2, 0).unwrap().is_null());
 }
+
+// ===== Book from_files Tests =====
+
+#[test]
+fn test_book_from_files_csv() {
+    let dir = tempdir().unwrap();
+
+    // Create test CSV files
+    let mut sheet1 = Sheet::from_data(vec![vec!["name", "value"], vec!["a", "1"]]);
+    sheet1.name_columns_by_row(0).unwrap();
+
+    let mut sheet2 = Sheet::from_data(vec![vec!["name", "value"], vec!["b", "2"]]);
+    sheet2.name_columns_by_row(0).unwrap();
+
+    sheet1.save_as_csv(dir.path().join("data1.csv")).unwrap();
+    sheet2.save_as_csv(dir.path().join("data2.csv")).unwrap();
+
+    let paths = [dir.path().join("data1.csv"), dir.path().join("data2.csv")];
+
+    let book = Book::from_files(&paths).unwrap();
+
+    assert_eq!(book.sheet_count(), 2);
+    assert!(book.has_sheet("data1"));
+    assert!(book.has_sheet("data2"));
+
+    // Verify data loaded correctly
+    let loaded1 = book.get_sheet("data1").unwrap();
+    assert!(loaded1.column_names().is_some());
+}
+
+#[test]
+fn test_book_from_files_mixed_formats() {
+    let dir = tempdir().unwrap();
+
+    // Create CSV file
+    let mut csv_sheet = Sheet::from_data(vec![vec!["id", "name"], vec!["1", "Alice"]]);
+    csv_sheet.name_columns_by_row(0).unwrap();
+    csv_sheet.save_as_csv(dir.path().join("users.csv")).unwrap();
+
+    // Create JSON file
+    let mut json_sheet = Sheet::from_data(vec![vec!["id", "product"], vec!["1", "Widget"]]);
+    json_sheet.name_columns_by_row(0).unwrap();
+    json_sheet
+        .save_as_json(dir.path().join("products.json"))
+        .unwrap();
+
+    // Create Parquet file
+    let mut parquet_sheet = Sheet::from_data(vec![vec!["id", "amount"], vec!["1", "100"]]);
+    parquet_sheet.name_columns_by_row(0).unwrap();
+    parquet_sheet
+        .save_as_parquet(dir.path().join("orders.parquet"))
+        .unwrap();
+
+    let paths = [
+        dir.path().join("users.csv"),
+        dir.path().join("products.json"),
+        dir.path().join("orders.parquet"),
+    ];
+
+    let book = Book::from_files(&paths).unwrap();
+
+    assert_eq!(book.sheet_count(), 3);
+    assert!(book.has_sheet("users"));
+    assert!(book.has_sheet("products"));
+    assert!(book.has_sheet("orders"));
+}
+
+#[test]
+fn test_book_from_files_duplicate_names() {
+    let dir = tempdir().unwrap();
+
+    // Create two files with same name in different dirs
+    std::fs::create_dir(dir.path().join("a")).unwrap();
+    std::fs::create_dir(dir.path().join("b")).unwrap();
+
+    let mut sheet = Sheet::from_data(vec![vec!["x"], vec!["1"]]);
+    sheet.name_columns_by_row(0).unwrap();
+
+    sheet
+        .save_as_csv(dir.path().join("a").join("data.csv"))
+        .unwrap();
+    sheet
+        .save_as_csv(dir.path().join("b").join("data.csv"))
+        .unwrap();
+
+    let paths = [
+        dir.path().join("a").join("data.csv"),
+        dir.path().join("b").join("data.csv"),
+    ];
+
+    let book = Book::from_files(&paths).unwrap();
+
+    assert_eq!(book.sheet_count(), 2);
+    assert!(book.has_sheet("data"));
+    assert!(book.has_sheet("data_1")); // Suffix added for duplicate
+}
+
+#[test]
+fn test_book_from_files_unsupported_extension() {
+    let dir = tempdir().unwrap();
+    let txt_path = dir.path().join("data.txt");
+    std::fs::write(&txt_path, "hello world").unwrap();
+
+    let result = Book::from_files(&[txt_path]);
+    assert!(result.is_err());
+}
+
+#[test]
+fn test_book_from_files_and_consolidate() {
+    let dir = tempdir().unwrap();
+
+    // Create Q1 and Q2 sales data
+    let mut q1 = Sheet::from_data(vec![vec!["product", "sales"], vec!["A", "100"]]);
+    q1.name_columns_by_row(0).unwrap();
+
+    let mut q2 = Sheet::from_data(vec![vec!["product", "sales"], vec!["B", "200"]]);
+    q2.name_columns_by_row(0).unwrap();
+
+    q1.save_as_csv(dir.path().join("q1.csv")).unwrap();
+    q2.save_as_csv(dir.path().join("q2.csv")).unwrap();
+
+    // Load and consolidate
+    let paths = [dir.path().join("q1.csv"), dir.path().join("q2.csv")];
+    let book = Book::from_files(&paths).unwrap();
+    let combined = book.consolidate().unwrap();
+
+    assert_eq!(combined.row_count(), 3); // header + 2 data rows
+    assert_eq!(combined.col_count(), 2);
+}
