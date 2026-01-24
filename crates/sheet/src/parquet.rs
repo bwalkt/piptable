@@ -172,7 +172,14 @@ fn arrow_array_to_cell(array: &ArrayRef, idx: usize) -> CellValue {
         }
         DataType::UInt8 | DataType::UInt16 | DataType::UInt32 | DataType::UInt64 => {
             if let Some(arr) = array.as_any().downcast_ref::<arrow::array::UInt64Array>() {
-                CellValue::Int(arr.value(idx) as i64)
+                let val = arr.value(idx);
+                // Check for overflow: u64 values > i64::MAX cannot be represented as i64
+                if val <= i64::MAX as u64 {
+                    CellValue::Int(val as i64)
+                } else {
+                    // Preserve large unsigned values as strings to avoid data corruption
+                    CellValue::String(val.to_string())
+                }
             } else if let Some(arr) = array.as_any().downcast_ref::<arrow::array::UInt32Array>() {
                 CellValue::Int(i64::from(arr.value(idx)))
             } else if let Some(arr) = array.as_any().downcast_ref::<arrow::array::UInt16Array>() {
@@ -399,5 +406,42 @@ mod tests {
 
         // Empty sheet should still have schema
         assert_eq!(loaded.row_count(), 0);
+    }
+
+    #[test]
+    fn test_parquet_uint64_overflow_preserved_as_string() {
+        use arrow::array::UInt64Array;
+        use arrow::datatypes::Field;
+
+        let dir = tempdir().unwrap();
+        let file_path = dir.path().join("uint64.parquet");
+
+        // Create a parquet file with UInt64 values that exceed i64::MAX
+        let schema = Arc::new(Schema::new(vec![Field::new("big_id", DataType::UInt64, false)]));
+
+        let large_value: u64 = (i64::MAX as u64) + 1000; // Value that would overflow i64
+        let safe_value: u64 = 42;
+
+        let array: ArrayRef = Arc::new(UInt64Array::from(vec![safe_value, large_value]));
+        let batch = RecordBatch::try_new(schema.clone(), vec![array]).unwrap();
+
+        let file = File::create(&file_path).unwrap();
+        let mut writer = ArrowWriter::try_new(file, schema, None).unwrap();
+        writer.write(&batch).unwrap();
+        writer.close().unwrap();
+
+        // Load the parquet file
+        let loaded = Sheet::from_parquet(&file_path).unwrap();
+
+        // Safe value should be Int
+        assert!(matches!(loaded.get(1, 0).unwrap(), CellValue::Int(42)));
+
+        // Large value should be preserved as String (not corrupted)
+        let large_cell = loaded.get(2, 0).unwrap();
+        assert!(
+            matches!(large_cell, CellValue::String(s) if *s == large_value.to_string()),
+            "Expected String({large_value}), got {:?}",
+            large_cell
+        );
     }
 }
