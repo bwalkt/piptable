@@ -2096,14 +2096,7 @@ fn import_sheet(path: &str, sheet_name: Option<&str>) -> Result<Sheet, String> {
         "json" => Sheet::from_json(path).map_err(|e| e.to_string()),
         "jsonl" | "ndjson" => Sheet::from_jsonl(path).map_err(|e| e.to_string()),
         "toon" => Sheet::from_toon(path).map_err(|e| e.to_string()),
-        "parquet" => {
-            let mut sheet = Sheet::from_parquet(path).map_err(|e| e.to_string())?;
-            // Parquet files already name columns during load, but ensure it's set
-            if sheet.column_names().is_none() && sheet.row_count() > 0 {
-                sheet.name_columns_by_row(0).map_err(|e| e.to_string())?;
-            }
-            Ok(sheet)
-        }
+        "parquet" => Sheet::from_parquet(path).map_err(|e| e.to_string()),
         _ => Err(format!(
             "Unsupported import format: '{}'. Supported: csv, tsv, xlsx, xls, json, jsonl, toon, parquet",
             ext
