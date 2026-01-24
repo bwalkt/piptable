@@ -2286,7 +2286,8 @@ fn consolidate_book(
         if let Value::Array(rows) = value {
             for row in rows {
                 if let Value::Object(obj) = row {
-                    let mut new_row: HashMap<String, Value> = HashMap::new();
+                    use indexmap::IndexMap;
+                    let mut new_row: IndexMap<String, Value> = IndexMap::new();
 
                     // Add source column if requested
                     if let Some(col) = source_col {
@@ -2299,7 +2300,7 @@ fn consolidate_book(
                         new_row.insert(col_name.clone(), val);
                     }
 
-                    result.push(Value::Object(new_row));
+                    result.push(Value::Object(new_row.into_iter().collect()));
                 }
             }
         }
@@ -2563,5 +2564,208 @@ export data to "{}""#,
                 assert!(matches!(obj.get("name"), Some(Value::String(s)) if s == "alice"));
             }
         }
+    }
+
+    #[tokio::test]
+    async fn test_multi_file_import() {
+        let dir = tempfile::tempdir().unwrap();
+        let file1 = dir.path().join("q1.csv");
+        let file2 = dir.path().join("q2.csv");
+
+        // Create test CSV files
+        std::fs::write(&file1, "product,sales\nwidget,100\ngadget,150").unwrap();
+        std::fs::write(&file2, "product,sales\nwidget,120\ngizmo,80").unwrap();
+
+        let mut interp = Interpreter::new();
+        let script = format!(
+            r#"import "{}", "{}" into quarterly_data"#,
+            file1.display(),
+            file2.display()
+        );
+        let program = PipParser::parse_str(&script).unwrap();
+        interp.eval(program).await.unwrap();
+
+        // Verify data was loaded as a book (object with sheet names)
+        let data = interp.get_var("quarterly_data").await.unwrap();
+        assert!(matches!(&data, Value::Object(book) if book.len() == 2));
+
+        // Check that both sheets exist
+        if let Value::Object(book) = &data {
+            assert!(book.contains_key("q1"));
+            assert!(book.contains_key("q2"));
+            
+            // Verify q1 sheet has correct data
+            if let Some(Value::Array(q1_data)) = book.get("q1") {
+                assert_eq!(q1_data.len(), 2);
+            }
+        }
+    }
+
+    #[tokio::test]
+    async fn test_import_without_headers() {
+        let dir = tempfile::tempdir().unwrap();
+        let file_path = dir.path().join("no_headers.csv");
+
+        // Create a CSV file without headers
+        std::fs::write(&file_path, "alice,30\nbob,25").unwrap();
+
+        let mut interp = Interpreter::new();
+        let script = format!(
+            r#"import "{}" into data (headers = false)"#,
+            file_path.display()
+        );
+        let program = PipParser::parse_str(&script).unwrap();
+        interp.eval(program).await.unwrap();
+
+        // Verify data was loaded with default column names
+        let data = interp.get_var("data").await.unwrap();
+        assert!(matches!(&data, Value::Array(arr) if arr.len() == 2));
+
+        // Check that default column names were used (col0, col1, etc.)
+        if let Value::Array(arr) = &data {
+            if let Value::Object(obj) = &arr[0] {
+                assert!(obj.contains_key("col0"));
+                assert!(obj.contains_key("col1"));
+                assert!(matches!(obj.get("col0"), Some(Value::String(s)) if s == "alice"));
+            }
+        }
+    }
+
+    #[tokio::test]
+    async fn test_consolidate_book() {
+        let dir = tempfile::tempdir().unwrap();
+        let file1 = dir.path().join("jan.csv");
+        let file2 = dir.path().join("feb.csv");
+
+        // Create test CSV files with slightly different columns
+        std::fs::write(&file1, "product,sales,month\nwidget,100,jan\ngadget,150,jan").unwrap();
+        std::fs::write(&file2, "product,sales,returns\nwidget,120,5\ngizmo,80,2").unwrap();
+
+        let mut interp = Interpreter::new();
+        let script = format!(
+            r#"
+import "{}", "{}" into monthly_data
+combined = consolidate(monthly_data)
+"#,
+            file1.display(),
+            file2.display()
+        );
+        let program = PipParser::parse_str(&script).unwrap();
+        interp.eval(program).await.unwrap();
+
+        // Verify consolidation worked
+        let combined = interp.get_var("combined").await.unwrap();
+        assert!(matches!(&combined, Value::Array(arr) if arr.len() == 4)); // 2 + 2 rows
+
+        // Check that all columns are present with nulls for missing values
+        if let Value::Array(arr) = &combined {
+            // All rows should have all columns
+            for row in arr {
+                if let Value::Object(obj) = row {
+                    assert!(obj.contains_key("product"));
+                    assert!(obj.contains_key("sales"));
+                    assert!(obj.contains_key("month"));
+                    assert!(obj.contains_key("returns"));
+                }
+            }
+            
+            // Check that each sheet's data has appropriate nulls
+            // The exact ordering depends on sheet name alphabetical order
+            // jan.csv comes before feb.csv alphabetically
+            
+            // Rows from feb.csv should have null month
+            let has_null_month = arr.iter().any(|row| {
+                matches!(row, Value::Object(obj) if matches!(obj.get("month"), Some(Value::Null)))
+            });
+            assert!(has_null_month, "Should have rows with null month");
+            
+            // Rows from jan.csv should have null returns
+            let has_null_returns = arr.iter().any(|row| {
+                matches!(row, Value::Object(obj) if matches!(obj.get("returns"), Some(Value::Null)))
+            });
+            assert!(has_null_returns, "Should have rows with null returns");
+        }
+    }
+
+    #[tokio::test]
+    async fn test_consolidate_with_source() {
+        let dir = tempfile::tempdir().unwrap();
+        let file1 = dir.path().join("store1.csv");
+        let file2 = dir.path().join("store2.csv");
+
+        // Create test CSV files
+        std::fs::write(&file1, "product,sales\nwidget,100").unwrap();
+        std::fs::write(&file2, "product,sales\nwidget,120").unwrap();
+
+        let mut interp = Interpreter::new();
+        let script = format!(
+            r#"
+import "{}", "{}" into stores
+combined = consolidate(stores, "_store")
+"#,
+            file1.display(),
+            file2.display()
+        );
+        let program = PipParser::parse_str(&script).unwrap();
+        interp.eval(program).await.unwrap();
+
+        // Verify source column was added
+        let combined = interp.get_var("combined").await.unwrap();
+        assert!(matches!(&combined, Value::Array(arr) if arr.len() == 2));
+
+        if let Value::Array(arr) = &combined {
+            // Check that source column contains sheet names
+            if let Value::Object(obj) = &arr[0] {
+                assert!(obj.contains_key("_store"));
+                assert!(matches!(obj.get("_store"), Some(Value::String(s)) if s == "store1"));
+            }
+            if let Value::Object(obj) = &arr[1] {
+                assert!(matches!(obj.get("_store"), Some(Value::String(s)) if s == "store2"));
+            }
+        }
+    }
+
+    #[tokio::test]
+    async fn test_consolidate_invalid_source_type() {
+        let mut interp = Interpreter::new();
+        // Create a simple book object directly
+        interp.set_var("book", Value::Object(
+            vec![("sheet1".to_string(), Value::Array(vec![]))]
+                .into_iter()
+                .collect()
+        )).await;
+
+        let script = r#"result = consolidate(book, 123)"#;  // 123 is not a string
+        let program = PipParser::parse_str(&script).unwrap();
+        let result = interp.eval(program).await;
+        
+        // Should error because source column must be a string
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("must be a string"));
+    }
+
+    #[tokio::test]  
+    async fn test_backward_compat_with_clause() {
+        let dir = tempfile::tempdir().unwrap();
+        let file_path = dir.path().join("test.csv");
+
+        // Create a test CSV file
+        std::fs::write(&file_path, "name,age\nalice,30").unwrap();
+
+        let mut interp = Interpreter::new();
+        // Test that old "with {}" syntax still parses (even if ignored)
+        let script = format!(
+            r#"import "{}" into data with {{"delimiter": ","}}"#,
+            file_path.display()
+        );
+        let program = PipParser::parse_str(&script).unwrap();
+        let result = interp.eval(program).await;
+        
+        // Should not error - backward compatibility maintained
+        assert!(result.is_ok());
+        
+        // Data should still be imported
+        let data = interp.get_var("data").await.unwrap();
+        assert!(matches!(&data, Value::Array(arr) if arr.len() == 1));
     }
 }

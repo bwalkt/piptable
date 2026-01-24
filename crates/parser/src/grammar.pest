@@ -93,7 +93,7 @@ chart_type = { "bar" | "line" | "pie" | "scatter" | "area" }
 chart_option = { ident ~ ":" ~ expr }
 
 export_stmt = { "export" ~ expr ~ "to" ~ expr ~ with_clause? }
-import_stmt = { "import" ~ file_list ~ sheet_clause? ~ "into" ~ ident ~ import_options? }
+import_stmt = { "import" ~ file_list ~ sheet_clause? ~ "into" ~ ident ~ (import_options | with_clause)? }
 file_list = { expr ~ ("," ~ expr)* }
 sheet_clause = { "sheet" ~ expr }
 import_options = { without_headers | named_params }

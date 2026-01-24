@@ -386,6 +386,10 @@ fn build_import_stmt(pair: Pair<Rule>, line: usize) -> BuildResult<Statement> {
             Rule::import_options => {
                 options = build_import_options(p)?;
             }
+            Rule::with_clause => {
+                // For backward compatibility, ignore with clause but don't error
+                // This allows old scripts using "with {...}" to continue working
+            }
             _ => {}
         }
     }
