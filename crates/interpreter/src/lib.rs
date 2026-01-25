@@ -427,26 +427,6 @@ impl Interpreter {
                     }
                 }
 
-                // Evaluate optional sheet name for Excel files
-                let sheet_name_str = if let Some(ref sheet_expr) = sheet_name {
-                    let val = self
-                        .eval_expr(sheet_expr)
-                        .await
-                        .map_err(|e| e.with_line(line))?;
-                    match val {
-                        Value::String(s) => Some(s),
-                        _ => {
-                            return Err(PipError::Import(format!(
-                                "Line {}: sheet name must be a string, got {}",
-                                line,
-                                val.type_name()
-                            )));
-                        }
-                    }
-                } else {
-                    None
-                };
-
                 // Defensive check: ensure at least one path
                 if paths.is_empty() {
                     return Err(PipError::Import(format!(
@@ -455,15 +435,41 @@ impl Interpreter {
                     )));
                 }
 
+                // Check for invalid multi-file import with sheet clause before evaluation
+                if paths.len() > 1 && sheet_name.is_some() {
+                    return Err(PipError::Import(format!(
+                        "Line {}: sheet clause is not supported for multi-file import",
+                        line
+                    )));
+                }
+
+                // Evaluate optional sheet name for Excel files (single-file only)
+                let sheet_name_str = if paths.len() == 1 {
+                    if let Some(ref sheet_expr) = sheet_name {
+                        let val = self
+                            .eval_expr(sheet_expr)
+                            .await
+                            .map_err(|e| e.with_line(line))?;
+                        match val {
+                            Value::String(s) => Some(s),
+                            _ => {
+                                return Err(PipError::Import(format!(
+                                    "Line {}: sheet name must be a string, got {}",
+                                    line,
+                                    val.type_name()
+                                )));
+                            }
+                        }
+                    } else {
+                        None
+                    }
+                } else {
+                    None
+                };
+
                 // Multi-file or single file import
                 let value = if paths.len() > 1 {
                     // Multi-file import: use Book::from_files_with_options
-                    if sheet_name_str.is_some() {
-                        return Err(PipError::Import(format!(
-                            "Line {}: sheet clause is not supported for multi-file import",
-                            line
-                        )));
-                    }
                     import_multi_files(&paths, &options)
                         .map_err(|e| PipError::Import(format!("Line {}: {}", line, e)))?
                 } else {
