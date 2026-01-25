@@ -2593,7 +2593,7 @@ export data to "{}""#,
         if let Value::Object(book) = &data {
             assert!(book.contains_key("q1"));
             assert!(book.contains_key("q2"));
-            
+
             // Verify q1 sheet has correct data
             if let Some(Value::Array(q1_data)) = book.get("q1") {
                 assert_eq!(q1_data.len(), 2);
@@ -2638,7 +2638,11 @@ export data to "{}""#,
         let file2 = dir.path().join("feb.csv");
 
         // Create test CSV files with slightly different columns
-        std::fs::write(&file1, "product,sales,month\nwidget,100,jan\ngadget,150,jan").unwrap();
+        std::fs::write(
+            &file1,
+            "product,sales,month\nwidget,100,jan\ngadget,150,jan",
+        )
+        .unwrap();
         std::fs::write(&file2, "product,sales,returns\nwidget,120,5\ngizmo,80,2").unwrap();
 
         let mut interp = Interpreter::new();
@@ -2668,17 +2672,17 @@ combined = consolidate(monthly_data)
                     assert!(obj.contains_key("returns"));
                 }
             }
-            
+
             // Check that each sheet's data has appropriate nulls
             // The exact ordering depends on sheet name alphabetical order
             // jan.csv comes before feb.csv alphabetically
-            
+
             // Rows from feb.csv should have null month
             let has_null_month = arr.iter().any(|row| {
                 matches!(row, Value::Object(obj) if matches!(obj.get("month"), Some(Value::Null)))
             });
             assert!(has_null_month, "Should have rows with null month");
-            
+
             // Rows from jan.csv should have null returns
             let has_null_returns = arr.iter().any(|row| {
                 matches!(row, Value::Object(obj) if matches!(obj.get("returns"), Some(Value::Null)))
@@ -2729,22 +2733,27 @@ combined = consolidate(stores, "_store")
     async fn test_consolidate_invalid_source_type() {
         let mut interp = Interpreter::new();
         // Create a simple book object directly
-        interp.set_var("book", Value::Object(
-            vec![("sheet1".to_string(), Value::Array(vec![]))]
-                .into_iter()
-                .collect()
-        )).await;
+        interp
+            .set_var(
+                "book",
+                Value::Object(
+                    vec![("sheet1".to_string(), Value::Array(vec![]))]
+                        .into_iter()
+                        .collect(),
+                ),
+            )
+            .await;
 
-        let script = r#"result = consolidate(book, 123)"#;  // 123 is not a string
+        let script = r#"result = consolidate(book, 123)"#; // 123 is not a string
         let program = PipParser::parse_str(&script).unwrap();
         let result = interp.eval(program).await;
-        
+
         // Should error because source column must be a string
         assert!(result.is_err());
         assert!(result.unwrap_err().to_string().contains("must be a string"));
     }
 
-    #[tokio::test]  
+    #[tokio::test]
     async fn test_backward_compat_with_clause() {
         let dir = tempfile::tempdir().unwrap();
         let file_path = dir.path().join("test.csv");
@@ -2760,10 +2769,10 @@ combined = consolidate(stores, "_store")
         );
         let program = PipParser::parse_str(&script).unwrap();
         let result = interp.eval(program).await;
-        
+
         // Should not error - backward compatibility maintained
         assert!(result.is_ok());
-        
+
         // Data should still be imported
         let data = interp.get_var("data").await.unwrap();
         assert!(matches!(&data, Value::Array(arr) if arr.len() == 1));
