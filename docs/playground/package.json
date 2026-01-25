@@ -17,8 +17,6 @@
     "@codemirror/theme-one-dark": "^6.1.2",
     "@codemirror/view": "^6.21.0",
     "@preact/signals": "^2.6.1",
-    "@radix-ui/react-select": "^2.2.6",
-    "@radix-ui/react-tabs": "^1.1.13",
     "codemirror": "^6.0.1",
     "dompurify": "^3.3.1",
     "lucide-react": "^0.563.0",
@@ -27,7 +25,7 @@
   },
   "devDependencies": {
     "@preact/preset-vite": "^2.10.2",
-    "@radix-ui/themes": "^3.2.1",
+    "@tailwindcss/postcss": "^4.1.18",
     "@types/dompurify": "^3.2.0",
     "autoprefixer": "^10.4.23",
     "class-variance-authority": "^0.7.1",

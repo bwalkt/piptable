@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'preact/hooks';
+import { useEffect, useRef, useState } from 'preact/hooks';
 import { useSignalEffect } from '@preact/signals';
 import { EditorView, basicSetup } from 'codemirror';
 import { keymap } from '@codemirror/view';
@@ -24,6 +24,7 @@ export function App() {
   const editorRef = useRef<HTMLDivElement>(null);
   const editorViewRef = useRef<EditorView | null>(null);
   const themeCompartment = useRef<Compartment>(new Compartment());
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
   // Initialize CodeMirror
   useEffect(() => {
@@ -101,6 +102,21 @@ export function App() {
       {/* Header */}
       <header className="flex items-center justify-between px-4 h-14 border-b bg-card">
         <div className="flex items-center gap-3">
+          {/* Mobile menu button */}
+          <button
+            onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+            className={cn(
+              "inline-flex items-center justify-center rounded-md text-sm font-medium md:hidden",
+              "h-9 w-9 hover:bg-accent hover:text-accent-foreground",
+              "ring-offset-background transition-colors",
+              "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+            )}
+            aria-label="Toggle menu"
+          >
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+            </svg>
+          </button>
           <span className="text-xl">🔧</span>
           <h1 className="text-lg font-semibold">PipTable Playground</h1>
         </div>
@@ -137,8 +153,21 @@ export function App() {
       </header>
 
       <div className="flex-1 flex overflow-hidden">
-        {/* Sidebar */}
-        <aside className="w-64 border-r bg-card flex flex-col">
+        {/* Mobile menu overlay */}
+        {isMobileMenuOpen && (
+          <div 
+            className="fixed inset-0 bg-black/50 z-40 md:hidden"
+            onClick={() => setIsMobileMenuOpen(false)}
+          />
+        )}
+        
+        {/* Sidebar - hidden on mobile, visible on md+ */}
+        <aside className={cn(
+          "border-r bg-card flex flex-col",
+          "md:relative md:w-64",
+          "fixed left-0 top-14 bottom-0 w-64 z-50 transition-transform md:translate-x-0",
+          isMobileMenuOpen ? "translate-x-0" : "-translate-x-full md:translate-x-0"
+        )}>
           <div className="p-4 border-b">
             <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">Examples</h2>
           </div>
@@ -146,7 +175,10 @@ export function App() {
             {Object.entries(examples).map(([key, example]) => (
               <button
                 key={key}
-                onClick={() => selectExample(key)}
+                onClick={() => {
+                  selectExample(key);
+                  setIsMobileMenuOpen(false);
+                }}
                 className={cn(
                   "w-full text-left px-3 py-2 rounded-md text-sm transition-colors mb-1",
                   "hover:bg-accent hover:text-accent-foreground",
@@ -161,9 +193,9 @@ export function App() {
         </aside>
 
         {/* Main Content */}
-        <div className="flex-1 flex">
+        <div className="flex-1 flex flex-col md:flex-row">
           {/* Editor Panel */}
-          <div className="flex-1 flex flex-col min-w-0">
+          <div className="flex-1 flex flex-col min-w-0 min-h-[50vh] md:min-h-0">
             <div className="px-4 py-2 border-b bg-muted/50">
               <h3 className="text-sm font-medium">Editor</h3>
             </div>
@@ -171,7 +203,7 @@ export function App() {
           </div>
 
           {/* Output Panel */}
-          <div className="flex-1 flex flex-col border-l min-w-0">
+          <div className="flex-1 flex flex-col border-t md:border-t-0 md:border-l min-w-0 min-h-[50vh] md:min-h-0">
             <div className="px-4 py-2 border-b bg-muted/50">
               <h3 className="text-sm font-medium">Output</h3>
             </div>

@@ -1,4 +1,4 @@
-import { signal, computed } from '@preact/signals';
+import { signal } from '@preact/signals';
 import DOMPurify from 'dompurify';
 
 // Example metadata
@@ -99,7 +99,9 @@ export function selectExample(name: string) {
 
 export function setTheme(newTheme: 'light' | 'dark') {
   theme.value = newTheme;
-  localStorage.setItem('playground-theme', newTheme);
+  if (typeof localStorage !== 'undefined') {
+    localStorage.setItem('playground-theme', newTheme);
+  }
 }
 
 export async function runCode() {
@@ -140,7 +142,9 @@ export async function runCode() {
 }
 
 // Initialize theme from localStorage
-const savedTheme = localStorage.getItem('playground-theme');
-if (savedTheme === 'light' || savedTheme === 'dark') {
-  theme.value = savedTheme;
+if (typeof localStorage !== 'undefined') {
+  const savedTheme = localStorage.getItem('playground-theme');
+  if (savedTheme === 'light' || savedTheme === 'dark') {
+    theme.value = savedTheme;
+  }
 }
