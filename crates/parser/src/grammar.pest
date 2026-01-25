@@ -111,18 +111,17 @@ expr_stmt = { expr }
 expr = { join_expr }
 
 // Join expressions
+// Note: join_condition is required (not optional) to match builder behavior
 join_expr = { or_expr ~ (join_op ~ or_expr ~ join_condition)* }
 join_op = { left_join | right_join | full_join | inner_join }
 left_join = { "left" ~ "join" }
 right_join = { "right" ~ "join" }
 full_join = { "full" ~ "join" }
 inner_join = { "join" }
-// Use comparison_expr to prevent join_condition from consuming subsequent joins
-// Note: While the grammar accepts general expressions, the builder currently only supports:
-//   - String literals: on "column_name" (for same column in both tables)
-//   - String equality: on "left_col" = "right_col" (for different column names)
-join_condition = { "on" ~ (join_key_pair | comparison_expr) }
-join_key_pair = { comparison_expr ~ "=" ~ comparison_expr }
+// Restricted to only accept string literals or string equality to match builder
+// This prevents consuming subsequent joins and provides clearer errors
+join_condition = { "on" ~ (join_key_pair | string) }
+join_key_pair = { string ~ "=" ~ string }
 // Word boundaries are enforced by requiring non-alpha after the keyword
 // Must be atomic (@) to prevent automatic whitespace insertion before the lookahead
 or_kw = @{ ^"or" ~ !ASCII_ALPHA }

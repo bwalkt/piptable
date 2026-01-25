@@ -502,77 +502,33 @@ fn build_join_expr(pair: Pair<Rule>) -> BuildResult<Expr> {
                 if cond_pair.as_rule() == Rule::join_condition {
                     let cond_inner = cond_pair.into_inner().next().unwrap();
                     if cond_inner.as_rule() == Rule::join_key_pair {
-                        // Handle "col1" = "col2" syntax when parsed as join_key_pair
-                        let cond_inner_pair = cond_inner.clone();
+                        // Handle "col1" = "col2" syntax
                         let mut key_inner = cond_inner.into_inner();
-                        let left_expr = build_expr(key_inner.next().unwrap())?;
-                        let right_expr = build_expr(key_inner.next().unwrap())?;
-
-                        // Extract column names from expressions
-                        let Expr::Literal(Literal::String(left_col)) = left_expr else {
-                            return Err(BuildError::from_pair(
-                                &cond_inner_pair,
-                                "Left join key must be a string",
-                            ));
-                        };
-                        let Expr::Literal(Literal::String(right_col)) = right_expr else {
-                            return Err(BuildError::from_pair(
-                                &cond_inner_pair,
-                                "Right join key must be a string",
-                            ));
-                        };
-
+                        let left_str = key_inner.next().unwrap().as_str();
+                        let right_str = key_inner.next().unwrap().as_str();
+                        
+                        // Remove quotes from string literals
+                        let left_col = left_str.trim_matches('"');
+                        let right_col = right_str.trim_matches('"');
+                        
                         JoinCondition::OnColumns {
-                            left: left_col,
-                            right: right_col,
+                            left: left_col.to_string(),
+                            right: right_col.to_string(),
                         }
                     } else {
-                        // Handle both simple "id" syntax and comparison expressions
-                        let cond_inner_pair = cond_inner.clone();
-                        let key_expr = build_expr(cond_inner)?;
-                        match key_expr {
-                            // Simple string literal: on "id"
-                            Expr::Literal(Literal::String(s)) => JoinCondition::On(s),
-                            // Binary equals expression: on "id" = "user_id"
-                            Expr::Binary {
-                                left,
-                                op: BinaryOp::Eq,
-                                right,
-                            } => {
-                                let Expr::Literal(Literal::String(left_col)) = *left else {
-                                    return Err(BuildError::from_pair(
-                                        &cond_inner_pair,
-                                        "Left join key must be a string",
-                                    ));
-                                };
-                                let Expr::Literal(Literal::String(right_col)) = *right else {
-                                    return Err(BuildError::from_pair(
-                                        &cond_inner_pair,
-                                        "Right join key must be a string",
-                                    ));
-                                };
-                                JoinCondition::OnColumns {
-                                    left: left_col,
-                                    right: right_col,
-                                }
-                            }
-                            _ => {
-                                return Err(BuildError::from_pair(
-                                    &cond_inner_pair,
-                                    "Join condition must be a string literal (on \"column\") or string equality (on \"left_col\" = \"right_col\"). Use quotes around column names.",
-                                ))
-                            }
-                        }
+                        // Handle simple "id" syntax (cond_inner is a string rule)
+                        let key_str = cond_inner.as_str().trim_matches('"');
+                        JoinCondition::On(key_str.to_string())
                     }
                 } else {
-                    // No condition - error for now (could default to natural join)
+                    // Not a join condition, should not happen with correct grammar
                     return Err(BuildError::from_pair(
                         &cond_pair,
-                        "Join requires an 'on' condition",
+                        "Expected join condition after join expression",
                     ));
                 }
             } else {
-                // No join condition provided - required for non-cross joins
+                // No join condition provided - grammar requires it
                 return Err(BuildError::from_pair(
                     &join_inner_pair,
                     "Join requires an 'on' condition",
