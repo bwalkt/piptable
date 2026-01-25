@@ -1,48 +1,48 @@
 # Getting Started
 
-Welcome to PipTable! This guide will help you get up and running quickly.
+Welcome to PipTable! This guide will help you get up and running quickly with data processing using our DSL.
 
-## Installation
+## What You'll Learn
 
-PipTable can be installed in several ways:
+- How to install PipTable
+- Writing your first script
+- Understanding basic concepts
+- Common data processing patterns
 
-### Using Cargo
+## Prerequisites
 
-```bash
-cargo install piptable
-```
+- Rust toolchain (for installation from source)
+- Basic command line familiarity
+- Text editor of your choice
 
-### From Source
+## Quick Example
 
-```bash
-git clone https://github.com/bwalkt/piptable
-cd piptable
-cargo build --release
-```
-
-## Your First Script
-
-Create a file called `hello.pip`:
+Here's what PipTable code looks like:
 
 ```vba
-' Hello World example
-dim message = "Hello, PipTable!"
-print(message)
+' Load sales data from CSV
+dim sales = import "sales.csv" into sheet
 
-' Load and process data
-dim data = import "sample.csv" into sheet
-dim result = query("SELECT * FROM data WHERE value > 100")
-export result to "output.csv"
-```
+' Filter high-value transactions  
+dim highValue = query("
+    SELECT * FROM sales 
+    WHERE amount > 1000
+")
 
-Run it with:
-
-```bash
-pip hello.pip
+' Export results
+export highValue to "high_value_sales.xlsx"
 ```
 
 ## Next Steps
 
-- Learn about [Core Concepts](core-concepts.md)
-- Explore the [DSL Reference](../reference/dsl/README.md)
-- Try examples in the [Cookbook](../cookbook/data-processing.md)
+1. [Install PipTable](installation.md) - Get PipTable on your system
+2. [Quick Start](quick-start.md) - Run your first script in minutes
+3. [First Script](first-script.md) - Build a complete data pipeline
+4. [Core Concepts](core-concepts.md) - Understand the fundamentals
+
+## Getting Help
+
+- **Documentation**: You're reading it!
+- **Examples**: Check the [Cookbook](../cookbook/data-processing.md)
+- **Issues**: [GitHub Issues](https://github.com/bwalkt/piptable/issues)
+- **Source Code**: [GitHub Repository](https://github.com/bwalkt/piptable)
