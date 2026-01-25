@@ -2,6 +2,9 @@
 //!
 //! These tests verify the interpreter executes full scripts correctly.
 
+#![allow(clippy::approx_constant)]
+#![allow(clippy::needless_raw_string_hashes)]
+
 use piptable_core::Value;
 use piptable_interpreter::Interpreter;
 use piptable_parser::PipParser;
@@ -63,31 +66,18 @@ async fn run_script_err(script: &str) -> String {
 }
 
 /// Creates a temporary file with a `.csv` suffix, writes `content` into it, flushes, and returns the open `NamedTempFile`.
-
 ///
-
 /// The returned `NamedTempFile` keeps the file alive for the duration of the handle; the file is created in the system temp directory.
-
 ///
-
 /// # Examples
-
 ///
-
 /// ```
-
 /// use tempfile::NamedTempFile;
-
 /// use std::fs;
-
 ///
-
 /// let file: NamedTempFile = create_temp_csv("a,b\n1,2\n");
-
 /// let read = fs::read_to_string(file.path()).unwrap();
-
 /// assert_eq!(read, "a,b\n1,2\n");
-
 /// ```
 fn create_temp_csv(content: &str) -> NamedTempFile {
     let mut file = NamedTempFile::with_suffix(".csv").expect("Failed to create temp file");

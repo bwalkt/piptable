@@ -353,6 +353,7 @@ fn validate_toon_field(name: &str) -> Result<&str> {
 
 #[cfg(test)]
 mod tests {
+    #![allow(clippy::approx_constant)]
     use super::*;
     use tempfile::tempdir;
 
@@ -372,9 +373,9 @@ mod tests {
 
     #[test]
     fn test_from_toon_str() {
-        let toon = r#"rows[2]{name,age,city}:
+        let toon = r"rows[2]{name,age,city}:
   Alice,30,NYC
-  Bob,25,LA"#;
+  Bob,25,LA";
 
         let sheet = Sheet::from_toon_str(toon).unwrap();
 
@@ -385,8 +386,8 @@ mod tests {
 
     #[test]
     fn test_from_toon_types() {
-        let toon = r#"data[1]{bool,int,float,string,null}:
-  true,42,3.14,hello,"#;
+        let toon = r"data[1]{bool,int,float,string,null}:
+  true,42,3.14,hello,";
 
         let sheet = Sheet::from_toon_str(toon).unwrap();
         let records = sheet.to_records().unwrap();
@@ -417,9 +418,9 @@ mod tests {
 
     #[test]
     fn test_toon_roundtrip() {
-        let toon = r#"rows[2]{name,age}:
+        let toon = r"rows[2]{name,age}:
   Alice,30
-  Bob,25"#;
+  Bob,25";
 
         let sheet = Sheet::from_toon_str(toon).unwrap();
         let output = sheet.to_toon_string().unwrap();
@@ -470,9 +471,9 @@ mod tests {
 
     #[test]
     fn test_toon_wrong_count() {
-        let toon = r#"rows[5]{name,age}:
+        let toon = r"rows[5]{name,age}:
   Alice,30
-  Bob,25"#;
+  Bob,25";
 
         let result = Sheet::from_toon_str(toon);
         assert!(result.is_err());
@@ -484,9 +485,10 @@ mod tests {
         sheet.name_columns_by_row(0).unwrap();
 
         // Add a row with a comma in string
-        let mut row = Vec::new();
-        row.push(CellValue::String("test, with comma".to_string()));
-        row.push(CellValue::Int(42));
+        let row = vec![
+            CellValue::String("test, with comma".to_string()),
+            CellValue::Int(42),
+        ];
         sheet.data_mut().push(row);
 
         let toon = sheet.to_toon_string().unwrap();

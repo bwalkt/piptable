@@ -511,6 +511,7 @@ fn print_help() {
 
 #[cfg(test)]
 mod tests {
+    #![allow(clippy::approx_constant)]
     use super::*;
     use arrow::array::RecordBatch;
     use std::collections::HashMap;
@@ -736,13 +737,13 @@ mod tests {
         let arr = Int16Array::from(vec![1000i16]);
         assert_eq!(array_value_to_json(&arr, 0), serde_json::json!(1000));
 
-        let arr = Int32Array::from(vec![100000i32]);
-        assert_eq!(array_value_to_json(&arr, 0), serde_json::json!(100000));
+        let arr = Int32Array::from(vec![100_000_i32]);
+        assert_eq!(array_value_to_json(&arr, 0), serde_json::json!(100_000));
 
-        let arr = Int64Array::from(vec![9999999999i64]);
+        let arr = Int64Array::from(vec![9_999_999_999_i64]);
         assert_eq!(
             array_value_to_json(&arr, 0),
-            serde_json::json!(9999999999i64)
+            serde_json::json!(9_999_999_999_i64)
         );
     }
 
@@ -756,16 +757,16 @@ mod tests {
         let arr = UInt16Array::from(vec![65535u16]);
         assert_eq!(array_value_to_json(&arr, 0), serde_json::json!(65535));
 
-        let arr = UInt32Array::from(vec![4294967295u32]);
+        let arr = UInt32Array::from(vec![4_294_967_295_u32]);
         assert_eq!(
             array_value_to_json(&arr, 0),
-            serde_json::json!(4294967295u64)
+            serde_json::json!(4_294_967_295_u64)
         );
 
-        let arr = UInt64Array::from(vec![18446744073709551615u64]);
+        let arr = UInt64Array::from(vec![18_446_744_073_709_551_615_u64]);
         assert_eq!(
             array_value_to_json(&arr, 0),
-            serde_json::json!(18446744073709551615u64)
+            serde_json::json!(18_446_744_073_709_551_615_u64)
         );
     }
 

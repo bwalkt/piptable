@@ -6,6 +6,9 @@ use piptable_sheet::{Book, Sheet, XlsxReadOptions};
 use std::env;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
+    use indexmap::IndexMap;
+    use piptable_sheet::CellValue;
+    
     println!("=== Sheet/Book Module Demo ===\n");
 
     // Use platform-appropriate temp directory
@@ -169,9 +172,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     // Create a sheet from records
-    use indexmap::IndexMap;
-    use piptable_sheet::CellValue;
-
     let mut rec1 = IndexMap::new();
     rec1.insert(
         "product".to_string(),

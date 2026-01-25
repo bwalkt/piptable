@@ -2848,8 +2848,8 @@ combined = consolidate(stores, "_store")
             )
             .await;
 
-        let script = r#"result = consolidate(book, 123)"#; // 123 is not a string
-        let program = PipParser::parse_str(&script).unwrap();
+        let script = r"result = consolidate(book, 123)"; // 123 is not a string
+        let program = PipParser::parse_str(script).unwrap();
         let result = interp.eval(program).await;
 
         // Should error because source column must be a string
