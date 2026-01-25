@@ -5,6 +5,7 @@ import { keymap } from '@codemirror/view';
 import { indentWithTab } from '@codemirror/commands';
 import { oneDark } from '@codemirror/theme-one-dark';
 import { Compartment } from '@codemirror/state';
+import DOMPurify from 'dompurify';
 import { 
   code, 
   selectedExample, 
@@ -189,7 +190,7 @@ export function App() {
               )}
               
               {!isRunning.value && !error.value && output.value && (
-                <div dangerouslySetInnerHTML={{ __html: output.value }} />
+                <div dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(output.value) }} />
               )}
               
               {!isRunning.value && !error.value && !output.value && (

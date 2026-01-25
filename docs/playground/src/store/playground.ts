@@ -1,4 +1,5 @@
 import { signal, computed } from '@preact/signals';
+import DOMPurify from 'dompurify';
 
 // Example metadata
 export interface Example {
@@ -129,7 +130,8 @@ export async function runCode() {
     result += 'Note: Full execution will be available when WASM module is integrated (Issue #126)';
     result += '</div>';
     
-    output.value = result;
+    // Sanitize the output HTML before storing
+    output.value = DOMPurify.sanitize(result);
   } catch (err) {
     error.value = err instanceof Error ? err.message : 'Unknown error';
   } finally {

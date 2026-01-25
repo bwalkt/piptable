@@ -3,6 +3,7 @@ import { keymap } from '@codemirror/view';
 import { indentWithTab } from '@codemirror/commands';
 import { oneDark } from '@codemirror/theme-one-dark';
 import { usePlaygroundStore, examples } from './store';
+import DOMPurify from 'dompurify';
 
 // Editor instance
 let editor: EditorView | null = null;
@@ -66,7 +67,7 @@ function initializeEditor() {
         <div style="padding: 2rem; color: #ff6b6b;">
           <h3>Editor Initialization Failed</h3>
           <p>Unable to load the code editor. Please refresh the page.</p>
-          <pre style="margin-top: 1rem; font-size: 0.9em;">${error}</pre>
+          <pre style="margin-top: 1rem; font-size: 0.9em;">${DOMPurify.sanitize(String(error))}</pre>
         </div>
       `;
     }
@@ -102,12 +103,11 @@ function renderOutput() {
     outputEl.innerHTML = '<div class="spinner"></div><div>Running...</div>';
     outputEl.setAttribute('aria-busy', 'true');
   } else if (error) {
-    outputEl.innerHTML = `<div class="error" role="alert">✗ Error: ${escapeHtml(error)}</div>`;
+    outputEl.innerHTML = `<div class="error" role="alert">✗ Error: ${DOMPurify.sanitize(error)}</div>`;
     outputEl.setAttribute('aria-busy', 'false');
   } else if (output) {
-    // Note: output HTML is developer-controlled from store/playground.ts
-    // When WASM execution is added, ensure user-generated content is sanitized
-    outputEl.innerHTML = output;
+    // Sanitize output HTML to prevent XSS
+    outputEl.innerHTML = DOMPurify.sanitize(output);
     outputEl.setAttribute('aria-busy', 'false');
   } else {
     outputEl.innerHTML = '<div style="color: #666;">Click "Run" or press Ctrl+Enter (Cmd+Enter on Mac) to execute</div>';
