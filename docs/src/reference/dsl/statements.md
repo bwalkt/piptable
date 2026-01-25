@@ -180,14 +180,15 @@ end sub
 **Examples:**
 ```piptable
 sub printHeader(title)
-    print("=" * 40)
+    print("========================================")
     print(title)
-    print("=" * 40)
+    print("========================================")
 end sub
 
 sub logError(message)
-    dim timestamp = now()
-    print("[ERROR] " + timestamp + ": " + message)
+    ' Note: now() is a planned function
+    ' For now, use a counter or manual timestamp
+    print("[ERROR]: " + message)
 end sub
 ```
 
@@ -360,12 +361,11 @@ expression
 print("Hello, World!")
 len(data)
 
-' Method calls
-data.sort()
-sheet.filter(condition)
-
 ' SQL queries
 query("UPDATE users SET active = true")
+
+' Note: Method calls on objects are planned features
+' Future: data.sort(), sheet.filter(condition)
 ```
 
 ## Comments

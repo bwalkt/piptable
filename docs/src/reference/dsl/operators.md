@@ -320,11 +320,15 @@ dim msg = "Value: " + str(42)        ' "Value: 42" (convert number to string)
 dim sum = int("10") + 5              ' 15 (convert string to number)
 ```
 
-### Other Operators
-Multiplication, division, and other math operators always attempt numeric conversion:
+### Other Math Operators
+Multiplication, division, and other math operators require numeric operands:
 ```piptable
-dim value = "3.14" * 2               ' 6.28 (converts to number)
-dim result = "10" / "2"              ' 5 (converts to number)
+dim value = 3.14 * 2                 ' 6.28 (both numeric)
+dim result = 10 / 2                  ' 5 (both numeric)
+
+' String operands require explicit conversion
+dim product = float("3.14") * 2      ' 6.28 (convert string first)
+dim quotient = int("10") / 2         ' 5 (convert string first)
 ```
 
 ### Boolean Context
