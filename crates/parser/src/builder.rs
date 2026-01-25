@@ -504,12 +504,41 @@ fn build_join_expr(pair: Pair<Rule>) -> BuildResult<Expr> {
                     if cond_inner.as_rule() == Rule::join_key_pair {
                         // Handle "col1" = "col2" syntax
                         let mut key_inner = cond_inner.into_inner();
-                        let left_str = key_inner.next().unwrap().as_str();
-                        let right_str = key_inner.next().unwrap().as_str();
+                        let left_pair = key_inner.next().unwrap();
+                        let right_pair = key_inner.next().unwrap();
 
-                        // Remove quotes and unescape string literals (same as build_literal)
-                        let left_col = unescape_string(&left_str[1..left_str.len() - 1]);
-                        let right_col = unescape_string(&right_str[1..right_str.len() - 1]);
+                        // Parse join keys using build_literal for consistency
+                        let left_col = match build_literal(left_pair.clone())? {
+                            Literal::String(s) if !s.is_empty() => s,
+                            Literal::String(_) => {
+                                return Err(BuildError::from_pair(
+                                    &left_pair,
+                                    "Left join key cannot be empty",
+                                ))
+                            }
+                            _ => {
+                                return Err(BuildError::from_pair(
+                                    &left_pair,
+                                    "Left join key must be a string",
+                                ))
+                            }
+                        };
+
+                        let right_col = match build_literal(right_pair.clone())? {
+                            Literal::String(s) if !s.is_empty() => s,
+                            Literal::String(_) => {
+                                return Err(BuildError::from_pair(
+                                    &right_pair,
+                                    "Right join key cannot be empty",
+                                ))
+                            }
+                            _ => {
+                                return Err(BuildError::from_pair(
+                                    &right_pair,
+                                    "Right join key must be a string",
+                                ))
+                            }
+                        };
 
                         JoinCondition::OnColumns {
                             left: left_col,
@@ -517,9 +546,22 @@ fn build_join_expr(pair: Pair<Rule>) -> BuildResult<Expr> {
                         }
                     } else {
                         // Handle simple "id" syntax (cond_inner is a string rule)
-                        let key_str = cond_inner.as_str();
-                        // Remove quotes and unescape (same as build_literal)
-                        let key = unescape_string(&key_str[1..key_str.len() - 1]);
+                        let key_pair = cond_inner.clone();
+                        let key = match build_literal(cond_inner)? {
+                            Literal::String(s) if !s.is_empty() => s,
+                            Literal::String(_) => {
+                                return Err(BuildError::from_pair(
+                                    &key_pair,
+                                    "Join key cannot be empty",
+                                ))
+                            }
+                            _ => {
+                                return Err(BuildError::from_pair(
+                                    &key_pair,
+                                    "Join key must be a string",
+                                ))
+                            }
+                        };
                         JoinCondition::On(key)
                     }
                 } else {
