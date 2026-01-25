@@ -613,7 +613,9 @@ mod tests {
         let result = PipParser::parse_str(code);
         assert!(result.is_err(), "Should error on key without distinct");
         let err = result.unwrap_err();
-        assert!(err.to_string().contains("'on' clause can only be used with 'append distinct'"));
+        assert!(err
+            .to_string()
+            .contains("'on' clause can only be used with 'append distinct'"));
     }
 
     #[test]
@@ -623,7 +625,9 @@ mod tests {
         let result = PipParser::parse_str(code);
         assert!(result.is_err(), "Should error on distinct without key");
         let err = result.unwrap_err();
-        assert!(err.to_string().contains("append distinct requires 'on' clause"));
+        assert!(err
+            .to_string()
+            .contains("append distinct requires 'on' clause"));
     }
 
     #[test]

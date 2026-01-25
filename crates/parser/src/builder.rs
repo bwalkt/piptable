@@ -454,12 +454,20 @@ fn build_append_stmt(pair: Pair<Rule>, line: usize) -> BuildResult<Statement> {
 
     // Validate: if distinct is used, key must be present
     if distinct && key.is_none() {
-        return Err(BuildError::new(line, 0, "append distinct requires 'on' clause with key column"));
+        return Err(BuildError::new(
+            line,
+            0,
+            "append distinct requires 'on' clause with key column",
+        ));
     }
 
     // Validate: if key is present, distinct must be used
     if key.is_some() && !distinct {
-        return Err(BuildError::new(line, 0, "'on' clause can only be used with 'append distinct'"));
+        return Err(BuildError::new(
+            line,
+            0,
+            "'on' clause can only be used with 'append distinct'",
+        ));
     }
 
     Ok(Statement::Append {
