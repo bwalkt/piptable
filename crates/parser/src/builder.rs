@@ -646,6 +646,7 @@ fn build_and_expr(pair: Pair<Rule>) -> BuildResult<Expr> {
 }
 
 fn build_not_expr(pair: Pair<Rule>) -> BuildResult<Expr> {
+    let pair_for_error = pair.clone();
     let mut inner = pair.into_inner();
 
     // Check if we have any inner pairs
@@ -664,7 +665,7 @@ fn build_not_expr(pair: Pair<Rule>) -> BuildResult<Expr> {
         }
     } else {
         // Empty not_expr - shouldn't happen with our grammar
-        Err(BuildError::new(0, 0, "Empty not_expr"))
+        Err(BuildError::from_pair(&pair_for_error, "Empty not_expr"))
     }
 }
 
