@@ -234,17 +234,23 @@ dim workbook = import "quarterly_report.xlsx" into book
 
 ' Process each sheet
 for each (name, sheet) in workbook.sheets_mut()
-    ' Add calculated column
-    sheet.column_append_calculated("total", "quantity * price")
+    ' Calculate totals for new column
+    dim quantity_col = sheet.column_by_name("quantity")
+    dim price_col = sheet.column_by_name("price")
+    dim totals_col = []
+    for i = 0 to len(quantity_col) - 1
+        totals_col.push(quantity_col[i] * price_col[i])
+    end for
+    sheet.column_append(totals_col)
     
     ' Add summary row
-    dim totals = [
+    dim summary = [
         "TOTAL",
-        sum(sheet.column_by_name("quantity")),
-        avg(sheet.column_by_name("price")),
-        sum(sheet.column_by_name("total"))
+        sum(quantity_col),
+        avg(price_col),
+        sum(totals_col)
     ]
-    sheet.row_append(totals)
+    sheet.row_append(summary)
 end for
 
 ' Export modified workbook
@@ -294,4 +300,3 @@ Book operations return `Result<T>` types that can contain:
 
 - [Sheet API](sheet.md) - Working with individual sheets
 - [File Formats](formats.md) - Supported import/export formats
-- [Consolidation Guide](../guide/consolidation.md) - Advanced consolidation techniques

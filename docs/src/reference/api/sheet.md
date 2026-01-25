@@ -105,8 +105,8 @@ sheet.row_insert(0, ["ID", "Name", "Price", "Active"])
 ' Delete row
 sheet.row_delete(5)
 
-' Delete rows matching condition
-sheet.row_delete_where(|row| row[2] < 10.0)
+' Delete rows matching condition  
+sheet.row_delete_where(|row| row[2].as_float().unwrap_or(0.0) < 10.0)
 ```
 
 ## Column Operations
@@ -156,11 +156,18 @@ column_map_by_name<F>(name: &str, f: F) -> Result<()>
 
 **Examples:**
 ```piptable
-' Transform all cells
-sheet.map(|cell| cell.to_uppercase())
+' Transform all cells to uppercase (for string cells)
+sheet.map(|cell| match cell {
+    CellValue::String(s) => CellValue::String(s.to_uppercase()),
+    other => other
+})
 
-' Transform specific column
-sheet.column_map_by_name("price", |cell| cell * 1.1)
+' Increase prices by 10%
+sheet.column_map_by_name("price", |cell| match cell {
+    CellValue::Float(f) => CellValue::Float(f * 1.1),
+    CellValue::Int(i) => CellValue::Float(i as f64 * 1.1),
+    other => other
+})
 ```
 
 ### Filter Operations
@@ -173,7 +180,7 @@ remove_columns_at(indices: &[usize]) -> Result<()>
 **Examples:**
 ```piptable
 ' Keep only active products
-sheet.filter_rows(|row| row[3] == true)
+sheet.filter_rows(|row| row[3].as_bool().unwrap_or(false))
 
 ' Remove columns by index
 sheet.remove_columns_at([0, 4, 5])
@@ -307,5 +314,5 @@ Sheet operations return `Result<T>` types that can contain:
 ## See Also
 
 - [Book API](book.md) - Working with multiple sheets
-- [Cell Types](../dsl/types.md) - CellValue types
+- [Variables and Types](../../guide/variables-types.md) - Data types including CellValue
 - [SQL Operations](../dsl/query.md) - Using SQL with sheets

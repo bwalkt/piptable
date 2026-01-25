@@ -187,5 +187,5 @@ Track breaking API changes between versions:
 ## See Also
 
 - [DSL Reference](../dsl/README.md) - Language syntax
-- [Examples](../../examples/README.md) - Code examples
-- [Guides](../../guide/README.md) - How-to guides
+- [Getting Started](../../guide/getting-started.md) - Installation and setup
+- [Core Concepts](../../guide/core-concepts.md) - Key concepts and patterns
