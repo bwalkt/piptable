@@ -4,6 +4,27 @@ Interactive playground for experimenting with PipTable DSL code.
 
 ## Development
 
+### Using Bun (Recommended)
+
+```bash
+# Install dependencies
+bun install
+
+# Start development server
+bun run dev
+
+# Build for production
+bun run build
+
+# Preview production build
+bun run preview
+
+# Type checking
+bun run typecheck
+```
+
+### Using npm (Alternative)
+
 ```bash
 # Install dependencies
 npm install
@@ -13,9 +34,6 @@ npm run dev
 
 # Build for production
 npm run build
-
-# Preview production build
-npm run preview
 ```
 
 ## Features
