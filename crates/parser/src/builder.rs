@@ -559,7 +559,7 @@ fn build_join_expr(pair: Pair<Rule>) -> BuildResult<Expr> {
                             _ => {
                                 return Err(BuildError::from_pair(
                                     &cond_inner_pair,
-                                    "Join condition must be a string or column equality",
+                                    "Join condition must be a string literal (on \"column\") or string equality (on \"left_col\" = \"right_col\"). Use quotes around column names.",
                                 ))
                             }
                         }

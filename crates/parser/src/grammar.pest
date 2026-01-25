@@ -111,14 +111,18 @@ expr_stmt = { expr }
 expr = { join_expr }
 
 // Join expressions
-join_expr = { or_expr ~ (join_op ~ or_expr ~ join_condition?)* }
+join_expr = { or_expr ~ (join_op ~ or_expr ~ join_condition)* }
 join_op = { left_join | right_join | full_join | inner_join }
 left_join = { "left" ~ "join" }
 right_join = { "right" ~ "join" }
 full_join = { "full" ~ "join" }
 inner_join = { "join" }
-join_condition = { "on" ~ (join_key_pair | expr) }
-join_key_pair = { expr ~ "=" ~ expr }
+// Use comparison_expr to prevent join_condition from consuming subsequent joins
+// Note: While the grammar accepts general expressions, the builder currently only supports:
+//   - String literals: on "column_name" (for same column in both tables)
+//   - String equality: on "left_col" = "right_col" (for different column names)
+join_condition = { "on" ~ (join_key_pair | comparison_expr) }
+join_key_pair = { comparison_expr ~ "=" ~ comparison_expr }
 // Word boundaries are enforced by requiring non-alpha after the keyword
 // Must be atomic (@) to prevent automatic whitespace insertion before the lookahead
 or_kw = @{ ^"or" ~ !ASCII_ALPHA }
@@ -237,7 +241,7 @@ func_arg_list = { func_arg ~ ("," ~ func_arg)* }
 func_arg = { (ident ~ "=>")? ~ expr }
 
 join_clause = { join_type? ~ ^"join" ~ table_ref ~ (^"as" ~ ident | alias_ident)? ~ (^"on" ~ expr)? }
-join_type = { ^"inner" | ^"left" ~ ^"outer"? | ^"right" ~ ^"outer"? | ^"cross" }
+join_type = { ^"inner" | ^"left" ~ ^"outer"? | ^"right" ~ ^"outer"? | ^"full" ~ ^"outer"? | ^"cross" }
 
 where_clause = { ^"where" ~ expr }
 group_by_clause = { ^"group" ~ ^"by" ~ expr ~ ("," ~ expr)* }

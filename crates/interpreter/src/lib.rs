@@ -3294,10 +3294,10 @@ combined = consolidate(stores, "_store")
         // Test behavior with empty sheet - should either work or give predictable error
         let code = r#"result = sheet1 join sheet2 on "id" = "user_id""#;
         let program = PipParser::parse_str(code).unwrap();
-        
+
         // This may fail with "Columns not named" for truly empty sheets, which is expected
         let eval_result = interp.eval(program).await;
-        
+
         match eval_result {
             Ok(_) => {
                 // If it succeeds, verify the result is empty
@@ -3327,7 +3327,7 @@ combined = consolidate(stores, "_store")
         let code = r#"result = sheet1 left join sheet2 on "id" = "user_id""#;
         let program = PipParser::parse_str(code).unwrap();
         let left_result = interp.eval(program).await;
-        
+
         if left_result.is_ok() {
             let result = interp.get_var("result").await.unwrap();
             if let Value::Array(arr) = result {
@@ -3344,7 +3344,7 @@ combined = consolidate(stores, "_store")
         let code = r#"result = sheet1 right join sheet2 on "id" = "user_id""#;
         let program = PipParser::parse_str(code).unwrap();
         let right_result = interp.eval(program).await;
-        
+
         if right_result.is_ok() {
             let result = interp.get_var("result").await.unwrap();
             if let Value::Array(arr) = result {
