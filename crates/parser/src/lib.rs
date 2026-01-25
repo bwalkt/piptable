@@ -520,6 +520,45 @@ mod tests {
     }
 
     #[test]
+    fn parse_append_basic() {
+        let code = r#"users append new_users"#;
+        let result = PipParser::parse_str(code);
+        assert!(result.is_ok(), "Parse error: {:?}", result.err());
+        let program = result.unwrap();
+        assert!(matches!(
+            &program.statements[0],
+            Statement::Append { target, distinct, key, .. }
+            if target == "users" && !distinct && key.is_none()
+        ));
+    }
+
+    #[test]
+    fn parse_append_distinct() {
+        let code = r#"users append distinct new_users on "id""#;
+        let result = PipParser::parse_str(code);
+        assert!(result.is_ok(), "Parse error: {:?}", result.err());
+        let program = result.unwrap();
+        assert!(matches!(
+            &program.statements[0],
+            Statement::Append { target, distinct, key, .. }
+            if target == "users" && *distinct && key.as_deref() == Some("id")
+        ));
+    }
+
+    #[test]
+    fn parse_upsert() {
+        let code = r#"users upsert updates on "id""#;
+        let result = PipParser::parse_str(code);
+        assert!(result.is_ok(), "Parse error: {:?}", result.err());
+        let program = result.unwrap();
+        assert!(matches!(
+            &program.statements[0],
+            Statement::Upsert { target, key, .. }
+            if target == "users" && key == "id"
+        ));
+    }
+
+    #[test]
     fn parse_join_with_different_columns() {
         let code = r#"result = users join orders on "id" = "user_id""#;
         let result = PipParser::parse_str(code);

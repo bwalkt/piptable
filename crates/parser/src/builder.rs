@@ -83,6 +83,8 @@ fn build_statement(pair: Pair<Rule>) -> BuildResult<Statement> {
         Rule::call_stmt => build_call_stmt(inner, line),
         Rule::export_stmt => build_export_stmt(inner, line),
         Rule::import_stmt => build_import_stmt(inner, line),
+        Rule::append_stmt => build_append_stmt(inner, line),
+        Rule::upsert_stmt => build_upsert_stmt(inner, line),
         _ => Err(BuildError::from_pair(
             &inner,
             format!("Unexpected statement rule: {:?}", inner.as_rule()),
@@ -399,6 +401,71 @@ fn build_import_stmt(pair: Pair<Rule>, line: usize) -> BuildResult<Statement> {
         target,
         sheet_name,
         options,
+        line,
+    })
+}
+
+fn build_append_stmt(pair: Pair<Rule>, line: usize) -> BuildResult<Statement> {
+    let mut inner = pair.into_inner();
+
+    // Get target variable name
+    let target = inner.next().unwrap().as_str().to_string();
+
+    // Check for optional "distinct" keyword
+    let mut distinct = false;
+    let mut key = None;
+    let mut source_expr = None;
+
+    for p in inner {
+        match p.as_rule() {
+            Rule::append_type => {
+                distinct = true;
+            }
+            Rule::append_key => {
+                // Extract the string literal for the key
+                let key_str = p.into_inner().next().unwrap().as_str();
+                // Remove quotes
+                key = Some(key_str.trim_matches('"').to_string());
+            }
+            Rule::expr => {
+                source_expr = Some(build_expr(p)?);
+            }
+            _ => {
+                source_expr = Some(build_expr(p)?);
+            }
+        }
+    }
+
+    let source = source_expr
+        .ok_or_else(|| BuildError::new(line, 0, "Missing source expression in append statement"))?;
+
+    Ok(Statement::Append {
+        target,
+        source,
+        distinct,
+        key,
+        line,
+    })
+}
+
+fn build_upsert_stmt(pair: Pair<Rule>, line: usize) -> BuildResult<Statement> {
+    let mut inner = pair.into_inner();
+
+    // Get target variable name
+    let target = inner.next().unwrap().as_str().to_string();
+
+    // Get source expression
+    let source = build_expr(inner.next().unwrap())?;
+
+    // Skip "on" keyword (handled by grammar) and get the key
+    let key_str = inner.next().unwrap().as_str();
+    // Remove quotes
+    let key = key_str.trim_matches('"').to_string();
+
+    Ok(Statement::Upsert {
+        target,
+        source,
+        key,
         line,
     })
 }
