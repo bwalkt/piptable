@@ -299,18 +299,29 @@ a / b / c   ' Evaluates as (a / b) / c
 
 PipTable performs automatic type conversion in some cases:
 
-### String Concatenation
-Any value concatenated with a string becomes a string:
+### Addition Operator (+) Rules
+The `+` operator behaves differently based on operand types:
+
+1. **If either operand contains non-numeric characters** → String concatenation
+2. **If both operands are numeric (or numeric strings)** → Numeric addition
+
 ```piptable
-dim text = "Value: " + 42           ' "Value: 42"
-dim msg = "Active: " + true         ' "Active: true"
+' String concatenation (non-numeric content)
+dim text = "Value: " + 42           ' "Value: 42" (left has non-numeric)
+dim msg = "Active: " + true         ' "Active: true" (left has non-numeric)
+dim path = "file" + 123              ' "file123" (left has non-numeric)
+
+' Numeric addition (both numeric)
+dim result = "10" + 5                ' 15 (both are numeric)
+dim total = 10 + "5"                 ' 15 (both are numeric)
+dim sum = "10" + "5"                 ' 15 (both are numeric)
 ```
 
-### Numeric Operations
-Strings are converted to numbers if possible:
+### Other Operators
+Multiplication, division, and other math operators always attempt numeric conversion:
 ```piptable
-dim result = "10" + 5               ' 15 (numeric)
-dim value = "3.14" * 2              ' 6.28
+dim value = "3.14" * 2               ' 6.28 (converts to number)
+dim result = "10" / "2"              ' 5 (converts to number)
 ```
 
 ### Boolean Context

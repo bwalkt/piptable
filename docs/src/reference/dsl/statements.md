@@ -386,7 +386,8 @@ dim x = 42  ' Inline comment
 ' ============================================
 
 ' Load sales data from multiple sources
-dim sales = import "sales_*.csv" into book
+' NOTE: Glob patterns are planned; currently use comma-separated list
+dim sales = import "sales_2023.csv,sales_2024.csv" into book
 
 ' TODO: Add validation for negative values
 ' NOTE: This assumes USD currency
