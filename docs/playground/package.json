@@ -1,0 +1,23 @@
+{
+  "name": "piptable-playground",
+  "version": "0.1.0",
+  "description": "Interactive playground for PipTable DSL",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "codemirror": "^6.0.1",
+    "@codemirror/commands": "^6.3.0",
+    "@codemirror/language": "^6.9.0",
+    "@codemirror/state": "^6.3.0",
+    "@codemirror/view": "^6.21.0",
+    "@codemirror/theme-one-dark": "^6.1.2"
+  },
+  "devDependencies": {
+    "vite": "^5.0.0",
+    "typescript": "^5.3.0"
+  }
+}

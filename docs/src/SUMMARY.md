@@ -64,5 +64,6 @@
 
 ---
 
+[Playground](../playground/index.html)
 [Changelog](changelog.md)
 [License](license.md)
