@@ -11,6 +11,7 @@ members = [
     "crates/server",
     "crates/sheet",
     "crates/python",
+    "crates/piptable-wasm",
 ]
 
 [workspace.package]
