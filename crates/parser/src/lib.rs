@@ -520,6 +520,117 @@ mod tests {
     }
 
     #[test]
+    fn parse_append_basic() {
+        let code = r#"users append new_users"#;
+        let result = PipParser::parse_str(code);
+        assert!(result.is_ok(), "Parse error: {:?}", result.err());
+        let program = result.unwrap();
+        assert!(matches!(
+            &program.statements[0],
+            Statement::Append { target, distinct, key, .. }
+            if target == "users" && !distinct && key.is_none()
+        ));
+    }
+
+    #[test]
+    fn parse_append_distinct() {
+        let code = r#"users append distinct new_users on "id""#;
+        let result = PipParser::parse_str(code);
+        assert!(result.is_ok(), "Parse error: {:?}", result.err());
+        let program = result.unwrap();
+        assert!(matches!(
+            &program.statements[0],
+            Statement::Append { target, distinct, key, .. }
+            if target == "users" && *distinct && key.as_deref() == Some("id")
+        ));
+    }
+
+    #[test]
+    fn parse_upsert() {
+        let code = r#"users upsert updates on "id""#;
+        let result = PipParser::parse_str(code);
+        assert!(result.is_ok(), "Parse error: {:?}", result.err());
+        let program = result.unwrap();
+        assert!(matches!(
+            &program.statements[0],
+            Statement::Upsert { target, key, .. }
+            if target == "users" && key == "id"
+        ));
+    }
+
+    #[test]
+    fn parse_append_with_escaped_key() {
+        // Test with escaped quotes in the key name
+        let code = r#"users append distinct new_users on "col\"name""#;
+        let result = PipParser::parse_str(code);
+        assert!(result.is_ok(), "Parse error: {:?}", result.err());
+        let program = result.unwrap();
+        assert!(matches!(
+            &program.statements[0],
+            Statement::Append { distinct, key, .. }
+            if *distinct && key.as_deref() == Some(r#"col"name"#)
+        ));
+    }
+
+    #[test]
+    fn parse_upsert_with_escaped_key() {
+        // Test with escaped characters in the key name
+        let code = r#"users upsert updates on "id\nline""#;
+        let result = PipParser::parse_str(code);
+        assert!(result.is_ok(), "Parse error: {:?}", result.err());
+        let program = result.unwrap();
+        assert!(matches!(
+            &program.statements[0],
+            Statement::Upsert { key, .. }
+            if key == "id\nline"
+        ));
+    }
+
+    #[test]
+    fn parse_append_empty_key_error() {
+        // Test that empty keys are rejected
+        let code = r#"users append distinct new_users on """#;
+        let result = PipParser::parse_str(code);
+        assert!(result.is_err(), "Should error on empty key");
+        let err = result.unwrap_err();
+        assert!(err.to_string().contains("Append key cannot be empty"));
+    }
+
+    #[test]
+    fn parse_upsert_empty_key_error() {
+        // Test that empty keys are rejected
+        let code = r#"users upsert updates on """#;
+        let result = PipParser::parse_str(code);
+        assert!(result.is_err(), "Should error on empty key");
+        let err = result.unwrap_err();
+        assert!(err.to_string().contains("Upsert key cannot be empty"));
+    }
+
+    #[test]
+    fn parse_append_with_key_no_distinct_error() {
+        // Test that append with "on" but no distinct fails at build time
+        let code = r#"users append new_users on "id""#;
+        let result = PipParser::parse_str(code);
+        assert!(result.is_err(), "Should error on key without distinct");
+        let err = result.unwrap_err();
+        assert!(err
+            .to_string()
+            .contains("'on' clause can only be used with 'append distinct'"));
+    }
+
+    #[test]
+    fn parse_append_distinct_requires_on() {
+        // Test that "distinct" without "on" fails at build time
+        let code = r#"users append distinct new_users"#;
+        let result = PipParser::parse_str(code);
+        assert!(result.is_err(), "Should error on distinct without key");
+        let err = result.unwrap_err();
+        assert!(err
+            .to_string()
+            .contains("append distinct requires 'on' clause"));
+    }
+
+    #[test]
     fn parse_join_with_different_columns() {
         let code = r#"result = users join orders on "id" = "user_id""#;
         let result = PipParser::parse_str(code);

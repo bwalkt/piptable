@@ -345,6 +345,92 @@ impl Interpreter {
                 self.call_function(&function, arg_vals, line).await
             }
 
+            Statement::Append {
+                target,
+                source,
+                distinct,
+                key,
+                line,
+            } => {
+                // Get the target sheet
+                let target_val = self.get_var(&target).await.ok_or_else(|| {
+                    PipError::runtime(line, format!("undefined variable: {}", target))
+                })?;
+
+                // Evaluate source expression
+                let source_val = self
+                    .eval_expr(&source)
+                    .await
+                    .map_err(|e| e.with_line(line))?;
+
+                // Convert both to sheets
+                let mut target_sheet = value_to_sheet(&target_val).map_err(|e| {
+                    PipError::runtime(line, format!("target must be a sheet: {}", e))
+                })?;
+                let source_sheet = value_to_sheet(&source_val).map_err(|e| {
+                    PipError::runtime(line, format!("source must be a sheet: {}", e))
+                })?;
+
+                // Perform append operation
+                if distinct {
+                    if let Some(key) = key {
+                        target_sheet
+                            .append_distinct(&source_sheet, &key)
+                            .map_err(|e| {
+                                PipError::runtime(line, format!("append distinct failed: {}", e))
+                            })?;
+                    } else {
+                        return Err(PipError::runtime(
+                            line,
+                            "append distinct requires a key column",
+                        ));
+                    }
+                } else {
+                    target_sheet
+                        .append(&source_sheet)
+                        .map_err(|e| PipError::runtime(line, format!("append failed: {}", e)))?;
+                }
+
+                // Update the variable with modified sheet
+                self.set_var(&target, sheet_to_value(&target_sheet)).await;
+                Ok(Value::Null)
+            }
+
+            Statement::Upsert {
+                target,
+                source,
+                key,
+                line,
+            } => {
+                // Get the target sheet
+                let target_val = self.get_var(&target).await.ok_or_else(|| {
+                    PipError::runtime(line, format!("undefined variable: {}", target))
+                })?;
+
+                // Evaluate source expression
+                let source_val = self
+                    .eval_expr(&source)
+                    .await
+                    .map_err(|e| e.with_line(line))?;
+
+                // Convert both to sheets
+                let mut target_sheet = value_to_sheet(&target_val).map_err(|e| {
+                    PipError::runtime(line, format!("target must be a sheet: {}", e))
+                })?;
+                let source_sheet = value_to_sheet(&source_val).map_err(|e| {
+                    PipError::runtime(line, format!("source must be a sheet: {}", e))
+                })?;
+
+                // Perform upsert operation
+                target_sheet
+                    .upsert(&source_sheet, &key)
+                    .map_err(|e| PipError::runtime(line, format!("upsert failed: {}", e)))?;
+
+                // Update the variable with modified sheet
+                self.set_var(&target, sheet_to_value(&target_sheet)).await;
+                Ok(Value::Null)
+            }
+
             Statement::Expr { expr, line } => {
                 self.eval_expr(&expr).await.map_err(|e| e.with_line(line))
             }
@@ -3351,6 +3437,225 @@ combined = consolidate(stores, "_store")
             } else {
                 panic!("Expected Array result");
             }
+        }
+    }
+
+    #[tokio::test]
+    async fn test_append_basic() {
+        use indexmap::IndexMap;
+        use piptable_sheet::{CellValue, Sheet};
+
+        let mut interp = Interpreter::new();
+
+        // Create initial users sheet
+        let mut user1 = IndexMap::new();
+        user1.insert("id".to_string(), CellValue::Int(1));
+        user1.insert("name".to_string(), CellValue::String("Alice".to_string()));
+
+        let mut user2 = IndexMap::new();
+        user2.insert("id".to_string(), CellValue::Int(2));
+        user2.insert("name".to_string(), CellValue::String("Bob".to_string()));
+
+        let sheet1 = Sheet::from_records(vec![user1, user2]).unwrap();
+        interp.set_var("users", sheet_to_value(&sheet1)).await;
+
+        // Create new users to append
+        let mut user3 = IndexMap::new();
+        user3.insert("id".to_string(), CellValue::Int(3));
+        user3.insert("name".to_string(), CellValue::String("Charlie".to_string()));
+
+        let sheet2 = Sheet::from_records(vec![user3]).unwrap();
+        interp.set_var("new_users", sheet_to_value(&sheet2)).await;
+
+        // Test basic append
+        let code = r#"users append new_users"#;
+        let program = PipParser::parse_str(code).unwrap();
+        interp.eval(program).await.unwrap();
+
+        // Verify the result
+        let result = interp.get_var("users").await.unwrap();
+        if let Value::Array(arr) = result {
+            assert_eq!(arr.len(), 3, "Should have 3 users after append");
+
+            // Check that all users are present
+            let mut found_alice = false;
+            let mut found_bob = false;
+            let mut found_charlie = false;
+
+            for item in &arr {
+                if let Value::Object(obj) = item {
+                    if let Some(Value::String(name)) = obj.get("name") {
+                        match name.as_str() {
+                            "Alice" => found_alice = true,
+                            "Bob" => found_bob = true,
+                            "Charlie" => found_charlie = true,
+                            _ => {}
+                        }
+                    }
+                }
+            }
+
+            assert!(found_alice, "Alice should be in the result");
+            assert!(found_bob, "Bob should be in the result");
+            assert!(found_charlie, "Charlie should be in the result");
+        } else {
+            panic!("Expected Array result");
+        }
+    }
+
+    #[tokio::test]
+    async fn test_append_distinct() {
+        use indexmap::IndexMap;
+        use piptable_sheet::{CellValue, Sheet};
+
+        let mut interp = Interpreter::new();
+
+        // Create initial users sheet
+        let mut user1 = IndexMap::new();
+        user1.insert("id".to_string(), CellValue::Int(1));
+        user1.insert("name".to_string(), CellValue::String("Alice".to_string()));
+
+        let mut user2 = IndexMap::new();
+        user2.insert("id".to_string(), CellValue::Int(2));
+        user2.insert("name".to_string(), CellValue::String("Bob".to_string()));
+
+        let sheet1 = Sheet::from_records(vec![user1, user2]).unwrap();
+        interp.set_var("users", sheet_to_value(&sheet1)).await;
+
+        // Create new users with duplicate ID
+        let mut user2_dup = IndexMap::new();
+        user2_dup.insert("id".to_string(), CellValue::Int(2));
+        user2_dup.insert(
+            "name".to_string(),
+            CellValue::String("Bob Updated".to_string()),
+        );
+
+        let mut user3 = IndexMap::new();
+        user3.insert("id".to_string(), CellValue::Int(3));
+        user3.insert("name".to_string(), CellValue::String("Charlie".to_string()));
+
+        let sheet2 = Sheet::from_records(vec![user2_dup, user3]).unwrap();
+        interp.set_var("new_users", sheet_to_value(&sheet2)).await;
+
+        // Test append distinct on "id"
+        let code = r#"users append distinct new_users on "id""#;
+        let program = PipParser::parse_str(code).unwrap();
+        interp.eval(program).await.unwrap();
+
+        // Verify the result
+        let result = interp.get_var("users").await.unwrap();
+        if let Value::Array(arr) = result {
+            assert_eq!(
+                arr.len(),
+                3,
+                "Should have 3 users (duplicate ID=2 not added)"
+            );
+
+            // Check that Bob's name wasn't updated
+            for item in &arr {
+                if let Value::Object(obj) = item {
+                    if let (Some(Value::Int(id)), Some(Value::String(name))) =
+                        (obj.get("id"), obj.get("name"))
+                    {
+                        if *id == 2 {
+                            assert_eq!(name, "Bob", "Bob's name should not have changed");
+                        }
+                    }
+                }
+            }
+        } else {
+            panic!("Expected Array result");
+        }
+    }
+
+    #[tokio::test]
+    async fn test_upsert() {
+        use indexmap::IndexMap;
+        use piptable_sheet::{CellValue, Sheet};
+
+        let mut interp = Interpreter::new();
+
+        // Create initial users sheet
+        let mut user1 = IndexMap::new();
+        user1.insert("id".to_string(), CellValue::Int(1));
+        user1.insert("name".to_string(), CellValue::String("Alice".to_string()));
+        user1.insert("age".to_string(), CellValue::Int(25));
+
+        let mut user2 = IndexMap::new();
+        user2.insert("id".to_string(), CellValue::Int(2));
+        user2.insert("name".to_string(), CellValue::String("Bob".to_string()));
+        user2.insert("age".to_string(), CellValue::Int(30));
+
+        let sheet1 = Sheet::from_records(vec![user1, user2]).unwrap();
+        interp.set_var("users", sheet_to_value(&sheet1)).await;
+
+        // Create updates with existing and new users
+        let mut user1_update = IndexMap::new();
+        user1_update.insert("id".to_string(), CellValue::Int(1));
+        user1_update.insert(
+            "name".to_string(),
+            CellValue::String("Alice Smith".to_string()),
+        );
+        user1_update.insert("age".to_string(), CellValue::Int(26));
+
+        let mut user3 = IndexMap::new();
+        user3.insert("id".to_string(), CellValue::Int(3));
+        user3.insert("name".to_string(), CellValue::String("Charlie".to_string()));
+        user3.insert("age".to_string(), CellValue::Int(35));
+
+        let sheet2 = Sheet::from_records(vec![user1_update, user3]).unwrap();
+        interp.set_var("updates", sheet_to_value(&sheet2)).await;
+
+        // Test upsert
+        let code = r#"users upsert updates on "id""#;
+        let program = PipParser::parse_str(code).unwrap();
+        interp.eval(program).await.unwrap();
+
+        // Verify the result
+        let result = interp.get_var("users").await.unwrap();
+        if let Value::Array(arr) = result {
+            assert_eq!(arr.len(), 3, "Should have 3 users after upsert");
+
+            // Check that Alice was updated
+            let mut found_alice_updated = false;
+            let mut found_bob_unchanged = false;
+            let mut found_charlie_new = false;
+
+            for item in &arr {
+                if let Value::Object(obj) = item {
+                    if let (
+                        Some(Value::Int(id)),
+                        Some(Value::String(name)),
+                        Some(Value::Int(age)),
+                    ) = (obj.get("id"), obj.get("name"), obj.get("age"))
+                    {
+                        match *id {
+                            1 => {
+                                assert_eq!(name, "Alice Smith", "Alice's name should be updated");
+                                assert_eq!(*age, 26, "Alice's age should be updated");
+                                found_alice_updated = true;
+                            }
+                            2 => {
+                                assert_eq!(name, "Bob", "Bob's name should be unchanged");
+                                assert_eq!(*age, 30, "Bob's age should be unchanged");
+                                found_bob_unchanged = true;
+                            }
+                            3 => {
+                                assert_eq!(name, "Charlie", "Charlie should be added");
+                                assert_eq!(*age, 35, "Charlie's age should be 35");
+                                found_charlie_new = true;
+                            }
+                            _ => {}
+                        }
+                    }
+                }
+            }
+
+            assert!(found_alice_updated, "Alice should be updated");
+            assert!(found_bob_unchanged, "Bob should be unchanged");
+            assert!(found_charlie_new, "Charlie should be added");
+        } else {
+            panic!("Expected Array result");
         }
     }
 }

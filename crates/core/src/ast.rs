@@ -113,6 +113,23 @@ pub enum Statement {
         line: usize,
     },
 
+    /// Append statement: `users append new_users` or `users append distinct new_users on "id"`
+    Append {
+        target: String,
+        source: Expr,
+        distinct: bool,
+        key: Option<String>,
+        line: usize,
+    },
+
+    /// Upsert statement: `users upsert updates on "id"`
+    Upsert {
+        target: String,
+        source: Expr,
+        key: String,
+        line: usize,
+    },
+
     /// Expression statement (for side effects)
     Expr { expr: Expr, line: usize },
 }

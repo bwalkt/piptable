@@ -83,6 +83,8 @@ fn build_statement(pair: Pair<Rule>) -> BuildResult<Statement> {
         Rule::call_stmt => build_call_stmt(inner, line),
         Rule::export_stmt => build_export_stmt(inner, line),
         Rule::import_stmt => build_import_stmt(inner, line),
+        Rule::append_stmt => build_append_stmt(inner, line),
+        Rule::upsert_stmt => build_upsert_stmt(inner, line),
         _ => Err(BuildError::from_pair(
             &inner,
             format!("Unexpected statement rule: {:?}", inner.as_rule()),
@@ -399,6 +401,116 @@ fn build_import_stmt(pair: Pair<Rule>, line: usize) -> BuildResult<Statement> {
         target,
         sheet_name,
         options,
+        line,
+    })
+}
+
+fn build_append_stmt(pair: Pair<Rule>, line: usize) -> BuildResult<Statement> {
+    let mut inner = pair.into_inner();
+
+    // Get target variable name
+    let target = inner.next().unwrap().as_str().to_string();
+
+    let mut distinct = false;
+    let mut key = None;
+    let mut source_expr = None;
+
+    for p in inner {
+        match p.as_rule() {
+            Rule::append_type => {
+                distinct = true;
+            }
+            Rule::append_key => {
+                let key_pair = p.into_inner().next().unwrap();
+                let parsed = build_literal(key_pair.clone())?;
+                let key_str = match parsed {
+                    Literal::String(s) if !s.is_empty() => s,
+                    Literal::String(_) => {
+                        return Err(BuildError::from_pair(
+                            &key_pair,
+                            "Append key cannot be empty",
+                        ))
+                    }
+                    _ => {
+                        return Err(BuildError::from_pair(
+                            &key_pair,
+                            "Append key must be a string",
+                        ))
+                    }
+                };
+                key = Some(key_str);
+            }
+            Rule::expr => {
+                source_expr = Some(build_expr(p)?);
+            }
+            _ => {
+                source_expr = Some(build_expr(p)?);
+            }
+        }
+    }
+
+    let source = source_expr
+        .ok_or_else(|| BuildError::new(line, 0, "Missing source expression in append statement"))?;
+
+    // Validate: if distinct is used, key must be present
+    if distinct && key.is_none() {
+        return Err(BuildError::new(
+            line,
+            0,
+            "append distinct requires 'on' clause with key column",
+        ));
+    }
+
+    // Validate: if key is present, distinct must be used
+    if key.is_some() && !distinct {
+        return Err(BuildError::new(
+            line,
+            0,
+            "'on' clause can only be used with 'append distinct'",
+        ));
+    }
+
+    Ok(Statement::Append {
+        target,
+        source,
+        distinct,
+        key,
+        line,
+    })
+}
+
+fn build_upsert_stmt(pair: Pair<Rule>, line: usize) -> BuildResult<Statement> {
+    let mut inner = pair.into_inner();
+
+    // Get target variable name
+    let target = inner.next().unwrap().as_str().to_string();
+
+    // Get source expression
+    let source = build_expr(inner.next().unwrap())?;
+
+    // Skip "on" keyword (handled by grammar) and get the key
+    let key_pair = inner.next().unwrap();
+    let parsed = build_literal(key_pair.clone())?;
+    let key = match parsed {
+        Literal::String(s) if !s.is_empty() => s,
+        Literal::String(_) => {
+            return Err(BuildError::from_pair(
+                &key_pair,
+                "Upsert key cannot be empty",
+            ))
+        }
+        _ => {
+            return Err(BuildError::from_pair(
+                &key_pair,
+                "Upsert key must be a string",
+            ))
+        }
+    };
+
+    Ok(Statement::Upsert {
+        target,
+        source,
+        key,
         line,
     })
 }

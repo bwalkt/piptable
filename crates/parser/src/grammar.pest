@@ -27,6 +27,8 @@ statement = {
   | chart_stmt
   | export_stmt
   | import_stmt
+  | append_stmt
+  | upsert_stmt
   | assignment_stmt
   | expr_stmt
 }
@@ -101,6 +103,12 @@ without_headers = { "without" ~ "headers" }
 named_params = { "(" ~ named_param ~ ("," ~ named_param)* ~ ")" }
 named_param = { ident ~ "=" ~ expr }
 with_clause = { "with" ~ object_literal }
+
+append_stmt = { ident ~ "append" ~ append_type? ~ expr ~ append_key? }
+append_type = { "distinct" }
+append_key = { "on" ~ string }
+
+upsert_stmt = { ident ~ "upsert" ~ expr ~ "on" ~ string }
 
 expr_stmt = { expr }
 
