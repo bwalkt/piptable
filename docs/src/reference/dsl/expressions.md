@@ -119,7 +119,7 @@ function(arg1, arg2, ...)
 ```vba
 print("Hello")
 len(array)
-sum(1, 2, 3)
+sum([1, 2, 3])
 max(scores)
 substr(text, 0, 10)
 ```
