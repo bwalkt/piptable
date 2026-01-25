@@ -336,4 +336,5 @@ convert_file("report.xlsx", "report.json")
 
 - [Sheet API](sheet.md) - Working with imported data
 - [Book API](book.md) - Multi-sheet file handling
-- [Import/Export Statements](../dsl/statements.md#import-export) - DSL syntax
+- [Import Statements](../dsl/statements.md#import) - Import DSL syntax
+- [Export Statements](../dsl/statements.md#export) - Export DSL syntax
