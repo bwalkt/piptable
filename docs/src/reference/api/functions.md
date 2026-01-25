@@ -2,78 +2,85 @@
 
 PipTable uses a hybrid approach for built-in functions: core functions are implemented in Rust for performance, while complex/specialized functions can be provided via Python UDFs.
 
-## Core Functions (Rust)
+> **Note:** This documentation includes both currently implemented functions and planned functionality. Functions marked with 📋 are planned but not yet implemented.
 
-These essential functions are always available and implemented in Rust for maximum performance.
+## Currently Implemented Functions (Rust)
+
+These functions are available in the current version of PipTable:
 
 ### Type Conversion
 
-| Function | Description | Example |
-|----------|-------------|---------|
-| `int(value)` | Convert to integer | `int("42")` → `42` |
-| `float(value)` | Convert to float | `float("3.14")` → `3.14` |
-| `str(value)` | Convert to string | `str(42)` → `"42"` |
-| `bool(value)` | Convert to boolean | `bool(1)` → `true` |
+| Function | Description | Example | Status |
+|----------|-------------|---------|--------|
+| `int(value)` | Convert to integer | `int("42")` → `42` | ✅ Implemented |
+| `float(value)` | Convert to float | `float("3.14")` → `3.14` | ✅ Implemented |
+| `str(value)` | Convert to string | `str(42)` → `"42"` | ✅ Implemented |
+| `bool(value)` | Convert to boolean | `bool(1)` → `true` | 📋 Planned |
 
-### String Functions (Basic)
+### Core Functions
 
-| Function | Description | Example |
-|----------|-------------|---------|
-| `len(str)` | String length | `len("hello")` → `5` |
-| `upper(str)` | Convert to uppercase | `upper("hello")` → `"HELLO"` |
-| `lower(str)` | Convert to lowercase | `lower("HELLO")` → `"hello"` |
-| `trim(str)` | Remove whitespace | `trim(" hello ")` → `"hello"` |
-| `substr(str, start, len)` | Extract substring | `substr("hello", 1, 3)` → `"ell"` |
-| `concat(str1, str2, ...)` | Concatenate strings | `concat("a", "b", "c")` → `"abc"` |
-| `split(str, delimiter)` | Split string | `split("a,b,c", ",")` → `["a", "b", "c"]` |
-| `replace(str, old, new)` | Replace substring | `replace("hello", "l", "r")` → `"herro"` |
+| Function | Description | Example | Status |
+|----------|-------------|---------|--------|
+| `len(value)` | Length of string/array/table | `len("hello")` → `5` | ✅ Implemented |
+| `type(value)` | Get type name | `type(42)` → `"int"` | ✅ Implemented |
+| `print(...)` | Output values | `print("Hello", name)` | ✅ Implemented |
 
-### Math Functions (Basic)
+### String Functions (Planned) 📋
 
-| Function | Description | Example |
-|----------|-------------|---------|
-| `abs(n)` | Absolute value | `abs(-5)` → `5` |
-| `round(n, decimals)` | Round number | `round(3.14159, 2)` → `3.14` |
-| `floor(n)` | Round down | `floor(3.9)` → `3` |
-| `ceil(n)` | Round up | `ceil(3.1)` → `4` |
-| `min(a, b, ...)` | Minimum value | `min(3, 1, 5)` → `1` |
-| `max(a, b, ...)` | Maximum value | `max(3, 1, 5)` → `5` |
-| `sum(array)` | Sum of array | `sum([1, 2, 3])` → `6` |
-| `avg(array)` | Average of array | `avg([1, 2, 3])` → `2` |
+| Function | Description | Example | Status |
+|----------|-------------|---------|--------|
+| `upper(str)` | Convert to uppercase | `upper("hello")` → `"HELLO"` | 📋 Planned |
+| `lower(str)` | Convert to lowercase | `lower("HELLO")` → `"hello"` | 📋 Planned |
+| `trim(str)` | Remove whitespace | `trim(" hello ")` → `"hello"` | 📋 Planned |
+| `substr(str, start, len)` | Extract substring | `substr("hello", 1, 3)` → `"ell"` | 📋 Planned |
+| `concat(str1, str2, ...)` | Concatenate strings | `concat("a", "b", "c")` → `"abc"` | 📋 Planned |
+| `split(str, delimiter)` | Split string | `split("a,b,c", ",")` → `["a", "b", "c"]` | 📋 Planned |
+| `replace(str, old, new)` | Replace substring | `replace("hello", "l", "r")` → `"herro"` | 📋 Planned |
 
-### Array Functions (Basic)
+### Math Functions
 
-| Function | Description | Example |
-|----------|-------------|---------|
-| `len(array)` | Array length | `len([1, 2, 3])` → `3` |
-| `first(array)` | First element | `first([1, 2, 3])` → `1` |
-| `last(array)` | Last element | `last([1, 2, 3])` → `3` |
-| `push(array, item)` | Add to end | `push([1, 2], 3)` → `[1, 2, 3]` |
-| `pop(array)` | Remove last | `pop([1, 2, 3])` → `[1, 2]` |
-| `slice(array, start, end)` | Extract subarray | `slice([1, 2, 3, 4], 1, 3)` → `[2, 3]` |
-| `contains(array, item)` | Check membership | `contains([1, 2, 3], 2)` → `true` |
-| `reverse(array)` | Reverse array | `reverse([1, 2, 3])` → `[3, 2, 1]` |
-| `sort(array)` | Sort array | `sort([3, 1, 2])` → `[1, 2, 3]` |
+| Function | Description | Example | Status |
+|----------|-------------|---------|--------|
+| `abs(n)` | Absolute value | `abs(-5)` → `5` | ✅ Implemented |
+| `min(a, b, ...)` | Minimum value | `min(3, 1, 5)` → `1` | ✅ Implemented |
+| `max(a, b, ...)` | Maximum value | `max(3, 1, 5)` → `5` | ✅ Implemented |
+| `sum(array)` | Sum of array | `sum([1, 2, 3])` → `6` | ✅ Implemented |
+| `avg(array)` | Average of array | `avg([1, 2, 3])` → `2` | ✅ Implemented |
+| `round(n, decimals)` | Round number | `round(3.14159, 2)` → `3.14` | 📋 Planned |
+| `floor(n)` | Round down | `floor(3.9)` → `3` | 📋 Planned |
+| `ceil(n)` | Round up | `ceil(3.1)` → `4` | 📋 Planned |
 
-### Object Functions
+### Object/Array Functions
 
-| Function | Description | Example |
-|----------|-------------|---------|
-| `keys(object)` | Get keys | `keys({"a": 1, "b": 2})` → `["a", "b"]` |
-| `values(object)` | Get values | `values({"a": 1, "b": 2})` → `[1, 2]` |
-| `has(object, key)` | Check key exists | `has({"a": 1}, "a")` → `true` |
-| `merge(obj1, obj2)` | Merge objects | `merge({"a": 1}, {"b": 2})` → `{"a": 1, "b": 2}` |
+| Function | Description | Example | Status |
+|----------|-------------|---------|--------|
+| `keys(object)` | Get object keys | `keys({"a": 1, "b": 2})` → `["a", "b"]` | ✅ Implemented |
+| `values(object)` | Get object values | `values({"a": 1, "b": 2})` → `[1, 2]` | ✅ Implemented |
+| `consolidate(book)` | Consolidate book sheets | `consolidate(book)` | ✅ Implemented |
 
-### Utility Functions
+### Array Functions (Planned) 📋
 
-| Function | Description | Example |
-|----------|-------------|---------|
-| `type(value)` | Get type name | `type(42)` → `"int"` |
-| `print(value, ...)` | Output values | `print("Hello", name)` |
-| `now()` | Current timestamp | `now()` → `2024-01-15 10:30:00` |
-| `uuid()` | Generate UUID | `uuid()` → `"550e8400-e29b-..."` |
-| `random()` | Random 0-1 | `random()` → `0.7264` |
-| `random(min, max)` | Random in range | `random(1, 10)` → `7` |
+| Function | Description | Example | Status |
+|----------|-------------|---------|--------|
+| `first(array)` | First element | `first([1, 2, 3])` → `1` | 📋 Planned |
+| `last(array)` | Last element | `last([1, 2, 3])` → `3` | 📋 Planned |
+| `push(array, item)` | Add to end | `push([1, 2], 3)` → `[1, 2, 3]` | 📋 Planned |
+| `pop(array)` | Remove last | `pop([1, 2, 3])` → `[1, 2]` | 📋 Planned |
+| `slice(array, start, end)` | Extract subarray | `slice([1, 2, 3, 4], 1, 3)` → `[2, 3]` | 📋 Planned |
+| `contains(array, item)` | Check membership | `contains([1, 2, 3], 2)` → `true` | 📋 Planned |
+| `reverse(array)` | Reverse array | `reverse([1, 2, 3])` → `[3, 2, 1]` | 📋 Planned |
+| `sort(array)` | Sort array | `sort([3, 1, 2])` → `[1, 2, 3]` | 📋 Planned |
+| `has(object, key)` | Check key exists | `has({"a": 1}, "a")` → `true` | 📋 Planned |
+| `merge(obj1, obj2)` | Merge objects | `merge({"a": 1}, {"b": 2})` → `{"a": 1, "b": 2}` | 📋 Planned |
+
+### Utility Functions (Planned) 📋
+
+| Function | Description | Example | Status |
+|----------|-------------|---------|--------|
+| `now()` | Current timestamp | `now()` → `2024-01-15 10:30:00` | 📋 Planned |
+| `uuid()` | Generate UUID | `uuid()` → `"550e8400-e29b-..."` | 📋 Planned |
+| `random()` | Random 0-1 | `random()` → `0.7264` | 📋 Planned |
+| `random(min, max)` | Random in range | `random(1, 10)` → `7` | 📋 Planned |
 
 ## Advanced Functions (Python UDFs)
 
@@ -109,8 +116,24 @@ def pad_left(text: str, width: int, char: str = ' ') -> str:
 
 def levenshtein(s1: str, s2: str) -> int:
     """Calculate edit distance between strings"""
-    # Implementation here
-    pass
+    if len(s1) < len(s2):
+        return levenshtein(s2, s1)
+    
+    if len(s2) == 0:
+        return len(s1)
+    
+    previous_row = range(len(s2) + 1)
+    for i, c1 in enumerate(s1):
+        current_row = [i + 1]
+        for j, c2 in enumerate(s2):
+            # j+1 instead of j since previous_row and current_row are one character longer
+            insertions = previous_row[j + 1] + 1
+            deletions = current_row[j] + 1
+            substitutions = previous_row[j] + (c1 != c2)
+            current_row.append(min(insertions, deletions, substitutions))
+        previous_row = current_row
+    
+    return previous_row[-1]
 ```
 
 ### Date/Time Functions (Advanced)
@@ -227,7 +250,7 @@ def zip_arrays(*arrays) -> list:
 
 ### Using Core Functions (Always Available)
 
-```
+```piptable
 ' Type conversion
 dim age = int("25")
 dim price = float("19.99")
@@ -248,9 +271,10 @@ dim sorted_list = sort(numbers)
 
 ### Using Python UDFs (When Python Available)
 
-```
-' Import Python functions module
-use python "functions.py"
+```piptable
+' Register Python functions
+register_python("regex_match", "import re; regex_match = lambda pattern, text: bool(re.match(pattern, text))")
+register_python("regex_extract", "functions.py", "regex_extract")
 
 ' Advanced string operations
 dim is_email = regex_match("^[a-zA-Z0-9+_.-]+@[a-zA-Z0-9.-]+$", email)

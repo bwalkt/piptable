@@ -238,15 +238,14 @@ import file_pattern into book [options]
 **Options:**
 - `without headers` - First row is data, not headers
 - `sheet "name"` - Specific sheet from Excel
-- Named parameters in parentheses
 
 **Examples:**
 ```piptable
 ' Single CSV file
 dim data = import "sales.csv" into sheet
 
-' Multiple files into book
-dim all_data = import "*.csv" into book
+' Multiple files into book (exact paths only, glob patterns planned)
+dim all_data = import "sales_2023.csv,sales_2024.csv" into book
 
 ' Without headers
 dim raw = import "data.csv" into sheet without headers
@@ -254,8 +253,7 @@ dim raw = import "data.csv" into sheet without headers
 ' Specific Excel sheet
 dim report = import "workbook.xlsx" sheet "Report" into sheet
 
-' With options
-dim custom = import "file.csv" into sheet (delimiter="|", encoding="utf-8")
+' Note: Additional options like delimiter and encoding are planned features
 ```
 
 ### export

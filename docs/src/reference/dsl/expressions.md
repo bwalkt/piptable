@@ -242,10 +242,9 @@ dim all_users = users left join profiles on "id"
 ' Different column names
 dim data = customers join purchases on "cust_id" = "customer_id"
 
-' Chain joins
-dim report = users 
-    join orders on "id" = "user_id"
-    join products on orders.product_id = products.id
+' Note: Chained joins require intermediate variables (planned feature)
+dim user_orders = users join orders on "id" = "user_id"
+dim report = user_orders join products on "product_id" = "id"
 ```
 
 ## Async Operations

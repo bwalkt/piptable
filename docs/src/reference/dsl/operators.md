@@ -16,7 +16,7 @@ Perform mathematical calculations on numeric values.
 | `-` | Negation (unary) | `-5` | `-5` |
 
 **Examples:**
-```
+```piptable
 dim total = price * quantity
 dim average = sum / count
 dim remainder = value % 10
@@ -32,7 +32,7 @@ Combine and manipulate string values.
 | `+` | Concatenation | `"Hello" + " " + "World"` | `"Hello World"` |
 
 **Examples:**
-```
+```piptable
 dim fullName = firstName + " " + lastName
 dim message = "Total: $" + str(amount)
 dim path = folder + "/" + filename
@@ -54,7 +54,7 @@ Compare values and return boolean results.
 | `>=` | Greater than or equal | `5 >= 5` | `true` |
 
 **Examples:**
-```
+```piptable
 if age >= 18 then
     print("Adult")
 end if
@@ -95,7 +95,7 @@ Combine boolean expressions.
 | false | false | false |
 
 **Examples:**
-```
+```piptable
 ' Complex conditions
 if age >= 18 and hasLicense then
     print("Can drive")
@@ -123,7 +123,7 @@ end if
 
 Pattern matching for strings (SQL-style).
 
-```
+```piptable
 expression LIKE pattern
 ```
 
@@ -132,7 +132,7 @@ expression LIKE pattern
 - `_` - Matches any single character
 
 **Examples:**
-```
+```piptable
 ' Match email pattern
 if email like "%@%.%" then
     print("Valid email format")
@@ -151,13 +151,13 @@ dim results = query("SELECT * FROM users WHERE name LIKE 'John%'")
 
 Check if value exists in a list or array.
 
-```
+```piptable
 value IN (list)
 value IN array
 ```
 
 **Examples:**
-```
+```piptable
 ' Check membership
 if status in ("active", "pending", "approved") then
     process()
@@ -180,13 +180,13 @@ dim results = query("
 
 Check for null values.
 
-```
+```piptable
 expression IS NULL
 expression IS NOT NULL
 ```
 
 **Examples:**
-```
+```piptable
 ' Check for null
 if value is null then
     value = defaultValue
@@ -215,7 +215,7 @@ Access members of objects and arrays.
 | `[]` | Array/object index | `array[0]`, `obj["key"]` |
 
 **Examples:**
-```
+```piptable
 ' Object access
 dim name = user.name
 dim city = user.address.city
@@ -239,12 +239,12 @@ dim value = data.users[0].profile.settings["theme"]
 
 Assert or convert types.
 
-```
+```piptable
 expression::type
 ```
 
 **Examples:**
-```
+```piptable
 ' Type conversion
 dim num = "42"::int
 dim text = 3.14::string
@@ -271,7 +271,7 @@ Operators are evaluated in this order (highest to lowest):
 11. **Join** `join`, `left join`, `right join`, `full join`
 
 **Examples:**
-```
+```piptable
 ' Multiplication before addition
 dim result = 2 + 3 * 4        ' = 14, not 20
 
@@ -290,7 +290,7 @@ dim value = -array[index].field + base * rate / 100
 
 Most binary operators are left-associative (evaluate left to right).
 
-```
+```piptable
 a + b + c   ' Evaluates as (a + b) + c
 a / b / c   ' Evaluates as (a / b) / c
 ```
@@ -301,14 +301,14 @@ PipTable performs automatic type conversion in some cases:
 
 ### String Concatenation
 Any value concatenated with a string becomes a string:
-```
+```piptable
 dim text = "Value: " + 42           ' "Value: 42"
 dim msg = "Active: " + true         ' "Active: true"
 ```
 
 ### Numeric Operations
 Strings are converted to numbers if possible:
-```
+```piptable
 dim result = "10" + 5               ' 15 (numeric)
 dim value = "3.14" * 2              ' 6.28
 ```
@@ -318,7 +318,7 @@ Values are truthy or falsy in boolean contexts:
 - **Falsy**: `null`, `false`, `0`, `""`, `[]`, `{}`
 - **Truthy**: Everything else
 
-```
+```piptable
 if array then                       ' True if non-empty
     print("Array has items")
 end if
