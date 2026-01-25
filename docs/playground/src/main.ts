@@ -105,6 +105,8 @@ function renderOutput() {
     outputEl.innerHTML = `<div class="error" role="alert">✗ Error: ${escapeHtml(error)}</div>`;
     outputEl.setAttribute('aria-busy', 'false');
   } else if (output) {
+    // Note: output HTML is developer-controlled from store/playground.ts
+    // When WASM execution is added, ensure user-generated content is sanitized
     outputEl.innerHTML = output;
     outputEl.setAttribute('aria-busy', 'false');
   } else {
