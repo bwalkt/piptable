@@ -254,6 +254,7 @@ How CellValue types map to different formats:
 - **Chunked processing**: Parquet, large Excel files
 
 ### Speed Comparison (relative)
+
 | Operation | CSV | Excel | JSON | Parquet |
 |-----------|-----|-------|------|---------|
 | Read small | Fast | Medium | Fast | Medium |
