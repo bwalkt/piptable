@@ -13,7 +13,7 @@ pip -i
 This starts a REPL where you can type commands and see results immediately:
 
 ```vba
-PipTable v0.1.0
+PipTable vX.Y.Z
 Type 'exit' to quit, 'help' for assistance
 
 > dim x = 42
