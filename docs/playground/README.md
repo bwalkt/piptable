@@ -46,7 +46,7 @@ npm run build
 
 ## Structure
 
-```
+```text
 playground/
 ├── index.html           # Main HTML file
 ├── src/
