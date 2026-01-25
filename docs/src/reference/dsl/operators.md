@@ -300,21 +300,24 @@ a / b / c   ' Evaluates as (a / b) / c
 PipTable performs automatic type conversion in some cases:
 
 ### Addition Operator (+) Rules
-The `+` operator behaves differently based on operand types:
+The `+` operator currently supports:
 
-1. **If either operand contains non-numeric characters** → String concatenation
-2. **If both operands are numeric (or numeric strings)** → Numeric addition
+1. **Numeric + Numeric** → Numeric addition
+2. **String + String** → String concatenation
+3. **Mixed types** → Currently errors (planned: automatic coercion)
 
 ```piptable
-' String concatenation (non-numeric content)
-dim text = "Value: " + 42           ' "Value: 42" (left has non-numeric)
-dim msg = "Active: " + true         ' "Active: true" (left has non-numeric)
-dim path = "file" + 123              ' "file123" (left has non-numeric)
+' Numeric addition
+dim result = 10 + 5                  ' 15 (both numeric)
+dim total = 3.14 + 2.86              ' 6.0 (both numeric)
 
-' Numeric addition (both numeric)
-dim result = "10" + 5                ' 15 (both are numeric)
-dim total = 10 + "5"                 ' 15 (both are numeric)
-dim sum = "10" + "5"                 ' 15 (both are numeric)
+' String concatenation
+dim text = "Hello" + " World"        ' "Hello World" (both strings)
+dim path = "file" + ".txt"           ' "file.txt" (both strings)
+
+' Mixed types (currently requires explicit conversion)
+dim msg = "Value: " + str(42)        ' "Value: 42" (convert number to string)
+dim sum = int("10") + 5              ' 15 (convert string to number)
 ```
 
 ### Other Operators

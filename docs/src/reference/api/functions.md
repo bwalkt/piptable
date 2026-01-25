@@ -256,17 +256,20 @@ dim age = int("25")
 dim price = float("19.99")
 dim text = str(42)
 
-' String manipulation
-dim name = upper("john")
-dim parts = split("a,b,c", ",")
+' Get type information
+dim data_type = type(scores)
+dim count = len(items)
 
 ' Math operations
 dim total = sum([10, 20, 30])
 dim average = avg(scores)
+dim absolute = abs(-42)
+dim minimum = min(3, 1, 5)
+dim maximum = max(3, 1, 5)
 
-' Array operations
-dim first_item = first(items)
-dim sorted_list = sort(numbers)
+' Object operations
+dim object_keys = keys(data)
+dim object_values = values(data)
 ```
 
 ### Using Python UDFs (When Python Available)

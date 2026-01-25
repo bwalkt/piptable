@@ -261,19 +261,19 @@ dim report = import "workbook.xlsx" sheet "Report" into sheet
 Save data to files.
 
 ```piptable
-export data to file [with options]
+export data to file
 ```
 
 **Examples:**
 ```piptable
-' Various formats
+' Various formats (format detected from extension)
 export data to "output.csv"
 export data to "output.xlsx"
 export data to "output.json"
 export data to "output.parquet"
 
-' With options
-export data to "output.csv" with {"delimiter": "|", "headers": false}
+' Note: Export options are planned but not yet implemented
+' Future: export data to "output.csv" with {"delimiter": "|"}
 ```
 
 ### append
