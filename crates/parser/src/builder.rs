@@ -507,18 +507,20 @@ fn build_join_expr(pair: Pair<Rule>) -> BuildResult<Expr> {
                         let left_str = key_inner.next().unwrap().as_str();
                         let right_str = key_inner.next().unwrap().as_str();
 
-                        // Remove quotes from string literals
-                        let left_col = left_str.trim_matches('"');
-                        let right_col = right_str.trim_matches('"');
+                        // Remove quotes and unescape string literals (same as build_literal)
+                        let left_col = unescape_string(&left_str[1..left_str.len() - 1]);
+                        let right_col = unescape_string(&right_str[1..right_str.len() - 1]);
 
                         JoinCondition::OnColumns {
-                            left: left_col.to_string(),
-                            right: right_col.to_string(),
+                            left: left_col,
+                            right: right_col,
                         }
                     } else {
                         // Handle simple "id" syntax (cond_inner is a string rule)
-                        let key_str = cond_inner.as_str().trim_matches('"');
-                        JoinCondition::On(key_str.to_string())
+                        let key_str = cond_inner.as_str();
+                        // Remove quotes and unescape (same as build_literal)
+                        let key = unescape_string(&key_str[1..key_str.len() - 1]);
+                        JoinCondition::On(key)
                     }
                 } else {
                     // Not a join condition, should not happen with correct grammar
