@@ -1,7 +1,6 @@
 # Build output
 /target/
 **/*.rs.bk
-
 # Cargo (Cargo.lock is committed for reproducible builds)
 
 # IDE
@@ -32,3 +31,6 @@ __pycache__/
 
 # Decision docs (local notes)
 docs/decisions/
+
+# Session context
+session.md

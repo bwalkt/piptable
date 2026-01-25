@@ -108,7 +108,17 @@ expr_stmt = { expr }
 // Expressions
 // =============================================================================
 
-expr = { or_expr }
+expr = { join_expr }
+
+// Join expressions
+join_expr = { or_expr ~ (join_op ~ or_expr ~ join_condition?)* }
+join_op = { left_join | right_join | full_join | inner_join }
+left_join = { "left" ~ "join" }
+right_join = { "right" ~ "join" }
+full_join = { "full" ~ "join" }
+inner_join = { "join" }
+join_condition = { "on" ~ (join_key_pair | expr) }
+join_key_pair = { expr ~ "=" ~ expr }
 // Word boundaries are enforced by requiring non-alpha after the keyword
 // Must be atomic (@) to prevent automatic whitespace insertion before the lookahead
 or_kw = @{ ^"or" ~ !ASCII_ALPHA }

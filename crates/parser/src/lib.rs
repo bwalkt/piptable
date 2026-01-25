@@ -92,7 +92,7 @@ impl LineColExt for pest::error::LineColLocation {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use piptable_core::{BinaryOp, Expr, Literal, SortDirection, Statement, TableRef};
+    use piptable_core::{BinaryOp, Expr, JoinCondition, JoinType, Literal, SortDirection, Statement, TableRef};
 
     // ========================================================================
     // Basic parsing tests
@@ -459,6 +459,162 @@ mod tests {
             Statement::Import { sources, target, options, .. }
             if sources.len() == 1 && target == "raw" && options.has_headers == Some(false)
         ));
+    }
+
+    // ========================================================================
+    // Join expression tests
+    // ========================================================================
+
+    #[test]
+    fn parse_join_inner() {
+        let code = r#"result = users join orders on "id""#;
+        let result = PipParser::parse_str(code);
+        assert!(result.is_ok(), "Parse error: {:?}", result.err());
+        let program = result.unwrap();
+        assert!(matches!(
+            &program.statements[0],
+            Statement::Assignment { value, .. }
+            if matches!(value, Expr::Join { join_type: JoinType::Inner, .. })
+        ));
+    }
+
+    #[test]
+    fn parse_join_left() {
+        let code = r#"result = users left join orders on "user_id""#;
+        let result = PipParser::parse_str(code);
+        assert!(result.is_ok(), "Parse error: {:?}", result.err());
+        let program = result.unwrap();
+        assert!(matches!(
+            &program.statements[0],
+            Statement::Assignment { value, .. }
+            if matches!(value, Expr::Join { join_type: JoinType::Left, .. })
+        ));
+    }
+
+    #[test]
+    fn parse_join_right() {
+        let code = r#"result = users right join orders on "id""#;
+        let result = PipParser::parse_str(code);
+        assert!(result.is_ok(), "Parse error: {:?}", result.err());
+        let program = result.unwrap();
+        assert!(matches!(
+            &program.statements[0],
+            Statement::Assignment { value, .. }
+            if matches!(value, Expr::Join { join_type: JoinType::Right, .. })
+        ));
+    }
+
+    #[test]
+    fn parse_join_full() {
+        let code = r#"result = users full join orders on "id""#;
+        let result = PipParser::parse_str(code);
+        assert!(result.is_ok(), "Parse error: {:?}", result.err());
+        let program = result.unwrap();
+        assert!(matches!(
+            &program.statements[0],
+            Statement::Assignment { value, .. }
+            if matches!(value, Expr::Join { join_type: JoinType::Full, .. })
+        ));
+    }
+
+    #[test]
+    fn parse_join_with_different_columns() {
+        let code = r#"result = users join orders on "id" = "user_id""#;
+        let result = PipParser::parse_str(code);
+        assert!(result.is_ok(), "Parse error: {:?}", result.err());
+        let program = result.unwrap();
+        
+        if let Statement::Assignment { value, .. } = &program.statements[0] {
+            if let Expr::Join { condition, .. } = value {
+                assert!(matches!(
+                    condition,
+                    JoinCondition::OnColumns { left, right }
+                    if left == "id" && right == "user_id"
+                ));
+            } else {
+                panic!("Expected Join expression");
+            }
+        } else {
+            panic!("Expected Assignment statement");
+        }
+    }
+
+    #[test]
+    fn parse_join_in_dim_statement() {
+        let code = r#"dim joined_data = customers left join orders on "customer_id""#;
+        let result = PipParser::parse_str(code);
+        assert!(result.is_ok(), "Parse error: {:?}", result.err());
+        let program = result.unwrap();
+        
+        assert!(matches!(
+            &program.statements[0],
+            Statement::Dim { value, name, .. }
+            if name == "joined_data" && matches!(value, Expr::Join { join_type: JoinType::Left, .. })
+        ));
+    }
+
+    #[test]
+    fn parse_chained_joins() {
+        // Chained joins need parentheses for proper precedence
+        let code = r#"result = (users join orders on "user_id") join products on "product_id""#;
+        let result = PipParser::parse_str(code);
+        assert!(result.is_ok(), "Parse error: {:?}", result.err());
+        let program = result.unwrap();
+        
+        if let Statement::Assignment { value, .. } = &program.statements[0] {
+            // The outer join should have a nested join as its left operand
+            if let Expr::Join { left, .. } = value {
+                assert!(matches!(&**left, Expr::Join { .. }), "Left side should be a join");
+            } else {
+                panic!("Expected Join expression");
+            }
+        } else {
+            panic!("Expected Assignment statement");
+        }
+    }
+
+    #[test]
+    fn parse_join_with_variables() {
+        let code = r#"result = sheet1 join sheet2 on "key""#;
+        let result = PipParser::parse_str(code);
+        assert!(result.is_ok(), "Parse error: {:?}", result.err());
+        let program = result.unwrap();
+        
+        if let Statement::Assignment { value, .. } = &program.statements[0] {
+            if let Expr::Join { left, right, condition, .. } = value {
+                assert!(matches!(&**left, Expr::Variable(name) if name == "sheet1"));
+                assert!(matches!(&**right, Expr::Variable(name) if name == "sheet2"));
+                assert!(matches!(condition, JoinCondition::On(key) if key == "key"));
+            } else {
+                panic!("Expected Join expression");
+            }
+        } else {
+            panic!("Expected Assignment statement");
+        }
+    }
+
+    #[test]
+    fn parse_join_with_function_calls() {
+        let code = r#"result = load_users() join load_orders() on "user_id" = "customer_id""#;
+        let result = PipParser::parse_str(code);
+        assert!(result.is_ok(), "Parse error: {:?}", result.err());
+        let program = result.unwrap();
+        
+        if let Statement::Assignment { value, .. } = &program.statements[0] {
+            if let Expr::Join { left, right, condition, .. } = value {
+                assert!(matches!(&**left, Expr::Call { function, .. } if function == "load_users"));
+                assert!(matches!(&**right, Expr::Call { function, .. } if function == "load_orders"));
+                assert!(matches!(
+                    condition,
+                    JoinCondition::OnColumns { left, right }
+                    if left == "user_id" && right == "customer_id"
+                ));
+            } else {
+                panic!("Expected Join expression");
+            }
+        } else {
+            panic!("Expected Assignment statement");
+        }
     }
 
     // ========================================================================
