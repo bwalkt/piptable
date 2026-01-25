@@ -313,23 +313,29 @@ export processed to "report.json"  ' For web dashboard
 ### Format Conversion Utility
 
 ```piptable
-' Generic format converter
-sub convert_file(input_path, output_path)
-    ' Detect format by extension
-    dim data = import input_path into sheet
+' Generic format converter example
+' Note: Import/export require literal paths, not variables
+' This shows the concept - in practice, use specific paths
+
+sub convert_csv_to_parquet()
+    dim data as sheet = import "data.csv" into sheet
     
-    ' Add metadata
-    data.set_name("Converted_" + now())
+    ' Add metadata with counter instead of now() (planned)
+    dim counter as int = 1
+    data.set_name("Converted_" + str(counter))
     
     ' Export to target format
-    export data to output_path
+    export data to "data.parquet"
     
-    print("Converted: " + input_path + " -> " + output_path)
+    print("Converted CSV to Parquet")
 end sub
 
-' Usage
-convert_file("data.csv", "data.parquet")
-convert_file("report.xlsx", "report.json")
+sub convert_xlsx_to_json()
+    dim data as sheet = import "report.xlsx" into sheet
+    data.set_name("Report")
+    export data to "report.json"
+    print("Converted Excel to JSON")
+end sub
 ```
 
 ## See Also
