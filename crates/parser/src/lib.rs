@@ -607,6 +607,26 @@ mod tests {
     }
 
     #[test]
+    fn parse_append_with_key_no_distinct_error() {
+        // Test that append with "on" but no distinct fails at build time
+        let code = r#"users append new_users on "id""#;
+        let result = PipParser::parse_str(code);
+        assert!(result.is_err(), "Should error on key without distinct");
+        let err = result.unwrap_err();
+        assert!(err.to_string().contains("'on' clause can only be used with 'append distinct'"));
+    }
+
+    #[test]
+    fn parse_append_distinct_requires_on() {
+        // Test that "distinct" without "on" fails at build time
+        let code = r#"users append distinct new_users"#;
+        let result = PipParser::parse_str(code);
+        assert!(result.is_err(), "Should error on distinct without key");
+        let err = result.unwrap_err();
+        assert!(err.to_string().contains("append distinct requires 'on' clause"));
+    }
+
+    #[test]
     fn parse_join_with_different_columns() {
         let code = r#"result = users join orders on "id" = "user_id""#;
         let result = PipParser::parse_str(code);

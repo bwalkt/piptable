@@ -411,7 +411,6 @@ fn build_append_stmt(pair: Pair<Rule>, line: usize) -> BuildResult<Statement> {
     // Get target variable name
     let target = inner.next().unwrap().as_str().to_string();
 
-    // Check for optional "distinct" keyword
     let mut distinct = false;
     let mut key = None;
     let mut source_expr = None;
@@ -424,7 +423,7 @@ fn build_append_stmt(pair: Pair<Rule>, line: usize) -> BuildResult<Statement> {
             Rule::append_key => {
                 let key_pair = p.into_inner().next().unwrap();
                 let parsed = build_literal(key_pair.clone())?;
-                let parsed = match parsed {
+                let key_str = match parsed {
                     Literal::String(s) if !s.is_empty() => s,
                     Literal::String(_) => {
                         return Err(BuildError::from_pair(
@@ -439,7 +438,7 @@ fn build_append_stmt(pair: Pair<Rule>, line: usize) -> BuildResult<Statement> {
                         ))
                     }
                 };
-                key = Some(parsed);
+                key = Some(key_str);
             }
             Rule::expr => {
                 source_expr = Some(build_expr(p)?);
@@ -452,6 +451,16 @@ fn build_append_stmt(pair: Pair<Rule>, line: usize) -> BuildResult<Statement> {
 
     let source = source_expr
         .ok_or_else(|| BuildError::new(line, 0, "Missing source expression in append statement"))?;
+
+    // Validate: if distinct is used, key must be present
+    if distinct && key.is_none() {
+        return Err(BuildError::new(line, 0, "append distinct requires 'on' clause with key column"));
+    }
+
+    // Validate: if key is present, distinct must be used
+    if key.is_some() && !distinct {
+        return Err(BuildError::new(line, 0, "'on' clause can only be used with 'append distinct'"));
+    }
 
     Ok(Statement::Append {
         target,
