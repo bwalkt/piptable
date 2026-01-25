@@ -115,14 +115,15 @@ PipTable uses Result types for fallible operations:
 
 ### Error Patterns
 ```piptable
-' Check for errors
-dim result = sheet.get_by_name(0, "invalid")
-if result.is_error() then
-    print("Column not found")
-end if
+' Handle errors (method calls planned - see PLANNED_FEATURES.md)
+' Future syntax:
+' if result.is_error() then
+'     print("Column not found")
+' end if
 
-' Use default values
-dim value = sheet.get(0, 0).unwrap_or(0)
+' Current approach: Use error handling in interpreter
+dim result = sheet.get_by_name(0, "invalid")
+' Errors will be caught and displayed by the interpreter
 ```
 
 ## Performance Guidelines
@@ -152,11 +153,12 @@ end parallel
 
 ### Python UDFs
 Extend PipTable with Python functions:
-```python
-def custom_transform(value):
-    return value.upper().strip()
+```piptable
+' Inline Python function
+register_python("transform", "lambda value: value.upper().strip()")
 
-register_python("transform", custom_transform)
+' Or from a file (transforms.py)
+register_python("transform", "transforms.py", "custom_transform")
 ```
 
 ### Command Line Interface
