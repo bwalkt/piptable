@@ -415,17 +415,15 @@ fn build_import_options(pair: Pair<Rule>) -> BuildResult<ImportOptions> {
                 let key_pair = param_inner.next().unwrap();
                 let key = key_pair.as_str();
                 let value_pair = param_inner.next().unwrap();
-                let (line, col) = value_pair.line_col();
-                let value = build_expr(value_pair)?;
+                let value = build_expr(value_pair.clone())?;
 
                 match key {
                     "headers" => {
                         if let Expr::Literal(Literal::Bool(b)) = value {
                             options.has_headers = Some(b);
                         } else {
-                            return Err(BuildError::new(
-                                line,
-                                col,
+                            return Err(BuildError::from_pair(
+                                &value_pair,
                                 "headers option must be a boolean (true or false)",
                             ));
                         }
