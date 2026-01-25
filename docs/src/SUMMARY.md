@@ -64,5 +64,6 @@
 
 ---
 
+[Playground](playground.md)
 [Changelog](changelog.md)
 [License](license.md)

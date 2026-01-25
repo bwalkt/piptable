@@ -1,0 +1,39 @@
+{
+  "name": "piptable-playground",
+  "version": "0.1.0",
+  "description": "Interactive playground for PipTable DSL",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "typecheck": "tsc --noEmit",
+    "clean": "rm -rf dist node_modules"
+  },
+  "dependencies": {
+    "@codemirror/commands": "^6.3.0",
+    "@codemirror/language": "^6.9.0",
+    "@codemirror/state": "^6.3.0",
+    "@codemirror/theme-one-dark": "^6.1.2",
+    "@codemirror/view": "^6.21.0",
+    "@preact/signals": "^2.6.1",
+    "codemirror": "^6.0.1",
+    "dompurify": "^3.3.1",
+    "lucide-react": "^0.563.0",
+    "preact": "^10.28.2",
+    "zustand": "^5.0.10"
+  },
+  "devDependencies": {
+    "@preact/preset-vite": "^2.10.2",
+    "@tailwindcss/postcss": "^4.1.18",
+    "@types/dompurify": "^3.2.0",
+    "autoprefixer": "^10.4.23",
+    "class-variance-authority": "^0.7.1",
+    "clsx": "^2.1.1",
+    "postcss": "^8.5.6",
+    "tailwind-merge": "^3.4.0",
+    "tailwindcss": "^4.1.18",
+    "typescript": "^5.3.0",
+    "vite": "^5.0.0"
+  }
+}
