@@ -422,10 +422,24 @@ fn build_append_stmt(pair: Pair<Rule>, line: usize) -> BuildResult<Statement> {
                 distinct = true;
             }
             Rule::append_key => {
-                // Extract the string literal for the key
-                let key_str = p.into_inner().next().unwrap().as_str();
-                // Remove quotes and unescape properly
-                key = Some(unescape_string(&key_str[1..key_str.len() - 1]));
+                let key_pair = p.into_inner().next().unwrap();
+                let parsed = build_literal(key_pair.clone())?;
+                let parsed = match parsed {
+                    Literal::String(s) if !s.is_empty() => s,
+                    Literal::String(_) => {
+                        return Err(BuildError::from_pair(
+                            &key_pair,
+                            "Append key cannot be empty",
+                        ))
+                    }
+                    _ => {
+                        return Err(BuildError::from_pair(
+                            &key_pair,
+                            "Append key must be a string",
+                        ))
+                    }
+                };
+                key = Some(parsed);
             }
             Rule::expr => {
                 source_expr = Some(build_expr(p)?);
@@ -458,9 +472,23 @@ fn build_upsert_stmt(pair: Pair<Rule>, line: usize) -> BuildResult<Statement> {
     let source = build_expr(inner.next().unwrap())?;
 
     // Skip "on" keyword (handled by grammar) and get the key
-    let key_str = inner.next().unwrap().as_str();
-    // Remove quotes and unescape properly
-    let key = unescape_string(&key_str[1..key_str.len() - 1]);
+    let key_pair = inner.next().unwrap();
+    let parsed = build_literal(key_pair.clone())?;
+    let key = match parsed {
+        Literal::String(s) if !s.is_empty() => s,
+        Literal::String(_) => {
+            return Err(BuildError::from_pair(
+                &key_pair,
+                "Upsert key cannot be empty",
+            ))
+        }
+        _ => {
+            return Err(BuildError::from_pair(
+                &key_pair,
+                "Upsert key must be a string",
+            ))
+        }
+    };
 
     Ok(Statement::Upsert {
         target,

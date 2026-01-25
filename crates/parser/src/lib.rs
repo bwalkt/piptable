@@ -587,6 +587,26 @@ mod tests {
     }
 
     #[test]
+    fn parse_append_empty_key_error() {
+        // Test that empty keys are rejected
+        let code = r#"users append distinct new_users on """#;
+        let result = PipParser::parse_str(code);
+        assert!(result.is_err(), "Should error on empty key");
+        let err = result.unwrap_err();
+        assert!(err.to_string().contains("Append key cannot be empty"));
+    }
+
+    #[test]
+    fn parse_upsert_empty_key_error() {
+        // Test that empty keys are rejected
+        let code = r#"users upsert updates on """#;
+        let result = PipParser::parse_str(code);
+        assert!(result.is_err(), "Should error on empty key");
+        let err = result.unwrap_err();
+        assert!(err.to_string().contains("Upsert key cannot be empty"));
+    }
+
+    #[test]
     fn parse_join_with_different_columns() {
         let code = r#"result = users join orders on "id" = "user_id""#;
         let result = PipParser::parse_str(code);
