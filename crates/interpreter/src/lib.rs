@@ -2175,8 +2175,33 @@ fn import_multi_files(paths: &[String], options: &ImportOptions) -> Result<Value
 
 /// Convert a Sheet to a piptable Value (array of objects)
 fn sheet_to_value(sheet: &Sheet) -> Value {
-    // Convert to records (array of objects) if columns are named
-    if let Some(records) = sheet.to_records() {
+    // Try to convert to records if columns are named
+    let records = if let Some(records) = sheet.to_records() {
+        Some(records)
+    } else if sheet.row_count() > 0 && sheet.col_count() > 0 {
+        // Synthesize column names for unnamed columns
+        let col_count = sheet.col_count();
+        let mut synthesized_records = Vec::new();
+
+        for row in sheet.data() {
+            let mut record = indexmap::IndexMap::new();
+            for (i, cell) in row.iter().enumerate() {
+                let col_name = format!("col{}", i);
+                record.insert(col_name, cell.clone());
+            }
+            // Fill missing columns with null
+            for i in row.len()..col_count {
+                let col_name = format!("col{}", i);
+                record.insert(col_name, CellValue::Null);
+            }
+            synthesized_records.push(record);
+        }
+        Some(synthesized_records)
+    } else {
+        None
+    };
+
+    if let Some(records) = records {
         // Skip first record if it's the header row (matches column names).
         // Note: This could theoretically drop a data row that exactly matches
         // headers, but this is extremely unlikely in practice.
@@ -2238,11 +2263,16 @@ fn consolidate_book(
 ) -> Result<Value, String> {
     use indexmap::IndexSet;
 
-    // Collect all column names across all sheets
+    // Sort sheet names first for deterministic processing
+    let mut sheet_names: Vec<_> = book_obj.keys().collect();
+    sheet_names.sort();
+
+    // Collect all column names across all sheets in deterministic order
     let mut all_columns: IndexSet<String> = IndexSet::new();
 
     // Validate all values are arrays of objects and collect column names
-    for (sheet_name, value) in book_obj {
+    for sheet_name in &sheet_names {
+        let value = &book_obj[*sheet_name];
         match value {
             Value::Array(rows) => {
                 for row in rows {
@@ -2273,10 +2303,6 @@ fn consolidate_book(
             ));
         }
     }
-
-    // Sort sheet names for deterministic output order
-    let mut sheet_names: Vec<_> = book_obj.keys().collect();
-    sheet_names.sort();
 
     // Build consolidated result
     let mut result: Vec<Value> = Vec::new();
