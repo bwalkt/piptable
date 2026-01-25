@@ -559,6 +559,34 @@ mod tests {
     }
 
     #[test]
+    fn parse_append_with_escaped_key() {
+        // Test with escaped quotes in the key name
+        let code = r#"users append distinct new_users on "col\"name""#;
+        let result = PipParser::parse_str(code);
+        assert!(result.is_ok(), "Parse error: {:?}", result.err());
+        let program = result.unwrap();
+        assert!(matches!(
+            &program.statements[0],
+            Statement::Append { distinct, key, .. }
+            if *distinct && key.as_deref() == Some(r#"col"name"#)
+        ));
+    }
+
+    #[test]
+    fn parse_upsert_with_escaped_key() {
+        // Test with escaped characters in the key name
+        let code = r#"users upsert updates on "id\nline""#;
+        let result = PipParser::parse_str(code);
+        assert!(result.is_ok(), "Parse error: {:?}", result.err());
+        let program = result.unwrap();
+        assert!(matches!(
+            &program.statements[0],
+            Statement::Upsert { key, .. }
+            if key == "id\nline"
+        ));
+    }
+
+    #[test]
     fn parse_join_with_different_columns() {
         let code = r#"result = users join orders on "id" = "user_id""#;
         let result = PipParser::parse_str(code);

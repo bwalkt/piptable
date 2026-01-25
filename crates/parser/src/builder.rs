@@ -424,8 +424,8 @@ fn build_append_stmt(pair: Pair<Rule>, line: usize) -> BuildResult<Statement> {
             Rule::append_key => {
                 // Extract the string literal for the key
                 let key_str = p.into_inner().next().unwrap().as_str();
-                // Remove quotes
-                key = Some(key_str.trim_matches('"').to_string());
+                // Remove quotes and unescape properly
+                key = Some(unescape_string(&key_str[1..key_str.len() - 1]));
             }
             Rule::expr => {
                 source_expr = Some(build_expr(p)?);
@@ -459,8 +459,8 @@ fn build_upsert_stmt(pair: Pair<Rule>, line: usize) -> BuildResult<Statement> {
 
     // Skip "on" keyword (handled by grammar) and get the key
     let key_str = inner.next().unwrap().as_str();
-    // Remove quotes
-    let key = key_str.trim_matches('"').to_string();
+    // Remove quotes and unescape properly
+    let key = unescape_string(&key_str[1..key_str.len() - 1]);
 
     Ok(Statement::Upsert {
         target,
