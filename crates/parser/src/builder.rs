@@ -484,13 +484,14 @@ fn build_join_expr(pair: Pair<Rule>) -> BuildResult<Expr> {
     
     while let Some(pair) = inner.next() {
         if let Rule::join_op = pair.as_rule() {
+            let join_inner_pair = pair.clone();
             let join_inner = pair.into_inner().next().unwrap();
             let join_type = match join_inner.as_rule() {
                 Rule::inner_join => JoinType::Inner,
                 Rule::left_join => JoinType::Left,
                 Rule::right_join => JoinType::Right,
                 Rule::full_join => JoinType::Full,
-                _ => return Err(BuildError::new(0, 0, "Unknown join type")),
+                _ => return Err(BuildError::from_pair(&join_inner_pair, "Unknown join type")),
             };
             
             // Get the right side expression
@@ -502,6 +503,7 @@ fn build_join_expr(pair: Pair<Rule>) -> BuildResult<Expr> {
                     let cond_inner = cond_pair.into_inner().next().unwrap();
                     if cond_inner.as_rule() == Rule::join_key_pair {
                         // Handle "col1" = "col2" syntax when parsed as join_key_pair
+                        let cond_inner_pair = cond_inner.clone();
                         let mut key_inner = cond_inner.into_inner();
                         let left_expr = build_expr(key_inner.next().unwrap())?;
                         let right_expr = build_expr(key_inner.next().unwrap())?;
@@ -509,16 +511,17 @@ fn build_join_expr(pair: Pair<Rule>) -> BuildResult<Expr> {
                         // Extract column names from expressions
                         let left_col = match left_expr {
                             Expr::Literal(Literal::String(s)) => s,
-                            _ => return Err(BuildError::new(0, 0, "Join key must be a string")),
+                            _ => return Err(BuildError::from_pair(&cond_inner_pair, "Left join key must be a string")),
                         };
                         let right_col = match right_expr {
                             Expr::Literal(Literal::String(s)) => s,
-                            _ => return Err(BuildError::new(0, 0, "Join key must be a string")),
+                            _ => return Err(BuildError::from_pair(&cond_inner_pair, "Right join key must be a string")),
                         };
                         
                         JoinCondition::OnColumns { left: left_col, right: right_col }
                     } else {
                         // Handle both simple "id" syntax and comparison expressions
+                        let cond_inner_pair = cond_inner.clone();
                         let key_expr = build_expr(cond_inner)?;
                         match key_expr {
                             // Simple string literal: on "id"
@@ -531,23 +534,24 @@ fn build_join_expr(pair: Pair<Rule>) -> BuildResult<Expr> {
                             } => {
                                 let left_col = match *left {
                                     Expr::Literal(Literal::String(s)) => s,
-                                    _ => return Err(BuildError::new(0, 0, "Left join key must be a string")),
+                                    _ => return Err(BuildError::from_pair(&cond_inner_pair, "Left join key must be a string")),
                                 };
                                 let right_col = match *right {
                                     Expr::Literal(Literal::String(s)) => s,
-                                    _ => return Err(BuildError::new(0, 0, "Right join key must be a string")),
+                                    _ => return Err(BuildError::from_pair(&cond_inner_pair, "Right join key must be a string")),
                                 };
                                 JoinCondition::OnColumns { left: left_col, right: right_col }
                             }
-                            _ => return Err(BuildError::new(0, 0, "Join condition must be a string or column equality")),
+                            _ => return Err(BuildError::from_pair(&cond_inner_pair, "Join condition must be a string or column equality")),
                         }
                     }
                 } else {
                     // No condition - error for now (could default to natural join)
-                    return Err(BuildError::new(0, 0, "Join requires an 'on' condition"));
+                    return Err(BuildError::from_pair(&cond_pair, "Join requires an 'on' condition"));
                 }
             } else {
-                return Err(BuildError::new(0, 0, "Join requires an 'on' condition"));
+                // No join condition provided - required for non-cross joins
+                return Err(BuildError::from_pair(&join_inner_pair, "Join requires an 'on' condition"));
             };
             
             left = Expr::Join {
@@ -1311,7 +1315,9 @@ fn build_join_clause(pair: Pair<Rule>) -> BuildResult<piptable_core::JoinClause>
                     join_type = JoinType::Left;
                 } else if s.contains("right") {
                     join_type = JoinType::Right;
-                } else if s.contains("cross") || s.contains("full") {
+                } else if s.contains("cross") {
+                    join_type = JoinType::Cross;
+                } else if s.contains("full") {
                     join_type = JoinType::Full;
                 } else {
                     join_type = JoinType::Inner;

@@ -729,6 +729,10 @@ impl Interpreter {
                         left_sheet.full_join_on(&right_sheet, l, r)
                             .map_err(|e: SheetError| PipError::runtime(0, e.to_string()))?
                     }
+                    (piptable_core::ast::JoinType::Cross, _) => {
+                        // CROSS JOIN is not supported in DSL, only in SQL
+                        return Err(PipError::runtime(0, "CROSS JOIN is not supported in DSL join syntax, only in SQL queries"));
+                    }
                 };
                 
                 Ok(sheet_to_value(&result))
@@ -1528,6 +1532,7 @@ impl Interpreter {
             JoinType::Left => " LEFT JOIN ",
             JoinType::Right => " RIGHT JOIN ",
             JoinType::Full => " FULL OUTER JOIN ",
+            JoinType::Cross => " CROSS JOIN ",
         };
 
         let table = self.table_ref_to_string(&join.table).await?;

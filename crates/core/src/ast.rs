@@ -428,6 +428,7 @@ pub enum JoinType {
     Left,
     Right,
     Full,
+    Cross,
 }
 
 /// ORDER BY item.
