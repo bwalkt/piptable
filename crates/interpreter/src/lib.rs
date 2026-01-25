@@ -3101,7 +3101,7 @@ combined = consolidate(stores, "_store")
         score3.insert("score".to_string(), CellValue::Int(95));
 
         let sheet2 = Sheet::from_records(vec![score1, score2, score3]).unwrap();
-        
+
         interp.set_var("sheet1", sheet_to_value(&sheet1)).await;
         interp.set_var("sheet2", sheet_to_value(&sheet2)).await;
 
@@ -3114,12 +3114,12 @@ combined = consolidate(stores, "_store")
         if let Value::Array(arr) = result {
             // Should have all rows from sheet2 (3 records)
             assert_eq!(arr.len(), 3);
-            
+
             // Check that we have the expected records
             let mut found_bob = false;
             let mut found_id3 = false;
             let mut found_id4 = false;
-            
+
             for record in &arr {
                 if let Value::Object(obj) = record {
                     // The join seems to be using "id" field from right table
@@ -3132,27 +3132,27 @@ combined = consolidate(stores, "_store")
                                     assert_eq!(name, "Bob");
                                     found_bob = true;
                                 }
-                            },
+                            }
                             3 => {
                                 // Should have nulls for left table columns
                                 assert!(matches!(obj.get("name"), Some(Value::Null)));
                                 // id=3 comes from right table (user_id=3)
                                 assert!(matches!(obj.get("score"), Some(Value::Int(90))));
                                 found_id3 = true;
-                            },
+                            }
                             4 => {
-                                // Should have nulls for left table columns  
+                                // Should have nulls for left table columns
                                 assert!(matches!(obj.get("name"), Some(Value::Null)));
                                 // id=4 comes from right table (user_id=4)
                                 assert!(matches!(obj.get("score"), Some(Value::Int(95))));
                                 found_id4 = true;
-                            },
+                            }
                             _ => panic!("Unexpected user_id in result: {}", id),
                         }
                     }
                 }
             }
-            
+
             assert!(found_bob, "Expected to find Bob's record");
             assert!(found_id3, "Expected to find user_id=3 record");
             assert!(found_id4, "Expected to find user_id=4 record");
@@ -3196,7 +3196,7 @@ combined = consolidate(stores, "_store")
         score3.insert("score".to_string(), CellValue::Int(95));
 
         let sheet2 = Sheet::from_records(vec![score1, score2, score3]).unwrap();
-        
+
         interp.set_var("sheet1", sheet_to_value(&sheet1)).await;
         interp.set_var("sheet2", sheet_to_value(&sheet2)).await;
 
@@ -3209,18 +3209,18 @@ combined = consolidate(stores, "_store")
         if let Value::Array(arr) = result {
             // Should have all unique keys from both tables (1,2,3,4,5 = 5 records)
             assert_eq!(arr.len(), 5);
-            
+
             let mut found_alice = false;
             let mut found_bob = false;
             let mut found_eve = false;
             let mut found_id3 = false;
             let mut found_id4 = false;
-            
+
             for record in &arr {
                 if let Value::Object(obj) = record {
                     // Check based on which side has data
                     let id = obj.get("id");
-                    
+
                     if matches!(id, Some(Value::Int(1))) {
                         // Alice - only in left table
                         assert!(matches!(obj.get("name"), Some(Value::String(s)) if s == "Alice"));
@@ -3250,7 +3250,7 @@ combined = consolidate(stores, "_store")
                     }
                 }
             }
-            
+
             assert!(found_alice, "Expected to find Alice's record");
             assert!(found_bob, "Expected to find Bob's record");
             assert!(found_eve, "Expected to find Eve's record");
@@ -3275,10 +3275,10 @@ combined = consolidate(stores, "_store")
         user1.insert("name".to_string(), CellValue::String("Alice".to_string()));
 
         let sheet1 = Sheet::from_records(vec![user1]).unwrap();
-        
+
         // Create empty sheet (no records)
         let sheet2 = Sheet::new(); // Just create an empty sheet
-        
+
         interp.set_var("sheet1", sheet_to_value(&sheet1)).await;
         interp.set_var("sheet2", sheet_to_value(&sheet2)).await;
 
@@ -3289,7 +3289,11 @@ combined = consolidate(stores, "_store")
 
         let result = interp.get_var("result").await.unwrap();
         if let Value::Array(arr) = result {
-            assert_eq!(arr.len(), 0, "Inner join with empty sheet should return no records");
+            assert_eq!(
+                arr.len(),
+                0,
+                "Inner join with empty sheet should return no records"
+            );
         } else {
             panic!("Expected Array result");
         }
@@ -3317,7 +3321,11 @@ combined = consolidate(stores, "_store")
 
         let result = interp.get_var("result").await.unwrap();
         if let Value::Array(arr) = result {
-            assert_eq!(arr.len(), 0, "Right join with empty right sheet should return no records");
+            assert_eq!(
+                arr.len(),
+                0,
+                "Right join with empty right sheet should return no records"
+            );
         } else {
             panic!("Expected Array result");
         }
