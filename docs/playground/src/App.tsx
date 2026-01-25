@@ -3,6 +3,7 @@ import { EditorView, basicSetup } from 'codemirror';
 import { keymap } from '@codemirror/view';
 import { indentWithTab } from '@codemirror/commands';
 import { oneDark } from '@codemirror/theme-one-dark';
+import { Compartment } from '@codemirror/state';
 import { 
   code, 
   selectedExample, 
@@ -20,6 +21,7 @@ import { cn } from './lib/utils';
 export function App() {
   const editorRef = useRef<HTMLDivElement>(null);
   const editorViewRef = useRef<EditorView | null>(null);
+  const themeCompartment = useRef<Compartment>(new Compartment());
 
   // Initialize CodeMirror
   useEffect(() => {
@@ -40,7 +42,7 @@ export function App() {
             }
           }
         ]),
-        theme.value === 'dark' ? oneDark : [],
+        themeCompartment.current.of(theme.value === 'dark' ? oneDark : []),
         EditorView.theme({
           '&': {
             height: '100%'
@@ -78,9 +80,18 @@ export function App() {
     }
   }, [code.value]);
 
-  // Apply theme to document
+  // Apply theme to document and editor
   useEffect(() => {
     document.documentElement.className = theme.value;
+    
+    // Update CodeMirror theme
+    if (editorViewRef.current && themeCompartment.current) {
+      editorViewRef.current.dispatch({
+        effects: themeCompartment.current.reconfigure(
+          theme.value === 'dark' ? oneDark : []
+        )
+      });
+    }
   }, [theme.value]);
 
   return (
