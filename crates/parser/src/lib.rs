@@ -92,7 +92,9 @@ impl LineColExt for pest::error::LineColLocation {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use piptable_core::{BinaryOp, Expr, JoinCondition, JoinType, Literal, SortDirection, Statement, TableRef};
+    use piptable_core::{
+        BinaryOp, Expr, JoinCondition, JoinType, Literal, SortDirection, Statement, TableRef,
+    };
 
     // ========================================================================
     // Basic parsing tests
@@ -523,7 +525,7 @@ mod tests {
         let result = PipParser::parse_str(code);
         assert!(result.is_ok(), "Parse error: {:?}", result.err());
         let program = result.unwrap();
-        
+
         if let Statement::Assignment { value, .. } = &program.statements[0] {
             if let Expr::Join { condition, .. } = value {
                 assert!(matches!(
@@ -545,7 +547,7 @@ mod tests {
         let result = PipParser::parse_str(code);
         assert!(result.is_ok(), "Parse error: {:?}", result.err());
         let program = result.unwrap();
-        
+
         assert!(matches!(
             &program.statements[0],
             Statement::Dim { value, name, .. }
@@ -560,11 +562,14 @@ mod tests {
         let result = PipParser::parse_str(code);
         assert!(result.is_ok(), "Parse error: {:?}", result.err());
         let program = result.unwrap();
-        
+
         if let Statement::Assignment { value, .. } = &program.statements[0] {
             // The outer join should have a nested join as its left operand
             if let Expr::Join { left, .. } = value {
-                assert!(matches!(&**left, Expr::Join { .. }), "Left side should be a join");
+                assert!(
+                    matches!(&**left, Expr::Join { .. }),
+                    "Left side should be a join"
+                );
             } else {
                 panic!("Expected Join expression");
             }
@@ -579,9 +584,15 @@ mod tests {
         let result = PipParser::parse_str(code);
         assert!(result.is_ok(), "Parse error: {:?}", result.err());
         let program = result.unwrap();
-        
+
         if let Statement::Assignment { value, .. } = &program.statements[0] {
-            if let Expr::Join { left, right, condition, .. } = value {
+            if let Expr::Join {
+                left,
+                right,
+                condition,
+                ..
+            } = value
+            {
                 assert!(matches!(&**left, Expr::Variable(name) if name == "sheet1"));
                 assert!(matches!(&**right, Expr::Variable(name) if name == "sheet2"));
                 assert!(matches!(condition, JoinCondition::On(key) if key == "key"));
@@ -599,11 +610,19 @@ mod tests {
         let result = PipParser::parse_str(code);
         assert!(result.is_ok(), "Parse error: {:?}", result.err());
         let program = result.unwrap();
-        
+
         if let Statement::Assignment { value, .. } = &program.statements[0] {
-            if let Expr::Join { left, right, condition, .. } = value {
+            if let Expr::Join {
+                left,
+                right,
+                condition,
+                ..
+            } = value
+            {
                 assert!(matches!(&**left, Expr::Call { function, .. } if function == "load_users"));
-                assert!(matches!(&**right, Expr::Call { function, .. } if function == "load_orders"));
+                assert!(
+                    matches!(&**right, Expr::Call { function, .. } if function == "load_orders")
+                );
                 assert!(matches!(
                     condition,
                     JoinCondition::OnColumns { left, right }
