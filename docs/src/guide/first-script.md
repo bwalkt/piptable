@@ -216,7 +216,7 @@ Loading sales data...
 Loaded 10 sales records
 
 Analyzing sales data...
-Total Revenue: $2530.00
+Total Revenue: $2900.00
 
 Sales by Product:
 product    units_sold  revenue  avg_price
@@ -237,7 +237,7 @@ Top Region: South
 Monthly Trends:
 month     revenue  transactions
 2024-01   1230.00  5
-2024-02   1300.00  5
+2024-02   1670.00  5
 
 Generating reports...
 Reports generated:
