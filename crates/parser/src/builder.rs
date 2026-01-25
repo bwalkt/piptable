@@ -509,13 +509,11 @@ fn build_join_expr(pair: Pair<Rule>) -> BuildResult<Expr> {
                         let right_expr = build_expr(key_inner.next().unwrap())?;
                         
                         // Extract column names from expressions
-                        let left_col = match left_expr {
-                            Expr::Literal(Literal::String(s)) => s,
-                            _ => return Err(BuildError::from_pair(&cond_inner_pair, "Left join key must be a string")),
+                        let Expr::Literal(Literal::String(left_col)) = left_expr else {
+                            return Err(BuildError::from_pair(&cond_inner_pair, "Left join key must be a string"));
                         };
-                        let right_col = match right_expr {
-                            Expr::Literal(Literal::String(s)) => s,
-                            _ => return Err(BuildError::from_pair(&cond_inner_pair, "Right join key must be a string")),
+                        let Expr::Literal(Literal::String(right_col)) = right_expr else {
+                            return Err(BuildError::from_pair(&cond_inner_pair, "Right join key must be a string"));
                         };
                         
                         JoinCondition::OnColumns { left: left_col, right: right_col }
@@ -532,13 +530,11 @@ fn build_join_expr(pair: Pair<Rule>) -> BuildResult<Expr> {
                                 op: BinaryOp::Eq,
                                 right,
                             } => {
-                                let left_col = match *left {
-                                    Expr::Literal(Literal::String(s)) => s,
-                                    _ => return Err(BuildError::from_pair(&cond_inner_pair, "Left join key must be a string")),
+                                let Expr::Literal(Literal::String(left_col)) = *left else {
+                                    return Err(BuildError::from_pair(&cond_inner_pair, "Left join key must be a string"));
                                 };
-                                let right_col = match *right {
-                                    Expr::Literal(Literal::String(s)) => s,
-                                    _ => return Err(BuildError::from_pair(&cond_inner_pair, "Right join key must be a string")),
+                                let Expr::Literal(Literal::String(right_col)) = *right else {
+                                    return Err(BuildError::from_pair(&cond_inner_pair, "Right join key must be a string"));
                                 };
                                 JoinCondition::OnColumns { left: left_col, right: right_col }
                             }
