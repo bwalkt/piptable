@@ -6,7 +6,7 @@ PipTable supports importing and exporting various file formats for data intercha
 
 | Format | Extension | Import | Export | Multi-Sheet | Notes |
 |--------|-----------|--------|--------|-------------|-------|
-| CSV | .csv | ✅ | ✅ | ❌ | Configurable delimiter |
+| CSV | .csv | ✅ | ✅ | ❌ | Configurable delimiter (planned) |
 | TSV | .tsv | ✅ | ✅ | ❌ | Tab-delimited CSV |
 | Excel | .xlsx | ✅ | ✅ | ✅ | Full workbook support |
 | JSON | .json | ✅ | ✅ | ❌ | Array or object format |
