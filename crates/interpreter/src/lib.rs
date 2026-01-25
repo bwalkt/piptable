@@ -3274,19 +3274,14 @@ combined = consolidate(stores, "_store")
         user1.insert("name".to_string(), CellValue::String("Alice".to_string()));
         let sheet1 = Sheet::from_records(vec![user1]).unwrap();
 
-        // Create sheet2 with no data (empty but with same structure)
-        let empty_records: Vec<IndexMap<String, CellValue>> = vec![];
-        let sheet2 = Sheet::from_records(empty_records).unwrap_or_else(|_| {
-            // If from_records fails with empty vec, create sheet with columns but no data
-            let mut s = Sheet::new();
-            s.data_mut().push(vec![
-                CellValue::String("user_id".to_string()),
-                CellValue::String("score".to_string()),
-            ]);
-            s.name_columns_by_row(0).unwrap();
-            s.data_mut().remove(0); // Remove header row, keep column names
-            s
-        });
+        // Create sheet2 with no data but named columns
+        let mut sheet2 = Sheet::new();
+        sheet2.data_mut().push(vec![
+            CellValue::String("user_id".to_string()),
+            CellValue::String("score".to_string()),
+        ]);
+        sheet2.name_columns_by_row(0).unwrap();
+        sheet2.data_mut().remove(0); // Remove header row, keep column names
 
         interp.set_var("sheet1", sheet_to_value(&sheet1)).await;
         interp.set_var("sheet2", sheet_to_value(&sheet2)).await;
