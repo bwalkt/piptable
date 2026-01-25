@@ -3106,7 +3106,7 @@ combined = consolidate(stores, "_store")
         interp.set_var("sheet2", sheet_to_value(&sheet2)).await;
 
         // Test right join
-        let code = r#"result = sheet1 right join sheet2 on "id" == "user_id""#;
+        let code = r#"result = sheet1 right join sheet2 on "id" = "user_id""#;
         let program = PipParser::parse_str(code).unwrap();
         interp.eval(program).await.unwrap();
 
@@ -3201,7 +3201,7 @@ combined = consolidate(stores, "_store")
         interp.set_var("sheet2", sheet_to_value(&sheet2)).await;
 
         // Test full join
-        let code = r#"result = sheet1 full join sheet2 on "id" == "user_id""#;
+        let code = r#"result = sheet1 full join sheet2 on "id" = "user_id""#;
         let program = PipParser::parse_str(code).unwrap();
         interp.eval(program).await.unwrap();
 
@@ -3283,7 +3283,7 @@ combined = consolidate(stores, "_store")
         interp.set_var("sheet2", sheet_to_value(&sheet2)).await;
 
         // Inner join should return empty (use default join which is inner)
-        let code = r#"result = sheet1 join sheet2 on "id" == "user_id""#;
+        let code = r#"result = sheet1 join sheet2 on "id" = "user_id""#;
         let program = PipParser::parse_str(code).unwrap();
         interp.eval(program).await.unwrap();
 
@@ -3299,7 +3299,7 @@ combined = consolidate(stores, "_store")
         }
 
         // Left join should return all from left
-        let code = r#"result = sheet1 left join sheet2 on "id" == "user_id""#;
+        let code = r#"result = sheet1 left join sheet2 on "id" = "user_id""#;
         let program = PipParser::parse_str(code).unwrap();
         interp.eval(program).await.unwrap();
 
@@ -3315,7 +3315,7 @@ combined = consolidate(stores, "_store")
         }
 
         // Right join should return empty (no right records)
-        let code = r#"result = sheet1 right join sheet2 on "id" == "user_id""#;
+        let code = r#"result = sheet1 right join sheet2 on "id" = "user_id""#;
         let program = PipParser::parse_str(code).unwrap();
         interp.eval(program).await.unwrap();
 
