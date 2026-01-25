@@ -688,6 +688,9 @@ impl Interpreter {
                 join_type,
                 condition,
             } => {
+                use piptable_core::ast::JoinCondition;
+                use piptable_sheet::SheetError;
+
                 // Evaluate both sides to get sheets
                 let left_val = self.eval_expr(left).await?;
                 let right_val = self.eval_expr(right).await?;
@@ -701,8 +704,6 @@ impl Interpreter {
                 })?;
 
                 // Perform the join based on the type and condition
-                use piptable_core::ast::JoinCondition;
-                use piptable_sheet::SheetError;
                 let result = match (join_type, condition) {
                     (piptable_core::ast::JoinType::Inner, JoinCondition::On(key)) => left_sheet
                         .inner_join(&right_sheet, key)
