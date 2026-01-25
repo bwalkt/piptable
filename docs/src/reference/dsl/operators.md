@@ -79,6 +79,7 @@ Combine boolean expressions.
 **Truth Tables:**
 
 ### AND
+
 | A | B | A and B |
 |---|---|---------|
 | true | true | true |
@@ -87,6 +88,7 @@ Combine boolean expressions.
 | false | false | false |
 
 ### OR
+
 | A | B | A or B |
 |---|---|---------|
 | true | true | true |
