@@ -1,0 +1,34 @@
+[book]
+title = "PipTable Documentation"
+authors = ["PipTable Contributors"]
+language = "en"
+src = "src"
+description = "A data processing DSL combining VBA-like syntax with SQL"
+
+[output.html]
+default-theme = "light"
+preferred-dark-theme = "navy"
+smart-punctuation = true
+git-repository-url = "https://github.com/bwalkt/piptable"
+site-url = "/piptable/"
+edit-url-template = "https://github.com/bwalkt/piptable/edit/main/docs/{path}"
+mathjax-support = false
+
+[output.html.fold]
+enable = true
+level = 0
+
+[output.html.playground]
+editable = true
+copyable = true
+
+[output.html.search]
+enable = true
+limit-results = 30
+teaser-word-count = 30
+use-boolean-and = true
+boost-title = 2
+boost-hierarchy = 1
+boost-paragraph = 1
+expand = true
+heading-split-level = 3
