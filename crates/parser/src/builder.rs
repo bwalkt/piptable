@@ -506,11 +506,11 @@ fn build_join_expr(pair: Pair<Rule>) -> BuildResult<Expr> {
                         let mut key_inner = cond_inner.into_inner();
                         let left_str = key_inner.next().unwrap().as_str();
                         let right_str = key_inner.next().unwrap().as_str();
-                        
+
                         // Remove quotes from string literals
                         let left_col = left_str.trim_matches('"');
                         let right_col = right_str.trim_matches('"');
-                        
+
                         JoinCondition::OnColumns {
                             left: left_col.to_string(),
                             right: right_col.to_string(),
