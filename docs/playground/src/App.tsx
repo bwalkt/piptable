@@ -1,4 +1,5 @@
 import { useEffect, useRef } from 'preact/hooks';
+import { useSignalEffect } from '@preact/signals';
 import { EditorView, basicSetup } from 'codemirror';
 import { keymap } from '@codemirror/view';
 import { indentWithTab } from '@codemirror/commands';
@@ -67,8 +68,8 @@ export function App() {
     };
   }, []);
 
-  // Update editor when code changes externally
-  useEffect(() => {
+  // Update editor when code signal changes externally
+  useSignalEffect(() => {
     if (editorViewRef.current && code.value !== editorViewRef.current.state.doc.toString()) {
       editorViewRef.current.dispatch({
         changes: {
@@ -78,10 +79,10 @@ export function App() {
         }
       });
     }
-  }, [code.value]);
+  });
 
-  // Apply theme to document and editor
-  useEffect(() => {
+  // Apply theme to document and editor when theme signal changes
+  useSignalEffect(() => {
     document.documentElement.className = theme.value;
     
     // Update CodeMirror theme
@@ -92,7 +93,7 @@ export function App() {
         )
       });
     }
-  }, [theme.value]);
+  });
 
   return (
     <div className="h-screen flex flex-col bg-background text-foreground">
