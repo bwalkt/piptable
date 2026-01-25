@@ -249,6 +249,7 @@ impl Book {
 
 #[cfg(test)]
 mod tests {
+    #![allow(clippy::approx_constant)]
     use super::*;
     use tempfile::tempdir;
 

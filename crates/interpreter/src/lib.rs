@@ -682,6 +682,77 @@ impl Interpreter {
                 Ok(Value::Null)
             }
 
+            Expr::Join {
+                left,
+                right,
+                join_type,
+                condition,
+            } => {
+                use piptable_core::ast::JoinCondition;
+                use piptable_sheet::SheetError;
+
+                // Evaluate both sides to get sheets
+                let left_val = self.eval_expr(left).await?;
+                let right_val = self.eval_expr(right).await?;
+
+                // Convert values to sheets
+                let left_sheet = value_to_sheet(&left_val).map_err(|e| {
+                    PipError::runtime(0, format!("Left side of join must be a sheet: {}", e))
+                })?;
+                let right_sheet = value_to_sheet(&right_val).map_err(|e| {
+                    PipError::runtime(0, format!("Right side of join must be a sheet: {}", e))
+                })?;
+
+                // Perform the join based on the type and condition
+                let result = match (join_type, condition) {
+                    (piptable_core::ast::JoinType::Inner, JoinCondition::On(key)) => left_sheet
+                        .inner_join(&right_sheet, key)
+                        .map_err(|e: SheetError| PipError::runtime(0, e.to_string()))?,
+                    (
+                        piptable_core::ast::JoinType::Inner,
+                        JoinCondition::OnColumns { left: l, right: r },
+                    ) => left_sheet
+                        .inner_join_on(&right_sheet, l, r)
+                        .map_err(|e: SheetError| PipError::runtime(0, e.to_string()))?,
+                    (piptable_core::ast::JoinType::Left, JoinCondition::On(key)) => left_sheet
+                        .left_join(&right_sheet, key)
+                        .map_err(|e: SheetError| PipError::runtime(0, e.to_string()))?,
+                    (
+                        piptable_core::ast::JoinType::Left,
+                        JoinCondition::OnColumns { left: l, right: r },
+                    ) => left_sheet
+                        .left_join_on(&right_sheet, l, r)
+                        .map_err(|e: SheetError| PipError::runtime(0, e.to_string()))?,
+                    (piptable_core::ast::JoinType::Right, JoinCondition::On(key)) => left_sheet
+                        .right_join(&right_sheet, key)
+                        .map_err(|e: SheetError| PipError::runtime(0, e.to_string()))?,
+                    (
+                        piptable_core::ast::JoinType::Right,
+                        JoinCondition::OnColumns { left: l, right: r },
+                    ) => left_sheet
+                        .right_join_on(&right_sheet, l, r)
+                        .map_err(|e: SheetError| PipError::runtime(0, e.to_string()))?,
+                    (piptable_core::ast::JoinType::Full, JoinCondition::On(key)) => left_sheet
+                        .full_join(&right_sheet, key)
+                        .map_err(|e: SheetError| PipError::runtime(0, e.to_string()))?,
+                    (
+                        piptable_core::ast::JoinType::Full,
+                        JoinCondition::OnColumns { left: l, right: r },
+                    ) => left_sheet
+                        .full_join_on(&right_sheet, l, r)
+                        .map_err(|e: SheetError| PipError::runtime(0, e.to_string()))?,
+                    (piptable_core::ast::JoinType::Cross, _) => {
+                        // CROSS JOIN is not supported in DSL, only in SQL
+                        return Err(PipError::runtime(
+                            0,
+                            "CROSS JOIN is not supported in DSL join syntax, only in SQL queries",
+                        ));
+                    }
+                };
+
+                Ok(sheet_to_value(&result))
+            }
+
             Expr::Ask { .. } => {
                 // TODO: Implement LLM integration
                 Err(PipError::runtime(0, "Ask expression not yet implemented"))
@@ -1475,6 +1546,7 @@ impl Interpreter {
             JoinType::Inner => " INNER JOIN ",
             JoinType::Left => " LEFT JOIN ",
             JoinType::Right => " RIGHT JOIN ",
+            JoinType::Full => " FULL OUTER JOIN ",
             JoinType::Cross => " CROSS JOIN ",
         };
 
@@ -2776,8 +2848,8 @@ combined = consolidate(stores, "_store")
             )
             .await;
 
-        let script = r#"result = consolidate(book, 123)"#; // 123 is not a string
-        let program = PipParser::parse_str(&script).unwrap();
+        let script = r"result = consolidate(book, 123)"; // 123 is not a string
+        let program = PipParser::parse_str(script).unwrap();
         let result = interp.eval(program).await;
 
         // Should error because source column must be a string
@@ -2808,5 +2880,477 @@ combined = consolidate(stores, "_store")
         // Data should still be imported
         let data = interp.get_var("data").await.unwrap();
         assert!(matches!(&data, Value::Array(arr) if arr.len() == 1));
+    }
+
+    #[tokio::test]
+    async fn test_join_inner() {
+        use indexmap::IndexMap;
+        use piptable_sheet::{CellValue, Sheet};
+
+        let mut interp = Interpreter::new();
+
+        // Create users sheet from records
+        let mut user1 = IndexMap::new();
+        user1.insert("id".to_string(), CellValue::Int(1));
+        user1.insert("name".to_string(), CellValue::String("Alice".to_string()));
+
+        let mut user2 = IndexMap::new();
+        user2.insert("id".to_string(), CellValue::Int(2));
+        user2.insert("name".to_string(), CellValue::String("Bob".to_string()));
+
+        let users = Sheet::from_records(vec![user1, user2]).unwrap();
+
+        // Create orders sheet from records
+        let mut order1 = IndexMap::new();
+        order1.insert("id".to_string(), CellValue::Int(101));
+        order1.insert("user_id".to_string(), CellValue::Int(1));
+        order1.insert("amount".to_string(), CellValue::Float(50.0));
+
+        let mut order2 = IndexMap::new();
+        order2.insert("id".to_string(), CellValue::Int(102));
+        order2.insert("user_id".to_string(), CellValue::Int(2));
+        order2.insert("amount".to_string(), CellValue::Float(75.0));
+
+        let mut order3 = IndexMap::new();
+        order3.insert("id".to_string(), CellValue::Int(103));
+        order3.insert("user_id".to_string(), CellValue::Int(1));
+        order3.insert("amount".to_string(), CellValue::Float(25.0));
+
+        let orders = Sheet::from_records(vec![order1, order2, order3]).unwrap();
+
+        // Set the sheets as variables (convert to Value)
+        interp.set_var("users", sheet_to_value(&users)).await;
+        interp.set_var("orders", sheet_to_value(&orders)).await;
+
+        // Test inner join with different columns
+        let code = r#"result = users join orders on "id" = "user_id""#;
+        let program = PipParser::parse_str(code).unwrap();
+        interp.eval(program).await.unwrap();
+
+        let result = interp.get_var("result").await.unwrap();
+        // Result is an array of objects
+        if let Value::Array(arr) = result {
+            assert_eq!(arr.len(), 3); // Should have 3 rows (1 has 2 orders, 2 has 1 order)
+                                      // Check that first record has expected fields
+            if let Value::Object(first) = &arr[0] {
+                assert!(first.contains_key("id"));
+                assert!(first.contains_key("name"));
+                assert!(first.contains_key("amount"));
+            } else {
+                panic!("Expected object in result array");
+            }
+        } else {
+            panic!("Expected Array result from join");
+        }
+    }
+
+    #[tokio::test]
+    async fn test_join_left() {
+        use indexmap::IndexMap;
+        use piptable_sheet::{CellValue, Sheet};
+
+        let mut interp = Interpreter::new();
+
+        // Create users sheet from records
+        let mut user1 = IndexMap::new();
+        user1.insert("id".to_string(), CellValue::Int(1));
+        user1.insert("name".to_string(), CellValue::String("Alice".to_string()));
+
+        let mut user2 = IndexMap::new();
+        user2.insert("id".to_string(), CellValue::Int(2));
+        user2.insert("name".to_string(), CellValue::String("Bob".to_string()));
+
+        let mut user3 = IndexMap::new();
+        user3.insert("id".to_string(), CellValue::Int(3));
+        user3.insert("name".to_string(), CellValue::String("Charlie".to_string()));
+
+        let users = Sheet::from_records(vec![user1, user2, user3]).unwrap();
+
+        // Create orders sheet from records
+        let mut order1 = IndexMap::new();
+        order1.insert("user_id".to_string(), CellValue::Int(1));
+        order1.insert("amount".to_string(), CellValue::Float(50.0));
+
+        let mut order2 = IndexMap::new();
+        order2.insert("user_id".to_string(), CellValue::Int(2));
+        order2.insert("amount".to_string(), CellValue::Float(75.0));
+
+        let orders = Sheet::from_records(vec![order1, order2]).unwrap();
+
+        // Set the sheets as variables
+        interp.set_var("users", sheet_to_value(&users)).await;
+        interp.set_var("orders", sheet_to_value(&orders)).await;
+
+        // Test left join
+        let code = r#"result = users left join orders on "id" = "user_id""#;
+        let program = PipParser::parse_str(code).unwrap();
+        interp.eval(program).await.unwrap();
+
+        let result = interp.get_var("result").await.unwrap();
+        if let Value::Array(arr) = result {
+            assert_eq!(arr.len(), 3); // Should have all 3 users
+
+            // Find Charlie's record
+            let charlie_record = arr
+                .iter()
+                .find(|record| {
+                    if let Value::Object(obj) = record {
+                        if let Some(Value::String(name)) = obj.get("name") {
+                            name == "Charlie"
+                        } else {
+                            false
+                        }
+                    } else {
+                        false
+                    }
+                })
+                .expect("Charlie record not found");
+
+            // Charlie should have null amount
+            if let Value::Object(obj) = charlie_record {
+                assert!(matches!(obj.get("amount"), Some(Value::Null)));
+            }
+        } else {
+            panic!("Expected Array result from left join");
+        }
+    }
+
+    #[tokio::test]
+    async fn test_join_with_same_key() {
+        use indexmap::IndexMap;
+        use piptable_sheet::{CellValue, Sheet};
+
+        let mut interp = Interpreter::new();
+
+        // Create first sheet from records
+        let mut record1_1 = IndexMap::new();
+        record1_1.insert("id".to_string(), CellValue::Int(1));
+        record1_1.insert("value1".to_string(), CellValue::String("A".to_string()));
+
+        let mut record1_2 = IndexMap::new();
+        record1_2.insert("id".to_string(), CellValue::Int(2));
+        record1_2.insert("value1".to_string(), CellValue::String("B".to_string()));
+
+        let sheet1 = Sheet::from_records(vec![record1_1, record1_2]).unwrap();
+
+        // Create second sheet from records
+        let mut record2_1 = IndexMap::new();
+        record2_1.insert("id".to_string(), CellValue::Int(1));
+        record2_1.insert("value2".to_string(), CellValue::String("X".to_string()));
+
+        let mut record2_2 = IndexMap::new();
+        record2_2.insert("id".to_string(), CellValue::Int(2));
+        record2_2.insert("value2".to_string(), CellValue::String("Y".to_string()));
+
+        let sheet2 = Sheet::from_records(vec![record2_1, record2_2]).unwrap();
+
+        // Set the sheets as variables
+        interp.set_var("sheet1", sheet_to_value(&sheet1)).await;
+        interp.set_var("sheet2", sheet_to_value(&sheet2)).await;
+
+        // Test join with same key column name
+        let code = r#"result = sheet1 join sheet2 on "id""#;
+        let program = PipParser::parse_str(code).unwrap();
+        interp.eval(program).await.unwrap();
+
+        let result = interp.get_var("result").await.unwrap();
+        if let Value::Array(arr) = result {
+            assert_eq!(arr.len(), 2);
+            // Check that first record has expected fields
+            if let Value::Object(first) = &arr[0] {
+                assert!(first.contains_key("id"));
+                assert!(first.contains_key("value1"));
+                assert!(first.contains_key("value2"));
+            } else {
+                panic!("Expected object in result array");
+            }
+        } else {
+            panic!("Expected Array result from join");
+        }
+    }
+
+    #[tokio::test]
+    async fn test_join_right() {
+        use indexmap::IndexMap;
+        use piptable_sheet::{CellValue, Sheet};
+
+        let mut interp = Interpreter::new();
+
+        // Create left sheet with 2 users
+        let mut user1 = IndexMap::new();
+        user1.insert("id".to_string(), CellValue::Int(1));
+        user1.insert("name".to_string(), CellValue::String("Alice".to_string()));
+
+        let mut user2 = IndexMap::new();
+        user2.insert("id".to_string(), CellValue::Int(2));
+        user2.insert("name".to_string(), CellValue::String("Bob".to_string()));
+
+        let sheet1 = Sheet::from_records(vec![user1, user2]).unwrap();
+
+        // Create right sheet with 3 scores (one matching, two non-matching)
+        let mut score1 = IndexMap::new();
+        score1.insert("user_id".to_string(), CellValue::Int(2));
+        score1.insert("score".to_string(), CellValue::Int(85));
+
+        let mut score2 = IndexMap::new();
+        score2.insert("user_id".to_string(), CellValue::Int(3));
+        score2.insert("score".to_string(), CellValue::Int(90));
+
+        let mut score3 = IndexMap::new();
+        score3.insert("user_id".to_string(), CellValue::Int(4));
+        score3.insert("score".to_string(), CellValue::Int(95));
+
+        let sheet2 = Sheet::from_records(vec![score1, score2, score3]).unwrap();
+
+        interp.set_var("sheet1", sheet_to_value(&sheet1)).await;
+        interp.set_var("sheet2", sheet_to_value(&sheet2)).await;
+
+        // Test right join
+        let code = r#"result = sheet1 right join sheet2 on "id" = "user_id""#;
+        let program = PipParser::parse_str(code).unwrap();
+        interp.eval(program).await.unwrap();
+
+        let result = interp.get_var("result").await.unwrap();
+        if let Value::Array(arr) = result {
+            // Should have all rows from sheet2 (3 records)
+            assert_eq!(arr.len(), 3);
+
+            // Check that we have the expected records
+            let mut found_bob = false;
+            let mut found_id3 = false;
+            let mut found_id4 = false;
+
+            for record in &arr {
+                if let Value::Object(obj) = record {
+                    // The join seems to be using "id" field from right table
+                    if let Some(Value::Int(id)) = obj.get("id") {
+                        match *id {
+                            2 => {
+                                // This should have data from both sheets
+                                assert!(obj.contains_key("name"));
+                                if let Some(Value::String(name)) = obj.get("name") {
+                                    assert_eq!(name, "Bob");
+                                    found_bob = true;
+                                }
+                            }
+                            3 => {
+                                // Should have nulls for left table columns
+                                assert!(matches!(obj.get("name"), Some(Value::Null)));
+                                // id=3 comes from right table (user_id=3)
+                                assert!(matches!(obj.get("score"), Some(Value::Int(90))));
+                                found_id3 = true;
+                            }
+                            4 => {
+                                // Should have nulls for left table columns
+                                assert!(matches!(obj.get("name"), Some(Value::Null)));
+                                // id=4 comes from right table (user_id=4)
+                                assert!(matches!(obj.get("score"), Some(Value::Int(95))));
+                                found_id4 = true;
+                            }
+                            _ => panic!("Unexpected user_id in result: {}", id),
+                        }
+                    }
+                }
+            }
+
+            assert!(found_bob, "Expected to find Bob's record");
+            assert!(found_id3, "Expected to find user_id=3 record");
+            assert!(found_id4, "Expected to find user_id=4 record");
+        } else {
+            panic!("Expected Array result from right join");
+        }
+    }
+
+    #[tokio::test]
+    async fn test_join_full() {
+        use indexmap::IndexMap;
+        use piptable_sheet::{CellValue, Sheet};
+
+        let mut interp = Interpreter::new();
+
+        // Create test data with some overlapping and some non-overlapping records
+        let mut user1 = IndexMap::new();
+        user1.insert("id".to_string(), CellValue::Int(1));
+        user1.insert("name".to_string(), CellValue::String("Alice".to_string()));
+
+        let mut user2 = IndexMap::new();
+        user2.insert("id".to_string(), CellValue::Int(2));
+        user2.insert("name".to_string(), CellValue::String("Bob".to_string()));
+
+        let mut user3 = IndexMap::new();
+        user3.insert("id".to_string(), CellValue::Int(5));
+        user3.insert("name".to_string(), CellValue::String("Eve".to_string()));
+
+        let sheet1 = Sheet::from_records(vec![user1, user2, user3]).unwrap();
+
+        let mut score1 = IndexMap::new();
+        score1.insert("user_id".to_string(), CellValue::Int(2));
+        score1.insert("score".to_string(), CellValue::Int(85));
+
+        let mut score2 = IndexMap::new();
+        score2.insert("user_id".to_string(), CellValue::Int(3));
+        score2.insert("score".to_string(), CellValue::Int(90));
+
+        let mut score3 = IndexMap::new();
+        score3.insert("user_id".to_string(), CellValue::Int(4));
+        score3.insert("score".to_string(), CellValue::Int(95));
+
+        let sheet2 = Sheet::from_records(vec![score1, score2, score3]).unwrap();
+
+        interp.set_var("sheet1", sheet_to_value(&sheet1)).await;
+        interp.set_var("sheet2", sheet_to_value(&sheet2)).await;
+
+        // Test full join
+        let code = r#"result = sheet1 full join sheet2 on "id" = "user_id""#;
+        let program = PipParser::parse_str(code).unwrap();
+        interp.eval(program).await.unwrap();
+
+        let result = interp.get_var("result").await.unwrap();
+        if let Value::Array(arr) = result {
+            // Should have all unique keys from both tables (1,2,3,4,5 = 5 records)
+            assert_eq!(arr.len(), 5);
+
+            let mut found_alice = false;
+            let mut found_bob = false;
+            let mut found_eve = false;
+            let mut found_id3 = false;
+            let mut found_id4 = false;
+
+            for record in &arr {
+                if let Value::Object(obj) = record {
+                    // Check based on which side has data
+                    let id = obj.get("id");
+
+                    if matches!(id, Some(Value::Int(1))) {
+                        // Alice - only in left table
+                        assert!(matches!(obj.get("name"), Some(Value::String(s)) if s == "Alice"));
+                        assert!(matches!(obj.get("score"), Some(Value::Null)));
+                        // There's no user_id field, it's all "id" after join
+                        found_alice = true;
+                    } else if matches!(id, Some(Value::Int(2))) {
+                        // Bob - in both tables
+                        assert!(matches!(obj.get("name"), Some(Value::String(s)) if s == "Bob"));
+                        assert!(matches!(obj.get("score"), Some(Value::Int(85))));
+                        found_bob = true;
+                    } else if matches!(id, Some(Value::Int(5))) {
+                        // Eve - only in left table
+                        assert!(matches!(obj.get("name"), Some(Value::String(s)) if s == "Eve"));
+                        assert!(matches!(obj.get("score"), Some(Value::Null)));
+                        found_eve = true;
+                    } else if matches!(id, Some(Value::Int(3))) {
+                        // Only in right table (user_id=3, no matching id in left)
+                        assert!(matches!(obj.get("name"), Some(Value::Null)));
+                        assert!(matches!(obj.get("score"), Some(Value::Int(90))));
+                        found_id3 = true;
+                    } else if matches!(id, Some(Value::Int(4))) {
+                        // Only in right table (user_id=4, no matching id in left)
+                        assert!(matches!(obj.get("name"), Some(Value::Null)));
+                        assert!(matches!(obj.get("score"), Some(Value::Int(95))));
+                        found_id4 = true;
+                    }
+                }
+            }
+
+            assert!(found_alice, "Expected to find Alice's record");
+            assert!(found_bob, "Expected to find Bob's record");
+            assert!(found_eve, "Expected to find Eve's record");
+            assert!(found_id3, "Expected to find user_id=3 record");
+            assert!(found_id4, "Expected to find user_id=4 record");
+        } else {
+            panic!("Expected Array result from full join");
+        }
+    }
+
+    #[tokio::test]
+    async fn test_join_with_empty_sheets() {
+        use indexmap::IndexMap;
+        use piptable_sheet::{CellValue, Sheet};
+
+        let mut interp = Interpreter::new();
+
+        // Create sheet1 with data
+        let mut user1 = IndexMap::new();
+        user1.insert("id".to_string(), CellValue::Int(1));
+        user1.insert("name".to_string(), CellValue::String("Alice".to_string()));
+        let sheet1 = Sheet::from_records(vec![user1]).unwrap();
+
+        // Create sheet2 with no data but named columns
+        let mut sheet2 = Sheet::new();
+        sheet2.data_mut().push(vec![
+            CellValue::String("user_id".to_string()),
+            CellValue::String("score".to_string()),
+        ]);
+        sheet2.name_columns_by_row(0).unwrap();
+        sheet2.data_mut().remove(0); // Remove header row, keep column names
+
+        interp.set_var("sheet1", sheet_to_value(&sheet1)).await;
+        interp.set_var("sheet2", sheet_to_value(&sheet2)).await;
+
+        // Test behavior with empty sheet - should either work or give predictable error
+        let code = r#"result = sheet1 join sheet2 on "id" = "user_id""#;
+        let program = PipParser::parse_str(code).unwrap();
+
+        // This may fail with "Columns not named" for truly empty sheets, which is expected
+        let eval_result = interp.eval(program).await;
+
+        match eval_result {
+            Ok(_) => {
+                // If it succeeds, verify the result is empty
+                let result = interp.get_var("result").await.unwrap();
+                if let Value::Array(arr) = result {
+                    assert_eq!(
+                        arr.len(),
+                        0,
+                        "Inner join with empty sheet should return no records"
+                    );
+                } else {
+                    panic!("Expected Array result");
+                }
+            }
+            Err(e) => {
+                // Expected error for empty sheets without proper column mapping
+                assert!(
+                    e.to_string().contains("Columns not named"),
+                    "Expected 'Columns not named' error for empty sheet, got: {}",
+                    e
+                );
+                return; // Skip remaining tests if empty sheets aren't supported
+            }
+        }
+
+        // Test left join with empty right sheet
+        let code = r#"result = sheet1 left join sheet2 on "id" = "user_id""#;
+        let program = PipParser::parse_str(code).unwrap();
+        let left_result = interp.eval(program).await;
+
+        if left_result.is_ok() {
+            let result = interp.get_var("result").await.unwrap();
+            if let Value::Array(arr) = result {
+                assert_eq!(arr.len(), 1, "Left join should preserve all left records");
+                if let Value::Object(obj) = &arr[0] {
+                    assert!(matches!(obj.get("name"), Some(Value::String(s)) if s == "Alice"));
+                }
+            } else {
+                panic!("Expected Array result");
+            }
+        }
+
+        // Test right join with empty right sheet
+        let code = r#"result = sheet1 right join sheet2 on "id" = "user_id""#;
+        let program = PipParser::parse_str(code).unwrap();
+        let right_result = interp.eval(program).await;
+
+        if right_result.is_ok() {
+            let result = interp.get_var("result").await.unwrap();
+            if let Value::Array(arr) = result {
+                assert_eq!(
+                    arr.len(),
+                    0,
+                    "Right join with empty right sheet should return no records"
+                );
+            } else {
+                panic!("Expected Array result");
+            }
+        }
     }
 }

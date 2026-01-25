@@ -271,6 +271,7 @@ fn value_to_py(py: Python<'_>, value: &Value) -> PyResult<PyObject> {
 }
 
 /// Convert a Python object to a piptable Value.
+#[allow(clippy::only_used_in_recursion)]
 fn py_to_value(py: Python<'_>, obj: &Bound<'_, PyAny>) -> PyResult<Value> {
     if obj.is_none() {
         return Ok(Value::Null);

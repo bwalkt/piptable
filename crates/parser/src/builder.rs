@@ -2,8 +2,8 @@
 
 use pest::iterators::{Pair, Pairs};
 use piptable_core::{
-    BinaryOp, Expr, FromClause, ImportOptions, Literal, OrderByItem, Program, SelectClause,
-    SelectItem, SortDirection, SqlQuery, Statement, TableRef, UnaryOp,
+    BinaryOp, Expr, FromClause, ImportOptions, JoinCondition, JoinType, Literal, OrderByItem,
+    Program, SelectClause, SelectItem, SortDirection, SqlQuery, Statement, TableRef, UnaryOp,
 };
 
 use crate::Rule;
@@ -445,7 +445,13 @@ fn build_import_options(pair: Pair<Rule>) -> BuildResult<ImportOptions> {
 /// Build an expression from a pest pair.
 pub fn build_expr(pair: Pair<Rule>) -> BuildResult<Expr> {
     match pair.as_rule() {
-        Rule::expr | Rule::or_expr => build_or_expr(pair),
+        Rule::expr => {
+            // expr contains a single join_expr
+            let inner = pair.into_inner().next().unwrap();
+            build_join_expr(inner)
+        }
+        Rule::join_expr => build_join_expr(pair),
+        Rule::or_expr => build_or_expr(pair),
         Rule::and_expr => build_and_expr(pair),
         Rule::not_expr => build_not_expr(pair),
         Rule::comparison_expr => build_comparison_expr(pair),
@@ -471,22 +477,136 @@ pub fn build_expr(pair: Pair<Rule>) -> BuildResult<Expr> {
     }
 }
 
+fn build_join_expr(pair: Pair<Rule>) -> BuildResult<Expr> {
+    // join_expr = { or_expr ~ (join_op ~ or_expr ~ join_condition?)* }
+    let mut inner = pair.into_inner();
+    let mut left = build_or_expr(inner.next().unwrap())?;
+
+    while let Some(pair) = inner.next() {
+        if let Rule::join_op = pair.as_rule() {
+            let join_inner_pair = pair.clone();
+            let join_inner = pair.into_inner().next().unwrap();
+            let join_type = match join_inner.as_rule() {
+                Rule::inner_join => JoinType::Inner,
+                Rule::left_join => JoinType::Left,
+                Rule::right_join => JoinType::Right,
+                Rule::full_join => JoinType::Full,
+                _ => return Err(BuildError::from_pair(&join_inner_pair, "Unknown join type")),
+            };
+
+            // Get the right side expression
+            let right = build_or_expr(inner.next().unwrap())?;
+
+            // Check for join condition
+            let condition = if let Some(cond_pair) = inner.next() {
+                if cond_pair.as_rule() == Rule::join_condition {
+                    let cond_inner = cond_pair.into_inner().next().unwrap();
+                    if cond_inner.as_rule() == Rule::join_key_pair {
+                        // Handle "col1" = "col2" syntax
+                        let mut key_inner = cond_inner.into_inner();
+                        let left_pair = key_inner.next().unwrap();
+                        let right_pair = key_inner.next().unwrap();
+
+                        // Parse join keys using build_literal for consistency
+                        let left_col = match build_literal(left_pair.clone())? {
+                            Literal::String(s) if !s.is_empty() => s,
+                            Literal::String(_) => {
+                                return Err(BuildError::from_pair(
+                                    &left_pair,
+                                    "Left join key cannot be empty",
+                                ))
+                            }
+                            _ => {
+                                return Err(BuildError::from_pair(
+                                    &left_pair,
+                                    "Left join key must be a string",
+                                ))
+                            }
+                        };
+
+                        let right_col = match build_literal(right_pair.clone())? {
+                            Literal::String(s) if !s.is_empty() => s,
+                            Literal::String(_) => {
+                                return Err(BuildError::from_pair(
+                                    &right_pair,
+                                    "Right join key cannot be empty",
+                                ))
+                            }
+                            _ => {
+                                return Err(BuildError::from_pair(
+                                    &right_pair,
+                                    "Right join key must be a string",
+                                ))
+                            }
+                        };
+
+                        JoinCondition::OnColumns {
+                            left: left_col,
+                            right: right_col,
+                        }
+                    } else {
+                        // Handle simple "id" syntax (cond_inner is a string rule)
+                        let key_pair = cond_inner.clone();
+                        let key = match build_literal(cond_inner)? {
+                            Literal::String(s) if !s.is_empty() => s,
+                            Literal::String(_) => {
+                                return Err(BuildError::from_pair(
+                                    &key_pair,
+                                    "Join key cannot be empty",
+                                ))
+                            }
+                            _ => {
+                                return Err(BuildError::from_pair(
+                                    &key_pair,
+                                    "Join key must be a string",
+                                ))
+                            }
+                        };
+                        JoinCondition::On(key)
+                    }
+                } else {
+                    // Not a join condition, should not happen with correct grammar
+                    return Err(BuildError::from_pair(
+                        &cond_pair,
+                        "Expected join condition after join expression",
+                    ));
+                }
+            } else {
+                // No join condition provided - grammar requires it
+                return Err(BuildError::from_pair(
+                    &join_inner_pair,
+                    "Join requires an 'on' condition",
+                ));
+            };
+
+            left = Expr::Join {
+                left: Box::new(left),
+                right: Box::new(right),
+                join_type,
+                condition,
+            };
+        }
+    }
+
+    Ok(left)
+}
+
 fn build_or_expr(pair: Pair<Rule>) -> BuildResult<Expr> {
     let mut inner = pair.into_inner();
-    let mut left = build_expr(inner.next().unwrap())?;
+    let mut left = build_and_expr(inner.next().unwrap())?;
 
     while let Some(next_pair) = inner.next() {
         // Skip or_kw, get the next and_expr
         if next_pair.as_rule() == Rule::or_kw {
             let right_pair = inner.next().unwrap();
-            let right = build_expr(right_pair)?;
+            let right = build_and_expr(right_pair)?;
             left = Expr::Binary {
                 left: Box::new(left),
                 op: BinaryOp::Or,
                 right: Box::new(right),
             };
         } else {
-            let right = build_expr(next_pair)?;
+            let right = build_and_expr(next_pair)?;
             left = Expr::Binary {
                 left: Box::new(left),
                 op: BinaryOp::Or,
@@ -500,20 +620,20 @@ fn build_or_expr(pair: Pair<Rule>) -> BuildResult<Expr> {
 
 fn build_and_expr(pair: Pair<Rule>) -> BuildResult<Expr> {
     let mut inner = pair.into_inner();
-    let mut left = build_expr(inner.next().unwrap())?;
+    let mut left = build_not_expr(inner.next().unwrap())?;
 
     while let Some(next_pair) = inner.next() {
         // Skip and_kw, get the next not_expr
         if next_pair.as_rule() == Rule::and_kw {
             let right_pair = inner.next().unwrap();
-            let right = build_expr(right_pair)?;
+            let right = build_not_expr(right_pair)?;
             left = Expr::Binary {
                 left: Box::new(left),
                 op: BinaryOp::And,
                 right: Box::new(right),
             };
         } else {
-            let right = build_expr(next_pair)?;
+            let right = build_not_expr(next_pair)?;
             left = Expr::Binary {
                 left: Box::new(left),
                 op: BinaryOp::And,
@@ -526,24 +646,32 @@ fn build_and_expr(pair: Pair<Rule>) -> BuildResult<Expr> {
 }
 
 fn build_not_expr(pair: Pair<Rule>) -> BuildResult<Expr> {
+    let pair_for_error = pair.clone();
     let mut inner = pair.into_inner();
-    let first = inner.next().unwrap();
 
-    // Check if it's not_kw rule or starts with "not"
-    if first.as_rule() == Rule::not_kw || first.as_str().eq_ignore_ascii_case("not") {
-        let operand = build_expr(inner.next().unwrap())?;
-        Ok(Expr::Unary {
-            op: UnaryOp::Not,
-            operand: Box::new(operand),
-        })
+    // Check if we have any inner pairs
+    if let Some(first) = inner.next() {
+        // Check if it's not_kw rule or starts with "not"
+        if first.as_rule() == Rule::not_kw {
+            // We have a NOT operator, get the comparison expression
+            let operand = build_comparison_expr(inner.next().unwrap())?;
+            Ok(Expr::Unary {
+                op: UnaryOp::Not,
+                operand: Box::new(operand),
+            })
+        } else {
+            // No NOT operator, just build the comparison expression
+            build_comparison_expr(first)
+        }
     } else {
-        build_expr(first)
+        // Empty not_expr - shouldn't happen with our grammar
+        Err(BuildError::from_pair(&pair_for_error, "Empty not_expr"))
     }
 }
 
 fn build_comparison_expr(pair: Pair<Rule>) -> BuildResult<Expr> {
     let mut inner = pair.into_inner();
-    let left = build_expr(inner.next().unwrap())?;
+    let left = build_additive_expr(inner.next().unwrap())?;
 
     if let Some(next) = inner.next() {
         match next.as_rule() {
@@ -565,7 +693,7 @@ fn build_comparison_expr(pair: Pair<Rule>) -> BuildResult<Expr> {
             }
             Rule::comparison_op => {
                 let op = build_comparison_op(&next)?;
-                let right = build_expr(inner.next().unwrap())?;
+                let right = build_additive_expr(inner.next().unwrap())?;
                 Ok(Expr::Binary {
                     left: Box::new(left),
                     op,
@@ -632,7 +760,7 @@ fn build_comparison_op(pair: &Pair<Rule>) -> BuildResult<BinaryOp> {
 /// ```
 fn build_additive_expr(pair: Pair<Rule>) -> BuildResult<Expr> {
     let mut inner = pair.into_inner();
-    let mut left = build_expr(inner.next().unwrap())?;
+    let mut left = build_multiplicative_expr(inner.next().unwrap())?;
 
     while let Some(op_pair) = inner.next() {
         // op_pair should be add_op rule
@@ -642,7 +770,7 @@ fn build_additive_expr(pair: Pair<Rule>) -> BuildResult<Expr> {
         } else {
             BinaryOp::Sub
         };
-        let right = build_expr(inner.next().unwrap())?;
+        let right = build_multiplicative_expr(inner.next().unwrap())?;
         left = Expr::Binary {
             left: Box::new(left),
             op,
@@ -678,7 +806,7 @@ fn build_additive_expr(pair: Pair<Rule>) -> BuildResult<Expr> {
 /// ```
 fn build_multiplicative_expr(pair: Pair<Rule>) -> BuildResult<Expr> {
     let mut inner = pair.into_inner();
-    let mut left = build_expr(inner.next().unwrap())?;
+    let mut left = build_unary_expr(inner.next().unwrap())?;
 
     while let Some(op_pair) = inner.next() {
         // op_pair should be mul_op rule
@@ -689,7 +817,7 @@ fn build_multiplicative_expr(pair: Pair<Rule>) -> BuildResult<Expr> {
             "%" => BinaryOp::Mod,
             _ => unreachable!("unexpected mul_op: {}", op_str),
         };
-        let right = build_expr(inner.next().unwrap())?;
+        let right = build_unary_expr(inner.next().unwrap())?;
         left = Expr::Binary {
             left: Box::new(left),
             op,
@@ -720,7 +848,7 @@ fn build_unary_expr(pair: Pair<Rule>) -> BuildResult<Expr> {
     match first.as_rule() {
         Rule::unary_op => {
             let op_str = first.as_str();
-            let operand = build_expr(inner.next().unwrap())?;
+            let operand = build_postfix_expr(inner.next().unwrap())?;
             if op_str == "-" {
                 Ok(Expr::Unary {
                     op: UnaryOp::Neg,
@@ -731,13 +859,13 @@ fn build_unary_expr(pair: Pair<Rule>) -> BuildResult<Expr> {
                 Ok(operand)
             }
         }
-        _ => build_expr(first),
+        _ => build_postfix_expr(first),
     }
 }
 
 fn build_postfix_expr(pair: Pair<Rule>) -> BuildResult<Expr> {
     let mut inner = pair.into_inner();
-    let mut expr = build_expr(inner.next().unwrap())?;
+    let mut expr = build_primary_expr(inner.next().unwrap())?;
 
     for postfix in inner {
         match postfix.as_rule() {
@@ -1215,6 +1343,8 @@ fn build_join_clause(pair: Pair<Rule>) -> BuildResult<piptable_core::JoinClause>
                     join_type = JoinType::Right;
                 } else if s.contains("cross") {
                     join_type = JoinType::Cross;
+                } else if s.contains("full") {
+                    join_type = JoinType::Full;
                 } else {
                     join_type = JoinType::Inner;
                 }

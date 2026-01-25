@@ -1,3 +1,5 @@
+#![allow(clippy::approx_constant)]
+
 use piptable_sheet::{Book, CellValue, Sheet, SheetError};
 use tempfile::tempdir;
 

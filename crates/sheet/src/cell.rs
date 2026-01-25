@@ -171,6 +171,7 @@ impl<T: Into<CellValue>> From<Option<T>> for CellValue {
 
 #[cfg(test)]
 mod tests {
+    #![allow(clippy::approx_constant)]
     use super::*;
 
     #[test]

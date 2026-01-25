@@ -206,6 +206,14 @@ pub enum Expr {
         source: Box<Expr>,
         options: Option<Box<Expr>>,
     },
+
+    /// Join expression: `sheet1 join sheet2 on "id"` or `sheet1 left join sheet2 on "id" = "user_id"`
+    Join {
+        left: Box<Expr>,
+        right: Box<Expr>,
+        join_type: JoinType,
+        condition: JoinCondition,
+    },
 }
 
 /// Literal values.
@@ -419,6 +427,7 @@ pub enum JoinType {
     Inner,
     Left,
     Right,
+    Full,
     Cross,
 }
 
@@ -465,6 +474,15 @@ impl Default for Program {
     fn default() -> Self {
         Self::new()
     }
+}
+
+/// Join condition specification
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum JoinCondition {
+    /// Join on same column name: `on "id"`
+    On(String),
+    /// Join on different columns: `on "left_col" = "right_col"`
+    OnColumns { left: String, right: String },
 }
 
 #[cfg(test)]

@@ -295,6 +295,7 @@ impl Value {
 
 #[cfg(test)]
 mod tests {
+    #![allow(clippy::approx_constant)]
     use super::*;
 
     // ========================================================================

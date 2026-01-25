@@ -332,7 +332,7 @@ impl Sheet {
     fn to_list(&self, py: Python<'_>) -> PyResult<PyObject> {
         let data = self.inner.to_array();
         let mut rows: Vec<PyObject> = Vec::with_capacity(data.len());
-        for row in data.iter() {
+        for row in &data {
             let inner = PyList::new(py, row.iter().map(|v| cell_value_to_py(py, v)))?;
             rows.push(inner.into_any().unbind());
         }
@@ -492,7 +492,7 @@ impl Sheet {
             // No column names - use row data directly
             let data = self.inner.to_array();
             let mut rows: Vec<PyObject> = Vec::with_capacity(data.len());
-            for row in data.iter() {
+            for row in &data {
                 let inner = PyList::new(py, row.iter().map(|v| cell_value_to_py(py, v)))?;
                 rows.push(inner.into_any().unbind());
             }
