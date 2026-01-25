@@ -7,7 +7,7 @@ PipTable can be installed in several ways depending on your needs.
 The easiest way to install PipTable is using Cargo, Rust's package manager:
 
 ```bash
-cargo install piptable
+cargo install piptable-cli
 ```
 
 This will install the `pip` command globally on your system.
@@ -42,7 +42,7 @@ The binary will be available at `target/release/pip`.
 # brew install piptable
 
 # Or use Cargo
-cargo install piptable
+cargo install piptable-cli
 ```
 
 ### Linux
@@ -52,7 +52,7 @@ cargo install piptable
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 
 # Install PipTable
-cargo install piptable
+cargo install piptable-cli
 ```
 
 ### Windows
@@ -60,7 +60,7 @@ cargo install piptable
 ```powershell
 # Install Rust from https://rustup.rs/
 # Then install PipTable
-cargo install piptable
+cargo install piptable-cli
 ```
 
 ## Verifying Installation
@@ -134,14 +134,14 @@ cargo build --release
 
 ### Python Integration Issues
 
-For Python UDF support:
+For Python UDF support (coming soon):
 
 ```bash
 # Ensure Python is available
 python3 --version
 
-# Install with Python feature
-cargo install piptable --features python
+# Note: Python feature is not yet available
+# This will be supported in a future release
 ```
 
 ## Next Steps
