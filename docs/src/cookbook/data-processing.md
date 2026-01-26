@@ -18,17 +18,18 @@ PipTable excels at data processing tasks that traditionally require complex Pyth
 ' @title Filter and Transform Example
 ' @description Clean data by filtering rows and transforming columns
 
-DIM sales AS SHEET = READ("sales.csv")
+import "sales.csv" into sales
 
-' Filter for high-value transactions
-DIM high_value AS SHEET = QUERY(sales, 
-  "SELECT * FROM sales WHERE amount > 1000")
+' Filter for high-value transactions and add calculated columns
+dim with_margin: table = query(
+  SELECT 
+    *,
+    amount * 0.15 as margin
+  FROM "sales.csv"
+  WHERE amount > 1000
+)
 
-' Add calculated columns
-DIM with_margin AS SHEET = QUERY(high_value,
-  "SELECT *, amount * 0.15 as margin FROM high_value")
-
-WRITE(with_margin, "high_value_sales.csv")
+export with_margin to "high_value_sales.csv"
 ```
 
 ### Aggregate and Summarize
@@ -36,21 +37,22 @@ WRITE(with_margin, "high_value_sales.csv")
 ' @title Sales Summary by Category
 ' @description Group sales data and calculate totals
 
-DIM transactions AS SHEET = READ("transactions.csv")
+import "transactions.csv" into transactions
 
-DIM summary AS SHEET = QUERY(transactions, 
-  "SELECT 
+dim summary: table = query(
+  SELECT 
     category,
     COUNT(*) as transaction_count,
     SUM(amount) as total_sales,
     AVG(amount) as avg_sale,
     MAX(amount) as largest_sale
-   FROM transactions 
-   GROUP BY category
-   ORDER BY total_sales DESC")
+  FROM "transactions.csv"
+  GROUP BY category
+  ORDER BY total_sales DESC
+)
 
-PRINT "Sales Summary Generated"
-WRITE(summary, "category_summary.csv")
+print "Sales Summary Generated"
+export summary to "category_summary.csv"
 ```
 
 ### Data Validation
@@ -58,28 +60,30 @@ WRITE(summary, "category_summary.csv")
 ' @title Data Validation Example
 ' @description Find and report data quality issues
 
-DIM data AS SHEET = READ("customer_data.csv")
+import "customer_data.csv" into data
 
 ' Find records with missing required fields
-DIM missing_email AS SHEET = QUERY(data, 
-  "SELECT * FROM data WHERE email IS NULL OR email = ''")
+dim missing_email: table = query(
+  SELECT * FROM "customer_data.csv" WHERE email IS NULL OR email = ''
+)
 
 ' Find duplicate records
-DIM duplicates AS SHEET = QUERY(data,
-  "SELECT email, COUNT(*) as count 
-   FROM data 
-   GROUP BY email 
-   HAVING COUNT(*) > 1")
+dim duplicates: table = query(
+  SELECT email, COUNT(*) as count 
+  FROM "customer_data.csv" 
+  GROUP BY email 
+  HAVING COUNT(*) > 1
+)
 
-IF LEN(missing_email) > 0 THEN
-  PRINT "Found " + STR(LEN(missing_email)) + " records with missing emails"
-  WRITE(missing_email, "data_quality_missing_emails.csv")
-END IF
+if len(missing_email) > 0 then
+  print "Found " + str(len(missing_email)) + " records with missing emails"
+  export missing_email to "data_quality_missing_emails.csv"
+end if
 
-IF LEN(duplicates) > 0 THEN
-  PRINT "Found " + STR(LEN(duplicates)) + " duplicate email addresses"
-  WRITE(duplicates, "data_quality_duplicates.csv")
-END IF
+if len(duplicates) > 0 then
+  print "Found " + str(len(duplicates)) + " duplicate email addresses"
+  export duplicates to "data_quality_duplicates.csv"
+end if
 ```
 
 ## Next Steps

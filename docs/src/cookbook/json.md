@@ -87,10 +87,11 @@ dim page2: table = fetch("https://api.example.com/data?page=2")
 dim page3: table = fetch("https://api.example.com/data?page=3")
 
 ' Combine pages
-page1 append page2
-page1 append page3
+dim all_data: table = page1
+all_data append page2
+all_data append page3
 
-print "Fetched 3 pages, total: " + str(len(page1)) + " records"
+print "Fetched 3 pages, total: " + str(len(all_data)) + " records"
 
 export all_data to "complete_dataset.json"
 ```

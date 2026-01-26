@@ -111,6 +111,7 @@ export dept_summary to "department_analysis.xlsx"
 ' @description Fix common Excel data issues
 
 import "messy_excel.xlsx" into raw
+export raw to "temp_messy_excel.csv"
 
 ' Clean common Excel issues using file reference
 dim cleaned: table = query(
@@ -123,7 +124,7 @@ dim cleaned: table = query(
     CAST(REPLACE(REPLACE(phone, '-', ''), ' ', '') AS TEXT) as phone,
     CAST(amount AS FLOAT) as amount,
     DATE(date_column) as clean_date
-  FROM "messy_excel.xlsx"
+  FROM "temp_messy_excel.csv"
   WHERE name IS NOT NULL
 )
 

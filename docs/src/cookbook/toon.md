@@ -37,6 +37,7 @@ print "Loaded " + str(len(data)) + " typed records from TOON"
 ' @description Leverage TOON's type information for safe processing
 
 import "employees.toon" into employees
+export employees to "temp_employees.csv"
 
 ' Type information is preserved - use file reference
 dim high_earners: table = query(
@@ -45,7 +46,7 @@ dim high_earners: table = query(
     age,
     salary,
     salary * 0.15 as bonus
-  FROM "employees.toon"
+  FROM "temp_employees.csv"
   WHERE salary > 70000 AND active = true
 )
 
@@ -83,6 +84,7 @@ print "Converted CSV to typed TOON format"
 ' @description Convert typed TOON data to JSON
 
 import "source.toon" into toon_data
+export toon_data to "temp_source_toon.csv"
 
 ' Type information helps with JSON conversion - use file reference
 dim json_ready: table = query(
@@ -96,7 +98,7 @@ dim json_ready: table = query(
         'active', active
       )
     ) as json_record
-  FROM "source.toon"
+  FROM "temp_source_toon.csv"
 )
 
 export json_ready to "output.json"
@@ -110,6 +112,7 @@ export json_ready to "output.json"
 ' @description Handle different data types from TOON files
 
 import "mixed_types.toon" into mixed_data
+export mixed_data to "temp_mixed_types.csv"
 
 ' Process different types appropriately using file reference
 dim processed: table = query(
@@ -122,7 +125,7 @@ dim processed: table = query(
       ELSE 'Inactive'
     END as status,
     COALESCE(nullable_col, 'N/A') as non_null
-  FROM "mixed_types.toon"
+  FROM "temp_mixed_types.csv"
 )
 
 export processed to "processed_types.csv"
@@ -134,6 +137,7 @@ export processed to "processed_types.csv"
 ' @description Perform type-aware aggregations
 
 import "sales_data.toon" into sales
+export sales to "temp_sales_data.csv"
 
 ' Type information ensures correct aggregations - use file reference
 dim summary: table = query(
@@ -144,7 +148,7 @@ dim summary: table = query(
     AVG(unit_price) as avg_price,
     SUM(quantity * unit_price) as revenue,
     COUNT(DISTINCT customer_id) as unique_customers
-  FROM "sales_data.toon"
+  FROM "temp_sales_data.csv"
   GROUP BY product_category
   ORDER BY revenue DESC
 )
@@ -160,6 +164,7 @@ export summary to "sales_summary.toon"
 ' @description Ensure data conforms to expected types
 
 import "input.toon" into raw_data
+export raw_data to "temp_input.csv"
 
 ' Validate and report issues (simplified without TYPE function)
 dim validation_report: table = query(
@@ -171,19 +176,19 @@ dim validation_report: table = query(
       WHEN active IS NULL THEN 'Missing active'
       ELSE 'Valid'
     END as validation_status
-  FROM "input.toon"
+  FROM "temp_input.csv"
 )
 
 ' Separate valid and invalid records
 dim valid_records: table = query(
-  SELECT * FROM "input.toon"
+  SELECT * FROM "temp_input.csv"
   WHERE age IS NOT NULL 
     AND salary IS NOT NULL 
     AND active IS NOT NULL
 )
 
 dim invalid_records: table = query(
-  SELECT * FROM "input.toon"
+  SELECT * FROM "temp_input.csv"
   WHERE age IS NULL 
     OR salary IS NULL 
     OR active IS NULL
@@ -203,6 +208,7 @@ print "Validation complete: " + str(len(valid_records)) + " valid, " + str(len(i
 ' @description Type information enables query optimization
 
 import "big_data.toon" into large_dataset
+export large_dataset to "temp_big_data.csv"
 
 ' Types allow efficient operations - use file reference
 dim optimized: table = query(
@@ -210,7 +216,7 @@ dim optimized: table = query(
     int_id,
     float_value * 1.1 as adjusted,
     bool_flag
-  FROM "big_data.toon"
+  FROM "temp_big_data.csv"
   WHERE int_id > 1000000  -- Integer comparison is fast
     AND bool_flag = true   -- Boolean check is optimized
     AND float_value BETWEEN 100.0 AND 500.0

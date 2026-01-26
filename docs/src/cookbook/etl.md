@@ -127,15 +127,13 @@ print "Data Quality Check: " + str(len(valid_records)) + "/" + str(len(raw_data)
 ### Merge Heterogeneous Data
 ```piptable
 ' @title Multi-Source Data Integration
-' @description Combine CSV, Excel, JSON, and API data
+' @description Combine CSV, Excel, and JSON data (API data handled separately)
 
 ' Load from different sources
 import "source1.csv" into csv_data
 import "source2.xlsx" into excel_data
+export excel_data to "temp_source2.csv"
 import "source3.json" into json_data
-
-' Fetch from API
-dim api_data: table = fetch("https://api.example.com/data")
 
 ' Standardize column names using file references
 dim std_csv: table = query(
@@ -153,7 +151,7 @@ dim std_excel: table = query(
     full_name as name,
     email,
     'EXCEL' as source
-  FROM "source2.xlsx"
+  FROM "temp_source2.csv"
 )
 
 dim std_json: table = query(
@@ -165,33 +163,23 @@ dim std_json: table = query(
   FROM "source3.json"
 )
 
-dim std_api: table = query(
-  SELECT 
-    userId as id,
-    displayName as name,
-    emailAddress as email,
-    'API' as source
-  FROM api_data
-)
-
 ' Combine and deduplicate in single query
 dim unique_customers: table = query(
-  WITH all_sources AS (
-    SELECT customer_id as id, customer_name as name, email_address as email, 'CSV' as source
-    FROM "source1.csv"
-    UNION ALL
-    SELECT cust_id as id, full_name as name, email, 'EXCEL' as source  
-    FROM "source2.xlsx"
-    UNION ALL
-    SELECT id, name, contact_email as email, 'JSON' as source
-    FROM "source3.json"
-  )
   SELECT 
     MIN(id) as id,
     FIRST(name) as name,
     email,
     STRING_AGG(source, ',') as sources
-  FROM all_sources
+  FROM (
+    SELECT customer_id as id, customer_name as name, email_address as email, 'CSV' as source
+    FROM "source1.csv"
+    UNION ALL
+    SELECT cust_id as id, full_name as name, email, 'EXCEL' as source  
+    FROM "temp_source2.csv"
+    UNION ALL
+    SELECT id, name, contact_email as email, 'JSON' as source
+    FROM "source3.json"
+  )
   GROUP BY email
 )
 

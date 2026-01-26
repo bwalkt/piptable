@@ -19,6 +19,7 @@ print "Loaded " + str(len(data)) + " rows"
 ' @description Import CSV and manually assign column names
 
 import "data.csv" into raw_data without headers
+export raw_data to "temp_no_headers.csv"
 
 ' Add column names using SQL with file reference
 dim data: table = query(
@@ -27,7 +28,7 @@ dim data: table = query(
     _2 as name,
     _3 as email,
     _4 as amount
-  FROM "data.csv"
+  FROM "temp_no_headers.csv"
 )
 ```
 
