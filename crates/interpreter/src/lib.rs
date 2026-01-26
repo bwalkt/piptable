@@ -685,11 +685,36 @@ impl Interpreter {
                         .get(key)
                         .cloned()
                         .ok_or_else(|| PipError::runtime(0, format!("Key '{}' not found", key))),
+                    // Sheet A1 notation access
+                    (Value::Sheet(sheet), Value::String(notation)) => {
+                        use piptable_sheet::CellValue;
+                        
+                        // Check if it's a range (contains colon)
+                        Ok(if notation.contains(':') {
+                            let sub_sheet = sheet.get_range(notation)
+                                .map_err(|e| PipError::runtime(0, format!("Invalid range '{}': {}", notation, e)))?;
+                            Value::Sheet(sub_sheet)
+                        } else {
+                            // Single cell access
+                            let cell = sheet.get_a1(notation)
+                                .map_err(|e| PipError::runtime(0, format!("Invalid cell notation '{}': {}", notation, e)))?;
+                            
+                            // Convert CellValue to Value
+                            match cell {
+                                CellValue::Null => Value::Null,
+                                CellValue::String(s) => Value::String(s.clone()),
+                                CellValue::Int(i) => Value::Int(*i),
+                                CellValue::Float(f) => Value::Float(*f),
+                                CellValue::Bool(b) => Value::Bool(*b),
+                            }
+                        })
+                    }
                     // Type mismatches
                     (Value::Array(_), _) => {
                         Err(PipError::runtime(0, "Array index must be integer"))
                     }
                     (Value::Object(_), _) => Err(PipError::runtime(0, "Object key must be string")),
+                    (Value::Sheet(_), _) => Err(PipError::runtime(0, "Sheet index must be string (A1 notation)")),
                     _ => Err(PipError::runtime(
                         0,
                         format!("Cannot index {}", arr.type_name()),
@@ -1074,6 +1099,7 @@ impl Interpreter {
             Value::Array(_) => "[Array]".to_string(),
             Value::Object(_) => "[Object]".to_string(),
             Value::Table(_) => "[Table]".to_string(),
+            Value::Sheet(_) => "[Sheet]".to_string(),
             Value::Function { name, .. } => format!("[Function: {name}]"),
         }
     }
@@ -1166,6 +1192,7 @@ impl Interpreter {
                         let count: usize = batches.iter().map(|b| b.num_rows()).sum();
                         Ok(Value::Int(count as i64))
                     }
+                    Value::Sheet(sheet) => Ok(Value::Int(sheet.row_count() as i64)),
                     _ => Err(PipError::runtime(
                         line,
                         format!("len() not supported for {}", args[0].type_name()),
@@ -1383,6 +1410,242 @@ impl Interpreter {
                     )),
                 }
             }
+            // Sheet operations
+            "sheet_name_columns_by_row" => {
+                if args.len() != 2 {
+                    return Err(PipError::runtime(line, "sheet_name_columns_by_row() takes exactly 2 arguments"));
+                }
+                match (&args[0], &args[1]) {
+                    (Value::Sheet(sheet), Value::Int(row_idx)) => {
+                        let mut new_sheet = sheet.clone();
+                        new_sheet.name_columns_by_row(*row_idx as usize)
+                            .map_err(|e| PipError::runtime(line, format!("Failed to name columns: {}", e)))?;
+                        Ok(Value::Sheet(new_sheet))
+                    }
+                    (Value::Sheet(_), _) => Err(PipError::runtime(line, "Row index must be an integer")),
+                    _ => Err(PipError::runtime(line, "First argument must be a sheet")),
+                }
+            }
+            "sheet_transpose" => {
+                if args.len() != 1 {
+                    return Err(PipError::runtime(line, "sheet_transpose() takes exactly 1 argument"));
+                }
+                match &args[0] {
+                    Value::Sheet(sheet) => {
+                        let mut new_sheet = sheet.clone();
+                        new_sheet.transpose();
+                        Ok(Value::Sheet(new_sheet))
+                    }
+                    _ => Err(PipError::runtime(line, "Argument must be a sheet")),
+                }
+            }
+            "sheet_select_columns" => {
+                if args.len() != 2 {
+                    return Err(PipError::runtime(line, "sheet_select_columns() takes exactly 2 arguments"));
+                }
+                match (&args[0], &args[1]) {
+                    (Value::Sheet(sheet), Value::Array(columns)) => {
+                        let mut new_sheet = sheet.clone();
+                        let column_names: Result<Vec<&str>, _> = columns.iter()
+                            .map(|v| match v {
+                                Value::String(s) => Ok(s.as_str()),
+                                _ => Err(PipError::runtime(line, "Column names must be strings")),
+                            })
+                            .collect();
+                        let column_names = column_names?;
+                        new_sheet.select_columns(&column_names)
+                            .map_err(|e| PipError::runtime(line, format!("Failed to select columns: {}", e)))?;
+                        Ok(Value::Sheet(new_sheet))
+                    }
+                    (Value::Sheet(_), _) => Err(PipError::runtime(line, "Second argument must be an array of column names")),
+                    _ => Err(PipError::runtime(line, "First argument must be a sheet")),
+                }
+            }
+            "sheet_remove_columns" => {
+                if args.len() != 2 {
+                    return Err(PipError::runtime(line, "sheet_remove_columns() takes exactly 2 arguments"));
+                }
+                match (&args[0], &args[1]) {
+                    (Value::Sheet(sheet), Value::Array(columns)) => {
+                        let mut new_sheet = sheet.clone();
+                        let column_names: Result<Vec<&str>, _> = columns.iter()
+                            .map(|v| match v {
+                                Value::String(s) => Ok(s.as_str()),
+                                _ => Err(PipError::runtime(line, "Column names must be strings")),
+                            })
+                            .collect();
+                        let column_names = column_names?;
+                        new_sheet.remove_columns(&column_names)
+                            .map_err(|e| PipError::runtime(line, format!("Failed to remove columns: {}", e)))?;
+                        Ok(Value::Sheet(new_sheet))
+                    }
+                    (Value::Sheet(_), _) => Err(PipError::runtime(line, "Second argument must be an array of column names")),
+                    _ => Err(PipError::runtime(line, "First argument must be a sheet")),
+                }
+            }
+            "sheet_remove_empty_rows" => {
+                if args.len() != 1 {
+                    return Err(PipError::runtime(line, "sheet_remove_empty_rows() takes exactly 1 argument"));
+                }
+                match &args[0] {
+                    Value::Sheet(sheet) => {
+                        let mut new_sheet = sheet.clone();
+                        new_sheet.remove_empty_rows();
+                        Ok(Value::Sheet(new_sheet))
+                    }
+                    _ => Err(PipError::runtime(line, "Argument must be a sheet")),
+                }
+            }
+            "sheet_row_count" => {
+                if args.len() != 1 {
+                    return Err(PipError::runtime(line, "sheet_row_count() takes exactly 1 argument"));
+                }
+                match &args[0] {
+                    Value::Sheet(sheet) => Ok(Value::Int(sheet.row_count() as i64)),
+                    _ => Err(PipError::runtime(line, "Argument must be a sheet")),
+                }
+            }
+            "sheet_col_count" => {
+                if args.len() != 1 {
+                    return Err(PipError::runtime(line, "sheet_col_count() takes exactly 1 argument"));
+                }
+                match &args[0] {
+                    Value::Sheet(sheet) => Ok(Value::Int(sheet.col_count() as i64)),
+                    _ => Err(PipError::runtime(line, "Argument must be a sheet")),
+                }
+            }
+            "sheet_get_a1" => {
+                if args.len() != 2 {
+                    return Err(PipError::runtime(line, "sheet_get_a1() takes exactly 2 arguments (sheet, notation)"));
+                }
+                match (&args[0], &args[1]) {
+                    (Value::Sheet(sheet), Value::String(notation)) => {
+                        use piptable_sheet::CellValue;
+                        let cell = sheet.get_a1(notation)
+                            .map_err(|e| PipError::runtime(line, format!("Invalid cell notation '{}': {}", notation, e)))?;
+                        
+                        match cell {
+                            CellValue::Null => Ok(Value::Null),
+                            CellValue::String(s) => Ok(Value::String(s.clone())),
+                            CellValue::Int(i) => Ok(Value::Int(*i)),
+                            CellValue::Float(f) => Ok(Value::Float(*f)),
+                            CellValue::Bool(b) => Ok(Value::Bool(*b)),
+                        }
+                    }
+                    _ => Err(PipError::runtime(line, "Arguments must be (sheet, string)")),
+                }
+            }
+            "sheet_set_a1" => {
+                if args.len() != 3 {
+                    return Err(PipError::runtime(line, "sheet_set_a1() takes exactly 3 arguments (sheet, notation, value)"));
+                }
+                match (&args[0], &args[1], &args[2]) {
+                    (Value::Sheet(sheet), Value::String(notation), value) => {
+                        use piptable_sheet::CellValue;
+                        let mut sheet_clone = sheet.clone();
+                        
+                        let cell_value = match value {
+                            Value::String(s) => CellValue::String(s.clone()),
+                            Value::Int(i) => CellValue::Int(*i),
+                            Value::Float(f) => CellValue::Float(*f),
+                            Value::Bool(b) => CellValue::Bool(*b),
+                            Value::Null => CellValue::Null,
+                            _ => return Err(PipError::runtime(line, "Unsupported value type for cell")),
+                        };
+                        
+                        sheet_clone.set_a1(notation, cell_value)
+                            .map_err(|e| PipError::runtime(line, format!("Failed to set cell '{}': {}", notation, e)))?;
+                        
+                        Ok(Value::Sheet(sheet_clone))
+                    }
+                    _ => Err(PipError::runtime(line, "Arguments must be (sheet, string, value)")),
+                }
+            }
+            "sheet_get_range" => {
+                if args.len() != 2 {
+                    return Err(PipError::runtime(line, "sheet_get_range() takes exactly 2 arguments (sheet, range_notation)"));
+                }
+                match (&args[0], &args[1]) {
+                    (Value::Sheet(sheet), Value::String(notation)) => {
+                        let sub_sheet = sheet.get_range(notation)
+                            .map_err(|e| PipError::runtime(line, format!("Invalid range '{}': {}", notation, e)))?;
+                        Ok(Value::Sheet(sub_sheet))
+                    }
+                    _ => Err(PipError::runtime(line, "Arguments must be (sheet, string)")),
+                }
+            }
+            "sheet_column_by_name" => {
+                if args.len() != 2 {
+                    return Err(PipError::runtime(line, "sheet_column_by_name() takes exactly 2 arguments (sheet, column_name)"));
+                }
+                match (&args[0], &args[1]) {
+                    (Value::Sheet(sheet), Value::String(col_name)) => {
+                        use piptable_sheet::CellValue;
+                        let column = sheet.column_by_name(col_name)
+                            .map_err(|e| PipError::runtime(line, format!("Failed to get column '{}': {}", col_name, e)))?;
+                        
+                        let array: Vec<Value> = column.iter()
+                            .map(|cell| match cell {
+                                CellValue::Null => Value::Null,
+                                CellValue::String(s) => Value::String(s.clone()),
+                                CellValue::Int(i) => Value::Int(*i),
+                                CellValue::Float(f) => Value::Float(*f),
+                                CellValue::Bool(b) => Value::Bool(*b),
+                            })
+                            .collect();
+                        
+                        Ok(Value::Array(array))
+                    }
+                    _ => Err(PipError::runtime(line, "Arguments must be (sheet, string)")),
+                }
+            }
+            "sheet_get_by_name" => {
+                if args.len() != 3 {
+                    return Err(PipError::runtime(line, "sheet_get_by_name() takes exactly 3 arguments (sheet, row_index, column_name)"));
+                }
+                match (&args[0], &args[1], &args[2]) {
+                    (Value::Sheet(sheet), Value::Int(row), Value::String(col_name)) => {
+                        use piptable_sheet::CellValue;
+                        let cell = sheet.get_by_name(*row as usize, col_name)
+                            .map_err(|e| PipError::runtime(line, format!("Failed to get cell at row {} column '{}': {}", row, col_name, e)))?;
+                        
+                        match cell {
+                            CellValue::Null => Ok(Value::Null),
+                            CellValue::String(s) => Ok(Value::String(s.clone())),
+                            CellValue::Int(i) => Ok(Value::Int(*i)),
+                            CellValue::Float(f) => Ok(Value::Float(*f)),
+                            CellValue::Bool(b) => Ok(Value::Bool(*b)),
+                        }
+                    }
+                    _ => Err(PipError::runtime(line, "Arguments must be (sheet, int, string)")),
+                }
+            }
+            "sheet_set_by_name" => {
+                if args.len() != 4 {
+                    return Err(PipError::runtime(line, "sheet_set_by_name() takes exactly 4 arguments (sheet, row_index, column_name, value)"));
+                }
+                match (&args[0], &args[1], &args[2], &args[3]) {
+                    (Value::Sheet(sheet), Value::Int(row), Value::String(col_name), value) => {
+                        use piptable_sheet::CellValue;
+                        let mut sheet_clone = sheet.clone();
+                        
+                        let cell_value = match value {
+                            Value::String(s) => CellValue::String(s.clone()),
+                            Value::Int(i) => CellValue::Int(*i),
+                            Value::Float(f) => CellValue::Float(*f),
+                            Value::Bool(b) => CellValue::Bool(*b),
+                            Value::Null => CellValue::Null,
+                            _ => return Err(PipError::runtime(line, "Unsupported value type for cell")),
+                        };
+                        
+                        sheet_clone.set_by_name(*row as usize, col_name, cell_value)
+                            .map_err(|e| PipError::runtime(line, format!("Failed to set cell at row {} column '{}': {}", row, col_name, e)))?;
+                        
+                        Ok(Value::Sheet(sheet_clone))
+                    }
+                    _ => Err(PipError::runtime(line, "Arguments must be (sheet, int, string, value)")),
+                }
+            }
             _ => {
                 // Check user-defined functions
                 let func = {
@@ -1588,7 +1851,18 @@ impl Interpreter {
     #[async_recursion]
     async fn table_ref_to_string(&mut self, table_ref: &TableRef) -> PipResult<String> {
         match table_ref {
-            TableRef::Table(name) => Ok(name.clone()),
+            TableRef::Table(name) => {
+                // Check if this refers to a variable containing a Sheet
+                if let Some(value) = self.get_var(name).await {
+                    if let Some(sheet) = value.as_sheet() {
+                        // Convert Sheet to Table and register it
+                        let table_name = self.register_sheet_as_table(name, sheet).await?;
+                        return Ok(table_name);
+                    }
+                }
+                // Otherwise, treat as regular table name
+                Ok(name.clone())
+            }
             TableRef::Qualified {
                 database,
                 schema,
@@ -1777,6 +2051,93 @@ impl Interpreter {
             // Default to CSV
             self.sql.register_csv(&table_name, path).await?;
         }
+
+        Ok(table_name)
+    }
+
+    /// Register a sheet as a table and return the table name.
+    async fn register_sheet_as_table(&mut self, name: &str, sheet: &Sheet) -> PipResult<String> {
+        use arrow::array::{ArrayRef, BooleanArray, Float64Array, Int64Array, StringArray};
+        use arrow::datatypes::{DataType, Field, Schema};
+        use arrow::array::RecordBatch;
+        use piptable_sheet::CellValue;
+        use std::sync::Arc;
+
+        let table_name = format!("sheet_{}", name.replace(['-', '.', ' '], "_"));
+
+        // Check if sheet has named columns
+        let column_names = match sheet.column_names() {
+            Some(names) => names.clone(),
+            None => {
+                // Generate default column names
+                (0..sheet.col_count())
+                    .map(|i| format!("column_{}", i))
+                    .collect()
+            }
+        };
+
+        if column_names.is_empty() {
+            // Empty sheet - create schema with no fields
+            let schema = Arc::new(Schema::empty());
+            let batch = RecordBatch::new_empty(schema.clone());
+            self.sql.register_table(&table_name, vec![batch]).await?;
+            return Ok(table_name);
+        }
+
+        if sheet.row_count() <= 1 {
+            // Only header row or empty - create empty table with schema
+            let fields: Vec<Field> = column_names
+                .iter()
+                .map(|name| Field::new(name, DataType::Utf8, true))
+                .collect();
+            let schema = Arc::new(Schema::new(fields));
+            let batch = RecordBatch::new_empty(schema.clone());
+            self.sql.register_table(&table_name, vec![batch]).await?;
+            return Ok(table_name);
+        }
+
+        // Skip header row for data analysis
+        let skip_header = sheet.column_names().is_some() as usize;
+        let data_rows: Vec<&Vec<CellValue>> = sheet.data().iter().skip(skip_header).collect();
+        
+        if data_rows.is_empty() {
+            // No data rows - create empty table with schema
+            let fields: Vec<Field> = column_names
+                .iter()
+                .map(|name| Field::new(name, DataType::Utf8, true))
+                .collect();
+            let schema = Arc::new(Schema::new(fields));
+            let batch = RecordBatch::new_empty(schema.clone());
+            self.sql.register_table(&table_name, vec![batch]).await?;
+            return Ok(table_name);
+        }
+
+        let num_cols = column_names.len();
+
+        // Infer types for each column
+        let col_types: Vec<DataType> = (0..num_cols)
+            .map(|col_idx| infer_sheet_column_type(&data_rows, col_idx))
+            .collect();
+
+        // Build schema
+        let fields: Vec<Field> = column_names
+            .iter()
+            .zip(col_types.iter())
+            .map(|(name, dtype)| Field::new(name, dtype.clone(), true))
+            .collect();
+        let schema = Arc::new(Schema::new(fields));
+
+        // Build Arrow arrays for each column
+        let arrays: Vec<ArrayRef> = (0..num_cols)
+            .map(|col_idx| build_sheet_arrow_array(&data_rows, col_idx, &col_types[col_idx]))
+            .collect();
+
+        // Create RecordBatch
+        let batch = RecordBatch::try_new(schema.clone(), arrays)
+            .map_err(|e| PipError::runtime(0, format!("Failed to create RecordBatch: {}", e)))?;
+
+        // Register the batch with the SQL engine
+        self.sql.register_table(&table_name, vec![batch]).await?;
 
         Ok(table_name)
     }
@@ -2111,7 +2472,7 @@ fn value_to_cell(value: &Value) -> CellValue {
         Value::Int(i) => CellValue::Int(*i),
         Value::Float(f) => CellValue::Float(*f),
         Value::String(s) => CellValue::String(s.clone()),
-        Value::Array(_) | Value::Object(_) | Value::Table(_) | Value::Function { .. } => {
+        Value::Array(_) | Value::Object(_) | Value::Table(_) | Value::Sheet(_) | Value::Function { .. } => {
             // Convert complex types to JSON string, fall back to Debug for non-serializable types
             match value.to_json() {
                 Ok(json) => CellValue::String(json.to_string()),
@@ -2497,6 +2858,91 @@ fn consolidate_book(
     }
 
     Ok(Value::Array(result))
+}
+
+/// Infer the Arrow DataType for a column based on cell values
+fn infer_sheet_column_type(rows: &[&Vec<piptable_sheet::CellValue>], col_idx: usize) -> arrow::datatypes::DataType {
+    use arrow::datatypes::DataType;
+    use piptable_sheet::CellValue;
+
+    let mut has_bool = false;
+    let mut has_int = false;
+    let mut has_float = false;
+    let mut has_string = false;
+
+    for row in rows {
+        if col_idx >= row.len() {
+            continue;
+        }
+        match &row[col_idx] {
+            CellValue::Null => {}
+            CellValue::Bool(_) => has_bool = true,
+            CellValue::Int(_) => has_int = true,
+            CellValue::Float(_) => has_float = true,
+            CellValue::String(_) => has_string = true,
+        }
+    }
+
+    // Priority: String > Float > Int > Bool (wider types win)
+    if has_string {
+        DataType::Utf8
+    } else if has_float {
+        DataType::Float64
+    } else if has_int {
+        DataType::Int64
+    } else if has_bool {
+        DataType::Boolean
+    } else {
+        DataType::Utf8 // Default to string for empty/null-only columns
+    }
+}
+
+/// Build an Arrow array from column data
+fn build_sheet_arrow_array(rows: &[&Vec<piptable_sheet::CellValue>], col_idx: usize, dtype: &arrow::datatypes::DataType) -> arrow::array::ArrayRef {
+    use arrow::array::{ArrayRef, BooleanArray, Float64Array, Int64Array, StringArray};
+    use arrow::datatypes::DataType;
+    use piptable_sheet::CellValue;
+    use std::sync::Arc;
+
+    match dtype {
+        DataType::Boolean => {
+            let values: Vec<Option<bool>> = rows
+                .iter()
+                .map(|row| row.get(col_idx).and_then(CellValue::as_bool))
+                .collect();
+            Arc::new(BooleanArray::from(values))
+        }
+        DataType::Int64 => {
+            let values: Vec<Option<i64>> = rows
+                .iter()
+                .map(|row| row.get(col_idx).and_then(CellValue::as_int))
+                .collect();
+            Arc::new(Int64Array::from(values))
+        }
+        DataType::Float64 => {
+            let values: Vec<Option<f64>> = rows
+                .iter()
+                .map(|row| row.get(col_idx).and_then(CellValue::as_float))
+                .collect();
+            Arc::new(Float64Array::from(values))
+        }
+        _ => {
+            // Default to string for Utf8 and any other types
+            let values: Vec<Option<String>> = rows
+                .iter()
+                .map(|row| {
+                    row.get(col_idx).and_then(|cell| {
+                        if cell.is_null() {
+                            None
+                        } else {
+                            Some(cell.as_str())
+                        }
+                    })
+                })
+                .collect();
+            Arc::new(StringArray::from(values))
+        }
+    }
 }
 
 #[cfg(test)]
@@ -3657,5 +4103,129 @@ combined = consolidate(stores, "_store")
         } else {
             panic!("Expected Array result");
         }
+    }
+
+    #[tokio::test]
+    async fn test_sheet_a1_notation() {
+        use indexmap::IndexMap;
+        use piptable_sheet::{CellValue, Sheet};
+        
+        let mut interp = Interpreter::new();
+        
+        // Create a sheet directly and set as variable
+        let mut record1 = IndexMap::new();
+        record1.insert("Name".to_string(), CellValue::String("Alice".to_string()));
+        record1.insert("Age".to_string(), CellValue::Int(30));
+        
+        let mut record2 = IndexMap::new();
+        record2.insert("Name".to_string(), CellValue::String("Bob".to_string()));
+        record2.insert("Age".to_string(), CellValue::Int(25));
+        
+        let sheet = Sheet::from_records(vec![record1, record2]).unwrap();
+        interp.set_var("sheet", Value::Sheet(sheet)).await;
+        
+        // Test A1 notation access
+        let program = PipParser::parse_str(r#"dim result = sheet["A1"]"#).unwrap();
+        interp.eval(program).await.unwrap();
+        
+        let result = interp.get_var("result").await;
+        assert!(matches!(result, Some(Value::String(s)) if s == "Name"));
+    }
+
+    #[tokio::test] 
+    async fn test_sheet_built_in_functions() {
+        use indexmap::IndexMap;
+        use piptable_sheet::{CellValue, Sheet};
+        
+        let mut interp = Interpreter::new();
+        
+        // Create a sheet with records
+        let mut record1 = IndexMap::new();
+        record1.insert("Name".to_string(), CellValue::String("Alice".to_string()));
+        record1.insert("Age".to_string(), CellValue::Int(30));
+        
+        let mut record2 = IndexMap::new();
+        record2.insert("Name".to_string(), CellValue::String("Bob".to_string()));
+        record2.insert("Age".to_string(), CellValue::Int(25));
+        
+        let sheet = Sheet::from_records(vec![record1, record2]).unwrap();
+        interp.set_var("sheet", Value::Sheet(sheet)).await;
+        
+        // Test basic Sheet functions
+        let program = PipParser::parse_str(r#"
+            dim row_count = sheet_row_count(sheet)
+            dim col_count = sheet_col_count(sheet)
+        "#).unwrap();
+        
+        interp.eval(program).await.unwrap();
+        
+        let row_count = interp.get_var("row_count").await;
+        let col_count = interp.get_var("col_count").await;
+        
+        assert!(matches!(row_count, Some(Value::Int(3)))); // Header + 2 data rows
+        assert!(matches!(col_count, Some(Value::Int(2)))); // Name, Age
+    }
+
+    #[tokio::test]
+    async fn test_sheet_to_sql_conversion() {
+        use indexmap::IndexMap;
+        use piptable_sheet::{CellValue, Sheet};
+        
+        let mut interp = Interpreter::new();
+        
+        // Create a sheet with sales data
+        let mut record1 = IndexMap::new();
+        record1.insert("Product".to_string(), CellValue::String("Widget".to_string()));
+        record1.insert("Amount".to_string(), CellValue::Int(100));
+        
+        let mut record2 = IndexMap::new();
+        record2.insert("Product".to_string(), CellValue::String("Gadget".to_string()));
+        record2.insert("Amount".to_string(), CellValue::Int(200));
+        
+        let sheet = Sheet::from_records(vec![record1, record2]).unwrap();
+        interp.set_var("sales_sheet", Value::Sheet(sheet)).await;
+        
+        // Use the sheet in a SQL query (just select to test the conversion works)
+        let program = PipParser::parse_str(r#"dim result = query(SELECT "Product", "Amount" FROM sales_sheet)"#).unwrap();
+        let result = interp.eval(program).await;
+        
+        // Should not error - this tests that Sheet to Table conversion works
+        match &result {
+            Ok(_) => println!("SQL query succeeded"),
+            Err(e) => println!("SQL query failed: {:?}", e),
+        }
+        assert!(result.is_ok());
+    }
+
+    #[tokio::test]
+    async fn test_sheet_cell_access_functions() {
+        use indexmap::IndexMap;
+        use piptable_sheet::{CellValue, Sheet};
+        
+        let mut interp = Interpreter::new();
+        
+        // Create a sheet
+        let mut record1 = IndexMap::new();
+        record1.insert("Name".to_string(), CellValue::String("Alice".to_string()));
+        record1.insert("Age".to_string(), CellValue::Int(30));
+        
+        let sheet = Sheet::from_records(vec![record1]).unwrap();
+        interp.set_var("sheet", Value::Sheet(sheet)).await;
+        
+        let program = PipParser::parse_str(r#"
+            dim a1_value = sheet_get_a1(sheet, "A1")
+            dim b2_value = sheet_get_a1(sheet, "B2")
+            dim name_value = sheet_get_by_name(sheet, 1, "Name")
+        "#).unwrap();
+        
+        interp.eval(program).await.unwrap();
+        
+        let a1_value = interp.get_var("a1_value").await;
+        let b2_value = interp.get_var("b2_value").await; 
+        let name_value = interp.get_var("name_value").await;
+        
+        assert!(matches!(a1_value, Some(Value::String(s)) if s == "Name"));
+        assert!(matches!(b2_value, Some(Value::Int(30))));
+        assert!(matches!(name_value, Some(Value::String(s)) if s == "Alice"));
     }
 }

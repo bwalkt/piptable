@@ -13,6 +13,7 @@ serde_json = { workspace = true }
 thiserror = { workspace = true }
 arrow = { workspace = true }
 chrono = { workspace = true }
+piptable-sheet = { path = "../sheet" }
 
 [dev-dependencies]
 tempfile = { workspace = true }
