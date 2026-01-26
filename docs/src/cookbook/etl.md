@@ -135,35 +135,7 @@ import "source2.xlsx" into excel_data
 export excel_data to "temp_source2.csv"
 import "source3.json" into json_data
 
-' Standardize column names using file references
-dim std_csv: table = query(
-  SELECT 
-    customer_id as id,
-    customer_name as name,
-    email_address as email,
-    'CSV' as source
-  FROM "source1.csv"
-)
-
-dim std_excel: table = query(
-  SELECT 
-    cust_id as id,
-    full_name as name,
-    email,
-    'EXCEL' as source
-  FROM "temp_source2.csv"
-)
-
-dim std_json: table = query(
-  SELECT 
-    id,
-    name,
-    contact_email as email,
-    'JSON' as source
-  FROM "source3.json"
-)
-
-' Combine and deduplicate in single query
+' Combine and deduplicate all sources in single query
 dim unique_customers: table = query(
   SELECT 
     MIN(id) as id,
@@ -171,20 +143,17 @@ dim unique_customers: table = query(
     email,
     STRING_AGG(source, ',') as sources
   FROM (
-    SELECT customer_id as id, customer_name as name, email_address as email, 'CSV' as source
-    FROM "source1.csv"
+    SELECT id, name, email, source FROM std_csv
     UNION ALL
-    SELECT cust_id as id, full_name as name, email, 'EXCEL' as source  
-    FROM "temp_source2.csv"
+    SELECT id, name, email, source FROM std_excel
     UNION ALL
-    SELECT id, name, contact_email as email, 'JSON' as source
-    FROM "source3.json"
+    SELECT id, name, email, source FROM std_json
   )
   GROUP BY email
 )
 
 export unique_customers to "integrated_customers.csv"
-print "Integrated " + str(len(unique_customers)) + " unique customers from 4 sources"
+print "Integrated " + str(len(unique_customers)) + " unique customers from 3 sources"
 ```
 
 ## Scheduled Reporting
