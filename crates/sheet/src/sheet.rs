@@ -873,6 +873,7 @@ impl Sheet {
             // Update column names and index
             self.column_names = Some(new_names);
             self.rebuild_column_index();
+            self.invalidate_row_names();
         } else {
             // Filter by index only if no names
             let col_count = self.col_count();
@@ -891,6 +892,7 @@ impl Sheet {
                     .collect();
                 *row = new_row;
             }
+            self.invalidate_row_names();
         }
         Ok(())
     }
@@ -991,6 +993,7 @@ impl Sheet {
             self.column_names = Some(new_names);
             self.rebuild_column_index();
         }
+        self.invalidate_row_names();
 
         Ok(())
     }
@@ -1028,6 +1031,7 @@ impl Sheet {
             // Update column names and index
             self.column_names = Some(new_names);
             self.rebuild_column_index();
+            self.invalidate_row_names();
         } else {
             return Err(SheetError::ColumnsNotNamed(
                 "Cannot remove columns by name without named columns".to_string(),
