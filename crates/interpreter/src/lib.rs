@@ -38,6 +38,8 @@ pub struct Interpreter {
     output: Arc<RwLock<Vec<String>>>,
     /// Function definitions
     functions: Arc<RwLock<HashMap<String, FunctionDef>>>,
+    /// Registered sheet tables (maps variable name to table name)
+    sheet_tables: Arc<RwLock<HashMap<String, String>>>,
     /// Python runtime (optional, with `python` feature)
     #[cfg(feature = "python")]
     python_runtime: Option<python::PythonRuntime>,
@@ -62,6 +64,7 @@ impl Interpreter {
             http: HttpClient::new().expect("Failed to create HTTP client"),
             output: Arc::new(RwLock::new(Vec::new())),
             functions: Arc::new(RwLock::new(HashMap::new())),
+            sheet_tables: Arc::new(RwLock::new(HashMap::new())),
             #[cfg(feature = "python")]
             python_runtime: match python::PythonRuntime::new() {
                 Ok(rt) => Some(rt),
@@ -1960,8 +1963,20 @@ impl Interpreter {
                 // Check if this refers to a variable containing a Sheet
                 if let Some(value) = self.get_var(name).await {
                     if let Some(sheet) = value.as_sheet() {
+                        // Check if we've already registered this sheet
+                        let sheet_tables = self.sheet_tables.read().await;
+                        if let Some(existing_table) = sheet_tables.get(name) {
+                            return Ok(existing_table.clone());
+                        }
+                        drop(sheet_tables);
+
                         // Convert Sheet to Table and register it
                         let table_name = self.register_sheet_as_table(name, sheet).await?;
+
+                        // Remember that we registered this sheet
+                        let mut sheet_tables = self.sheet_tables.write().await;
+                        sheet_tables.insert(name.to_string(), table_name.clone());
+
                         return Ok(table_name);
                     }
                 }
@@ -2162,8 +2177,8 @@ impl Interpreter {
 
     /// Register a sheet as a table and return the table name.
     async fn register_sheet_as_table(&mut self, name: &str, sheet: &Sheet) -> PipResult<String> {
+        use arrow::array::ArrayRef;
         use arrow::array::RecordBatch;
-        use arrow::array::{ArrayRef, BooleanArray, Float64Array, Int64Array, StringArray};
         use arrow::datatypes::{DataType, Field, Schema};
         use piptable_sheet::CellValue;
         use std::sync::Arc;
@@ -2201,9 +2216,23 @@ impl Interpreter {
             return Ok(table_name);
         }
 
-        // Skip header row for data analysis
-        let skip_header = sheet.column_names().is_some() as usize;
-        let data_rows: Vec<&Vec<CellValue>> = sheet.data().iter().skip(skip_header).collect();
+        // Determine if we should skip the first row
+        // Only skip if column_names were set AND the first row matches those names
+        let should_skip_first = if sheet.column_names().is_some() && !sheet.data().is_empty() {
+            // Check if first row matches column names
+            let first_row = &sheet.data()[0];
+            let names_match = column_names.iter().enumerate().all(|(idx, name)| {
+                first_row
+                    .get(idx)
+                    .map(|cell| cell.as_str() == name.as_str())
+                    .unwrap_or(false)
+            });
+            names_match as usize
+        } else {
+            0
+        };
+
+        let data_rows: Vec<&Vec<CellValue>> = sheet.data().iter().skip(should_skip_first).collect();
 
         if data_rows.is_empty() {
             // No data rows - create empty table with schema
@@ -2445,6 +2474,16 @@ impl Interpreter {
     /// Set a variable, searching scopes for existing bindings first.
     /// Use this for assignment statements where we want to update existing variables.
     pub async fn set_var(&self, name: &str, value: Value) {
+        // If we're setting a Sheet variable, clear any registered table for it
+        // This ensures re-registration if the sheet changes
+        if matches!(value, Value::Sheet(_)) {
+            let mut sheet_tables = self.sheet_tables.write().await;
+            if let Some(table_name) = sheet_tables.remove(name) {
+                // Also deregister from SQL context
+                let _ = self.sql.deregister_table(&table_name).await;
+            }
+        }
+
         let mut scopes = self.scopes.write().await;
         // Check if variable exists in any scope (for reassignment)
         for scope in scopes.iter_mut().rev() {
@@ -3015,7 +3054,7 @@ fn build_sheet_arrow_array(
     col_idx: usize,
     dtype: &arrow::datatypes::DataType,
 ) -> arrow::array::ArrayRef {
-    use arrow::array::{ArrayRef, BooleanArray, Float64Array, Int64Array, StringArray};
+    use arrow::array::{BooleanArray, Float64Array, Int64Array, StringArray};
     use arrow::datatypes::DataType;
     use piptable_sheet::CellValue;
     use std::sync::Arc;
@@ -4358,5 +4397,166 @@ combined = consolidate(stores, "_store")
         assert!(matches!(a1_value, Some(Value::String(s)) if s == "Name"));
         assert!(matches!(b2_value, Some(Value::Int(30))));
         assert!(matches!(name_value, Some(Value::String(s)) if s == "Alice"));
+    }
+
+    #[tokio::test]
+    async fn test_repeated_sql_queries_on_same_sheet() {
+        // Test that we can run multiple SQL queries on the same Sheet variable
+        use indexmap::IndexMap;
+        use piptable_sheet::{CellValue, Sheet};
+
+        let mut interp = Interpreter::new();
+
+        // Create a sheet with data
+        let mut record1 = IndexMap::new();
+        record1.insert(
+            "Product".to_string(),
+            CellValue::String("Widget".to_string()),
+        );
+        record1.insert("Amount".to_string(), CellValue::Int(100));
+
+        let mut record2 = IndexMap::new();
+        record2.insert(
+            "Product".to_string(),
+            CellValue::String("Gadget".to_string()),
+        );
+        record2.insert("Amount".to_string(), CellValue::Int(200));
+
+        let sheet = Sheet::from_records(vec![record1, record2]).unwrap();
+        interp.set_var("sales", Value::Sheet(sheet)).await;
+
+        // First query
+        let program1 = PipParser::parse_str(r#"dim result1 = query(SELECT * FROM sales)"#).unwrap();
+        let result1 = interp.eval(program1).await;
+        assert!(result1.is_ok(), "First query should succeed");
+
+        // Second query on same sheet
+        let program2 = PipParser::parse_str(
+            r#"dim result2 = query(SELECT COUNT("Product") as cnt FROM sales)"#,
+        )
+        .unwrap();
+        let result2 = interp.eval(program2).await;
+        assert!(result2.is_ok(), "Second query should succeed");
+
+        // Third query with different operation
+        let program3 = PipParser::parse_str(
+            r#"dim result3 = query(SELECT "Product" FROM sales WHERE "Amount" > 150)"#,
+        )
+        .unwrap();
+        let result3 = interp.eval(program3).await;
+        assert!(result3.is_ok(), "Third query should succeed");
+    }
+
+    #[tokio::test]
+    async fn test_sheet_header_row_detection() {
+        // Test that header rows are correctly detected and not duplicated
+        use piptable_sheet::Sheet;
+
+        let mut interp = Interpreter::new();
+
+        // Create a sheet where first row matches column names (should be skipped)
+        let mut sheet1 = Sheet::new();
+        sheet1.data_mut().push(vec![
+            piptable_sheet::CellValue::String("Name".to_string()),
+            piptable_sheet::CellValue::String("Age".to_string()),
+        ]);
+        sheet1.data_mut().push(vec![
+            piptable_sheet::CellValue::String("Alice".to_string()),
+            piptable_sheet::CellValue::Int(30),
+        ]);
+        sheet1.name_columns_by_row(0).unwrap();
+
+        interp.set_var("sheet1", Value::Sheet(sheet1)).await;
+
+        // Query should return 1 data row (not 2)
+        let program1 =
+            PipParser::parse_str(r#"dim result1 = query(SELECT COUNT("Name") as cnt FROM sheet1)"#)
+                .unwrap();
+        interp.eval(program1).await.unwrap();
+
+        let result1 = interp.get_var("result1").await;
+        if let Some(Value::Table(batches)) = result1 {
+            assert_eq!(batches.len(), 1);
+            let batch = &batches[0];
+            assert_eq!(batch.num_rows(), 1); // Should have 1 result row
+                                             // The count should be 1 (only Alice, not the header row)
+        }
+
+        // Create a sheet where first row does NOT match column names (should NOT be skipped)
+        let mut sheet2 = Sheet::new();
+        // Add a dummy header row with different names, then real data
+        sheet2.data_mut().push(vec![
+            piptable_sheet::CellValue::String("PersonName".to_string()),
+            piptable_sheet::CellValue::String("PersonAge".to_string()),
+        ]);
+        sheet2.data_mut().push(vec![
+            piptable_sheet::CellValue::String("Bob".to_string()),
+            piptable_sheet::CellValue::Int(25),
+        ]);
+        sheet2.data_mut().push(vec![
+            piptable_sheet::CellValue::String("Charlie".to_string()),
+            piptable_sheet::CellValue::Int(35),
+        ]);
+        // Name columns from row 0 (which has PersonName, PersonAge)
+        sheet2.name_columns_by_row(0).unwrap();
+
+        interp.set_var("sheet2", Value::Sheet(sheet2)).await;
+
+        // Query should return 2 data rows (both Bob and Charlie)
+        let program2 =
+            PipParser::parse_str(r#"dim result2 = query(SELECT COUNT("Name") as cnt FROM sheet2)"#)
+                .unwrap();
+        interp.eval(program2).await.unwrap();
+
+        let result2 = interp.get_var("result2").await;
+        if let Some(Value::Table(batches)) = result2 {
+            assert_eq!(batches.len(), 1);
+            let batch = &batches[0];
+            assert_eq!(batch.num_rows(), 1); // Should have 1 result row
+                                             // The count should be 2 (both Bob and Charlie)
+        }
+    }
+
+    #[tokio::test]
+    async fn test_sheet_modification_and_requery() {
+        // Test that modifying a sheet and re-querying works correctly
+        use indexmap::IndexMap;
+        use piptable_sheet::{CellValue, Sheet};
+
+        let mut interp = Interpreter::new();
+
+        // Create initial sheet
+        let mut record1 = IndexMap::new();
+        record1.insert("Name".to_string(), CellValue::String("Alice".to_string()));
+        record1.insert("Score".to_string(), CellValue::Int(90));
+
+        let sheet1 = Sheet::from_records(vec![record1]).unwrap();
+        interp.set_var("scores", Value::Sheet(sheet1)).await;
+
+        // First query
+        let program1 =
+            PipParser::parse_str(r#"dim result1 = query(SELECT * FROM scores)"#).unwrap();
+        assert!(interp.eval(program1).await.is_ok());
+
+        // Modify the sheet (this should clear the cached table)
+        let mut record2 = IndexMap::new();
+        record2.insert("Name".to_string(), CellValue::String("Bob".to_string()));
+        record2.insert("Score".to_string(), CellValue::Int(85));
+
+        let sheet2 = Sheet::from_records(vec![record2]).unwrap();
+        interp.set_var("scores", Value::Sheet(sheet2)).await;
+
+        // Second query should work with the new data
+        let program2 =
+            PipParser::parse_str(r#"dim result2 = query(SELECT * FROM scores)"#).unwrap();
+        let result = interp.eval(program2).await;
+        assert!(result.is_ok(), "Second query failed: {:?}", result.err());
+
+        // Verify we get different data
+        let result2 = interp.get_var("result2").await;
+        if let Some(Value::Table(batches)) = result2 {
+            assert!(!batches.is_empty());
+            // The new query should have Bob's data, not Alice's
+        }
     }
 }
