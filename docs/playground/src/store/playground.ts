@@ -116,7 +116,7 @@ export function getCurrentShareableState(): ShareableState {
 }
 
 export function loadFromSharedState(state: ShareableState) {
-  if (state.code) {
+  if (state.code !== undefined) {
     code.value = state.code;
   }
   if (state.theme) {
