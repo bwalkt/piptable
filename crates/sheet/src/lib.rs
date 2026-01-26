@@ -53,6 +53,7 @@
 //! assert_eq!(book.sheet_count(), 2);
 //! ```
 
+mod a1_notation;
 mod book;
 mod cell;
 mod csv;

@@ -35,6 +35,8 @@
 - [API Reference](reference/api/README.md)
   - [Built-in Functions](reference/api/functions.md)
   - [Sheet API](reference/api/sheet.md)
+  - [Sheet Advanced Operations](reference/api/sheet_advanced.md)
+  - [Sheet DSL Integration](reference/api/sheet_dsl_integration.md)
   - [Book API](reference/api/book.md)
   - [File Formats](reference/api/formats.md)
 
@@ -45,6 +47,7 @@
   - [Excel Processing](cookbook/excel.md)
   - [JSON Transformation](cookbook/json.md)
   - [TOON Processing](cookbook/toon.md)
+  - [Sheet Rust API](cookbook/sheet-rust-api.md)
   
 - [ETL Pipelines](cookbook/etl.md)
   - [Data Import](cookbook/import.md)

@@ -192,7 +192,7 @@ fn test_column_map() {
 fn test_filter_rows() {
     let mut sheet = Sheet::from_data(vec![vec![1], vec![2], vec![3], vec![4]]);
 
-    sheet.filter_rows(|row| row[0].as_int().unwrap_or(0) > 2);
+    sheet.filter_rows(|_idx, row| row[0].as_int().unwrap_or(0) > 2);
 
     assert_eq!(sheet.row_count(), 2);
     assert_eq!(sheet.get(0, 0).unwrap(), &CellValue::Int(3));
