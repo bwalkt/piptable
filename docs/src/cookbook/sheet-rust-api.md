@@ -53,7 +53,8 @@ fn process_employee_data() -> Result<(), Box<dyn std::error::Error>> {
         .skip(1)  // Skip header
         .filter_map(|cell| cell.as_float())
         .sum();
-    let avg = total / (salaries.len() - 1) as f64;
+    let count = salaries.len().saturating_sub(1);
+    let avg = if count > 0 { total / count as f64 } else { 0.0 };
     println!("Average salary: ${:.2}", avg);
     
     // Update specific cells by column name
