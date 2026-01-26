@@ -9,6 +9,9 @@
 //! - Integration with SQL and HTTP engines
 //! - Python UDF support (with `python` feature)
 
+mod builtins;
+mod converters;
+
 #[cfg(feature = "python")]
 mod python;
 
@@ -706,7 +709,7 @@ impl Interpreter {
                             })?;
 
                             // Convert CellValue to Value
-                            cell_to_value(cell)
+                            cell_to_value(cell.clone())
                         })
                     }
                     // Type mismatches
@@ -920,8 +923,8 @@ impl Interpreter {
             BinaryOp::And => Ok(Value::Bool(left.is_truthy() && right.is_truthy())),
             BinaryOp::Or => Ok(Value::Bool(left.is_truthy() || right.is_truthy())),
             BinaryOp::Concat => {
-                let l = self.value_to_string(left);
-                let r = self.value_to_string(right);
+                let l = converters::value_to_string(left);
+                let r = converters::value_to_string(right);
                 Ok(Value::String(format!("{l}{r}")))
             }
             BinaryOp::Like => {
@@ -932,7 +935,7 @@ impl Interpreter {
                 let pattern = right
                     .as_str()
                     .ok_or_else(|| PipError::runtime(0, "LIKE pattern must be string"))?;
-                Ok(Value::Bool(self.matches_like(s, pattern)))
+                Ok(Value::Bool(converters::matches_like(s, pattern)))
             }
             BinaryOp::In => {
                 // Check if left is in right (array)
@@ -1061,11 +1064,9 @@ impl Interpreter {
     where
         F: Fn(f64, f64) -> bool,
     {
-        let l = self
-            .value_to_number(left)
+        let l = converters::value_to_number(left)
             .ok_or_else(|| PipError::runtime(0, "Cannot compare non-numeric value"))?;
-        let r = self
-            .value_to_number(right)
+        let r = converters::value_to_number(right)
             .ok_or_else(|| PipError::runtime(0, "Cannot compare non-numeric value"))?;
         Ok(Value::Bool(cmp(l, r)))
     }
@@ -1082,64 +1083,6 @@ impl Interpreter {
             (Value::String(a), Value::String(b)) => a == b,
             _ => false,
         }
-    }
-
-    fn value_to_number(&self, val: &Value) -> Option<f64> {
-        match val {
-            Value::Int(n) => Some(*n as f64),
-            Value::Float(f) => Some(*f),
-            _ => None,
-        }
-    }
-
-    fn value_to_string(&self, val: &Value) -> String {
-        match val {
-            Value::Null => "null".to_string(),
-            Value::Bool(b) => b.to_string(),
-            Value::Int(n) => n.to_string(),
-            Value::Float(f) => f.to_string(),
-            Value::String(s) => s.clone(),
-            Value::Array(_) => "[Array]".to_string(),
-            Value::Object(_) => "[Object]".to_string(),
-            Value::Table(_) => "[Table]".to_string(),
-            Value::Sheet(_) => "[Sheet]".to_string(),
-            Value::Function { name, .. } => format!("[Function: {name}]"),
-        }
-    }
-
-    fn matches_like(&self, s: &str, pattern: &str) -> bool {
-        // Simple LIKE implementation with % wildcards
-        let parts: Vec<&str> = pattern.split('%').collect();
-        if parts.len() == 1 {
-            return s == pattern;
-        }
-
-        let mut pos = 0;
-        for (i, part) in parts.iter().enumerate() {
-            if part.is_empty() {
-                continue;
-            }
-            if i == 0 {
-                // Must start with this part
-                if !s.starts_with(part) {
-                    return false;
-                }
-                pos = part.len();
-            } else if i == parts.len() - 1 {
-                // Must end with this part
-                if !s[pos..].ends_with(part) {
-                    return false;
-                }
-            } else {
-                // Must contain this part
-                if let Some(idx) = s[pos..].find(part) {
-                    pos += idx + part.len();
-                } else {
-                    return false;
-                }
-            }
-        }
-        true
     }
 
     /// Evaluate a unary operation.
@@ -1177,168 +1120,12 @@ impl Interpreter {
         line: usize,
     ) -> PipResult<Value> {
         // Check built-in functions first
+        if let Some(result) = builtins::call_builtin(self, name, args.clone(), line).await {
+            return result;
+        }
+
+        // Functions that still need to be migrated to modules
         match name.to_lowercase().as_str() {
-            "print" => {
-                let output: Vec<String> = args.iter().map(|v| self.value_to_string(v)).collect();
-                let msg = output.join(" ");
-                self.print(&msg).await;
-                Ok(Value::Null)
-            }
-            "len" | "length" => {
-                if args.len() != 1 {
-                    return Err(PipError::runtime(line, "len() takes exactly 1 argument"));
-                }
-                match &args[0] {
-                    Value::String(s) => Ok(Value::Int(s.len() as i64)),
-                    Value::Array(a) => Ok(Value::Int(a.len() as i64)),
-                    Value::Table(batches) => {
-                        let count: usize = batches.iter().map(|b| b.num_rows()).sum();
-                        Ok(Value::Int(count as i64))
-                    }
-                    Value::Sheet(sheet) => Ok(Value::Int(sheet.row_count() as i64)),
-                    _ => Err(PipError::runtime(
-                        line,
-                        format!("len() not supported for {}", args[0].type_name()),
-                    )),
-                }
-            }
-            "type" | "typeof" => {
-                if args.len() != 1 {
-                    return Err(PipError::runtime(line, "type() takes exactly 1 argument"));
-                }
-                Ok(Value::String(args[0].type_name().to_string()))
-            }
-            "str" | "string" => {
-                if args.len() != 1 {
-                    return Err(PipError::runtime(line, "str() takes exactly 1 argument"));
-                }
-                Ok(Value::String(self.value_to_string(&args[0])))
-            }
-            "int" | "integer" => {
-                if args.len() != 1 {
-                    return Err(PipError::runtime(line, "int() takes exactly 1 argument"));
-                }
-                match &args[0] {
-                    Value::Int(n) => Ok(Value::Int(*n)),
-                    Value::Float(f) => Ok(Value::Int(*f as i64)),
-                    Value::String(s) => s.parse::<i64>().map(Value::Int).map_err(|_| {
-                        PipError::runtime(line, format!("Cannot convert '{s}' to int"))
-                    }),
-                    Value::Bool(b) => Ok(Value::Int(if *b { 1 } else { 0 })),
-                    _ => Err(PipError::runtime(
-                        line,
-                        format!("Cannot convert {} to int", args[0].type_name()),
-                    )),
-                }
-            }
-            "float" => {
-                if args.len() != 1 {
-                    return Err(PipError::runtime(line, "float() takes exactly 1 argument"));
-                }
-                match &args[0] {
-                    Value::Int(n) => Ok(Value::Float(*n as f64)),
-                    Value::Float(f) => Ok(Value::Float(*f)),
-                    Value::String(s) => s.parse::<f64>().map(Value::Float).map_err(|_| {
-                        PipError::runtime(line, format!("Cannot convert '{s}' to float"))
-                    }),
-                    _ => Err(PipError::runtime(
-                        line,
-                        format!("Cannot convert {} to float", args[0].type_name()),
-                    )),
-                }
-            }
-            "abs" => {
-                if args.len() != 1 {
-                    return Err(PipError::runtime(line, "abs() takes exactly 1 argument"));
-                }
-                match &args[0] {
-                    Value::Int(n) => n
-                        .checked_abs()
-                        .map(Value::Int)
-                        .ok_or_else(|| PipError::runtime(line, "Integer overflow in abs()")),
-                    Value::Float(f) => Ok(Value::Float(f.abs())),
-                    _ => Err(PipError::runtime(line, "abs() requires numeric argument")),
-                }
-            }
-            "min" => {
-                if args.is_empty() {
-                    return Err(PipError::runtime(
-                        line,
-                        "min() requires at least 1 argument",
-                    ));
-                }
-                self.find_min_max(&args, true, line)
-            }
-            "max" => {
-                if args.is_empty() {
-                    return Err(PipError::runtime(
-                        line,
-                        "max() requires at least 1 argument",
-                    ));
-                }
-                self.find_min_max(&args, false, line)
-            }
-            "sum" => {
-                if args.len() != 1 {
-                    return Err(PipError::runtime(line, "sum() takes exactly 1 argument"));
-                }
-                match &args[0] {
-                    Value::Array(arr) => {
-                        let mut total = 0.0;
-                        for v in arr {
-                            total += self.value_to_number(v).ok_or_else(|| {
-                                PipError::runtime(line, "sum() requires numeric array")
-                            })?;
-                        }
-                        if arr.iter().all(|v| matches!(v, Value::Int(_))) {
-                            Ok(Value::Int(total as i64))
-                        } else {
-                            Ok(Value::Float(total))
-                        }
-                    }
-                    _ => Err(PipError::runtime(line, "sum() requires array argument")),
-                }
-            }
-            "avg" | "average" => {
-                if args.len() != 1 {
-                    return Err(PipError::runtime(line, "avg() takes exactly 1 argument"));
-                }
-                match &args[0] {
-                    Value::Array(arr) => {
-                        if arr.is_empty() {
-                            return Ok(Value::Null);
-                        }
-                        let mut total = 0.0;
-                        for v in arr {
-                            total += self.value_to_number(v).ok_or_else(|| {
-                                PipError::runtime(line, "avg() requires numeric array")
-                            })?;
-                        }
-                        Ok(Value::Float(total / arr.len() as f64))
-                    }
-                    _ => Err(PipError::runtime(line, "avg() requires array argument")),
-                }
-            }
-            "keys" => {
-                if args.len() != 1 {
-                    return Err(PipError::runtime(line, "keys() takes exactly 1 argument"));
-                }
-                match &args[0] {
-                    Value::Object(obj) => Ok(Value::Array(
-                        obj.keys().map(|k| Value::String(k.clone())).collect(),
-                    )),
-                    _ => Err(PipError::runtime(line, "keys() requires object argument")),
-                }
-            }
-            "values" => {
-                if args.len() != 1 {
-                    return Err(PipError::runtime(line, "values() takes exactly 1 argument"));
-                }
-                match &args[0] {
-                    Value::Object(obj) => Ok(Value::Array(obj.values().cloned().collect())),
-                    _ => Err(PipError::runtime(line, "values() requires object argument")),
-                }
-            }
             "consolidate" => {
                 // consolidate(book) or consolidate(book, source = "_source")
                 if args.is_empty() || args.len() > 2 {
@@ -1363,7 +1150,7 @@ impl Interpreter {
                         } else {
                             None
                         };
-                        consolidate_book(book_obj, source_col.as_deref())
+                        converters::consolidate_book(book_obj, source_col.as_deref())
                             .map_err(|e| PipError::runtime(line, e))
                     }
                     _ => Err(PipError::runtime(
@@ -1411,33 +1198,6 @@ impl Interpreter {
                         line,
                         "register_python() takes 2 or 3 arguments: (name, code) or (name, file, function)",
                     )),
-                }
-            }
-            // Sheet operations
-            "sheet_name_columns_by_row" => {
-                if args.len() != 2 {
-                    return Err(PipError::runtime(
-                        line,
-                        "sheet_name_columns_by_row() takes exactly 2 arguments",
-                    ));
-                }
-                match (&args[0], &args[1]) {
-                    (Value::Sheet(sheet), Value::Int(row_idx)) => {
-                        if *row_idx < 0 {
-                            return Err(PipError::runtime(line, "Row index cannot be negative"));
-                        }
-                        let mut new_sheet = sheet.clone();
-                        new_sheet
-                            .name_columns_by_row(*row_idx as usize)
-                            .map_err(|e| {
-                                PipError::runtime(line, format!("Failed to name columns: {}", e))
-                            })?;
-                        Ok(Value::Sheet(new_sheet))
-                    }
-                    (Value::Sheet(_), _) => {
-                        Err(PipError::runtime(line, "Row index must be an integer"))
-                    }
-                    _ => Err(PipError::runtime(line, "First argument must be a sheet")),
                 }
             }
             "sheet_transpose" => {
@@ -1572,7 +1332,7 @@ impl Interpreter {
                             )
                         })?;
 
-                        Ok(cell_to_value(cell))
+                        Ok(cell_to_value(cell.clone()))
                     }
                     _ => Err(PipError::runtime(line, "Arguments must be (sheet, string)")),
                 }
@@ -1802,44 +1562,6 @@ impl Interpreter {
                     Err(PipError::runtime(line, format!("Unknown function: {name}")))
                 }
             }
-        }
-    }
-
-    fn find_min_max(&self, args: &[Value], is_min: bool, line: usize) -> PipResult<Value> {
-        // Handle single array argument
-        let values = if args.len() == 1 {
-            match &args[0] {
-                Value::Array(arr) => arr.clone(),
-                _ => args.to_vec(),
-            }
-        } else {
-            args.to_vec()
-        };
-
-        if values.is_empty() {
-            return Ok(Value::Null);
-        }
-
-        let mut result = self
-            .value_to_number(&values[0])
-            .ok_or_else(|| PipError::runtime(line, "min/max requires numeric values"))?;
-
-        for v in &values[1..] {
-            let n = self
-                .value_to_number(v)
-                .ok_or_else(|| PipError::runtime(line, "min/max requires numeric values"))?;
-            if is_min {
-                result = result.min(n);
-            } else {
-                result = result.max(n);
-            }
-        }
-
-        // Return int if all values were ints
-        if values.iter().all(|v| matches!(v, Value::Int(_))) {
-            Ok(Value::Int(result as i64))
-        } else {
-            Ok(Value::Float(result))
         }
     }
 
@@ -2921,85 +2643,6 @@ fn cell_to_value(cell: CellValue) -> Value {
         CellValue::Float(f) => Value::Float(f),
         CellValue::String(s) => Value::String(s),
     }
-}
-
-/// Consolidate a book (object of arrays) into a single array
-fn consolidate_book(
-    book_obj: &HashMap<String, Value>,
-    source_col: Option<&str>,
-) -> Result<Value, String> {
-    use indexmap::IndexSet;
-
-    // Sort sheet names first for deterministic processing
-    let mut sheet_names: Vec<_> = book_obj.keys().collect();
-    sheet_names.sort();
-
-    // Collect all column names across all sheets in deterministic order
-    let mut all_columns: IndexSet<String> = IndexSet::new();
-
-    // Validate all values are arrays of objects and collect column names
-    for sheet_name in &sheet_names {
-        let value = &book_obj[*sheet_name];
-        match value {
-            Value::Array(rows) => {
-                for row in rows {
-                    match row {
-                        Value::Object(obj) => {
-                            for key in obj.keys() {
-                                all_columns.insert(key.clone());
-                            }
-                        }
-                        _ => {
-                            return Err(format!("Sheet '{}' contains non-object rows", sheet_name));
-                        }
-                    }
-                }
-            }
-            _ => {
-                return Err(format!("Sheet '{}' is not an array", sheet_name));
-            }
-        }
-    }
-
-    // Check for source column conflict
-    if let Some(col) = source_col {
-        if all_columns.contains(col) {
-            return Err(format!(
-                "Source column name '{}' conflicts with existing column",
-                col
-            ));
-        }
-    }
-
-    // Build consolidated result
-    let mut result: Vec<Value> = Vec::new();
-
-    for sheet_name in sheet_names {
-        let value = &book_obj[sheet_name];
-        if let Value::Array(rows) = value {
-            for row in rows {
-                if let Value::Object(obj) = row {
-                    use indexmap::IndexMap;
-                    let mut new_row: IndexMap<String, Value> = IndexMap::new();
-
-                    // Add source column if requested
-                    if let Some(col) = source_col {
-                        new_row.insert(col.to_string(), Value::String(sheet_name.to_string()));
-                    }
-
-                    // Add all columns (with nulls for missing)
-                    for col_name in &all_columns {
-                        let val = obj.get(col_name).cloned().unwrap_or(Value::Null);
-                        new_row.insert(col_name.clone(), val);
-                    }
-
-                    result.push(Value::Object(new_row.into_iter().collect()));
-                }
-            }
-        }
-    }
-
-    Ok(Value::Array(result))
 }
 
 /// Infer the Arrow DataType for a column based on cell values
