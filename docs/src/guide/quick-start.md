@@ -43,7 +43,10 @@ PRINT "Hello, " + name + "!"
 
 ' Working with data
 DIM numbers AS ARRAY = [1, 2, 3, 4, 5]
-DIM total AS INT = 15
+DIM total AS INT = 0
+FOR i = 0 TO 4
+    total = total + numbers[i]
+NEXT
 PRINT "Sum of numbers: " + STR(total)
 ```
 
