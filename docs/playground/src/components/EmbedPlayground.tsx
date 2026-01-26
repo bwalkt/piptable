@@ -154,7 +154,7 @@ export function EmbedPlayground({
       editorViewRef.current?.destroy();
       editorViewRef.current = null;
     };
-  }, [readonly, height]);
+  }, [readonly, height, state]);
 
   // Update editor when code signal changes
   useSignalEffect(() => {
