@@ -17,7 +17,7 @@ TOON is a columnar format that includes:
 ' @title Read TOON File
 ' @description Import typed data from a TOON file
 
-dim data: table = import "data.toon" into sheet
+import "data.toon" into data
 print "Loaded " + str(len(data)) + " typed records from TOON"
 ```
 
@@ -36,16 +36,16 @@ print "Loaded " + str(len(data)) + " typed records from TOON"
 ' @title Type-Safe TOON Processing
 ' @description Leverage TOON's type information for safe processing
 
-dim employees: table = import "employees.toon" into sheet
+import "employees.toon" into employees
 
-' Type information is preserved
+' Type information is preserved - use file reference
 dim high_earners: table = query(
   SELECT 
     name,
     age,
     salary,
     salary * 0.15 as bonus
-  FROM employees
+  FROM "employees.toon"
   WHERE salary > 70000 AND active = true
 )
 
@@ -59,9 +59,9 @@ export high_earners to "high_earners.toon"
 ' @title Convert CSV to TOON
 ' @description Add type information to CSV data
 
-dim csv_data: table = import "untyped_data.csv" into sheet
+import "untyped_data.csv" into csv_data
 
-' Ensure correct types
+' Ensure correct types using file reference
 dim typed_data: table = query(
   SELECT 
     CAST(id AS INT) as id,
@@ -69,7 +69,7 @@ dim typed_data: table = query(
     CAST(amount AS FLOAT) as amount,
     CAST(is_active AS BOOL) as is_active,
     DATE(created_at) as created_date
-  FROM csv_data
+  FROM "untyped_data.csv"
 )
 
 ' Export with type information
@@ -82,9 +82,9 @@ print "Converted CSV to typed TOON format"
 ' @title Export TOON to JSON
 ' @description Convert typed TOON data to JSON
 
-dim toon_data: table = import "source.toon" into sheet
+import "source.toon" into toon_data
 
-' Type information helps with JSON conversion
+' Type information helps with JSON conversion - use file reference
 dim json_ready: table = query(
   SELECT 
     JSON_OBJECT(
@@ -96,7 +96,7 @@ dim json_ready: table = query(
         'active', active
       )
     ) as json_record
-  FROM toon_data
+  FROM "source.toon"
 )
 
 export json_ready to "output.json"
@@ -109,9 +109,9 @@ export json_ready to "output.json"
 ' @title Process Mixed Types in TOON
 ' @description Handle different data types from TOON files
 
-dim mixed_data: table = import "mixed_types.toon" into sheet
+import "mixed_types.toon" into mixed_data
 
-' Process different types appropriately
+' Process different types appropriately using file reference
 dim processed: table = query(
   SELECT 
     string_col,
@@ -122,7 +122,7 @@ dim processed: table = query(
       ELSE 'Inactive'
     END as status,
     COALESCE(nullable_col, 'N/A') as non_null
-  FROM mixed_data
+  FROM "mixed_types.toon"
 )
 
 export processed to "processed_types.csv"
@@ -133,9 +133,9 @@ export processed to "processed_types.csv"
 ' @title Aggregate TOON Data
 ' @description Perform type-aware aggregations
 
-dim sales: table = import "sales_data.toon" into sheet
+import "sales_data.toon" into sales
 
-' Type information ensures correct aggregations
+' Type information ensures correct aggregations - use file reference
 dim summary: table = query(
   SELECT 
     product_category,
@@ -144,7 +144,7 @@ dim summary: table = query(
     AVG(unit_price) as avg_price,
     SUM(quantity * unit_price) as revenue,
     COUNT(DISTINCT customer_id) as unique_customers
-  FROM sales
+  FROM "sales_data.toon"
   GROUP BY product_category
   ORDER BY revenue DESC
 )
@@ -159,30 +159,34 @@ export summary to "sales_summary.toon"
 ' @title TOON Schema Validation
 ' @description Ensure data conforms to expected types
 
-dim raw_data: table = import "input.toon" into sheet
+import "input.toon" into raw_data
 
-' Validate and report type issues
+' Validate and report issues (simplified without TYPE function)
 dim validation_report: table = query(
   SELECT 
     *,
     CASE 
-      WHEN TYPE(age) != 'INT' THEN 'Invalid age type'
-      WHEN TYPE(salary) != 'FLOAT' THEN 'Invalid salary type'
-      WHEN TYPE(active) != 'BOOL' THEN 'Invalid active type'
+      WHEN age IS NULL THEN 'Missing age'
+      WHEN salary IS NULL THEN 'Missing salary'
+      WHEN active IS NULL THEN 'Missing active'
       ELSE 'Valid'
     END as validation_status
-  FROM raw_data
+  FROM "input.toon"
 )
 
 ' Separate valid and invalid records
 dim valid_records: table = query(
-  SELECT * FROM validation_report 
-  WHERE validation_status = 'Valid'
+  SELECT * FROM "input.toon"
+  WHERE age IS NOT NULL 
+    AND salary IS NOT NULL 
+    AND active IS NOT NULL
 )
 
 dim invalid_records: table = query(
-  SELECT * FROM validation_report 
-  WHERE validation_status != 'Valid'
+  SELECT * FROM "input.toon"
+  WHERE age IS NULL 
+    OR salary IS NULL 
+    OR active IS NULL
 )
 
 export valid_records to "valid_data.toon"
@@ -198,15 +202,15 @@ print "Validation complete: " + str(len(valid_records)) + " valid, " + str(len(i
 ' @title Leverage TOON Types for Performance
 ' @description Type information enables query optimization
 
-dim large_dataset: table = import "big_data.toon" into sheet
+import "big_data.toon" into large_dataset
 
-' Types allow efficient operations
+' Types allow efficient operations - use file reference
 dim optimized: table = query(
   SELECT 
     int_id,
     float_value * 1.1 as adjusted,
     bool_flag
-  FROM large_dataset
+  FROM "big_data.toon"
   WHERE int_id > 1000000  -- Integer comparison is fast
     AND bool_flag = true   -- Boolean check is optimized
     AND float_value BETWEEN 100.0 AND 500.0

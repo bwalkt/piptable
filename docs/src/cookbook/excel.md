@@ -9,7 +9,7 @@ PipTable provides comprehensive support for Excel files, including both modern X
 ' @title Read Excel File
 ' @description Import data from an Excel file
 
-dim data: table = import "report.xlsx" into sheet
+import "report.xlsx" into data
 print "Loaded " + str(len(data)) + " rows from Excel"
 ```
 
@@ -18,8 +18,8 @@ print "Loaded " + str(len(data)) + " rows from Excel"
 ' @title Read Specific Excel Sheet
 ' @description Import a named sheet from an Excel workbook
 
-' Read specific sheet by name (Note: sheet selection may require different syntax)
-import "workbook.xlsx" into sales_data
+' Read specific sheet by name
+import "workbook.xlsx" sheet "Sales" into sales_data
 
 ' Process the imported sheet
 print "Loaded sheet with " + str(len(sales_data)) + " rows"
@@ -46,7 +46,7 @@ print "Loaded workbook with multiple sheets"
 ' @description Support for pre-2007 Excel formats
 
 ' Read old Excel format
-dim legacy_data: table = import "old_report.xls" into sheet
+import "old_report.xls" into legacy_data
 
 ' Convert to modern format
 export legacy_data to "modernized_report.xlsx"
@@ -61,14 +61,15 @@ print "Converted XLS to XLSX format"
 ' @description Combine data from multiple Excel files
 
 ' Import multiple Excel files
-import "report_jan.xlsx,report_feb.xlsx,report_mar.xlsx" into quarterly
+import "report_jan.xlsx", "report_feb.xlsx", "report_mar.xlsx" into quarterly
 
 ' Consolidate all sheets with same structure
 dim combined: table = consolidate(quarterly)
 
-' Add quarter column
+' Add quarter column (Note: must use file reference or export/reimport)
+export combined to "temp_combined.csv"
 dim with_quarter: table = query(
-  SELECT *, 'Q1' as quarter FROM combined
+  SELECT *, 'Q1' as quarter FROM "temp_combined.csv"
 )
 
 export with_quarter to "quarterly_report.xlsx"
@@ -82,21 +83,21 @@ export with_quarter to "quarterly_report.xlsx"
 import "company_data.xlsx" into company
 
 ' Load individual sheets from the workbook
-' Note: Actual sheet access syntax may vary
-dim employees: table = import "employees.csv" into sheet
-dim departments: table = import "departments.csv" into sheet
+import "employees.xlsx" into employees
+import "departments.xlsx" into departments
 
 ' Join data from different sheets
 dim analysis: table = employees inner join departments on "dept_id" = "id"
 
-' Calculate department summaries
+' Calculate department summaries (export and query)
+export analysis to "temp_analysis.csv"
 dim dept_summary: table = query(
   SELECT 
     department_name,
     COUNT(*) as employee_count,
     AVG(salary) as avg_salary,
     SUM(salary) as total_payroll
-  FROM analysis
+  FROM "temp_analysis.csv"
   GROUP BY department_name
   ORDER BY total_payroll DESC
 )
@@ -109,9 +110,9 @@ export dept_summary to "department_analysis.xlsx"
 ' @title Clean Messy Excel Data
 ' @description Fix common Excel data issues
 
-dim raw: table = import "messy_excel.xlsx" into sheet
+import "messy_excel.xlsx" into raw
 
-' Clean common Excel issues
+' Clean common Excel issues using file reference
 dim cleaned: table = query(
   SELECT 
     TRIM(name) as name,
@@ -122,7 +123,7 @@ dim cleaned: table = query(
     CAST(REPLACE(REPLACE(phone, '-', ''), ' ', '') AS TEXT) as phone,
     CAST(amount AS FLOAT) as amount,
     DATE(date_column) as clean_date
-  FROM raw
+  FROM "messy_excel.xlsx"
   WHERE name IS NOT NULL
 )
 
@@ -136,16 +137,16 @@ export cleaned to "cleaned_data.xlsx"
 ' @title Create Multi-Sheet Workbook
 ' @description Generate Excel file with multiple sheets
 
-dim sales: table = import "sales.csv" into sheet
-dim customers: table = import "customers.csv" into sheet
+import "sales.csv" into sales
+import "customers.csv" into customers
 
-' Create summaries for different sheets
+' Create summaries for different sheets using file references
 dim monthly_summary: table = query(
   SELECT 
     month,
     COUNT(*) as transactions,
     SUM(amount) as total_sales
-  FROM sales
+  FROM "sales.csv"
   GROUP BY month
 )
 
@@ -154,7 +155,7 @@ dim top_customers: table = query(
     customer_id,
     COUNT(*) as purchase_count,
     SUM(amount) as total_spent
-  FROM sales
+  FROM "sales.csv"
   GROUP BY customer_id
   ORDER BY total_spent DESC
   LIMIT 100
@@ -172,9 +173,9 @@ print "Created Excel reports"
 ' @title Excel with Calculated Columns
 ' @description Add formulas and calculated fields
 
-dim data: table = import "products.csv" into sheet
+import "products.csv" into data
 
-' Add calculated columns for Excel
+' Add calculated columns for Excel using file reference
 dim with_formulas: table = query(
   SELECT 
     product_name,
@@ -187,7 +188,7 @@ dim with_formulas: table = query(
       ELSE 'In Stock'
     END as stock_status,
     unit_price * quantity * 0.15 as estimated_profit
-  FROM data
+  FROM "products.csv"
   ORDER BY total_value DESC
 )
 
@@ -202,10 +203,10 @@ export with_formulas to "inventory_report.xlsx"
 ' @description Create formatted reports for distribution
 
 ' Load template structure
-dim template: table = import "report_template.xlsx" into sheet
-dim current_data: table = import "current_month.csv" into sheet
+import "report_template.xlsx" into template
+import "current_month.csv" into current_data
 
-' Match template structure
+' Match template structure using file reference
 dim formatted: table = query(
   SELECT 
     department,
@@ -214,18 +215,19 @@ dim formatted: table = query(
     SUM(costs) as costs,
     SUM(revenue) - SUM(costs) as profit,
     ROUND((SUM(revenue) - SUM(costs)) / SUM(revenue) * 100, 2) as margin_pct
-  FROM current_data
+  FROM "current_month.csv"
   GROUP BY department, category
   ORDER BY department, category
 )
 
-' Add metadata
+' Add metadata (export and query)
+export formatted to "temp_formatted.csv"
 dim with_metadata: table = query(
   SELECT 
     CURRENT_DATE as report_date,
     'Monthly Report' as report_type,
     *
-  FROM formatted
+  FROM "temp_formatted.csv"
 )
 
 ' Export with date in filename (Note: date formatting may vary)
