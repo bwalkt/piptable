@@ -1,5 +1,4 @@
 import { useState } from 'preact/hooks';
-import { signal } from '@preact/signals';
 import { exportData, type ExportFormat, type ExportData } from '../lib/export';
 import { cn } from '../lib/utils';
 
@@ -10,15 +9,14 @@ interface ExportButtonProps {
   className?: string;
 }
 
-const isExportModalOpen = signal(false);
-
 export function ExportButton({ code, output, disabled = false, className }: ExportButtonProps) {
+  const [isExportModalOpen, setExportModalOpen] = useState(false);
   const [exportStatus, setExportStatus] = useState<'idle' | 'exporting' | 'success' | 'error'>('idle');
   const [lastError, setLastError] = useState<string>('');
 
   const handleOpenModal = () => {
     if (!disabled) {
-      isExportModalOpen.value = true;
+      setExportModalOpen(true);
     }
   };
 
@@ -26,19 +24,19 @@ export function ExportButton({ code, output, disabled = false, className }: Expo
     setExportStatus('exporting');
     
     try {
-      const exportData: ExportData = {
+      const data: ExportData = {
         code,
         output,
         timestamp: new Date(),
         filename: customFilename
       };
       
-      await exportData(exportData, format);
+      await exportData(data, format);
       
       setExportStatus('success');
       setTimeout(() => {
         setExportStatus('idle');
-        isExportModalOpen.value = false;
+        setExportModalOpen(false);
       }, 1500);
     } catch (error) {
       console.error('Export failed:', error);
@@ -74,7 +72,7 @@ export function ExportButton({ code, output, disabled = false, className }: Expo
       </button>
 
       {/* Export Modal */}
-      {isExportModalOpen.value && (
+      {isExportModalOpen && (
         <ExportModal 
           code={code}
           output={output}
@@ -82,7 +80,7 @@ export function ExportButton({ code, output, disabled = false, className }: Expo
           lastError={lastError}
           onExport={handleExport}
           onClose={() => {
-            isExportModalOpen.value = false;
+            setExportModalOpen(false);
             setExportStatus('idle');
             setLastError('');
           }}
