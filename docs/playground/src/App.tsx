@@ -157,7 +157,7 @@ export function App() {
         <div className="flex items-center gap-1 sm:gap-2 flex-shrink-0">
           {/* Hide share/export on very small screens */}
           <div className="hidden xs:flex items-center gap-1 sm:gap-2">
-            <ShareButton state={getCurrentShareableState()} className="h-8 sm:h-9 px-2 sm:px-3 text-xs sm:text-sm" />
+            <ShareButton getState={getCurrentShareableState} className="h-8 sm:h-9 px-2 sm:px-3 text-xs sm:text-sm" />
             
             <ExportButton 
               code={code.value}
@@ -260,7 +260,7 @@ export function App() {
             <div className="px-3 sm:px-4 py-2 border-b bg-muted/50 flex items-center justify-between">
               <h3 className="text-sm font-medium">Editor</h3>
               <div className="flex items-center gap-2 text-xs text-muted-foreground lg:hidden">
-                <span>Swipe down for output</span>
+                <span>Scroll down for output</span>
               </div>
             </div>
             <div ref={editorRef} className="flex-1 overflow-auto" />

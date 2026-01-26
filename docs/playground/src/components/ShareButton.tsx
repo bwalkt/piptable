@@ -4,18 +4,19 @@ import { generateShareURL, copyToClipboard, generateCodeDescription, type Sharea
 import { cn } from '../lib/utils';
 
 interface ShareButtonProps {
-  state: ShareableState;
+  getState: () => ShareableState;
   className?: string;
 }
 
 const isShareModalOpen = signal(false);
 
-export function ShareButton({ state, className }: ShareButtonProps) {
+export function ShareButton({ getState, className }: ShareButtonProps) {
   const [copyStatus, setCopyStatus] = useState<'idle' | 'copying' | 'success' | 'error'>('idle');
 
   const handleShare = async () => {
     try {
-      const shareURL = generateShareURL(state);
+      const currentState = getState();
+      const shareURL = generateShareURL(currentState);
       const success = await copyToClipboard(shareURL);
       
       if (success) {
@@ -60,7 +61,7 @@ export function ShareButton({ state, className }: ShareButtonProps) {
       {/* Share Modal */}
       {isShareModalOpen.value && (
         <ShareModal 
-          state={state} 
+          getState={getState} 
           copyStatus={copyStatus} 
           onShare={handleShare}
           onClose={() => isShareModalOpen.value = false}
@@ -71,13 +72,14 @@ export function ShareButton({ state, className }: ShareButtonProps) {
 }
 
 interface ShareModalProps {
-  state: ShareableState;
+  getState: () => ShareableState;
   copyStatus: 'idle' | 'copying' | 'success' | 'error';
   onShare: () => void;
   onClose: () => void;
 }
 
-function ShareModal({ state, copyStatus, onShare, onClose }: ShareModalProps) {
+function ShareModal({ getState, copyStatus, onShare, onClose }: ShareModalProps) {
+  const state = getState();
   let shareURL = '';
   try {
     shareURL = generateShareURL(state);
