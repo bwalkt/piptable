@@ -14,7 +14,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     
     // Get cell value
     let value = sheet.get_a1("A1")?;
-    println!("A1 = {}", value.as_str());
+    println!("A1 = {}", value.as_str().unwrap_or(""));
     
     // Set cell value
     sheet.set_a1("B2", "Updated Value")?;
