@@ -116,87 +116,99 @@ pub async fn call_math_builtin(
         }
 
         "min" => {
-            if args.len() != 1 {
+            if args.is_empty() {
                 return Some(Err(PipError::runtime(
                     line,
-                    "min() takes exactly 1 argument",
+                    "min() requires at least 1 argument",
                 )));
             }
-            match &args[0] {
-                Value::Array(arr) if !arr.is_empty() => {
-                    let mut min_val = arr[0].clone();
-                    for val in arr.iter().skip(1) {
-                        match (&min_val, val) {
-                            (Value::Int(a), Value::Int(b)) if b < a => min_val = val.clone(),
-                            (Value::Float(a), Value::Float(b)) if b < a => min_val = val.clone(),
-                            (Value::Int(a), Value::Float(b)) if *b < *a as f64 => {
-                                min_val = val.clone();
-                            }
-                            (Value::Float(a), Value::Int(b)) if (*b as f64) < *a => {
-                                min_val = val.clone();
-                            }
-                            (Value::Int(_) | Value::Float(_), Value::Int(_) | Value::Float(_)) => {}
-                            _ => {
-                                return Some(Err(PipError::runtime(
-                                    line,
-                                    "min() requires all numeric values",
-                                )));
-                            }
-                        }
-                    }
-                    Some(Ok(min_val))
+            
+            // Handle both forms: min(array) or min(a, b, c, ...)
+            let values = if args.len() == 1 {
+                match &args[0] {
+                    Value::Array(arr) => arr.clone(),
+                    _ => args.to_vec(),
                 }
-                Value::Array(_) => Some(Err(PipError::runtime(
+            } else {
+                args.to_vec()
+            };
+            
+            if values.is_empty() {
+                return Some(Err(PipError::runtime(
                     line,
                     "min() cannot find min of empty array",
-                ))),
-                _ => Some(Err(PipError::runtime(
-                    line,
-                    format!("min() expects array, got {}", args[0].type_name()),
-                ))),
+                )));
             }
+            
+            let mut min_val = values[0].clone();
+            for val in values.iter().skip(1) {
+                match (&min_val, val) {
+                    (Value::Int(a), Value::Int(b)) if b < a => min_val = val.clone(),
+                    (Value::Float(a), Value::Float(b)) if b < a => min_val = val.clone(),
+                    (Value::Int(a), Value::Float(b)) if *b < *a as f64 => {
+                        min_val = val.clone();
+                    }
+                    (Value::Float(a), Value::Int(b)) if (*b as f64) < *a => {
+                        min_val = val.clone();
+                    }
+                    (Value::Int(_) | Value::Float(_), Value::Int(_) | Value::Float(_)) => {}
+                    _ => {
+                        return Some(Err(PipError::runtime(
+                            line,
+                            "min() requires all numeric values",
+                        )));
+                    }
+                }
+            }
+            Some(Ok(min_val))
         }
 
         "max" => {
-            if args.len() != 1 {
+            if args.is_empty() {
                 return Some(Err(PipError::runtime(
                     line,
-                    "max() takes exactly 1 argument",
+                    "max() requires at least 1 argument",
                 )));
             }
-            match &args[0] {
-                Value::Array(arr) if !arr.is_empty() => {
-                    let mut max_val = arr[0].clone();
-                    for val in arr.iter().skip(1) {
-                        match (&max_val, val) {
-                            (Value::Int(a), Value::Int(b)) if b > a => max_val = val.clone(),
-                            (Value::Float(a), Value::Float(b)) if b > a => max_val = val.clone(),
-                            (Value::Int(a), Value::Float(b)) if *b > *a as f64 => {
-                                max_val = val.clone();
-                            }
-                            (Value::Float(a), Value::Int(b)) if (*b as f64) > *a => {
-                                max_val = val.clone();
-                            }
-                            (Value::Int(_) | Value::Float(_), Value::Int(_) | Value::Float(_)) => {}
-                            _ => {
-                                return Some(Err(PipError::runtime(
-                                    line,
-                                    "max() requires all numeric values",
-                                )));
-                            }
-                        }
-                    }
-                    Some(Ok(max_val))
+            
+            // Handle both forms: max(array) or max(a, b, c, ...)
+            let values = if args.len() == 1 {
+                match &args[0] {
+                    Value::Array(arr) => arr.clone(),
+                    _ => args.to_vec(),
                 }
-                Value::Array(_) => Some(Err(PipError::runtime(
+            } else {
+                args.to_vec()
+            };
+            
+            if values.is_empty() {
+                return Some(Err(PipError::runtime(
                     line,
                     "max() cannot find max of empty array",
-                ))),
-                _ => Some(Err(PipError::runtime(
-                    line,
-                    format!("max() expects array, got {}", args[0].type_name()),
-                ))),
+                )));
             }
+            
+            let mut max_val = values[0].clone();
+            for val in values.iter().skip(1) {
+                match (&max_val, val) {
+                    (Value::Int(a), Value::Int(b)) if b > a => max_val = val.clone(),
+                    (Value::Float(a), Value::Float(b)) if b > a => max_val = val.clone(),
+                    (Value::Int(a), Value::Float(b)) if *b > *a as f64 => {
+                        max_val = val.clone();
+                    }
+                    (Value::Float(a), Value::Int(b)) if (*b as f64) > *a => {
+                        max_val = val.clone();
+                    }
+                    (Value::Int(_) | Value::Float(_), Value::Int(_) | Value::Float(_)) => {}
+                    _ => {
+                        return Some(Err(PipError::runtime(
+                            line,
+                            "max() requires all numeric values",
+                        )));
+                    }
+                }
+            }
+            Some(Ok(max_val))
         }
 
         _ => None,
