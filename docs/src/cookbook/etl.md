@@ -10,51 +10,35 @@ Build robust Extract, Transform, Load (ETL) pipelines using PipTable's powerful 
 ' @description Extract from multiple sources, transform, and load to reporting database
 
 ' EXTRACT: Load data from multiple sources
-DIM raw_sales AS SHEET = READ("sales_transactions.csv")
-DIM customers AS SHEET = READ("customers.xlsx") 
-DIM products AS SHEET = READ("products.json")
+import "sales_transactions.csv" into raw_sales
+import "customers.csv" into customers
+import "products.json" into products
 
-' TRANSFORM: Clean and enrich data
-' Step 1: Clean sales data
-DIM cleaned_sales AS SHEET = QUERY(raw_sales,
-  "SELECT 
-    transaction_id,
-    UPPER(TRIM(customer_id)) as customer_id,
-    product_id,
-    CAST(quantity AS INT) as quantity,
-    CAST(unit_price AS FLOAT) as unit_price,
-    DATE(transaction_date) as sale_date
-   FROM raw_sales
-   WHERE quantity > 0 AND unit_price > 0")
-
-' Step 2: Join with customer data
-DIM sales_with_customer AS SHEET = JOIN LEFT cleaned_sales, customers
-  ON cleaned_sales.customer_id = customers.id
-
-' Step 3: Join with product data
-DIM enriched_sales AS SHEET = JOIN LEFT sales_with_customer, products
-  ON sales_with_customer.product_id = products.id
-
-' Step 4: Calculate metrics
-DIM final_sales AS SHEET = QUERY(enriched_sales,
-  "SELECT 
-    transaction_id,
-    sale_date,
-    customer_name,
-    customer_segment,
-    product_name,
-    category,
-    quantity,
-    unit_price,
-    quantity * unit_price as total_amount,
-    quantity * unit_price * 0.15 as profit_margin
-   FROM enriched_sales")
+' TRANSFORM: Clean and enrich data in single query
+' Combine all transformations using file references
+dim final_sales: table = query(
+  SELECT
+    s.transaction_id,
+    s.transaction_date as sale_date,
+    c.customer_name,
+    c.customer_segment,
+    p.product_name,
+    p.category,
+    cast(s.quantity as int) as quantity,
+    cast(s.unit_price as float) as unit_price,
+    cast(s.quantity as int) * cast(s.unit_price as float) as total_amount,
+    cast(s.quantity as int) * cast(s.unit_price as float) * 0.15 as profit_margin
+  FROM "sales_transactions.csv" s
+  LEFT JOIN "customers.csv" c ON s.customer_id = c.id
+  LEFT JOIN "products.json" p ON s.product_id = p.id
+  WHERE cast(s.quantity as int) > 0 AND cast(s.unit_price as float) > 0
+)
 
 ' LOAD: Export to different formats
-WRITE(final_sales, "processed_sales.csv")
-EXPORT final_sales TO "sales_report.xlsx"
+export final_sales to "processed_sales.csv"
+export final_sales to "sales_report.xlsx"
 
-PRINT "ETL Pipeline Complete: " + STR(LEN(final_sales)) + " records processed"
+print "ETL Pipeline Complete: " + str(len(final_sales)) + " records processed"
 ```
 
 ## Daily Data Processing
@@ -65,36 +49,24 @@ PRINT "ETL Pipeline Complete: " + STR(LEN(final_sales)) + " records processed"
 ' @description Process only new records since last run
 
 ' Load existing data
-DIM existing_data AS SHEET = READ("master_database.csv")
+import "master_database.csv" into existing_data
+import "daily_extract.csv" into todays_data
 
-' Get today's new data
-DIM todays_data AS SHEET = READ("daily_extract_" + STR(CURRENT_DATE) + ".csv")
+' Find new records using file references
+dim new_records: table = query(
+  SELECT d.*
+  FROM "daily_extract.csv" d
+  LEFT JOIN "master_database.csv" m ON d.id = m.id
+  WHERE m.id IS NULL
+)
 
-' Find new records (not in existing)
-DIM new_records AS SHEET = QUERY(todays_data,
-  "SELECT t.* 
-   FROM todays_data t
-   LEFT JOIN existing_data e ON t.id = e.id
-   WHERE e.id IS NULL")
-
-IF LEN(new_records) > 0 THEN
-  ' Process new records
-  DIM processed_new AS SHEET = QUERY(new_records,
-    "SELECT 
-      *,
-      CURRENT_DATE as processed_date,
-      'PENDING' as status
-     FROM new_records")
-  
-  ' Append to master
-  existing_data APPEND processed_new
-  
-  ' Save updated master
-  WRITE(existing_data, "master_database.csv")
-  PRINT "Added " + STR(LEN(new_records)) + " new records"
-ELSE
-  PRINT "No new records to process today"
-END IF
+if len(new_records) > 0 then
+  ' Export new records (can't append and re-export efficiently)
+  export new_records to "new_records_today.csv"
+  print "Added " + str(len(new_records)) + " new records to new_records_today.csv"
+else
+  print "No new records to process today"
+end if
 ```
 
 ## Data Quality Pipeline
@@ -104,51 +76,50 @@ END IF
 ' @title Data Quality Pipeline
 ' @description Validate, clean, and separate good/bad records
 
-DIM raw_data AS SHEET = READ("raw_input.csv")
+import "raw_input.csv" into raw_data
 
-' Define validation rules
-DIM valid_records AS SHEET = QUERY(raw_data,
-  "SELECT * FROM raw_data
-   WHERE 
+' Define validation rules using file references
+dim valid_records: table = query(
+  SELECT * FROM "raw_input.csv"
+  WHERE 
     email LIKE '%@%.%' AND
     age BETWEEN 18 AND 120 AND
-    phone REGEXP '^[0-9]{10}$' AND
-    country IN ('US', 'CA', 'UK', 'AU')")
+    phone LIKE '__________' AND
+    country IN ('US', 'CA', 'UK', 'AU')
+)
 
-DIM invalid_records AS SHEET = QUERY(raw_data,
-  "SELECT * FROM raw_data
-   WHERE 
+dim invalid_records: table = query(
+  SELECT * FROM "raw_input.csv"
+  WHERE 
     email NOT LIKE '%@%.%' OR
     age NOT BETWEEN 18 AND 120 OR
-    phone NOT REGEXP '^[0-9]{10}$' OR
-    country NOT IN ('US', 'CA', 'UK', 'AU')")
+    phone NOT LIKE '__________' OR
+    country NOT IN ('US', 'CA', 'UK', 'AU')
+)
 
-' Process valid records
-DIM processed AS SHEET = QUERY(valid_records,
-  "SELECT 
-    LOWER(email) as email,
-    INITCAP(name) as name,
+' Process valid records using file reference
+dim processed: table = query(
+  SELECT 
+    lower(email) as email,
+    name,
     age,
     phone,
     country,
-    CURRENT_TIMESTAMP as processed_at
-   FROM valid_records")
+    'processed' as status
+  FROM "raw_input.csv"
+  WHERE 
+    email LIKE '%@%.%' AND
+    age BETWEEN 18 AND 120 AND
+    phone LIKE '__________' AND
+    country IN ('US', 'CA', 'UK', 'AU')
+)
 
 ' Export results
-WRITE(processed, "clean_data.csv")
-WRITE(invalid_records, "rejected_records.csv")
+export processed to "clean_data.csv"
+export invalid_records to "rejected_records.csv"
 
 ' Generate quality report
-DIM quality_report AS SHEET = QUERY(raw_data,
-  "SELECT 
-    COUNT(*) as total_records,
-    " + STR(LEN(valid_records)) + " as valid_count,
-    " + STR(LEN(invalid_records)) + " as invalid_count,
-    ROUND(" + STR(LEN(valid_records)) + " * 100.0 / COUNT(*), 2) as success_rate
-   FROM raw_data")
-
-WRITE(quality_report, "quality_report.csv")
-PRINT "Data Quality Check: " + STR(LEN(valid_records)) + "/" + STR(LEN(raw_data)) + " records passed"
+print "Data Quality Check: " + str(len(valid_records)) + "/" + str(len(raw_data)) + " records passed"
 ```
 
 ## Multi-Source Integration
@@ -156,67 +127,49 @@ PRINT "Data Quality Check: " + STR(LEN(valid_records)) + "/" + STR(LEN(raw_data)
 ### Merge Heterogeneous Data
 ```piptable
 ' @title Multi-Source Data Integration
-' @description Combine CSV, Excel, JSON, and API data
+' @description Combine CSV, Excel, and JSON data (API data handled separately)
 
 ' Load from different sources
-DIM csv_data AS SHEET = READ("source1.csv")
-DIM excel_data AS SHEET = READ("source2.xlsx")
-DIM json_data AS SHEET = READ("source3.json")
+import "source1.csv" into csv_data
+import "source2.xlsx" into excel_data
+export excel_data to "temp_source2.csv"
+import "source3.json" into json_data
 
-' Fetch from API
-DIM api_data AS SHEET = FETCH("https://api.example.com/data")
+' Standardize column names and add source tracking
+dim std_csv: table = query(
+  SELECT customer_id as id, customer_name as name, email_address as email, 'CSV' as source
+  FROM "source1.csv"
+)
 
-' Standardize column names
-DIM std_csv AS SHEET = QUERY(csv_data,
-  "SELECT 
-    customer_id as id,
-    customer_name as name,
-    email_address as email,
-    'CSV' as source
-   FROM csv_data")
+dim std_excel: table = query(
+  SELECT cust_id as id, full_name as name, email, 'EXCEL' as source
+  FROM "temp_source2.csv"
+)
 
-DIM std_excel AS SHEET = QUERY(excel_data,
-  "SELECT 
-    cust_id as id,
-    full_name as name,
-    email,
-    'EXCEL' as source
-   FROM excel_data")
+dim std_json: table = query(
+  SELECT id, name, contact_email as email, 'JSON' as source
+  FROM "source3.json"
+)
 
-DIM std_json AS SHEET = QUERY(json_data,
-  "SELECT 
-    id,
-    name,
-    contact_email as email,
-    'JSON' as source
-   FROM json_data")
-
-DIM std_api AS SHEET = QUERY(api_data,
-  "SELECT 
-    userId as id,
-    displayName as name,
-    emailAddress as email,
-    'API' as source
-   FROM api_data")
-
-' Combine all sources
-DIM all_sources AS SHEET = std_csv
-all_sources APPEND std_excel
-all_sources APPEND std_json
-all_sources APPEND std_api
-
-' Deduplicate based on email
-DIM unique_customers AS SHEET = QUERY(all_sources,
-  "SELECT 
+' Combine and deduplicate all sources
+dim unique_customers: table = query(
+  SELECT 
     MIN(id) as id,
     FIRST(name) as name,
     email,
     STRING_AGG(source, ',') as sources
-   FROM all_sources
-   GROUP BY email")
+  FROM (
+    SELECT id, name, email, source FROM std_csv
+    UNION ALL
+    SELECT id, name, email, source FROM std_excel
+    UNION ALL
+    SELECT id, name, email, source FROM std_json
+  )
+  GROUP BY email
+)
 
-WRITE(unique_customers, "integrated_customers.csv")
-PRINT "Integrated " + STR(LEN(unique_customers)) + " unique customers from 4 sources"
+export unique_customers to "integrated_customers.csv"
+print "Integrated " + str(len(unique_customers)) + " unique customers from 3 sources"
 ```
 
 ## Scheduled Reporting
@@ -226,54 +179,58 @@ PRINT "Integrated " + STR(LEN(unique_customers)) + " unique customers from 4 sou
 ' @title Automated Daily Report
 ' @description Generate and distribute daily reports
 
-' Load today's data
-DIM todays_transactions AS SHEET = QUERY(
-  READ("transactions.csv"),
-  "SELECT * FROM transactions 
-   WHERE DATE(transaction_date) = CURRENT_DATE")
+' Load and filter today's data
+import "transactions.csv" into transactions
 
-' Generate summary metrics
-DIM daily_summary AS SHEET = QUERY(todays_transactions,
-  "SELECT 
+dim todays_transactions: table = query(
+  SELECT * FROM "transactions.csv" 
+  WHERE transaction_date = CURRENT_DATE
+)
+
+' Generate all reports from file references
+dim daily_summary: table = query(
+  SELECT 
     CURRENT_DATE as report_date,
     COUNT(*) as total_transactions,
     COUNT(DISTINCT customer_id) as unique_customers,
     SUM(amount) as total_revenue,
     AVG(amount) as avg_transaction_value,
     MAX(amount) as largest_transaction
-   FROM todays_transactions")
+  FROM "transactions.csv"
+  WHERE transaction_date = CURRENT_DATE
+)
 
 ' Top products
-DIM top_products AS SHEET = QUERY(todays_transactions,
-  "SELECT 
+dim top_products: table = query(
+  SELECT 
     product_name,
     COUNT(*) as units_sold,
     SUM(amount) as revenue
-   FROM todays_transactions
-   GROUP BY product_name
-   ORDER BY revenue DESC
-   LIMIT 10")
+  FROM "transactions.csv"
+  WHERE transaction_date = CURRENT_DATE
+  GROUP BY product_name
+  ORDER BY revenue DESC
+  LIMIT 10
+)
 
 ' Hourly breakdown
-DIM hourly_sales AS SHEET = QUERY(todays_transactions,
-  "SELECT 
-    EXTRACT(HOUR FROM transaction_date) as hour,
+dim hourly_sales: table = query(
+  SELECT 
+    EXTRACT(HOUR FROM transaction_time) as hour,
     COUNT(*) as transactions,
     SUM(amount) as revenue
-   FROM todays_transactions
-   GROUP BY hour
-   ORDER BY hour")
+  FROM "transactions.csv"
+  WHERE transaction_date = CURRENT_DATE
+  GROUP BY EXTRACT(HOUR FROM transaction_time)
+  ORDER BY hour
+)
 
-' Create report workbook
-DIM report AS BOOK = NEW BOOK()
-report.summary = daily_summary
-report.top_products = top_products
-report.hourly_breakdown = hourly_sales
-report.all_transactions = todays_transactions
+' Export reports (Note: Multi-sheet workbooks not directly supported)
+export daily_summary to "daily_summary.csv"
+export top_products to "top_products.csv"
+export hourly_sales to "hourly_sales.csv"
 
-' Save report
-WRITE(report, "daily_report_" + STR(CURRENT_DATE) + ".xlsx")
-PRINT "Daily report generated with " + STR(LEN(todays_transactions)) + " transactions"
+print "Daily report generated with " + str(len(todays_transactions)) + " transactions"
 ```
 
 ## Performance Optimization
@@ -282,52 +239,56 @@ PRINT "Daily report generated with " + STR(LEN(todays_transactions)) + " transac
 ```piptable
 ' @title Query-Based Batch Processing
 ' @description Process datasets using SQL LIMIT/OFFSET batching
-' WARNING: This example loads the entire file into memory on each iteration!
-' See "Memory-Efficient Processing" section below for better approaches
+' WARNING: This example loads the entire file into memory!
+' For truly large files, consider splitting files externally first
 
-' Define batch size
-DIM batch_size AS INT = 10000
-DIM offset AS INT = 0
-DIM total_processed AS INT = 0
+' Define batch parameters
+dim batch_size: int = 10000
+dim offset: int = 0
+dim total_processed: int = 0
+dim continue_processing: bool = true
 
-' Process in batches
-WHILE true
-  ' Read batch
-  DIM batch AS SHEET = QUERY(
-    READ("large_file.csv"),
-    "SELECT * FROM large_file 
-     LIMIT " + STR(batch_size) + " 
-     OFFSET " + STR(offset))
+' Note: Must work with file references for SQL
+while continue_processing
+  ' Process batch using file reference with LIMIT/OFFSET
+  dim batch: table = query(
+    SELECT * FROM "large_file.csv"
+    LIMIT batch_size
+    OFFSET offset
+  )
   
   ' Check if batch is empty
-  IF LEN(batch) = 0 THEN
-    EXIT WHILE
-  END IF
-  
-  ' Process batch
-  DIM processed_batch AS SHEET = QUERY(batch,
-    "SELECT 
-      *,
-      UPPER(name) as name_upper,
-      LOWER(email) as email_lower
-     FROM batch")
-  
-  ' Append to output
-  IF offset = 0 THEN
-    WRITE(processed_batch, "output.csv")
-  ELSE
-    DIM existing AS SHEET = READ("output.csv")
-    existing APPEND processed_batch
-    WRITE(existing, "output.csv")
-  END IF
-  
-  total_processed = total_processed + LEN(batch)
-  offset = offset + batch_size
-  
-  PRINT "Processed " + STR(total_processed) + " records..."
-WEND
+  if len(batch) = 0 then
+    continue_processing = false
+  else
+    ' Process batch (transform the already-loaded batch)
+    export batch to "temp_batch.csv"
+    dim processed_batch: table = query(
+      SELECT 
+        *,
+        upper(name) as name_upper,
+        lower(email) as email_lower
+      FROM "temp_batch.csv"
+    )
+    
+    ' Export batch
+    if offset = 0 then
+      export processed_batch to "output.csv"
+    else
+      ' Note: Appending requires loading and re-exporting
+      import "output.csv" into existing
+      existing append processed_batch
+      export existing to "output.csv"
+    end if
+    
+    total_processed = total_processed + len(batch)
+    offset = offset + batch_size
+    
+    print "Processed " + str(total_processed) + " records..."
+  end if
+wend
 
-PRINT "Batch processing complete: " + STR(total_processed) + " total records"
+print "Batch processing complete: " + str(total_processed) + " total records"
 ```
 
 ### Memory-Efficient Processing
@@ -337,44 +298,55 @@ PRINT "Batch processing complete: " + STR(total_processed) + " total records"
 ' Note: Use file chunks or streaming approaches for very large datasets
 
 ' Method 1: Process pre-split file chunks
-DIM chunk_num AS INT = 1
-DIM total_processed AS INT = 0
-DIM all_results AS SHEET = NEW SHEET()
+dim total_processed: int = 0
 
 ' Process pre-split chunks (split externally: split -l 10000 large_file.csv chunk_)
-WHILE true
-  ' Read next chunk file
-  DIM chunk_file AS TEXT = "chunk_" + STR(chunk_num) + ".csv"
-  DIM batch AS SHEET = READ(chunk_file)
-  
-  IF LEN(batch) = 0 THEN
-    EXIT WHILE
-  END IF
-  
-  ' Transform batch
-  DIM processed AS SHEET = QUERY(batch,
-    "SELECT 
-      *,
-      UPPER(name) as name_upper,
-      LOWER(email) as email_lower,
-      " + STR(chunk_num) + " as chunk_id
-     FROM batch")
-  
-  ' Accumulate results or write to separate files
-  IF chunk_num = 1 THEN
-    all_results = processed
-  ELSE
-    all_results APPEND processed
-  END IF
-  
-  total_processed = total_processed + LEN(batch)
-  chunk_num = chunk_num + 1
-  
-  PRINT "Processed chunk " + STR(chunk_num - 1) + ": " + STR(total_processed) + " total records"
-WEND
+' Note: Files must be explicitly referenced - no dynamic file paths
+' Example assumes files: chunk_01.csv, chunk_02.csv, chunk_03.csv
 
-WRITE(all_results, "final_processed.csv")
-PRINT "Memory-efficient processing complete: " + STR(total_processed) + " records"
+' Process chunk 1
+import "chunk_01.csv" into chunk1
+dim processed1: table = query(
+  SELECT 
+    *,
+    upper(name) as name_upper,
+    lower(email) as email_lower,
+    '1' as chunk_id
+  FROM "chunk_01.csv"
+)
+export processed1 to "processed_chunk_01.csv"
+total_processed = total_processed + len(processed1)
+print "Processed chunk 1: " + str(len(processed1)) + " records"
+
+' Process chunk 2  
+import "chunk_02.csv" into chunk2
+dim processed2: table = query(
+  SELECT 
+    *,
+    upper(name) as name_upper,
+    lower(email) as email_lower,
+    '2' as chunk_id
+  FROM "chunk_02.csv"
+)
+export processed2 to "processed_chunk_02.csv"
+total_processed = total_processed + len(processed2)
+print "Processed chunk 2: " + str(len(processed2)) + " records"
+
+' Process chunk 3
+import "chunk_03.csv" into chunk3
+dim processed3: table = query(
+  SELECT 
+    *,
+    upper(name) as name_upper,
+    lower(email) as email_lower,
+    '3' as chunk_id
+  FROM "chunk_03.csv"
+)
+export processed3 to "processed_chunk_03.csv"
+total_processed = total_processed + len(processed3)
+print "Processed chunk 3: " + str(len(processed3)) + " records"
+
+print "Memory-efficient processing complete: " + str(total_processed) + " records"
 ```
 
 ## Best Practices

@@ -17,8 +17,8 @@ TOON is a columnar format that includes:
 ' @title Read TOON File
 ' @description Import typed data from a TOON file
 
-DIM data AS SHEET = READ("data.toon")
-PRINT "Loaded " + STR(LEN(data)) + " typed records from TOON"
+import "data.toon" into data
+print "Loaded " + str(len(data)) + " typed records from TOON"
 ```
 
 ### TOON File Structure Example
@@ -36,19 +36,21 @@ PRINT "Loaded " + STR(LEN(data)) + " typed records from TOON"
 ' @title Type-Safe TOON Processing
 ' @description Leverage TOON's type information for safe processing
 
-DIM employees AS SHEET = READ("employees.toon")
+import "employees.toon" into employees
+export employees to "temp_employees.csv"
 
-' Type information is preserved
-DIM high_earners AS SHEET = QUERY(employees,
-  "SELECT 
+' Type information is preserved - use file reference
+dim high_earners: table = query(
+  SELECT 
     name,
     age,
     salary,
     salary * 0.15 as bonus
-   FROM employees
-   WHERE salary > 70000 AND active = true")
+  FROM "temp_employees.csv"
+  WHERE salary > 70000 AND active = true
+)
 
-WRITE(high_earners, "high_earners.toon")
+export high_earners to "high_earners.toon"
 ```
 
 ## Converting Between Formats
@@ -58,21 +60,22 @@ WRITE(high_earners, "high_earners.toon")
 ' @title Convert CSV to TOON
 ' @description Add type information to CSV data
 
-DIM csv_data AS SHEET = READ("untyped_data.csv")
+import "untyped_data.csv" into csv_data
 
-' Ensure correct types
-DIM typed_data AS SHEET = QUERY(csv_data,
-  "SELECT 
+' Ensure correct types using file reference
+dim typed_data: table = query(
+  SELECT 
     CAST(id AS INT) as id,
     CAST(name AS TEXT) as name,
     CAST(amount AS FLOAT) as amount,
     CAST(is_active AS BOOL) as is_active,
     DATE(created_at) as created_date
-   FROM csv_data")
+  FROM "untyped_data.csv"
+)
 
 ' Export with type information
-WRITE(typed_data, "typed_data.toon")
-PRINT "Converted CSV to typed TOON format"
+export typed_data to "typed_data.toon"
+print "Converted CSV to typed TOON format"
 ```
 
 ### TOON to JSON
@@ -80,11 +83,12 @@ PRINT "Converted CSV to typed TOON format"
 ' @title Export TOON to JSON
 ' @description Convert typed TOON data to JSON
 
-DIM toon_data AS SHEET = READ("source.toon")
+import "source.toon" into toon_data
+export toon_data to "temp_source_toon.csv"
 
-' Type information helps with JSON conversion
-DIM json_ready AS SHEET = QUERY(toon_data,
-  "SELECT 
+' Type information helps with JSON conversion - use file reference
+dim json_ready: table = query(
+  SELECT 
     JSON_OBJECT(
       'id', id,
       'name', name,
@@ -94,9 +98,10 @@ DIM json_ready AS SHEET = QUERY(toon_data,
         'active', active
       )
     ) as json_record
-   FROM toon_data")
+  FROM "temp_source_toon.csv"
+)
 
-WRITE(json_ready, "output.json")
+export json_ready to "output.json"
 ```
 
 ## Working with Complex TOON Data
@@ -106,11 +111,12 @@ WRITE(json_ready, "output.json")
 ' @title Process Mixed Types in TOON
 ' @description Handle different data types from TOON files
 
-DIM mixed_data AS SHEET = READ("mixed_types.toon")
+import "mixed_types.toon" into mixed_data
+export mixed_data to "temp_mixed_types.csv"
 
-' Process different types appropriately
-DIM processed AS SHEET = QUERY(mixed_data,
-  "SELECT 
+' Process different types appropriately using file reference
+dim processed: table = query(
+  SELECT 
     string_col,
     int_col * 2 as doubled_int,
     ROUND(float_col, 2) as rounded_float,
@@ -119,9 +125,10 @@ DIM processed AS SHEET = QUERY(mixed_data,
       ELSE 'Inactive'
     END as status,
     COALESCE(nullable_col, 'N/A') as non_null
-   FROM mixed_data")
+  FROM "temp_mixed_types.csv"
+)
 
-WRITE(processed, "processed_types.csv")
+export processed to "processed_types.csv"
 ```
 
 ### Aggregate Typed Data
@@ -129,22 +136,24 @@ WRITE(processed, "processed_types.csv")
 ' @title Aggregate TOON Data
 ' @description Perform type-aware aggregations
 
-DIM sales AS SHEET = READ("sales_data.toon")
+import "sales_data.toon" into sales
+export sales to "temp_sales_data.csv"
 
-' Type information ensures correct aggregations
-DIM summary AS SHEET = QUERY(sales,
-  "SELECT 
+' Type information ensures correct aggregations - use file reference
+dim summary: table = query(
+  SELECT 
     product_category,
     COUNT(*) as transaction_count,
     SUM(quantity) as total_units,
     AVG(unit_price) as avg_price,
     SUM(quantity * unit_price) as revenue,
     COUNT(DISTINCT customer_id) as unique_customers
-   FROM sales
-   GROUP BY product_category
-   ORDER BY revenue DESC")
+  FROM "temp_sales_data.csv"
+  GROUP BY product_category
+  ORDER BY revenue DESC
+)
 
-WRITE(summary, "sales_summary.toon")
+export summary to "sales_summary.toon"
 ```
 
 ## TOON Schema Validation
@@ -154,33 +163,41 @@ WRITE(summary, "sales_summary.toon")
 ' @title TOON Schema Validation
 ' @description Ensure data conforms to expected types
 
-DIM raw_data AS SHEET = READ("input.toon")
+import "input.toon" into raw_data
+export raw_data to "temp_input.csv"
 
-' Validate and report type issues
-DIM validation_report AS SHEET = QUERY(raw_data,
-  "SELECT 
+' Validate and report issues (simplified without TYPE function)
+dim validation_report: table = query(
+  SELECT 
     *,
     CASE 
-      WHEN TYPE(age) != 'INT' THEN 'Invalid age type'
-      WHEN TYPE(salary) != 'FLOAT' THEN 'Invalid salary type'
-      WHEN TYPE(active) != 'BOOL' THEN 'Invalid active type'
+      WHEN age IS NULL THEN 'Missing age'
+      WHEN salary IS NULL THEN 'Missing salary'
+      WHEN active IS NULL THEN 'Missing active'
       ELSE 'Valid'
     END as validation_status
-   FROM raw_data")
+  FROM "temp_input.csv"
+)
 
 ' Separate valid and invalid records
-DIM valid_records AS SHEET = QUERY(validation_report,
-  "SELECT * FROM validation_report 
-   WHERE validation_status = 'Valid'")
+dim valid_records: table = query(
+  SELECT * FROM "temp_input.csv"
+  WHERE age IS NOT NULL 
+    AND salary IS NOT NULL 
+    AND active IS NOT NULL
+)
 
-DIM invalid_records AS SHEET = QUERY(validation_report,
-  "SELECT * FROM validation_report 
-   WHERE validation_status != 'Valid'")
+dim invalid_records: table = query(
+  SELECT * FROM "temp_input.csv"
+  WHERE age IS NULL 
+    OR salary IS NULL 
+    OR active IS NULL
+)
 
-WRITE(valid_records, "valid_data.toon")
-WRITE(invalid_records, "type_errors.csv")
+export valid_records to "valid_data.toon"
+export invalid_records to "type_errors.csv"
 
-PRINT "Validation complete: " + STR(LEN(valid_records)) + " valid, " + STR(LEN(invalid_records)) + " invalid"
+print "Validation complete: " + str(len(valid_records)) + " valid, " + str(len(invalid_records)) + " invalid"
 ```
 
 ## Performance Benefits
@@ -190,20 +207,22 @@ PRINT "Validation complete: " + STR(LEN(valid_records)) + " valid, " + STR(LEN(i
 ' @title Leverage TOON Types for Performance
 ' @description Type information enables query optimization
 
-DIM large_dataset AS SHEET = READ("big_data.toon")
+import "big_data.toon" into large_dataset
+export large_dataset to "temp_big_data.csv"
 
-' Types allow efficient operations
-DIM optimized AS SHEET = QUERY(large_dataset,
-  "SELECT 
+' Types allow efficient operations - use file reference
+dim optimized: table = query(
+  SELECT 
     int_id,
     float_value * 1.1 as adjusted,
     bool_flag
-   FROM large_dataset
-   WHERE int_id > 1000000  -- Integer comparison is fast
-     AND bool_flag = true   -- Boolean check is optimized
-     AND float_value BETWEEN 100.0 AND 500.0")
+  FROM "temp_big_data.csv"
+  WHERE int_id > 1000000  -- Integer comparison is fast
+    AND bool_flag = true   -- Boolean check is optimized
+    AND float_value BETWEEN 100.0 AND 500.0
+)
 
-WRITE(optimized, "filtered.toon")
+export optimized to "filtered.toon"
 ```
 
 ## TOON Best Practices

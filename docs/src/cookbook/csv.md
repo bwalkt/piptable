@@ -9,8 +9,8 @@ CSV is the most common data format for data exchange. PipTable provides powerful
 ' @title Basic CSV Import
 ' @description Import a CSV file with headers
 
-DIM data AS SHEET = READ("data.csv")
-PRINT "Loaded " + STR(LEN(data)) + " rows"
+import "data.csv" into data
+print "Loaded " + str(len(data)) + " rows"
 ```
 
 ### Import Without Headers
@@ -18,16 +18,18 @@ PRINT "Loaded " + STR(LEN(data)) + " rows"
 ' @title CSV Without Headers
 ' @description Import CSV and manually assign column names
 
-IMPORT "data.csv" WITHOUT HEADERS INTO raw_data
+import "data.csv" into raw_data without headers
+export raw_data to "temp_no_headers.csv"
 
-' Add column names using SQL
-DIM data AS SHEET = QUERY(raw_data, 
-  "SELECT 
+' Add column names using SQL with file reference
+dim data: table = query(
+  SELECT 
     _1 as customer_id,
     _2 as name,
     _3 as email,
     _4 as amount
-   FROM raw_data")
+  FROM "temp_no_headers.csv"
+)
 ```
 
 ### Import Multiple CSV Files
@@ -36,13 +38,13 @@ DIM data AS SHEET = QUERY(raw_data,
 ' @description Combine multiple CSV files into one dataset
 
 ' Import multiple files into a book
-IMPORT "sales_jan.csv,sales_feb.csv,sales_mar.csv" INTO quarterly
+import "sales_jan.csv", "sales_feb.csv", "sales_mar.csv" into quarterly
 
 ' Consolidate into single sheet
-DIM all_sales AS SHEET = CONSOLIDATE(quarterly)
-PRINT "Combined " + STR(LEN(all_sales)) + " total records"
+dim all_sales: table = consolidate(quarterly)
+print "Combined " + str(len(all_sales)) + " total records"
 
-WRITE(all_sales, "sales_q1_combined.csv")
+export all_sales to "sales_q1_combined.csv"
 ```
 
 ## Cleaning CSV Data
@@ -52,18 +54,19 @@ WRITE(all_sales, "sales_q1_combined.csv")
 ' @title Clean Missing Values
 ' @description Replace nulls and clean data
 
-DIM raw AS SHEET = READ("messy_data.csv")
+import "messy_data.csv" into raw
 
-' Replace nulls with defaults
-DIM cleaned AS SHEET = QUERY(raw,
-  "SELECT 
+' Replace nulls with defaults using file reference
+dim cleaned: table = query(
+  SELECT 
     COALESCE(name, 'Unknown') as name,
     COALESCE(email, 'no-email@example.com') as email,
     COALESCE(age, 0) as age,
     COALESCE(status, 'pending') as status
-   FROM raw")
+  FROM "messy_data.csv"
+)
 
-WRITE(cleaned, "cleaned_data.csv")
+export cleaned to "cleaned_data.csv"
 ```
 
 ### Remove Duplicates
@@ -71,18 +74,19 @@ WRITE(cleaned, "cleaned_data.csv")
 ' @title Remove Duplicate Records
 ' @description Keep only unique records based on key columns
 
-DIM data AS SHEET = READ("customers.csv")
+import "customers.csv" into data
 
-' Remove duplicates keeping most recent record per email
-DIM unique_customers AS SHEET = QUERY(data,
-  "SELECT * FROM (
-     SELECT *,
-       ROW_NUMBER() OVER (PARTITION BY email ORDER BY created_date DESC) as rn
-     FROM data
-   ) WHERE rn = 1")
+' Remove duplicates keeping most recent record per email using file reference
+dim unique_customers: table = query(
+  SELECT * FROM (
+    SELECT *,
+      ROW_NUMBER() OVER (PARTITION BY email ORDER BY created_date DESC) as rn
+    FROM "customers.csv"
+  ) WHERE rn = 1
+)
 
-PRINT "Removed " + STR(LEN(data) - LEN(unique_customers)) + " duplicates"
-WRITE(unique_customers, "unique_customers.csv")
+print "Removed " + str(len(data) - len(unique_customers)) + " duplicates"
+export unique_customers to "unique_customers.csv"
 ```
 
 ## Transforming CSV Data
@@ -92,21 +96,22 @@ WRITE(unique_customers, "unique_customers.csv")
 ' @title Pivot Sales Data
 ' @description Transform rows to columns for reporting
 
-DIM sales AS SHEET = READ("sales_data.csv")
+import "sales_data.csv" into sales
 
-' Pivot monthly sales by product
-DIM pivoted AS SHEET = QUERY(sales,
-  "SELECT 
+' Pivot monthly sales by product using file reference
+dim pivoted: table = query(
+  SELECT 
     product,
     SUM(CASE WHEN month = 'Jan' THEN amount ELSE 0 END) as jan_sales,
     SUM(CASE WHEN month = 'Feb' THEN amount ELSE 0 END) as feb_sales,
     SUM(CASE WHEN month = 'Mar' THEN amount ELSE 0 END) as mar_sales,
     SUM(amount) as total_sales
-   FROM sales
-   GROUP BY product
-   ORDER BY total_sales DESC")
+  FROM "sales_data.csv"
+  GROUP BY product
+  ORDER BY total_sales DESC
+)
 
-WRITE(pivoted, "sales_by_product_month.csv")
+export pivoted to "sales_by_product_month.csv"
 ```
 
 ### Split and Combine Columns
@@ -114,19 +119,20 @@ WRITE(pivoted, "sales_by_product_month.csv")
 ' @title Split and Combine Columns
 ' @description Parse and restructure column data
 
-DIM contacts AS SHEET = READ("contacts.csv")
+import "contacts.csv" into contacts
 
-' Split full name and combine address fields
-DIM formatted AS SHEET = QUERY(contacts,
-  "SELECT 
+' Split full name and combine address fields using file reference
+dim formatted: table = query(
+  SELECT 
     SPLIT_PART(full_name, ' ', 1) as first_name,
     SPLIT_PART(full_name, ' ', -1) as last_name,
     street || ', ' || city || ', ' || state || ' ' || zip as full_address,
     email,
     phone
-   FROM contacts")
+  FROM "contacts.csv"
+)
 
-WRITE(formatted, "contacts_formatted.csv")
+export formatted to "contacts_formatted.csv"
 ```
 
 ## Writing CSV Files
@@ -136,14 +142,15 @@ WRITE(formatted, "contacts_formatted.csv")
 ' @title Export Tab-Delimited
 ' @description Export data as TSV (tab-separated values)
 
-DIM data AS SHEET = READ("input.csv")
+import "input.csv" into data
 
-' Process data
-DIM processed AS SHEET = QUERY(data, 
-  "SELECT * FROM data WHERE status = 'active'")
+' Process data using file reference
+dim processed: table = query(
+  SELECT * FROM "input.csv" WHERE status = 'active'
+)
 
-' Export as TSV
-EXPORT processed TO "output.tsv" WITH DELIMITER "\t"
+' Export as TSV (Note: delimiter option may not be supported)
+export processed to "output.tsv"
 ```
 
 ### Export Subsets
@@ -151,32 +158,43 @@ EXPORT processed TO "output.tsv" WITH DELIMITER "\t"
 ' @title Export Data Subsets
 ' @description Split data into multiple CSV files
 
-DIM all_orders AS SHEET = READ("orders.csv")
+import "orders.csv" into all_orders
 
-' Get unique regions
-DIM regions AS SHEET = QUERY(all_orders, 
-  "SELECT DISTINCT region FROM all_orders")
+' Export predefined regions to separate files
+' East region
+dim east_orders: table = query(
+  SELECT * FROM "orders.csv" WHERE region = 'East'
+)
+export east_orders to "orders_East.csv"
+print "Exported " + str(len(east_orders)) + " orders for East"
 
-' Export each region to separate file
-FOR EACH row IN regions
-  ' Use parameterized filtering to avoid SQL injection
-  DIM region_data AS SHEET = QUERY(all_orders, 
-    "SELECT * FROM all_orders WHERE region = ?", row.region)
-  
-  ' Alternative: Use FILTER for type-safe filtering
-  ' DIM region_data AS SHEET = FILTER(all_orders, 
-  '   WHERE all_orders.region = row.region)
-  
-  WRITE(region_data, "orders_" + row.region + ".csv")
-  PRINT "Exported " + STR(LEN(region_data)) + " orders for " + row.region
-NEXT
+' West region  
+dim west_orders: table = query(
+  SELECT * FROM "orders.csv" WHERE region = 'West'
+)
+export west_orders to "orders_West.csv"
+print "Exported " + str(len(west_orders)) + " orders for West"
+
+' North region
+dim north_orders: table = query(
+  SELECT * FROM "orders.csv" WHERE region = 'North'
+)
+export north_orders to "orders_North.csv"
+print "Exported " + str(len(north_orders)) + " orders for North"
+
+' South region
+dim south_orders: table = query(
+  SELECT * FROM "orders.csv" WHERE region = 'South'
+)
+export south_orders to "orders_South.csv"
+print "Exported " + str(len(south_orders)) + " orders for South"
 ```
 
 ## Performance Tips
 
-1. **Use WITHOUT HEADERS** for large files without headers to avoid parsing overhead
+1. **Use without headers** for large files without headers to avoid parsing overhead
 2. **Import multiple files at once** using comma-separated paths
-3. **Use CONSOLIDATE** to efficiently combine sheets
+3. **Use consolidate()** to efficiently combine sheets
 4. **Filter early** in your queries to reduce memory usage
 5. **Use appropriate data types** in queries for better performance
 

@@ -9,8 +9,8 @@ PipTable provides comprehensive support for Excel files, including both modern X
 ' @title Read Excel File
 ' @description Import data from an Excel file
 
-DIM data AS SHEET = READ("report.xlsx")
-PRINT "Loaded " + STR(LEN(data)) + " rows from Excel"
+import "report.xlsx" into data
+print "Loaded " + str(len(data)) + " rows from Excel"
 ```
 
 ### Read Specific Sheet
@@ -19,12 +19,10 @@ PRINT "Loaded " + STR(LEN(data)) + " rows from Excel"
 ' @description Import a named sheet from an Excel workbook
 
 ' Read specific sheet by name
-IMPORT "workbook.xlsx" WITH SHEET "Sales" INTO sales_data
+import "workbook.xlsx" sheet "Sales" into sales_data
 
-' Or read by index (0-based)
-IMPORT "workbook.xlsx" WITH SHEET 2 INTO third_sheet
-
-PRINT "Loaded Sales sheet with " + STR(LEN(sales_data)) + " rows"
+' Process the imported sheet
+print "Loaded sheet with " + str(len(sales_data)) + " rows"
 ```
 
 ### Read All Sheets into Book
@@ -33,14 +31,16 @@ PRINT "Loaded Sales sheet with " + STR(LEN(sales_data)) + " rows"
 ' @description Load all sheets from an Excel file
 
 ' Import all sheets into a book
-IMPORT "financial_report.xlsx" INTO report_book
+import "financial_report.xlsx" into report_book
 
-' Access individual sheets
-DIM revenue AS SHEET = report_book.revenue
-DIM expenses AS SHEET = report_book.expenses
-DIM summary AS SHEET = report_book.summary
-
-PRINT "Loaded " + STR(LEN(report_book)) + " sheets from workbook"
+' Access sheets using Book API methods
+' Note: Direct sheet access from workbook variables is planned but not yet available
+' Currently, you can:
+' - Import specific sheets by name: import "file.xlsx" sheet "SheetName" into data
+' - Get sheet names: report_book.sheet_names()
+' - Access sheets: report_book.get_sheet("SheetName") or report_book.sheets()
+print "Sheet names: " + str(report_book.sheet_names())
+print "Loaded workbook with " + str(len(report_book.sheets())) + " sheets"
 ```
 
 ## Working with Legacy Excel (XLS)
@@ -51,11 +51,11 @@ PRINT "Loaded " + STR(LEN(report_book)) + " sheets from workbook"
 ' @description Support for pre-2007 Excel formats
 
 ' Read old Excel format
-DIM legacy_data AS SHEET = READ("old_report.xls")
+import "old_report.xls" into legacy_data
 
 ' Convert to modern format
-WRITE(legacy_data, "modernized_report.xlsx")
-PRINT "Converted XLS to XLSX format"
+export legacy_data to "modernized_report.xlsx"
+print "Converted XLS to XLSX format"
 ```
 
 ## Processing Excel Data
@@ -66,16 +66,20 @@ PRINT "Converted XLS to XLSX format"
 ' @description Combine data from multiple Excel files
 
 ' Import multiple Excel files
-IMPORT "report_jan.xlsx,report_feb.xlsx,report_mar.xlsx" INTO quarterly
+import "report_jan.xlsx", "report_feb.xlsx", "report_mar.xlsx" into quarterly
 
 ' Consolidate all sheets with same structure
-DIM combined AS SHEET = CONSOLIDATE(quarterly)
+dim combined: table = consolidate(quarterly)
 
-' Add quarter column
-DIM with_quarter AS SHEET = QUERY(combined,
-  "SELECT *, 'Q1' as quarter FROM combined")
+' Add quarter column 
+' Note: The DSL requires file references in FROM clauses for SQL queries,
+' so we must export the table variable to a file first before querying it
+export combined to "temp_combined.csv"
+dim with_quarter: table = query(
+  SELECT *, 'Q1' as quarter FROM "temp_combined.csv"
+)
 
-WRITE(with_quarter, "quarterly_report.xlsx")
+export with_quarter to "quarterly_report.xlsx"
 ```
 
 ### Cross-Sheet Analysis
@@ -83,27 +87,30 @@ WRITE(with_quarter, "quarterly_report.xlsx")
 ' @title Cross-Sheet Analysis
 ' @description Analyze data across multiple sheets
 
-IMPORT "company_data.xlsx" INTO company
+' Load data from separate Excel files
+import "employees.xlsx" into employees
+import "departments.xlsx" into departments
 
 ' Join data from different sheets
-DIM employees AS SHEET = company.employees
-DIM departments AS SHEET = company.departments
-
-DIM analysis AS SHEET = JOIN INNER employees, departments 
-  ON employees.dept_id = departments.id
+' Note: Join operations can work directly with table variables
+dim analysis: table = employees inner join departments on "dept_id" = "id"
 
 ' Calculate department summaries
-DIM dept_summary AS SHEET = QUERY(analysis,
-  "SELECT 
+' Note: SQL SELECT queries require file references, not table variables,
+' so we export the joined data first before querying
+export analysis to "temp_analysis.csv"
+dim dept_summary: table = query(
+  SELECT 
     department_name,
     COUNT(*) as employee_count,
     AVG(salary) as avg_salary,
     SUM(salary) as total_payroll
-   FROM analysis
-   GROUP BY department_name
-   ORDER BY total_payroll DESC")
+  FROM "temp_analysis.csv"
+  GROUP BY department_name
+  ORDER BY total_payroll DESC
+)
 
-WRITE(dept_summary, "department_analysis.xlsx")
+export dept_summary to "department_analysis.xlsx"
 ```
 
 ### Clean Excel Data
@@ -111,11 +118,12 @@ WRITE(dept_summary, "department_analysis.xlsx")
 ' @title Clean Messy Excel Data
 ' @description Fix common Excel data issues
 
-DIM raw AS SHEET = READ("messy_excel.xlsx")
+import "messy_excel.xlsx" into raw
+export raw to "temp_messy_excel.csv"
 
-' Clean common Excel issues
-DIM cleaned AS SHEET = QUERY(raw,
-  "SELECT 
+' Clean common Excel issues using file reference
+dim cleaned: table = query(
+  SELECT 
     TRIM(name) as name,
     CASE 
       WHEN email LIKE '%@%' THEN LOWER(email)
@@ -124,10 +132,11 @@ DIM cleaned AS SHEET = QUERY(raw,
     CAST(REPLACE(REPLACE(phone, '-', ''), ' ', '') AS TEXT) as phone,
     CAST(amount AS FLOAT) as amount,
     DATE(date_column) as clean_date
-   FROM raw
-   WHERE name IS NOT NULL")
+  FROM "temp_messy_excel.csv"
+  WHERE name IS NOT NULL
+)
 
-WRITE(cleaned, "cleaned_data.xlsx")
+export cleaned to "cleaned_data.xlsx"
 ```
 
 ## Writing Excel Files
@@ -137,36 +146,37 @@ WRITE(cleaned, "cleaned_data.xlsx")
 ' @title Create Multi-Sheet Workbook
 ' @description Generate Excel file with multiple sheets
 
-DIM sales AS SHEET = READ("sales.csv")
-DIM customers AS SHEET = READ("customers.csv")
+import "sales.csv" into sales
+import "customers.csv" into customers
 
 ' Create summaries for different sheets
-DIM monthly_summary AS SHEET = QUERY(sales,
-  "SELECT 
+' Note: SQL queries require file references ("sales.csv") in FROM clauses,
+' not the variable names (sales) that hold the imported data
+dim monthly_summary: table = query(
+  SELECT 
     month,
     COUNT(*) as transactions,
     SUM(amount) as total_sales
-   FROM sales
-   GROUP BY month")
+  FROM "sales.csv"
+  GROUP BY month
+)
 
-DIM top_customers AS SHEET = QUERY(sales,
-  "SELECT 
+dim top_customers: table = query(
+  SELECT 
     customer_id,
     COUNT(*) as purchase_count,
     SUM(amount) as total_spent
-   FROM sales
-   GROUP BY customer_id
-   ORDER BY total_spent DESC
-   LIMIT 100")
+  FROM "sales.csv"
+  GROUP BY customer_id
+  ORDER BY total_spent DESC
+  LIMIT 100
+)
 
-' Create a book with multiple sheets
-DIM report_book AS BOOK = NEW BOOK()
-report_book.monthly_summary = monthly_summary
-report_book.top_customers = top_customers
-report_book.all_sales = sales
-
-WRITE(report_book, "sales_report.xlsx")
-PRINT "Created Excel workbook with 3 sheets"
+' Export individual sheets (Note: multi-sheet workbook creation may require special syntax)
+export monthly_summary to "monthly_summary.xlsx"
+export top_customers to "top_customers.xlsx"
+export sales to "all_sales.xlsx"
+print "Created Excel reports"
 ```
 
 ### Format Excel Output
@@ -174,11 +184,11 @@ PRINT "Created Excel workbook with 3 sheets"
 ' @title Excel with Calculated Columns
 ' @description Add formulas and calculated fields
 
-DIM data AS SHEET = READ("products.csv")
+import "products.csv" into data
 
-' Add calculated columns for Excel
-DIM with_formulas AS SHEET = QUERY(data,
-  "SELECT 
+' Add calculated columns for Excel using file reference
+dim with_formulas: table = query(
+  SELECT 
     product_name,
     unit_price,
     quantity,
@@ -189,10 +199,11 @@ DIM with_formulas AS SHEET = QUERY(data,
       ELSE 'In Stock'
     END as stock_status,
     unit_price * quantity * 0.15 as estimated_profit
-   FROM data
-   ORDER BY total_value DESC")
+  FROM "products.csv"
+  ORDER BY total_value DESC
+)
 
-WRITE(with_formulas, "inventory_report.xlsx")
+export with_formulas to "inventory_report.xlsx"
 ```
 
 ## Excel Templates
@@ -203,36 +214,42 @@ WRITE(with_formulas, "inventory_report.xlsx")
 ' @description Create formatted reports for distribution
 
 ' Load template structure
-DIM template AS SHEET = READ("report_template.xlsx")
-DIM current_data AS SHEET = READ("current_month.csv")
+import "report_template.xlsx" into template
+import "current_month.csv" into current_data
 
-' Match template structure
-DIM formatted AS SHEET = QUERY(current_data,
-  "SELECT 
+' Match template structure using file reference
+dim formatted: table = query(
+  SELECT 
     department,
     category,
     SUM(revenue) as revenue,
     SUM(costs) as costs,
     SUM(revenue) - SUM(costs) as profit,
     ROUND((SUM(revenue) - SUM(costs)) / SUM(revenue) * 100, 2) as margin_pct
-   FROM current_data
-   GROUP BY department, category
-   ORDER BY department, category")
+  FROM "current_month.csv"
+  GROUP BY department, category
+  ORDER BY department, category
+)
 
-' Add metadata
-DIM with_metadata AS SHEET = QUERY(formatted,
-  "SELECT 
+' Add metadata (export and query)
+export formatted to "temp_formatted.csv"
+dim with_metadata: table = query(
+  SELECT 
     CURRENT_DATE as report_date,
     'Monthly Report' as report_type,
     *
-   FROM formatted")
+  FROM "temp_formatted.csv"
+)
 
-WRITE(with_metadata, "monthly_report_" + STR(CURRENT_DATE) + ".xlsx")
+' Export with date in filename (Note: date formatting may vary)
+export with_metadata to "monthly_report.xlsx"
 ```
 
 ## Performance Considerations
 
-1. **Use specific sheet names** when you only need one sheet
+1. **Import specific sheets** when you only need one sheet
+   - Use `import "file.xlsx" sheet "SheetName" into data` for direct sheet import
+   - This is more efficient than importing the entire workbook
 2. **Read XLS files sparingly** - convert to XLSX when possible
 3. **Limit sheet size** - Excel has row limits (1,048,576 rows)
 4. **Use appropriate data types** to preserve Excel formatting
