@@ -44,6 +44,7 @@
   - [CSV Operations](cookbook/csv.md)
   - [Excel Processing](cookbook/excel.md)
   - [JSON Transformation](cookbook/json.md)
+  - [TOON Processing](cookbook/toon.md)
   
 - [ETL Pipelines](cookbook/etl.md)
   - [Data Import](cookbook/import.md)
