@@ -80,9 +80,8 @@ export with_quarter to "quarterly_report.xlsx"
 ' @title Cross-Sheet Analysis
 ' @description Analyze data across multiple sheets
 
-import "company_data.xlsx" into company
-
-' Load individual sheets from the workbook
+' Load individual sheets as separate files
+' Note: Direct sheet access from workbook not currently supported
 import "employees.xlsx" into employees
 import "departments.xlsx" into departments
 
