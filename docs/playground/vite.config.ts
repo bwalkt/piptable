@@ -1,4 +1,5 @@
 import { defineConfig } from 'vite';
+import { fileURLToPath } from 'url';
 import preact from '@preact/preset-vite';
 
 export default defineConfig({
@@ -6,8 +7,8 @@ export default defineConfig({
   build: {
     rollupOptions: {
       input: {
-        main: new URL('./index.html', import.meta.url).pathname,
-        embed: new URL('./embed.html', import.meta.url).pathname,
+        main: fileURLToPath(new URL('./index.html', import.meta.url)),
+        embed: fileURLToPath(new URL('./embed.html', import.meta.url)),
       },
     },
   },
