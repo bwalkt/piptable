@@ -29,7 +29,10 @@ export function App() {
 
   // Initialize WASM on mount
   useEffect(() => {
-    initializeWasm().catch(console.error);
+    initializeWasm().catch((err) => {
+      console.error('WASM initialization failed:', err);
+      error.value = 'Failed to load WebAssembly module. Please refresh the page.';
+    });
   }, []);
 
   // Initialize CodeMirror

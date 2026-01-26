@@ -133,29 +133,8 @@ export async function runCode() {
       result += '</pre>';
       result += '</details>';
       
-      // Parse print statements for mock output (until we have full execution)
-      const prints = code.value.match(/print\s+"([^"]+)"/gi) || code.value.match(/print\s+[^\n]+/gi);
-      if (prints && prints.length > 0) {
-        result += '<div class="mt-4"><strong>Expected Output:</strong></div>\n';
-        result += '<pre class="mt-2 p-3 bg-gray-100 dark:bg-gray-800 rounded-md overflow-x-auto">';
-        
-        prints.forEach(p => {
-          const quotedContent = p.match(/print\s+"([^"]+)"/i)?.[1];
-          if (quotedContent) {
-            result += quotedContent + '\n';
-          } else {
-            const varContent = p.match(/print\s+(\w+)/i)?.[1];
-            if (varContent) {
-              result += `[${varContent}]\n`;
-            }
-          }
-        });
-        
-        result += '</pre>';
-      }
-      
       result += '<div class="mt-4 text-gray-500 dark:text-gray-400 text-sm">';
-      result += 'Note: Full execution coming soon. Currently showing parsing results only.';
+      result += 'Note: Full execution coming soon. Currently showing parsing validation only.';
       result += '</div>';
     } else {
       result += '<div class="text-red-600 dark:text-red-400 mb-2">❌ Parse error:</div>\n';

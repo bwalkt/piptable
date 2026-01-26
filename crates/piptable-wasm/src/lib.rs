@@ -1,3 +1,4 @@
+use piptable_core::PipError;
 use piptable_parser::PipParser;
 use serde::{Deserialize, Serialize};
 use wasm_bindgen::prelude::*;
@@ -51,7 +52,8 @@ impl PipTableParser {
 
     #[wasm_bindgen]
     pub fn parse(&self, code: &str) -> Result<JsValue, JsValue> {
-        console_log!("Parsing code: {}", code);
+        #[cfg(debug_assertions)]
+        console_log!("Parsing {} bytes of code", code.len());
 
         match PipParser::parse_str(code) {
             Ok(ast) => {
@@ -84,12 +86,21 @@ impl PipTableParser {
                 serde_wasm_bindgen::to_value(&result).map_err(|e| JsValue::from_str(&e.to_string()))
             }
             Err(e) => {
-                // Extract line and column from error message if possible
-                let error_str = e.to_string();
+                // Extract line and column from PipError::Parse variant
+                let (line, column, message) = match e {
+                    PipError::Parse {
+                        line,
+                        column,
+                        message,
+                    } => (line, column, message),
+                    // For other error types, default to line 1, column 1
+                    other_error => (1, 1, other_error.to_string()),
+                };
+
                 let errors = vec![serde_json::json!({
-                    "line": 1,
-                    "column": 1,
-                    "message": error_str
+                    "line": line,
+                    "column": column,
+                    "message": message
                 })];
 
                 let result = serde_json::json!({

@@ -13,7 +13,8 @@ serde_json = "1.0"
 serde-wasm-bindgen = "0.6"
 console_error_panic_hook = "0.1"
 
-# Internal dependencies - only parser for now
+# Internal dependencies
+piptable-core = { path = "../core" }
 piptable-parser = { path = "../parser" }
 
 [dependencies.web-sys]
@@ -25,3 +26,5 @@ features = [
 [profile.release]
 opt-level = "z"
 lto = true
+codegen-units = 1
+strip = true
