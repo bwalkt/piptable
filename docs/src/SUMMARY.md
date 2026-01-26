@@ -35,6 +35,7 @@
 - [API Reference](reference/api/README.md)
   - [Built-in Functions](reference/api/functions.md)
   - [Sheet API](reference/api/sheet.md)
+  - [Sheet Advanced Operations](reference/api/sheet_advanced.md)
   - [Book API](reference/api/book.md)
   - [File Formats](reference/api/formats.md)
 

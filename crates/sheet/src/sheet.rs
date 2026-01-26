@@ -1,7 +1,7 @@
 use crate::cell::CellValue;
 use crate::error::{Result, SheetError};
 use indexmap::IndexMap;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 /// A sheet representing a 2D grid of cells (row-major storage)
 #[derive(Debug, Clone)]
@@ -130,6 +130,77 @@ impl Sheet {
     ) -> Result<()> {
         let col = self.column_index_by_name(col_name)?;
         self.set(row, col, value)
+    }
+
+    // ===== A1-Style Notation Access =====
+
+    /// Get a cell value using A1-style notation (e.g., "A1", "B2")
+    pub fn get_a1(&self, notation: &str) -> Result<&CellValue> {
+        let (row, col) = crate::a1_notation::parse_a1(notation)?;
+        self.get(row, col)
+    }
+
+    /// Get a mutable cell reference using A1-style notation
+    pub fn get_a1_mut(&mut self, notation: &str) -> Result<&mut CellValue> {
+        let (row, col) = crate::a1_notation::parse_a1(notation)?;
+        self.get_mut(row, col)
+    }
+
+    /// Set a cell value using A1-style notation
+    pub fn set_a1<T: Into<CellValue>>(&mut self, notation: &str, value: T) -> Result<()> {
+        let (row, col) = crate::a1_notation::parse_a1(notation)?;
+        self.set(row, col, value)
+    }
+
+    /// Get a sub-sheet using A1-style range notation (e.g., "A1:C3")
+    pub fn get_range(&self, range: &str) -> Result<Sheet> {
+        let ((start_row, start_col), (end_row, end_col)) =
+            crate::a1_notation::parse_a1_range(range)?;
+
+        // Validate bounds
+        if end_row >= self.row_count() {
+            return Err(SheetError::RowIndexOutOfBounds {
+                index: end_row,
+                count: self.row_count(),
+            });
+        }
+        if end_col >= self.col_count() {
+            return Err(SheetError::ColumnIndexOutOfBounds {
+                index: end_col,
+                count: self.col_count(),
+            });
+        }
+
+        // Extract sub-sheet
+        let mut data = Vec::new();
+        for row_idx in start_row..=end_row {
+            let row = &self.data[row_idx];
+            let mut new_row = Vec::new();
+            for col_idx in start_col..=end_col {
+                new_row.push(row[col_idx].clone());
+            }
+            data.push(new_row);
+        }
+
+        let mut sub_sheet = Sheet::from_data(data);
+        sub_sheet.set_name(&format!("Range {}", range));
+
+        // Copy column names if they exist and are in range
+        if let Some(col_names) = &self.column_names {
+            if start_col < col_names.len() && end_col < col_names.len() {
+                let sub_names: Vec<String> = col_names[start_col..=end_col].to_vec();
+                sub_sheet.column_names = Some(sub_names);
+
+                // Rebuild column index
+                let mut index_map = HashMap::new();
+                for (i, name) in sub_sheet.column_names.as_ref().unwrap().iter().enumerate() {
+                    index_map.insert(name.clone(), i);
+                }
+                sub_sheet.column_index = Some(index_map);
+            }
+        }
+
+        Ok(sub_sheet)
     }
 
     // ===== Row Operations =====
@@ -514,11 +585,18 @@ impl Sheet {
     }
 
     /// Filter rows, keeping only those that match the predicate
+    /// The predicate receives the row index and the row data
     pub fn filter_rows<F>(&mut self, predicate: F)
     where
-        F: Fn(&[CellValue]) -> bool,
+        F: Fn(usize, &[CellValue]) -> bool,
     {
-        self.data.retain(|row| predicate(row));
+        let mut keep = Vec::new();
+        for (i, row) in self.data.iter().enumerate() {
+            if predicate(i, row) {
+                keep.push(row.clone());
+            }
+        }
+        self.data = keep;
         self.invalidate_row_names();
     }
 
@@ -752,6 +830,220 @@ impl Sheet {
         self.join_impl(other, left_key, right_key, JoinType::Full)
     }
 
+    // ===== Bulk Operations =====
+
+    /// Apply a function to every cell in the sheet (consuming version)
+    pub fn map_into<F>(mut self, f: F) -> Self
+    where
+        F: Fn(&CellValue) -> CellValue,
+    {
+        self.map(f);
+        self
+    }
+
+    /// Filter columns based on a predicate
+    pub fn filter_columns<F>(&mut self, f: F) -> Result<()>
+    where
+        F: Fn(usize, &str) -> bool,
+    {
+        if let Some(names) = &self.column_names {
+            let mut keep_indices = Vec::new();
+            let mut new_names = Vec::new();
+
+            for (i, name) in names.iter().enumerate() {
+                if f(i, name) {
+                    keep_indices.push(i);
+                    new_names.push(name.clone());
+                }
+            }
+
+            // Filter data columns
+            for row in &mut self.data {
+                let new_row: Vec<CellValue> = keep_indices
+                    .iter()
+                    .filter_map(|&i| row.get(i).cloned())
+                    .collect();
+                *row = new_row;
+            }
+
+            // Update column names and index
+            self.column_names = Some(new_names);
+            self.rebuild_column_index();
+        } else {
+            // Filter by index only if no names
+            let col_count = self.col_count();
+            let mut keep_indices = Vec::new();
+
+            for i in 0..col_count {
+                if f(i, "") {
+                    keep_indices.push(i);
+                }
+            }
+
+            for row in &mut self.data {
+                let new_row: Vec<CellValue> = keep_indices
+                    .iter()
+                    .filter_map(|&i| row.get(i).cloned())
+                    .collect();
+                *row = new_row;
+            }
+        }
+        Ok(())
+    }
+
+    /// Format a specific column using a function
+    pub fn format_column<F>(&mut self, col_index: usize, f: F) -> Result<()>
+    where
+        F: Fn(&CellValue) -> CellValue,
+    {
+        if col_index >= self.col_count() {
+            return Err(SheetError::ColumnIndexOutOfBounds {
+                index: col_index,
+                count: self.col_count(),
+            });
+        }
+
+        for row in &mut self.data {
+            if let Some(cell) = row.get_mut(col_index) {
+                *cell = f(cell);
+            }
+        }
+        Ok(())
+    }
+
+    /// Format a column by name using a function
+    pub fn format_column_by_name<F>(&mut self, col_name: &str, f: F) -> Result<()>
+    where
+        F: Fn(&CellValue) -> CellValue,
+    {
+        let col_index = self.column_index_by_name(col_name)?;
+        self.format_column(col_index, f)
+    }
+
+    /// Remove empty rows (rows where all cells are null or empty strings)
+    pub fn remove_empty_rows(&mut self) {
+        self.data.retain(|row| {
+            !row.iter().all(|cell| match cell {
+                CellValue::Null => true,
+                CellValue::String(s) if s.is_empty() => true,
+                _ => false,
+            })
+        });
+        self.invalidate_row_names();
+    }
+
+    /// Transpose the sheet (swap rows and columns)
+    pub fn transpose(&mut self) {
+        if self.data.is_empty() {
+            return;
+        }
+
+        let rows = self.row_count();
+        let cols = self.col_count();
+
+        let mut transposed = Vec::with_capacity(cols);
+        for col in 0..cols {
+            let mut new_row = Vec::with_capacity(rows);
+            for row in 0..rows {
+                new_row.push(self.data[row][col].clone());
+            }
+            transposed.push(new_row);
+        }
+
+        self.data = transposed;
+
+        // Swap column names with first column if they exist
+        if self.column_names.is_some() {
+            // Column names become first column after transpose
+            self.column_names = None;
+            self.column_index = None;
+        }
+
+        // Clear row names as they're no longer valid
+        self.row_names = None;
+    }
+
+    /// Cherry-pick columns: Keep only the specified columns
+    pub fn select_columns(&mut self, columns: &[&str]) -> Result<()> {
+        let indices: Result<Vec<usize>> = columns
+            .iter()
+            .map(|name| self.column_index_by_name(name))
+            .collect();
+
+        let indices = indices?;
+
+        // Create new data with only selected columns
+        for row in &mut self.data {
+            let new_row: Vec<CellValue> = indices
+                .iter()
+                .filter_map(|&i| row.get(i).cloned())
+                .collect();
+            *row = new_row;
+        }
+
+        // Update column names
+        if self.column_names.is_some() {
+            let new_names: Vec<String> = columns.iter().map(|s| s.to_string()).collect();
+            self.column_names = Some(new_names);
+            self.rebuild_column_index();
+        }
+
+        Ok(())
+    }
+
+    /// Remove the specified columns (opposite of select_columns)
+    pub fn remove_columns(&mut self, columns: &[&str]) -> Result<()> {
+        if let Some(names) = &self.column_names {
+            let remove_indices: Result<Vec<usize>> = columns
+                .iter()
+                .map(|name| self.column_index_by_name(name))
+                .collect();
+
+            let remove_indices = remove_indices?;
+            let remove_set: HashSet<usize> = remove_indices.into_iter().collect();
+
+            let mut keep_indices = Vec::new();
+            let mut new_names = Vec::new();
+
+            for (i, name) in names.iter().enumerate() {
+                if !remove_set.contains(&i) {
+                    keep_indices.push(i);
+                    new_names.push(name.clone());
+                }
+            }
+
+            // Filter data columns
+            for row in &mut self.data {
+                let new_row: Vec<CellValue> = keep_indices
+                    .iter()
+                    .filter_map(|&i| row.get(i).cloned())
+                    .collect();
+                *row = new_row;
+            }
+
+            // Update column names and index
+            self.column_names = Some(new_names);
+            self.rebuild_column_index();
+        } else {
+            return Err(SheetError::ColumnsNotNamed(
+                "Cannot remove columns by name without named columns".to_string(),
+            ));
+        }
+
+        Ok(())
+    }
+
+    // Helper to rebuild column index after modifications
+    fn rebuild_column_index(&mut self) {
+        if let Some(names) = &self.column_names {
+            let mut index_map = HashMap::new();
+            for (i, name) in names.iter().enumerate() {
+                index_map.insert(name.clone(), i);
+            }
+            self.column_index = Some(index_map);
+        }
+    }
+
     /// Internal join implementation
     fn join_impl(
         &self,
@@ -847,7 +1139,7 @@ impl Sheet {
 
         let left_col_count = left_names.len();
         let right_col_count = right_cols_to_add.len();
-        let mut matched_right: std::collections::HashSet<usize> = std::collections::HashSet::new();
+        let mut matched_right: HashSet<usize> = HashSet::new();
 
         // Process left rows
         for left_row in self.data.iter().skip(left_start) {
@@ -979,7 +1271,7 @@ impl Sheet {
 
         // Build set of existing keys (skip header row if columns are named)
         let start_idx = if self.column_names.is_some() { 1 } else { 0 };
-        let mut existing_keys: std::collections::HashSet<String> = self
+        let mut existing_keys: HashSet<String> = self
             .data
             .iter()
             .skip(start_idx)
@@ -1228,7 +1520,7 @@ mod tests {
     fn test_filter_rows() {
         let mut sheet = Sheet::from_data(vec![vec![1, 2], vec![3, 4], vec![5, 6]]);
 
-        sheet.filter_rows(|row| row[0].as_int().unwrap_or(0) > 2);
+        sheet.filter_rows(|_idx, row| row[0].as_int().unwrap_or(0) > 2);
 
         assert_eq!(sheet.row_count(), 2);
         assert_eq!(sheet.get(0, 0).unwrap(), &CellValue::Int(3));
