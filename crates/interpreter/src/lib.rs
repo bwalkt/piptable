@@ -336,7 +336,7 @@ impl Interpreter {
                     None => Value::Null,
                 };
                 // Return is handled by propagating up the call stack
-                Err(PipError::Return(val))
+                Err(PipError::Return(Box::new(val)))
             }
 
             Statement::Call {
@@ -1787,7 +1787,7 @@ impl Interpreter {
                             Ok(val) => result = val,
                             Err(PipError::Return(val)) => {
                                 self.pop_scope().await;
-                                return Ok(val);
+                                return Ok(*val);
                             }
                             Err(e) => {
                                 self.pop_scope().await;
@@ -2227,7 +2227,7 @@ impl Interpreter {
                     .map(|cell| cell.as_str() == name.as_str())
                     .unwrap_or(false)
             });
-            names_match as usize
+            usize::from(names_match)
         } else {
             0
         };
@@ -4069,7 +4069,7 @@ combined = consolidate(stores, "_store")
         interp.set_var("new_users", sheet_to_value(&sheet2)).await;
 
         // Test basic append
-        let code = r#"users append new_users"#;
+        let code = r"users append new_users";
         let program = PipParser::parse_str(code).unwrap();
         interp.eval(program).await.unwrap();
 
@@ -4308,10 +4308,10 @@ combined = consolidate(stores, "_store")
 
         // Test basic Sheet functions
         let program = PipParser::parse_str(
-            r#"
+            r"
             dim row_count = sheet_row_count(sheet)
             dim col_count = sheet_col_count(sheet)
-        "#,
+        ",
         )
         .unwrap();
 
@@ -4426,7 +4426,7 @@ combined = consolidate(stores, "_store")
         interp.set_var("sales", Value::Sheet(sheet)).await;
 
         // First query
-        let program1 = PipParser::parse_str(r#"dim result1 = query(SELECT * FROM sales)"#).unwrap();
+        let program1 = PipParser::parse_str(r"dim result1 = query(SELECT * FROM sales)").unwrap();
         let result1 = interp.eval(program1).await;
         assert!(result1.is_ok(), "First query should succeed");
 
@@ -4534,8 +4534,7 @@ combined = consolidate(stores, "_store")
         interp.set_var("scores", Value::Sheet(sheet1)).await;
 
         // First query
-        let program1 =
-            PipParser::parse_str(r#"dim result1 = query(SELECT * FROM scores)"#).unwrap();
+        let program1 = PipParser::parse_str(r"dim result1 = query(SELECT * FROM scores)").unwrap();
         assert!(interp.eval(program1).await.is_ok());
 
         // Modify the sheet (this should clear the cached table)
@@ -4547,8 +4546,7 @@ combined = consolidate(stores, "_store")
         interp.set_var("scores", Value::Sheet(sheet2)).await;
 
         // Second query should work with the new data
-        let program2 =
-            PipParser::parse_str(r#"dim result2 = query(SELECT * FROM scores)"#).unwrap();
+        let program2 = PipParser::parse_str(r"dim result2 = query(SELECT * FROM scores)").unwrap();
         let result = interp.eval(program2).await;
         assert!(result.is_ok(), "Second query failed: {:?}", result.err());
 
