@@ -23,7 +23,18 @@ process.stdin.on('data', chunk => {
 
 process.stdin.on('end', () => {
   try {
+    if (!input.trim()) {
+      console.error('Error: No input received from stdin');
+      process.exit(1);
+    }
+    
     const book = JSON.parse(input);
+    
+    if (!book || typeof book !== 'object') {
+      console.error('Error: Invalid book structure');
+      process.exit(1);
+    }
+    
     const playgroundBaseUrl = book.config?.preprocessor?.['playground-embed']?.base_url || '/playground';
     
     // Process each section
@@ -32,18 +43,23 @@ process.stdin.on('end', () => {
     // Output the modified book
     console.log(JSON.stringify(book));
   } catch (error) {
-    console.error('Error processing book:', error);
+    console.error('Error processing book:', error.message || error);
+    console.error('Input was:', input.substring(0, 200) + (input.length > 200 ? '...' : ''));
     process.exit(1);
   }
 });
 
 function processSections(sections, baseUrl) {
+  if (!sections || !Array.isArray(sections)) {
+    return sections || [];
+  }
+  
   return sections.map(section => {
-    if (section.Chapter && section.Chapter.content) {
+    if (section && section.Chapter && section.Chapter.content) {
       section.Chapter.content = processMarkdown(section.Chapter.content, baseUrl);
     }
     
-    if (section.Chapter && section.Chapter.sub_items) {
+    if (section && section.Chapter && section.Chapter.sub_items) {
       section.Chapter.sub_items = processSections(section.Chapter.sub_items, baseUrl);
     }
     

@@ -33,6 +33,7 @@ boost-paragraph = 1
 expand = true
 heading-split-level = 3
 
-[preprocessor.playground-embed]
-command = "./preprocessor/playground-embed.js"
-base_url = "/playground"
+# Temporarily disable until CI issue is resolved
+# [preprocessor.playground-embed]
+# command = "./preprocessor/playground-embed.js"
+# base_url = "/playground"
