@@ -345,7 +345,7 @@ DIM all_results AS SHEET = NEW SHEET()
 WHILE true
   ' Read next chunk file
   DIM chunk_file AS TEXT = "chunk_" + STR(chunk_num) + ".csv"
-  DIM batch AS SHEET = read(chunk_file)
+  DIM batch AS SHEET = READ(chunk_file)
   
   IF LEN(batch) = 0 THEN
     EXIT WHILE
