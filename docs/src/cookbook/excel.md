@@ -66,7 +66,9 @@ import "report_jan.xlsx", "report_feb.xlsx", "report_mar.xlsx" into quarterly
 ' Consolidate all sheets with same structure
 dim combined: table = consolidate(quarterly)
 
-' Add quarter column (Note: must use file reference or export/reimport)
+' Add quarter column 
+' Note: The DSL requires file references in FROM clauses for SQL queries,
+' so we must export the table variable to a file first before querying it
 export combined to "temp_combined.csv"
 dim with_quarter: table = query(
   SELECT *, 'Q1' as quarter FROM "temp_combined.csv"
@@ -86,9 +88,12 @@ import "employees.xlsx" into employees
 import "departments.xlsx" into departments
 
 ' Join data from different sheets
+' Note: Join operations can work directly with table variables
 dim analysis: table = employees inner join departments on "dept_id" = "id"
 
-' Calculate department summaries (export and query)
+' Calculate department summaries
+' Note: SQL SELECT queries require file references, not table variables,
+' so we export the joined data first before querying
 export analysis to "temp_analysis.csv"
 dim dept_summary: table = query(
   SELECT 
@@ -140,7 +145,9 @@ export cleaned to "cleaned_data.xlsx"
 import "sales.csv" into sales
 import "customers.csv" into customers
 
-' Create summaries for different sheets using file references
+' Create summaries for different sheets
+' Note: SQL queries require file references ("sales.csv") in FROM clauses,
+' not the variable names (sales) that hold the imported data
 dim monthly_summary: table = query(
   SELECT 
     month,
