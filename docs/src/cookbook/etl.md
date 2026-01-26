@@ -135,7 +135,23 @@ import "source2.xlsx" into excel_data
 export excel_data to "temp_source2.csv"
 import "source3.json" into json_data
 
-' Combine and deduplicate all sources in single query
+' Standardize column names and add source tracking
+dim std_csv: table = query(
+  SELECT customer_id as id, customer_name as name, email_address as email, 'CSV' as source
+  FROM "source1.csv"
+)
+
+dim std_excel: table = query(
+  SELECT cust_id as id, full_name as name, email, 'EXCEL' as source
+  FROM "temp_source2.csv"
+)
+
+dim std_json: table = query(
+  SELECT id, name, contact_email as email, 'JSON' as source
+  FROM "source3.json"
+)
+
+' Combine and deduplicate all sources
 dim unique_customers: table = query(
   SELECT 
     MIN(id) as id,
