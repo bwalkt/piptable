@@ -6,19 +6,26 @@ import init, {
 
 let wasmInitialized = false;
 let parser: PipTableParser | null = null;
+let initPromise: Promise<void> | null = null;
 
 export async function initializeWasm() {
   if (wasmInitialized) return;
+  if (initPromise) return initPromise;
   
-  try {
-    await init();
-    parser = new PipTableParser();
-    wasmInitialized = true;
-    console.log('WASM initialized successfully');
-  } catch (error) {
-    console.error('Failed to initialize WASM:', error);
-    throw error;
-  }
+  initPromise = (async () => {
+    try {
+      await init();
+      parser = new PipTableParser();
+      wasmInitialized = true;
+      console.log('WASM initialized successfully');
+    } catch (error) {
+      initPromise = null; // Allow retry on failure
+      console.error('Failed to initialize WASM:', error);
+      throw error;
+    }
+  })();
+  
+  return initPromise;
 }
 
 export function getParser(): PipTableParser | null {
