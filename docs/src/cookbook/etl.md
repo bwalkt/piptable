@@ -261,15 +261,14 @@ while continue_processing
   if len(batch) = 0 then
     continue_processing = false
   else
-    ' Process batch
+    ' Process batch (transform the already-loaded batch)
+    export batch to "temp_batch.csv"
     dim processed_batch: table = query(
       SELECT 
         *,
         upper(name) as name_upper,
         lower(email) as email_lower
-      FROM "large_file.csv"
-      LIMIT batch_size
-      OFFSET offset
+      FROM "temp_batch.csv"
     )
     
     ' Export batch
@@ -299,33 +298,53 @@ print "Batch processing complete: " + str(total_processed) + " total records"
 ' Note: Use file chunks or streaming approaches for very large datasets
 
 ' Method 1: Process pre-split file chunks
-dim chunk_num: int = 1
 dim total_processed: int = 0
 
 ' Process pre-split chunks (split externally: split -l 10000 large_file.csv chunk_)
-' Note: This example assumes you know the number of chunks
-for chunk_num = 1 to 10
-  ' Build chunk filename
-  dim chunk_file: string = "chunk_" + str(chunk_num) + ".csv"
-  
-  ' Process chunk using file reference
-  dim processed: table = query(
-    SELECT 
-      *,
-      upper(name) as name_upper,
-      lower(email) as email_lower,
-      '" + str(chunk_num) + "' as chunk_id
-    FROM '" + chunk_file + "'
-  )
-  
-  ' Export chunk results
-  dim output_file: string = "processed_chunk_" + str(chunk_num) + ".csv"
-  export processed to output_file
-  
-  total_processed = total_processed + len(processed)
-  
-  print "Processed chunk " + str(chunk_num) + ": " + str(total_processed) + " total records"
-next chunk_num
+' Note: Files must be explicitly referenced - no dynamic file paths
+' Example assumes files: chunk_01.csv, chunk_02.csv, chunk_03.csv
+
+' Process chunk 1
+import "chunk_01.csv" into chunk1
+dim processed1: table = query(
+  SELECT 
+    *,
+    upper(name) as name_upper,
+    lower(email) as email_lower,
+    '1' as chunk_id
+  FROM "chunk_01.csv"
+)
+export processed1 to "processed_chunk_01.csv"
+total_processed = total_processed + len(processed1)
+print "Processed chunk 1: " + str(len(processed1)) + " records"
+
+' Process chunk 2  
+import "chunk_02.csv" into chunk2
+dim processed2: table = query(
+  SELECT 
+    *,
+    upper(name) as name_upper,
+    lower(email) as email_lower,
+    '2' as chunk_id
+  FROM "chunk_02.csv"
+)
+export processed2 to "processed_chunk_02.csv"
+total_processed = total_processed + len(processed2)
+print "Processed chunk 2: " + str(len(processed2)) + " records"
+
+' Process chunk 3
+import "chunk_03.csv" into chunk3
+dim processed3: table = query(
+  SELECT 
+    *,
+    upper(name) as name_upper,
+    lower(email) as email_lower,
+    '3' as chunk_id
+  FROM "chunk_03.csv"
+)
+export processed3 to "processed_chunk_03.csv"
+total_processed = total_processed + len(processed3)
+print "Processed chunk 3: " + str(len(processed3)) + " records"
 
 print "Memory-efficient processing complete: " + str(total_processed) + " records"
 ```
