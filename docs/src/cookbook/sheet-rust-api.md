@@ -112,11 +112,15 @@ fn bulk_transformations() -> Result<(), Box<dyn std::error::Error>> {
     
     // Filter rows based on condition
     sheet.name_columns_by_row(0)?;
+    
+    // Find the Stock column index
+    let stock_col_idx = sheet.column_names()
+        .and_then(|names| names.iter().position(|n| n == "Stock"))
+        .unwrap_or(2);  // Assume Stock is in column 2 if not found
+    
     sheet.filter_rows(|idx, row| {
         // Keep header and rows with stock > 0
-        idx == 0 || row.iter()
-            .position(|_| true)  // Find "Stock" column
-            .and_then(|i| row.get(i))
+        idx == 0 || row.get(stock_col_idx)
             .and_then(|cell| cell.as_int())
             .map(|stock| stock > 0)
             .unwrap_or(false)
