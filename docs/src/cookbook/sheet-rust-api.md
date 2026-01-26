@@ -1,0 +1,303 @@
+# Sheet Operations - Rust API
+
+This page demonstrates the advanced Sheet operations available through the Rust API, implementing pyexcel-like functionality.
+
+## A1-Style Cell Access
+
+Access and modify cells using Excel-style notation:
+
+```rust
+use piptable_sheet::{Sheet, CellValue};
+
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let mut sheet = Sheet::from_csv("sales.csv")?;
+    
+    // Get cell value
+    let value = sheet.get_a1("A1")?;
+    println!("A1 = {}", value.as_str());
+    
+    // Set cell value
+    sheet.set_a1("B2", "Updated Value")?;
+    sheet.set_a1("C3", 42)?;
+    
+    // Get a range as sub-sheet
+    let range = sheet.get_range("A1:C3")?;
+    println!("Range has {} rows", range.row_count());
+    
+    // Get mutable reference for in-place modification
+    let cell = sheet.get_a1_mut("D4")?;
+    *cell = CellValue::Float(99.99);
+    
+    Ok(())
+}
+```
+
+## Named Column Operations
+
+Use column names for easier data manipulation:
+
+```rust
+use piptable_sheet::{Sheet, CellValue};
+
+fn process_employee_data() -> Result<(), Box<dyn std::error::Error>> {
+    let mut sheet = Sheet::from_csv("employees.csv")?;
+    
+    // Use first row as column headers
+    sheet.name_columns_by_row(0)?;
+    
+    // Access entire column by name
+    let salaries = sheet.column_by_name("Salary")?;
+    
+    // Calculate average salary
+    let total: f64 = salaries.iter()
+        .skip(1)  // Skip header
+        .filter_map(|cell| cell.as_float())
+        .sum();
+    let avg = total / (salaries.len() - 1) as f64;
+    println!("Average salary: ${:.2}", avg);
+    
+    // Update specific cells by column name
+    for row in 1..sheet.row_count() {
+        let current = sheet.get_by_name(row, "Salary")?;
+        if let Some(sal) = current.as_float() {
+            // Give 10% raise
+            sheet.set_by_name(row, "Salary", sal * 1.1)?;
+        }
+    }
+    
+    // Format a column
+    sheet.format_column_by_name("HireDate", |cell| {
+        // Standardize date format
+        match cell.as_str() {
+            s if s.contains("/") => {
+                // Convert MM/DD/YYYY to YYYY-MM-DD
+                let parts: Vec<&str> = s.split('/').collect();
+                if parts.len() == 3 {
+                    CellValue::String(format!("{}-{:02}-{:02}", 
+                        parts[2], 
+                        parts[0].parse::<u32>().unwrap_or(1),
+                        parts[1].parse::<u32>().unwrap_or(1)
+                    ))
+                } else {
+                    cell.clone()
+                }
+            }
+            _ => cell.clone()
+        }
+    })?;
+    
+    sheet.save_as_csv("employees_processed.csv")?;
+    Ok(())
+}
+```
+
+## Bulk Operations
+
+Apply transformations to entire sheets:
+
+```rust
+use piptable_sheet::{Sheet, CellValue};
+
+fn bulk_transformations() -> Result<(), Box<dyn std::error::Error>> {
+    let mut sheet = Sheet::from_csv("inventory.csv")?;
+    
+    // Apply function to all cells
+    sheet.map(|cell| {
+        match cell {
+            CellValue::String(s) => CellValue::String(s.trim().to_string()),
+            CellValue::Int(n) if *n < 0 => CellValue::Int(0),  // No negative inventory
+            v => v.clone()
+        }
+    });
+    
+    // Filter rows based on condition
+    sheet.name_columns_by_row(0)?;
+    sheet.filter_rows(|idx, row| {
+        // Keep header and rows with stock > 0
+        idx == 0 || row.iter()
+            .position(|_| true)  // Find "Stock" column
+            .and_then(|i| row.get(i))
+            .and_then(|cell| cell.as_int())
+            .map(|stock| stock > 0)
+            .unwrap_or(false)
+    });
+    
+    // Remove empty rows
+    sheet.remove_empty_rows();
+    
+    // Transpose for pivot-like view
+    sheet.transpose();
+    
+    Ok(())
+}
+```
+
+## Column Selection and Manipulation
+
+Cherry-pick and reorganize columns:
+
+```rust
+use piptable_sheet::Sheet;
+
+fn reorganize_data() -> Result<(), Box<dyn std::error::Error>> {
+    let mut sheet = Sheet::from_excel("report.xlsx")?;
+    sheet.name_columns_by_row(0)?;
+    
+    // Keep only specific columns in order
+    sheet.select_columns(&["CustomerID", "OrderDate", "Total", "Status"])?;
+    
+    // Or remove unwanted columns
+    // sheet.remove_columns(&["InternalNotes", "TempData", "Debug"])?;
+    
+    // Filter columns by condition
+    sheet.filter_columns(|_idx, name| {
+        // Keep only columns that don't start with underscore
+        !name.starts_with('_')
+    })?;
+    
+    Ok(())
+}
+```
+
+## Complete Sales Analysis Example
+
+A comprehensive example combining multiple operations:
+
+```rust
+use piptable_sheet::{Sheet, CellValue};
+use std::collections::HashMap;
+
+fn analyze_sales() -> Result<(), Box<dyn std::error::Error>> {
+    // Load and prepare data
+    let mut sales = Sheet::from_csv("sales.csv")?;
+    sales.name_columns_by_row(0)?;
+    sales.remove_rows(&[0])?;  // Remove header from data
+    
+    // Clean and format data
+    sales.format_column_by_name("Price", |cell| {
+        match cell.as_str() {
+            s if s.starts_with('$') => {
+                let cleaned = s.trim_start_matches('$').replace(",", "");
+                cleaned.parse::<f64>()
+                    .map(CellValue::Float)
+                    .unwrap_or(CellValue::Null)
+            }
+            s => s.parse::<f64>()
+                .map(CellValue::Float)
+                .unwrap_or(CellValue::Null)
+        }
+    })?;
+    
+    // Calculate totals using A1 notation
+    let mut row = 1;
+    while row <= sales.row_count() {
+        let price_ref = format!("C{}", row);  // Assuming Price is column C
+        let qty_ref = format!("D{}", row);    // Assuming Quantity is column D
+        let total_ref = format!("E{}", row);  // Total goes in column E
+        
+        if let (Ok(price), Ok(qty)) = (sales.get_a1(&price_ref), sales.get_a1(&qty_ref)) {
+            let total = price.as_float().unwrap_or(0.0) * qty.as_int().unwrap_or(0) as f64;
+            sales.set_a1(&total_ref, total)?;
+        }
+        row += 1;
+    }
+    
+    // Filter out invalid entries
+    sales.filter_rows(|_, row| {
+        row.iter().any(|cell| !matches!(cell, CellValue::Null))
+    });
+    
+    // Extract top products
+    let products_range = sales.get_range("A1:E10")?;  // Top 10 products
+    
+    // Group by category using named rows
+    sales.name_rows_by_column(0)?;  // Use first column as row names
+    
+    // Export results
+    sales.save_as_excel("sales_analysis.xlsx")?;
+    products_range.save_as_csv("top_products.csv")?;
+    
+    Ok(())
+}
+```
+
+## Migration from pyexcel
+
+If you're coming from pyexcel, here's how to translate common operations:
+
+```rust
+use piptable_sheet::Sheet;
+
+fn pyexcel_migration() -> Result<(), Box<dyn std::error::Error>> {
+    let mut sheet = Sheet::from_csv("data.csv")?;
+    
+    // pyexcel: sheet['A1']
+    let value = sheet.get_a1("A1")?;
+    
+    // pyexcel: sheet['A1'] = 'value'
+    sheet.set_a1("A1", "value")?;
+    
+    // pyexcel: sheet['A1:C3']
+    let range = sheet.get_range("A1:C3")?;
+    
+    // pyexcel: sheet.column['Name']
+    sheet.name_columns_by_row(0)?;
+    let column = sheet.column_by_name("Name")?;
+    
+    // pyexcel: sheet.row['Row1']
+    sheet.name_rows_by_column(0)?;
+    let row = sheet.row_by_name("Row1")?;
+    
+    // pyexcel: sheet.map(lambda x: x.upper())
+    sheet.map(|cell| {
+        match cell {
+            CellValue::String(s) => CellValue::String(s.to_uppercase()),
+            v => v.clone()
+        }
+    });
+    
+    // pyexcel: sheet.filter(condition)
+    sheet.filter_rows(|idx, row| {
+        // your condition here
+        true
+    });
+    
+    // pyexcel: del sheet.column['a', 'c']
+    sheet.remove_columns(&["a", "c"])?;
+    
+    // pyexcel: sheet.transpose()
+    sheet.transpose();
+    
+    Ok(())
+}
+```
+
+## Performance Tips
+
+1. **Use bulk operations** instead of cell-by-cell updates when possible
+2. **Name columns once** at the beginning if you'll access by name multiple times
+3. **Filter early** to reduce data size before expensive operations
+4. **Use references** (`get_a1`) for reading, mutations (`get_a1_mut`) only when modifying
+5. **Consider memory** when transposing large sheets
+
+## When to Use Rust API vs DSL
+
+Use the **Rust API** when you need:
+- Cell-level access (A1 notation)
+- Complex data transformations
+- Custom formatting logic
+- Performance-critical operations
+- Integration with other Rust code
+
+Use the **DSL** when you need:
+- SQL-based queries
+- Simple import/export
+- Joins between tables
+- Integration with HTTP APIs
+- Quick scripting without compilation
+
+## See Also
+
+- [Sheet API Reference](../reference/api/sheet.md)
+- [Sheet Advanced Operations](../reference/api/sheet_advanced.md)
+- [DSL Integration Status](../reference/api/sheet_dsl_integration.md)
