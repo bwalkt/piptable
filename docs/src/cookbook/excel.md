@@ -87,9 +87,7 @@ export with_quarter to "quarterly_report.xlsx"
 ' @title Cross-Sheet Analysis
 ' @description Analyze data across multiple sheets
 
-' Load individual sheets as separate files
-' Note: Accessing sheets from a book variable after import is not yet supported,
-' but you can import specific sheets directly during the import statement
+' Load data from separate Excel files
 import "employees.xlsx" into employees
 import "departments.xlsx" into departments
 
