@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="en" class="h-full">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PipTable Playground - Embed</title>
+  <style>
+    html, body {
+      margin: 0;
+      padding: 0;
+      height: 100%;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
+    }
+    
+    #embed-root {
+      height: 100%;
+      width: 100%;
+    }
+    
+    /* Ensure dark mode works in iframe */
+    .dark {
+      color-scheme: dark;
+    }
+  </style>
+</head>
+<body class="h-full">
+  <div id="embed-root"></div>
+  <script type="module" src="/src/embed.tsx"></script>
+</body>
+</html>
