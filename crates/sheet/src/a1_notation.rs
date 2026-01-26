@@ -90,6 +90,7 @@ fn parse_column_letters(col_str: &str) -> Result<usize> {
 
 /// Convert 0-based column index to column letters
 /// 0=A, 1=B, ... 25=Z, 26=AA, 27=AB, ...
+#[allow(dead_code)]
 pub fn column_index_to_letters(mut col: usize) -> String {
     let mut result = String::new();
     col += 1; // Convert to 1-based for calculation
@@ -105,6 +106,7 @@ pub fn column_index_to_letters(mut col: usize) -> String {
 
 /// Convert (row, col) to A1 notation
 /// (0, 0) = "A1", (0, 1) = "B1", etc.
+#[allow(dead_code)]
 pub fn to_a1_notation(row: usize, col: usize) -> String {
     format!("{}{}", column_index_to_letters(col), row + 1)
 }

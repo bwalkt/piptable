@@ -42,9 +42,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("Ages column: {:?}", ages);
 
     // Filter rows (keep age > 25)
-    sheet.filter_rows(|row| {
+    sheet.filter_rows(|_idx, row| {
         row.get(1)
-            .and_then(|c| c.as_str().parse::<i32>().ok())
+            .and_then(|c: &CellValue| c.as_str().parse::<i32>().ok())
             .map(|age| age > 25)
             .unwrap_or(false)
     });

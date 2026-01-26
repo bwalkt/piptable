@@ -185,8 +185,8 @@ fn test_remove_empty_rows() -> Result<()> {
         ],
         vec![CellValue::Null, CellValue::Null],
         vec![
-            CellValue::String("".to_string()),
-            CellValue::String("".to_string()),
+            CellValue::String(String::new()),
+            CellValue::String(String::new()),
         ],
         vec![
             CellValue::String("Bob".to_string()),

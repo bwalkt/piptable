@@ -176,8 +176,8 @@ impl Sheet {
         for row_idx in start_row..=end_row {
             let row = &self.data[row_idx];
             let mut new_row = Vec::new();
-            for col_idx in start_col..=end_col {
-                new_row.push(row[col_idx].clone());
+            for cell in row.iter().take(end_col + 1).skip(start_col) {
+                new_row.push(cell.clone());
             }
             data.push(new_row);
         }
@@ -833,6 +833,7 @@ impl Sheet {
     // ===== Bulk Operations =====
 
     /// Apply a function to every cell in the sheet (consuming version)
+    #[must_use]
     pub fn map_into<F>(mut self, f: F) -> Self
     where
         F: Fn(&CellValue) -> CellValue,
