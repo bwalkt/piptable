@@ -122,7 +122,7 @@ pub async fn call_math_builtin(
                     "min() requires at least 1 argument",
                 )));
             }
-            
+
             // Handle both forms: min(array) or min(a, b, c, ...)
             let values = if args.len() == 1 {
                 match &args[0] {
@@ -132,14 +132,14 @@ pub async fn call_math_builtin(
             } else {
                 args.to_vec()
             };
-            
+
             if values.is_empty() {
                 return Some(Err(PipError::runtime(
                     line,
                     "min() cannot find min of empty array",
                 )));
             }
-            
+
             let mut min_val = values[0].clone();
             for val in values.iter().skip(1) {
                 match (&min_val, val) {
@@ -170,7 +170,7 @@ pub async fn call_math_builtin(
                     "max() requires at least 1 argument",
                 )));
             }
-            
+
             // Handle both forms: max(array) or max(a, b, c, ...)
             let values = if args.len() == 1 {
                 match &args[0] {
@@ -180,14 +180,14 @@ pub async fn call_math_builtin(
             } else {
                 args.to_vec()
             };
-            
+
             if values.is_empty() {
                 return Some(Err(PipError::runtime(
                     line,
                     "max() cannot find max of empty array",
                 )));
             }
-            
+
             let mut max_val = values[0].clone();
             for val in values.iter().skip(1) {
                 match (&max_val, val) {
