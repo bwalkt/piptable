@@ -69,6 +69,23 @@ function processItems(items, baseUrl) {
   });
 }
 
+// Helper function to escape HTML attributes
+function escapeAttr(value) {
+  if (!value) return '';
+  return String(value)
+    .replace(/&/g, '&amp;')
+    .replace(/"/g, '&quot;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+}
+
+// Helper function to sanitize height values
+function sanitizeHeight(value, fallback = '300px') {
+  if (!value) return fallback;
+  // Allow only valid CSS units for height
+  return /^[0-9]+(px|em|rem|%|vh|vw)$/.test(value) ? value : fallback;
+}
+
 function processMarkdown(content, baseUrl) {
   // Replace PipTable code blocks with interactive examples
   return content.replace(/```(?:piptable|vba)\s*\n([\s\S]*?)\n```/g, (match, code) => {
@@ -104,7 +121,8 @@ function createInteractiveExample(code, baseUrl) {
   const params = new URLSearchParams();
   params.set('code', encodeURIComponent(cleanCode));
   
-  const height = heightMatch?.[1] || '300px';
+  // Sanitize and validate extracted values
+  const height = sanitizeHeight(heightMatch?.[1], '300px');
   const title = titleMatch?.[1];
   const description = descMatch?.[1];
   const readonly = !!readonlyMatch;
@@ -117,16 +135,19 @@ function createInteractiveExample(code, baseUrl) {
   if (description) params.set('description', description);
   
   const embedUrl = `${baseUrl}/embed.html?${params.toString()}`;
+  const safeEmbedUrl = escapeAttr(embedUrl);
+  const safeTitle = escapeAttr(title || 'PipTable Code Example');
+  const safeHeight = escapeAttr(height);
   
-  // Generate the iframe HTML
+  // Generate the iframe HTML with escaped attributes
   return `<div class="playground-embed" style="margin: 1.5em 0;">
   <iframe 
-    src="${embedUrl}" 
+    src="${safeEmbedUrl}" 
     width="100%" 
-    height="${height}"
+    height="${safeHeight}"
     frameborder="0" 
     style="border: 1px solid #e5e7eb; border-radius: 8px; background: white;"
-    title="${title || 'PipTable Code Example'}"
+    title="${safeTitle}"
     sandbox="allow-scripts allow-same-origin"
     loading="lazy">
   </iframe>
