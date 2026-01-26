@@ -1,5 +1,6 @@
 import { signal } from '@preact/signals';
 import DOMPurify from 'dompurify';
+import { parseCode, validateCode, getExamples, initializeWasm } from './wasm';
 
 // Example metadata
 export interface Example {
@@ -104,38 +105,51 @@ export function setTheme(newTheme: 'light' | 'dark') {
   }
 }
 
+function escapeHtml(str: string): string {
+  return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
 export async function runCode() {
   isRunning.value = true;
   error.value = null;
   
   try {
-    // Simulate execution
-    await new Promise(resolve => setTimeout(resolve, 500));
+    // Initialize WASM if needed
+    await initializeWasm();
     
-    // Parse print statements for mock output
-    let result = '<div class="text-green-600 dark:text-green-400 mb-2">✓ Code parsed successfully</div>\n';
+    // Parse the code with real parser
+    const parseResult = await parseCode(code.value);
     
-    const prints = code.value.match(/PRINT\s+"([^"]+)"/gi);
-    if (prints && prints.length > 0) {
-      result += '<div class="mt-4"><strong>Console Output:</strong></div>\n';
-      result += '<pre class="mt-2 p-3 bg-gray-100 dark:bg-gray-800 rounded-md overflow-x-auto">';
+    let result = '';
+    
+    if (parseResult.success) {
+      result += '<div class="text-green-600 dark:text-green-400 mb-2">✓ Code parsed successfully!</div>\n';
       
-      prints.forEach(p => {
-        const content = p.match(/PRINT\s+"([^"]+)"/i)?.[1] || '';
-        result += content + '\n';
-      });
+      // Show AST in collapsible section
+      result += '<details class="mt-4">';
+      result += '<summary class="cursor-pointer text-sm font-medium">View Abstract Syntax Tree</summary>';
+      result += '<pre class="mt-2 p-3 bg-gray-100 dark:bg-gray-800 rounded-md overflow-x-auto text-xs">';
+      result += escapeHtml(parseResult.ast || 'No AST available');
+      result += '</pre>';
+      result += '</details>';
       
+      result += '<div class="mt-4 text-gray-500 dark:text-gray-400 text-sm">';
+      result += 'Note: Full execution coming soon. Currently showing parsing validation only.';
+      result += '</div>';
+    } else {
+      result += '<div class="text-red-600 dark:text-red-400 mb-2">❌ Parse error:</div>\n';
+      result += '<pre class="mt-2 p-3 bg-red-50 dark:bg-red-900/20 rounded-md overflow-x-auto">';
+      result += escapeHtml(parseResult.error || 'Unknown parse error');
       result += '</pre>';
     }
-    
-    result += '<div class="mt-4 text-gray-500 dark:text-gray-400 text-sm">';
-    result += 'Note: Full execution will be available when WASM module is integrated (Issue #126)';
-    result += '</div>';
     
     // Sanitize the output HTML before storing
     output.value = DOMPurify.sanitize(result);
   } catch (err) {
     error.value = err instanceof Error ? err.message : 'Unknown error';
+    output.value = DOMPurify.sanitize(
+      `<div class="text-red-600 dark:text-red-400">Error: ${error.value}</div>`
+    );
   } finally {
     isRunning.value = false;
   }

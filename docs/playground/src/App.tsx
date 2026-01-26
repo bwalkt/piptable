@@ -6,6 +6,7 @@ import { indentWithTab } from '@codemirror/commands';
 import { oneDark } from '@codemirror/theme-one-dark';
 import { Compartment } from '@codemirror/state';
 import DOMPurify from 'dompurify';
+import { initializeWasm } from './store/wasm';
 import { 
   code, 
   selectedExample, 
@@ -25,6 +26,14 @@ export function App() {
   const editorViewRef = useRef<EditorView | null>(null);
   const themeCompartment = useRef<Compartment>(new Compartment());
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+
+  // Initialize WASM on mount
+  useEffect(() => {
+    initializeWasm().catch((err) => {
+      console.error('WASM initialization failed:', err);
+      error.value = 'Failed to load WebAssembly module. Please refresh the page.';
+    });
+  }, []);
 
   // Initialize CodeMirror
   useEffect(() => {
