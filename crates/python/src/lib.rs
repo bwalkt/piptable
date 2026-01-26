@@ -365,7 +365,7 @@ impl Sheet {
     /// Example:
     ///     >>> sheet = Sheet.from_csv("data.csv", has_headers=True)
     ///     >>> for record in sheet.to_records():
-    ///     ...     print(f"{record['name']} is {record['age']} years old")
+    ///     ...     print(f"{record[\"name\"]} is {record[\"age\"]} years old")
     fn to_records(&self, py: Python<'_>) -> PyResult<PyObject> {
         let records = self
             .inner
@@ -514,7 +514,7 @@ impl Sheet {
     ///
     /// Example:
     ///     >>> import pandas as pd
-    ///     >>> df = pd.DataFrame({"name": ["Alice", "Bob"], "age": [30, 25]})
+    ///     >>> df = pd.DataFrame({\"name\": [\"Alice\", \"Bob\"], \"age\": [30, 25]})
     ///     >>> sheet = Sheet.from_pandas(df)
     #[staticmethod]
     fn from_pandas(_py: Python<'_>, df: &Bound<'_, PyAny>) -> PyResult<Self> {

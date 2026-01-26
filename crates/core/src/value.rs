@@ -1,6 +1,7 @@
 //! Runtime value types for piptable.
 
 use arrow::array::RecordBatch;
+use piptable_sheet::Sheet;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -32,6 +33,9 @@ pub enum Value {
     /// Table data (Arrow RecordBatches).
     Table(Vec<Arc<RecordBatch>>),
 
+    /// Sheet data (piptable_sheet::Sheet).
+    Sheet(Sheet),
+
     /// Function reference.
     Function {
         name: String,
@@ -59,6 +63,7 @@ impl Value {
             Self::Array(a) => !a.is_empty(),
             Self::Object(o) => !o.is_empty(),
             Self::Table(t) => !t.is_empty(),
+            Self::Sheet(s) => s.row_count() > 0,
             Self::Function { .. } => true,
         }
     }
@@ -75,6 +80,7 @@ impl Value {
             Self::Array(_) => "Array",
             Self::Object(_) => "Object",
             Self::Table(_) => "Table",
+            Self::Sheet(_) => "Sheet",
             Self::Function { .. } => "Function",
         }
     }
@@ -140,6 +146,24 @@ impl Value {
     pub fn as_table(&self) -> Option<&[Arc<RecordBatch>]> {
         match self {
             Self::Table(t) => Some(t.as_slice()),
+            _ => None,
+        }
+    }
+
+    /// Extract sheet reference if this value is a sheet.
+    #[must_use]
+    pub fn as_sheet(&self) -> Option<&Sheet> {
+        match self {
+            Self::Sheet(s) => Some(s),
+            _ => None,
+        }
+    }
+
+    /// Extract mutable sheet reference if this value is a sheet.
+    #[must_use]
+    pub fn as_sheet_mut(&mut self) -> Option<&mut Sheet> {
+        match self {
+            Self::Sheet(s) => Some(s),
             _ => None,
         }
     }
@@ -215,6 +239,9 @@ impl Serialize for Value {
             Self::Table(_) => Err(serde::ser::Error::custom(
                 "Table values are not JSON-serializable",
             )),
+            Self::Sheet(_) => Err(serde::ser::Error::custom(
+                "Sheet values are not JSON-serializable",
+            )),
             Self::Function { name, .. } => Err(serde::ser::Error::custom(format!(
                 "Function '{name}' is not JSON-serializable"
             ))),
@@ -288,6 +315,7 @@ impl Value {
                 Ok(serde_json::Value::Object(items?))
             }
             Self::Table(_) => Err("Table values are not JSON-serializable"),
+            Self::Sheet(_) => Err("Sheet values are not JSON-serializable"),
             Self::Function { .. } => Err("Function values are not JSON-serializable"),
         }
     }
@@ -333,6 +361,10 @@ mod tests {
         map.insert("k".to_string(), Value::Int(1));
         assert!(Value::Object(map).is_truthy());
         assert!(!Value::Table(vec![]).is_truthy());
+        assert!(!Value::Sheet(Sheet::new()).is_truthy()); // Empty sheet
+        let mut sheet_with_data = Sheet::new();
+        sheet_with_data.row_append(vec!["test"]).unwrap();
+        assert!(Value::Sheet(sheet_with_data).is_truthy()); // Non-empty sheet
         assert!(Value::Function {
             name: "f".to_string(),
             params: vec![],
@@ -355,6 +387,7 @@ mod tests {
         assert_eq!(Value::Array(vec![]).type_name(), "Array");
         assert_eq!(Value::Object(HashMap::new()).type_name(), "Object");
         assert_eq!(Value::Table(vec![]).type_name(), "Table");
+        assert_eq!(Value::Sheet(Sheet::new()).type_name(), "Sheet");
         assert_eq!(
             Value::Function {
                 name: "f".to_string(),
@@ -428,6 +461,15 @@ mod tests {
         let v = Value::Table(vec![]);
         assert!(v.as_table().is_some());
         assert!(Value::Int(42).as_table().is_none());
+    }
+
+    #[test]
+    fn test_as_sheet() {
+        let sheet = Sheet::new();
+        let v = Value::Sheet(sheet);
+        assert!(v.as_sheet().is_some());
+        assert_eq!(v.as_sheet().unwrap().row_count(), 0);
+        assert!(Value::Int(42).as_sheet().is_none());
     }
 
     // ========================================================================

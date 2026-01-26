@@ -11,7 +11,7 @@ pub type PipResult<T> = Result<T, PipError>;
 pub enum PipError {
     /// Return statement (not really an error, used for control flow).
     #[error("Return value")]
-    Return(Value),
+    Return(Box<Value>),
 
     /// Parse error with location information.
     #[error("Parse error at line {line}, column {column}: {message}")]

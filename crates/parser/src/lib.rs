@@ -521,7 +521,7 @@ mod tests {
 
     #[test]
     fn parse_append_basic() {
-        let code = r#"users append new_users"#;
+        let code = r"users append new_users";
         let result = PipParser::parse_str(code);
         assert!(result.is_ok(), "Parse error: {:?}", result.err());
         let program = result.unwrap();
@@ -621,7 +621,7 @@ mod tests {
     #[test]
     fn parse_append_distinct_requires_on() {
         // Test that "distinct" without "on" fails at build time
-        let code = r#"users append distinct new_users"#;
+        let code = r"users append distinct new_users";
         let result = PipParser::parse_str(code);
         assert!(result.is_err(), "Should error on distinct without key");
         let err = result.unwrap_err();

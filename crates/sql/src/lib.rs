@@ -94,6 +94,14 @@ impl SqlEngine {
         Ok(())
     }
 
+    /// Deregister (drop) a table from the context.
+    pub async fn deregister_table(&self, name: &str) -> PipResult<()> {
+        self.ctx
+            .deregister_table(name)
+            .map_err(|e| PipError::Sql(format!("Failed to deregister table {}: {}", name, e)))?;
+        Ok(())
+    }
+
     /// Execute a SQL query and return results.
     ///
     /// # Errors
