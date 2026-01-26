@@ -73,11 +73,13 @@ WRITE(cleaned, "cleaned_data.csv")
 
 DIM data AS SHEET = READ("customers.csv")
 
-' Remove duplicates keeping first occurrence
+' Remove duplicates keeping most recent record per email
 DIM unique_customers AS SHEET = QUERY(data,
-  "SELECT DISTINCT ON (email) * 
-   FROM data 
-   ORDER BY email, created_date DESC")
+  "SELECT * FROM (
+     SELECT *,
+       ROW_NUMBER() OVER (PARTITION BY email ORDER BY created_date DESC) as rn
+     FROM data
+   ) WHERE rn = 1")
 
 PRINT "Removed " + STR(LEN(data) - LEN(unique_customers)) + " duplicates"
 WRITE(unique_customers, "unique_customers.csv")
@@ -157,8 +159,13 @@ DIM regions AS SHEET = QUERY(all_orders,
 
 ' Export each region to separate file
 FOR EACH row IN regions
+  ' Use parameterized filtering to avoid SQL injection
   DIM region_data AS SHEET = QUERY(all_orders, 
-    "SELECT * FROM all_orders WHERE region = '" + row.region + "'")
+    "SELECT * FROM all_orders WHERE region = ?", row.region)
+  
+  ' Alternative: Use FILTER for type-safe filtering
+  ' DIM region_data AS SHEET = FILTER(all_orders, 
+  '   WHERE all_orders.region = row.region)
   
   WRITE(region_data, "orders_" + row.region + ".csv")
   PRINT "Exported " + STR(LEN(region_data)) + " orders for " + row.region

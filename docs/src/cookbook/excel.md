@@ -242,4 +242,4 @@ WRITE(with_metadata, "monthly_report_" + STR(CURRENT_DATE) + ".xlsx")
 
 - [JSON Transformation](json.md) - Processing JSON data
 - [Database Queries](database.md) - Working with databases
-- [Report Generation](../etl.md#report-generation) - Building reports
+- [Report Generation](etl.md#automated-report-generation) - Building reports

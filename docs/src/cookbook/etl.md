@@ -280,8 +280,9 @@ PRINT "Daily report generated with " + STR(LEN(todays_transactions)) + " transac
 
 ### Batch Processing
 ```piptable
-' @title Batch Processing Large Dataset
-' @description Process large files in chunks
+' @title Process Pre-Split Data Chunks
+' @description Process large datasets using pre-split file chunks
+' Note: For truly large files, split files externally before processing
 
 ' Define batch size
 DIM batch_size AS INT = 10000
@@ -326,6 +327,53 @@ WHILE true
 WEND
 
 PRINT "Batch processing complete: " + STR(total_processed) + " total records"
+```
+
+### Memory-Efficient Processing
+```piptable
+' @title Memory-Efficient Data Processing  
+' @description Process large datasets without loading entire file repeatedly
+' Note: Use file chunks or streaming approaches for very large datasets
+
+' Method 1: Process pre-split file chunks
+DIM chunk_num AS INT = 1
+DIM total_processed AS INT = 0
+DIM all_results AS SHEET = NEW SHEET()
+
+' Process pre-split chunks (split externally: split -l 10000 large_file.csv chunk_)
+WHILE true
+  ' Read next chunk file
+  DIM chunk_file AS TEXT = "chunk_" + STR(chunk_num) + ".csv"
+  DIM batch AS SHEET = read(chunk_file)
+  
+  IF LEN(batch) = 0 THEN
+    EXIT WHILE
+  END IF
+  
+  ' Transform batch
+  DIM processed AS SHEET = QUERY(batch,
+    "SELECT 
+      *,
+      UPPER(name) as name_upper,
+      LOWER(email) as email_lower,
+      " + STR(chunk_num) + " as chunk_id
+     FROM batch")
+  
+  ' Accumulate results or write to separate files
+  IF chunk_num = 1 THEN
+    all_results = processed
+  ELSE
+    all_results APPEND processed
+  END IF
+  
+  total_processed = total_processed + LEN(batch)
+  chunk_num = chunk_num + 1
+  
+  PRINT "Processed chunk " + STR(chunk_num - 1) + ": " + STR(total_processed) + " total records"
+WEND
+
+WRITE(all_results, "final_processed.csv")
+PRINT "Memory-efficient processing complete: " + STR(total_processed) + " records"
 ```
 
 ## Best Practices

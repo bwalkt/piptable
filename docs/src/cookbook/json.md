@@ -101,18 +101,26 @@ WHILE has_more
   DIM page_data AS SHEET = FETCH(
     "https://api.example.com/data?page=" + STR(page))
   
-  ' Extract records and metadata
+  ' Extract records array and flatten it
   DIM records AS SHEET = QUERY(page_data,
-    "SELECT JSON_EXTRACT(data, '$.records') as records")
+    "SELECT record FROM (
+       SELECT JSON_ARRAY_ELEMENTS(JSON_EXTRACT(data, '$.records')) as record
+     )") 
   
+  ' Extract pagination metadata
   DIM meta AS SHEET = QUERY(page_data,
     "SELECT JSON_EXTRACT(data, '$.has_more') as has_more")
   
-  ' Append records
-  all_data APPEND records
+  ' Append records to accumulated data
+  IF page = 1 THEN
+    all_data = records
+  ELSE
+    all_data APPEND records
+  END IF
   
-  ' Check for more pages
-  has_more = meta.has_more
+  ' Check for more pages (accessing first row's field)
+  DIM meta_row AS ROW = meta[0]
+  has_more = meta_row.has_more
   page = page + 1
   
   PRINT "Fetched page " + STR(page - 1) + ", total: " + STR(LEN(all_data))
