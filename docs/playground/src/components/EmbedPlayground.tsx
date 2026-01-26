@@ -98,7 +98,7 @@ export function EmbedPlayground({
       console.error('WASM initialization failed:', err);
       state.error.value = 'Failed to load WebAssembly module. Please refresh the page.';
     });
-  }, []);
+  }, [state]);
 
   // Initialize CodeMirror
   useEffect(() => {
