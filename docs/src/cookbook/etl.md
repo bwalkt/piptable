@@ -280,9 +280,10 @@ PRINT "Daily report generated with " + STR(LEN(todays_transactions)) + " transac
 
 ### Batch Processing
 ```piptable
-' @title Process Pre-Split Data Chunks
-' @description Process large datasets using pre-split file chunks
-' Note: For truly large files, split files externally before processing
+' @title Query-Based Batch Processing
+' @description Process datasets using SQL LIMIT/OFFSET batching
+' WARNING: This example loads the entire file into memory on each iteration!
+' See "Memory-Efficient Processing" section below for better approaches
 
 ' Define batch size
 DIM batch_size AS INT = 10000
