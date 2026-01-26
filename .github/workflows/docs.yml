@@ -7,10 +7,7 @@ on:
     paths:
       - 'docs/**'
       - '.github/workflows/docs.yml'
-  pull_request:
-    paths:
-      - 'docs/**'
-      - '.github/workflows/docs.yml'
+  # Removed pull_request trigger - docs build will be checked in pre-push hook instead
   workflow_dispatch:
 
 permissions:

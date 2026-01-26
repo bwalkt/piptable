@@ -28,20 +28,20 @@ process.stdin.on('end', () => {
       process.exit(1);
     }
     
-    const book = JSON.parse(input);
+    const [context, book] = JSON.parse(input);
     
-    if (!book || typeof book !== 'object') {
-      console.error('Error: Invalid book structure');
+    if (!context || !book || !Array.isArray(book.items)) {
+      console.error('Error: Invalid mdBook preprocessor input format');
       process.exit(1);
     }
     
-    const playgroundBaseUrl = book.config?.preprocessor?.['playground-embed']?.base_url || '/playground';
+    const playgroundBaseUrl = context.config?.preprocessor?.['playground-embed']?.base_url || '/playground';
     
-    // Process each section
-    book.sections = processSections(book.sections, playgroundBaseUrl);
+    // Process each section/item
+    book.items = processSections(book.items, playgroundBaseUrl);
     
-    // Output the modified book
-    console.log(JSON.stringify(book));
+    // Output the modified structure as array
+    console.log(JSON.stringify([context, book]));
   } catch (error) {
     console.error('Error processing book:', error.message || error);
     console.error('Input was:', input.substring(0, 200) + (input.length > 200 ? '...' : ''));

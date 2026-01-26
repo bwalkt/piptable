@@ -33,7 +33,7 @@ boost-paragraph = 1
 expand = true
 heading-split-level = 3
 
-# Temporarily disable until CI issue is resolved
+# Disabled until mdBook format issue is resolved locally 
 # [preprocessor.playground-embed]
 # command = "./preprocessor/playground-embed.js"
 # base_url = "/playground"
