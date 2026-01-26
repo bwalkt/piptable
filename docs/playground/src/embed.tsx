@@ -22,7 +22,7 @@ function initializeEmbedPlayground() {
   // Get configuration from URL parameters
   const urlParams = new URLSearchParams(window.location.search);
   const config: EmbedConfig = {
-    code: decodeURIComponent(urlParams.get('code') || ''),
+    code: urlParams.get('code') || '',
     height: urlParams.get('height') || '200px',
     readonly: urlParams.get('readonly') === 'true',
     showOutput: urlParams.get('showOutput') !== 'false', // default true

@@ -31,7 +31,7 @@ export function ExportButton({ code, output, disabled = false, className }: Expo
         filename: customFilename
       };
       
-      await exportData(data, format);
+      exportData(data, format);
       
       setExportStatus('success');
       setTimeout(() => {

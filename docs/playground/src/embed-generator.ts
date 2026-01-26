@@ -17,7 +17,7 @@ export function generateEmbedUrl(options: EmbedOptions): string {
   const baseUrl = options.baseUrl || '/playground/embed.html';
   const params = new URLSearchParams();
   
-  params.set('code', encodeURIComponent(options.code));
+  params.set('code', options.code);
   
   if (options.height && options.height !== '200px') {
     params.set('height', options.height);
