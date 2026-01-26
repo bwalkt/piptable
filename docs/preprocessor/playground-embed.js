@@ -37,11 +37,11 @@ process.stdin.on('end', () => {
     
     const playgroundBaseUrl = context.config?.preprocessor?.['playground-embed']?.base_url || '/playground';
     
-    // Process each section/item
-    book.items = processSections(book.items, playgroundBaseUrl);
+    // Process each item in the book
+    book.items = processItems(book.items, playgroundBaseUrl);
     
-    // Output the modified structure as array
-    console.log(JSON.stringify([context, book]));
+    // Output just the book object (not the array)
+    console.log(JSON.stringify(book));
   } catch (error) {
     console.error('Error processing book:', error.message || error);
     console.error('Input was:', input.substring(0, 200) + (input.length > 200 ? '...' : ''));
@@ -49,21 +49,23 @@ process.stdin.on('end', () => {
   }
 });
 
-function processSections(sections, baseUrl) {
-  if (!sections || !Array.isArray(sections)) {
-    return sections || [];
+function processItems(items, baseUrl) {
+  if (!items || !Array.isArray(items)) {
+    return items || [];
   }
   
-  return sections.map(section => {
-    if (section && section.Chapter && section.Chapter.content) {
-      section.Chapter.content = processMarkdown(section.Chapter.content, baseUrl);
+  return items.map(item => {
+    // Process Chapter items
+    if (item && item.Chapter && item.Chapter.content) {
+      item.Chapter.content = processMarkdown(item.Chapter.content, baseUrl);
     }
     
-    if (section && section.Chapter && section.Chapter.sub_items) {
-      section.Chapter.sub_items = processSections(section.Chapter.sub_items, baseUrl);
+    // Recursively process sub_items
+    if (item && item.Chapter && item.Chapter.sub_items) {
+      item.Chapter.sub_items = processItems(item.Chapter.sub_items, baseUrl);
     }
     
-    return section;
+    return item;
   });
 }
 
