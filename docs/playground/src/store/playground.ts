@@ -196,9 +196,13 @@ if (typeof window !== 'undefined') {
     }
   } else {
     // Fall back to localStorage theme if no shared state
-    const savedTheme = localStorage.getItem('playground-theme');
-    if (savedTheme === 'light' || savedTheme === 'dark') {
-      theme.value = savedTheme;
+    try {
+      const savedTheme = localStorage.getItem('playground-theme');
+      if (savedTheme === 'light' || savedTheme === 'dark') {
+        theme.value = savedTheme;
+      }
+    } catch {
+      // localStorage unavailable (e.g., private browsing), use default theme
     }
   }
 }
