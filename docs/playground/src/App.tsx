@@ -69,20 +69,18 @@ export function App() {
             lineHeight: '1.5',
             touchAction: 'manipulation'
           },
-          '.cm-editor': {
-            '@media (max-width: 768px)': {
-              '.cm-content': {
-                padding: '0.5rem 0.75rem',
-                fontSize: '0.8rem'
-              }
-            }
-          },
           '.cm-focused': {
             outline: 'none'
           },
           '.cm-line': {
             padding: '0 0',
             minHeight: '1.5rem'
+          },
+          '@media (max-width: 768px)': {
+            '.cm-content': {
+              padding: '0.5rem 0.75rem',
+              fontSize: '0.8rem'
+            }
           }
         }),
         EditorView.updateListener.of((update) => {
