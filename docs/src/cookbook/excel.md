@@ -33,9 +33,14 @@ print "Loaded sheet with " + str(len(sales_data)) + " rows"
 ' Import all sheets into a book
 import "financial_report.xlsx" into report_book
 
-' Access individual sheets (Note: sheet access syntax may vary)
-' Sheets can be accessed via book object
-print "Loaded workbook with multiple sheets"
+' Access sheets using Book API methods
+' Note: Direct sheet access from workbook variables is planned but not yet available
+' Currently, you can:
+' - Import specific sheets by name: import "file.xlsx" sheet "SheetName" into data
+' - Get sheet names: report_book.sheet_names()
+' - Access sheets: report_book.get_sheet("SheetName") or report_book.sheets()
+print "Sheet names: " + str(report_book.sheet_names())
+print "Loaded workbook with " + str(len(report_book.sheets())) + " sheets"
 ```
 
 ## Working with Legacy Excel (XLS)
@@ -83,7 +88,8 @@ export with_quarter to "quarterly_report.xlsx"
 ' @description Analyze data across multiple sheets
 
 ' Load individual sheets as separate files
-' Note: Direct sheet access from workbook not currently supported
+' Note: Accessing sheets from a book variable after import is not yet supported,
+' but you can import specific sheets directly during the import statement
 import "employees.xlsx" into employees
 import "departments.xlsx" into departments
 
@@ -244,6 +250,8 @@ export with_metadata to "monthly_report.xlsx"
 ## Performance Considerations
 
 1. **Import specific sheets** when you only need one sheet
+   - Use `import "file.xlsx" sheet "SheetName" into data` for direct sheet import
+   - This is more efficient than importing the entire workbook
 2. **Read XLS files sparingly** - convert to XLSX when possible
 3. **Limit sheet size** - Excel has row limits (1,048,576 rows)
 4. **Use appropriate data types** to preserve Excel formatting
