@@ -4,11 +4,17 @@ export interface ShareableState {
   selectedExample?: string;
 }
 
-// Compress code using base64 encoding for URL sharing
+// Compress code using base64 encoding for URL sharing (UTF-8 safe)
 export function encodeForURL(state: ShareableState): string {
   try {
     const json = JSON.stringify(state);
-    const base64 = btoa(unescape(encodeURIComponent(json)));
+    // Use TextEncoder for proper UTF-8 encoding (supports all Unicode including emojis)
+    const bytes = new TextEncoder().encode(json);
+    let binary = '';
+    for (const byte of bytes) {
+      binary += String.fromCharCode(byte);
+    }
+    const base64 = btoa(binary);
     
     // Use URL-safe base64 encoding
     return base64
@@ -21,7 +27,7 @@ export function encodeForURL(state: ShareableState): string {
   }
 }
 
-// Decompress code from URL parameter
+// Decompress code from URL parameter (UTF-8 safe)
 export function decodeFromURL(encoded: string): ShareableState | null {
   try {
     // Convert from URL-safe base64
@@ -35,7 +41,10 @@ export function decodeFromURL(encoded: string): ShareableState | null {
       base64 += '='.repeat(4 - padding);
     }
     
-    const json = decodeURIComponent(escape(atob(base64)));
+    // Use TextDecoder for proper UTF-8 decoding (supports all Unicode including emojis)
+    const binary = atob(base64);
+    const bytes = Uint8Array.from(binary, c => c.charCodeAt(0));
+    const json = new TextDecoder().decode(bytes);
     const state = JSON.parse(json) as ShareableState;
     
     // Validate the decoded state

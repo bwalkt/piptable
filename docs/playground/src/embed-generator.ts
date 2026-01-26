@@ -48,12 +48,24 @@ export function generateEmbedUrl(options: EmbedOptions): string {
 }
 
 /**
+ * Escape HTML attribute values to prevent injection
+ */
+function escapeAttr(value: string): string {
+  return value
+    .replace(/&/g, '&amp;')
+    .replace(/"/g, '&quot;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+}
+
+/**
  * Generate an iframe HTML element for embedding
  * @param options - Configuration options including optional origin for postMessage security
  */
 export function generateEmbedIframe(options: EmbedOptions): string {
-  const url = generateEmbedUrl(options);
-  const height = options.height || '200px';
+  const url = escapeAttr(generateEmbedUrl(options));
+  const height = escapeAttr(options.height || '200px');
+  const title = escapeAttr(options.title || 'PipTable Code Example');
   
   return `<iframe 
     src="${url}" 
@@ -61,7 +73,7 @@ export function generateEmbedIframe(options: EmbedOptions): string {
     height="${height}"
     frameborder="0" 
     style="border: 1px solid #e5e7eb; border-radius: 8px; background: white;"
-    title="${options.title || 'PipTable Code Example'}"
+    title="${title}"
     sandbox="allow-scripts allow-same-origin"
   ></iframe>`;
 }
@@ -69,8 +81,8 @@ export function generateEmbedIframe(options: EmbedOptions): string {
 /**
  * Create a code block replacement for mdBook
  */
-export function createCodeBlockReplacement(codeBlock: string, language: string = 'piptable'): string {
-  // Extract code from markdown code block
+export function createCodeBlockReplacement(codeBlock: string): string {
+  // Extract code from markdown code block (supports piptable and vba)
   const codeMatch = codeBlock.match(/```(?:piptable|vba)?\n([\s\S]*?)\n```/);
   const code = codeMatch ? codeMatch[1].trim() : codeBlock;
   
