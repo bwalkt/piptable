@@ -1,6 +1,7 @@
 import { signal } from '@preact/signals';
 import DOMPurify from 'dompurify';
 import { parseCode, validateCode, getExamples, initializeWasm } from './wasm';
+import { loadSharedState, type ShareableState } from '../lib/share';
 
 // Example metadata
 export interface Example {
@@ -105,6 +106,31 @@ export function setTheme(newTheme: 'light' | 'dark') {
   }
 }
 
+// Share functionality
+export function getCurrentShareableState(): ShareableState {
+  return {
+    code: code.value,
+    theme: theme.value,
+    selectedExample: selectedExample.value
+  };
+}
+
+export function loadFromSharedState(state: ShareableState) {
+  if (state.code !== undefined) {
+    code.value = state.code;
+  }
+  if (state.theme) {
+    theme.value = state.theme;
+  }
+  if (state.selectedExample) {
+    selectedExample.value = state.selectedExample;
+  }
+  
+  // Clear any existing output/errors when loading shared code
+  output.value = '';
+  error.value = null;
+}
+
 function escapeHtml(str: string): string {
   return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
@@ -155,10 +181,28 @@ export async function runCode() {
   }
 }
 
-// Initialize theme from localStorage
-if (typeof localStorage !== 'undefined') {
-  const savedTheme = localStorage.getItem('playground-theme');
-  if (savedTheme === 'light' || savedTheme === 'dark') {
-    theme.value = savedTheme;
+// Initialize theme from localStorage and load shared state from URL
+if (typeof window !== 'undefined') {
+  // Try to load shared state from URL first
+  const sharedState = loadSharedState();
+  if (sharedState) {
+    loadFromSharedState(sharedState);
+    
+    // Remove the share parameter from URL after loading to clean up the URL bar
+    const url = new URL(window.location.href);
+    if (url.searchParams.has('share')) {
+      url.searchParams.delete('share');
+      window.history.replaceState({}, '', url.toString());
+    }
+  } else {
+    // Fall back to localStorage theme if no shared state
+    try {
+      const savedTheme = localStorage.getItem('playground-theme');
+      if (savedTheme === 'light' || savedTheme === 'dark') {
+        theme.value = savedTheme;
+      }
+    } catch {
+      // localStorage unavailable (e.g., private browsing), use default theme
+    }
   }
 }

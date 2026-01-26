@@ -1,0 +1,122 @@
+// Utility functions for generating embeddable playground URLs
+
+export interface EmbedOptions {
+  code: string;
+  height?: string;
+  readonly?: boolean;
+  showOutput?: boolean;
+  title?: string;
+  description?: string;
+  baseUrl?: string;
+  origin?: string;
+}
+
+/**
+ * Generate an embed URL for a PipTable code example
+ */
+export function generateEmbedUrl(options: EmbedOptions): string {
+  const baseUrl = options.baseUrl || '/playground/embed.html';
+  const params = new URLSearchParams();
+  
+  params.set('code', options.code);
+  
+  if (options.height && options.height !== '200px') {
+    params.set('height', options.height);
+  }
+  
+  if (options.readonly === true) {
+    params.set('readonly', 'true');
+  }
+  
+  if (options.showOutput === false) {
+    params.set('showOutput', 'false');
+  }
+  
+  if (options.title) {
+    params.set('title', options.title);
+  }
+  
+  if (options.description) {
+    params.set('description', options.description);
+  }
+  
+  if (options.origin) {
+    params.set('origin', options.origin);
+  }
+  
+  return `${baseUrl}?${params.toString()}`;
+}
+
+/**
+ * Escape HTML attribute values to prevent injection
+ */
+function escapeAttr(value: string): string {
+  return value
+    .replace(/&/g, '&amp;')
+    .replace(/"/g, '&quot;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+}
+
+/**
+ * Generate an iframe HTML element for embedding
+ * @param options - Configuration options including optional origin for postMessage security
+ */
+export function generateEmbedIframe(options: EmbedOptions): string {
+  const url = escapeAttr(generateEmbedUrl(options));
+  const height = escapeAttr(options.height || '200px');
+  const title = escapeAttr(options.title || 'PipTable Code Example');
+  
+  return `<iframe 
+    src="${url}" 
+    width="100%" 
+    height="${height}"
+    frameborder="0" 
+    style="border: 1px solid #e5e7eb; border-radius: 8px; background: white;"
+    title="${title}"
+    sandbox="allow-scripts allow-same-origin"
+  ></iframe>`;
+}
+
+/**
+ * Create a code block replacement for mdBook
+ */
+export function createCodeBlockReplacement(codeBlock: string): string {
+  // Extract code from markdown code block (supports piptable and vba)
+  const codeMatch = codeBlock.match(/```(?:piptable|vba)?\n([\s\S]*?)\n```/);
+  const code = codeMatch ? codeMatch[1].trim() : codeBlock;
+  
+  // Check for special comments that configure the playground
+  const titleMatch = code.match(/^\s*'\s*@title\s+(.+)$/m);
+  const descMatch = code.match(/^\s*'\s*@description\s+(.+)$/m);
+  const heightMatch = code.match(/^\s*'\s*@height\s+(.+)$/m);
+  const readonlyMatch = code.match(/^\s*'\s*@readonly\s*$/m);
+  const noOutputMatch = code.match(/^\s*'\s*@no-output\s*$/m);
+  
+  // Remove configuration comments from displayed code
+  const cleanCode = code
+    .replace(/^\s*'\s*@\w+.*$/gm, '')
+    .replace(/\n\n+/g, '\n\n')
+    .trim();
+  
+  const options: EmbedOptions = {
+    code: cleanCode,
+    title: titleMatch?.[1],
+    description: descMatch?.[1],
+    height: heightMatch?.[1] || '250px',
+    readonly: !!readonlyMatch,
+    showOutput: !noOutputMatch,
+  };
+  
+  return generateEmbedIframe(options);
+}
+
+// Browser-compatible version for client-side usage
+if (typeof window !== 'undefined') {
+  // Make functions available globally for use in documentation
+  (window as any).PipTableEmbed = {
+    generateEmbedUrl,
+    generateEmbedIframe,
+    createCodeBlockReplacement
+  };
+}

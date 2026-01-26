@@ -12,46 +12,62 @@ pip -i
 
 This starts a REPL where you can type commands and see results immediately:
 
-```vba
-PipTable vX.Y.Z
-Type 'exit' to quit, 'help' for assistance
+```piptable
+' @title Interactive REPL Session
+' @description Example of using PipTable in interactive mode
+' @readonly
+' @height 250px
 
-> dim x = 42
-> print(x)
-42
+DIM x AS INT = 42
+PRINT x
 
-> dim data = [1, 2, 3, 4, 5]
-> dim sum = 0
-> for each item in data
-    sum = sum + item
-  next
-> print(sum)
-15
+DIM data AS ARRAY = [1, 2, 3, 4, 5]
+DIM sum AS INT = 0
+FOR i = 1 TO 5
+    sum = sum + data[i - 1]
+NEXT
+PRINT sum
 ```
 
 ## Your First Script
 
 Create a file called `hello.pip`:
 
-```vba
-' hello.pip - My first PipTable script
+```piptable
+' @title My First PipTable Script
+' @description A simple example showing variables, functions, and output
 
 ' Variables and printing
-dim name = "World"
-print("Hello, " + name + "!")
+DIM name AS STRING = "World"
+PRINT "Hello, " + name + "!"
 
 ' Working with data
-dim numbers = [1, 2, 3, 4, 5]
-dim total = sum(numbers)
-print("Sum of numbers: " + str(total))
+DIM numbers AS ARRAY = [1, 2, 3, 4, 5]
+DIM total AS INT = 0
+FOR i = 0 TO 4
+    total = total + numbers[i]
+NEXT
+PRINT "Sum of numbers: " + STR(total)
+```
 
-' Simple data processing
-dim data = {
-    "name": "Alice",
-    "age": 30,
-    "city": "NYC"
-}
-print("User: " + data.name + " from " + data.city)
+Try editing the code above and clicking "Run" to see how it works!
+
+```piptable
+' @title Data Processing Example
+' @description Working with objects and conditional logic
+' @height 350px
+
+DIM userName AS STRING = "Alice"
+DIM userAge AS INT = 30
+DIM userCity AS STRING = "NYC"
+
+PRINT "User: " + userName + " from " + userCity
+
+IF userAge >= 18 THEN
+    PRINT "User is an adult"
+ELSE
+    PRINT "User is a minor"
+END IF
 ```
 
 Run it:
