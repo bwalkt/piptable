@@ -102,7 +102,10 @@ export function EmbedPlayground({
 
   // Initialize CodeMirror
   useEffect(() => {
-    if (!editorRef.current || editorViewRef.current) return;
+    if (!editorRef.current) return;
+
+    // Destroy existing editor before creating a new one
+    editorViewRef.current?.destroy();
 
     editorViewRef.current = new EditorView({
       doc: state.code.value,
@@ -151,7 +154,7 @@ export function EmbedPlayground({
       editorViewRef.current?.destroy();
       editorViewRef.current = null;
     };
-  }, []);
+  }, [readonly, height]);
 
   // Update editor when code signal changes
   useSignalEffect(() => {
