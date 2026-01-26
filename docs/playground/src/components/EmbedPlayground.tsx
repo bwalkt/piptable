@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'preact/hooks';
+import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
 import { useSignalEffect } from '@preact/signals';
 import { EditorView, basicSetup } from 'codemirror';
 import { keymap } from '@codemirror/view';
@@ -89,8 +89,8 @@ export function EmbedPlayground({
   const themeCompartment = useRef<Compartment>(new Compartment());
   const [isExpanded, setIsExpanded] = useState(false);
   
-  // Create local playground state
-  const state = createLocalPlaygroundState(initialCode);
+  // Create local playground state - memoized to prevent re-creation on re-renders
+  const state = useMemo(() => createLocalPlaygroundState(initialCode), [initialCode]);
 
   // Initialize WASM on mount
   useEffect(() => {
@@ -171,7 +171,7 @@ export function EmbedPlayground({
     if (readonly) {
       state.runCode();
     }
-  }, [readonly]);
+  }, [readonly, initialCode, state]);
 
   return (
     <div className="border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden bg-white dark:bg-gray-950">
