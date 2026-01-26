@@ -151,6 +151,7 @@ impl Value {
     }
 
     /// Extract sheet reference if this value is a sheet.
+    #[must_use]
     pub fn as_sheet(&self) -> Option<&Sheet> {
         match self {
             Self::Sheet(s) => Some(s),
@@ -159,6 +160,7 @@ impl Value {
     }
 
     /// Extract mutable sheet reference if this value is a sheet.
+    #[must_use]
     pub fn as_sheet_mut(&mut self) -> Option<&mut Sheet> {
         match self {
             Self::Sheet(s) => Some(s),

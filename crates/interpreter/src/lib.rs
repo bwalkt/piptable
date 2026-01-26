@@ -690,8 +690,6 @@ impl Interpreter {
                         .ok_or_else(|| PipError::runtime(0, format!("Key '{}' not found", key))),
                     // Sheet A1 notation access
                     (Value::Sheet(sheet), Value::String(notation)) => {
-                        use piptable_sheet::CellValue;
-
                         // Check if it's a range (contains colon)
                         Ok(if notation.contains(':') {
                             let sub_sheet = sheet.get_range(notation).map_err(|e| {
@@ -708,13 +706,7 @@ impl Interpreter {
                             })?;
 
                             // Convert CellValue to Value
-                            match cell {
-                                CellValue::Null => Value::Null,
-                                CellValue::String(s) => Value::String(s.clone()),
-                                CellValue::Int(i) => Value::Int(*i),
-                                CellValue::Float(f) => Value::Float(*f),
-                                CellValue::Bool(b) => Value::Bool(*b),
-                            }
+                            cell_to_value(cell)
                         })
                     }
                     // Type mismatches
@@ -1573,7 +1565,6 @@ impl Interpreter {
                 }
                 match (&args[0], &args[1]) {
                     (Value::Sheet(sheet), Value::String(notation)) => {
-                        use piptable_sheet::CellValue;
                         let cell = sheet.get_a1(notation).map_err(|e| {
                             PipError::runtime(
                                 line,
@@ -1581,13 +1572,7 @@ impl Interpreter {
                             )
                         })?;
 
-                        match cell {
-                            CellValue::Null => Ok(Value::Null),
-                            CellValue::String(s) => Ok(Value::String(s.clone())),
-                            CellValue::Int(i) => Ok(Value::Int(*i)),
-                            CellValue::Float(f) => Ok(Value::Float(*f)),
-                            CellValue::Bool(b) => Ok(Value::Bool(*b)),
-                        }
+                        Ok(cell_to_value(cell))
                     }
                     _ => Err(PipError::runtime(line, "Arguments must be (sheet, string)")),
                 }
@@ -1601,7 +1586,6 @@ impl Interpreter {
                 }
                 match (&args[0], &args[1], &args[2]) {
                     (Value::Sheet(sheet), Value::String(notation), value) => {
-                        use piptable_sheet::CellValue;
                         let mut sheet_clone = sheet.clone();
 
                         let cell_value = match value {
