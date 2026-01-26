@@ -105,6 +105,10 @@ export function setTheme(newTheme: 'light' | 'dark') {
   }
 }
 
+function escapeHtml(str: string): string {
+  return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
 export async function runCode() {
   isRunning.value = true;
   error.value = null;
@@ -125,7 +129,7 @@ export async function runCode() {
       result += '<details class="mt-4">';
       result += '<summary class="cursor-pointer text-sm font-medium">View Abstract Syntax Tree</summary>';
       result += '<pre class="mt-2 p-3 bg-gray-100 dark:bg-gray-800 rounded-md overflow-x-auto text-xs">';
-      result += parseResult.ast || 'No AST available';
+      result += escapeHtml(parseResult.ast || 'No AST available');
       result += '</pre>';
       result += '</details>';
       
@@ -156,7 +160,7 @@ export async function runCode() {
     } else {
       result += '<div class="text-red-600 dark:text-red-400 mb-2">❌ Parse error:</div>\n';
       result += '<pre class="mt-2 p-3 bg-red-50 dark:bg-red-900/20 rounded-md overflow-x-auto">';
-      result += parseResult.error || 'Unknown parse error';
+      result += escapeHtml(parseResult.error || 'Unknown parse error');
       result += '</pre>';
     }
     
