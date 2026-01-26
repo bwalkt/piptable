@@ -8,6 +8,7 @@ export interface EmbedOptions {
   title?: string;
   description?: string;
   baseUrl?: string;
+  origin?: string;
 }
 
 /**
@@ -39,11 +40,16 @@ export function generateEmbedUrl(options: EmbedOptions): string {
     params.set('description', options.description);
   }
   
+  if (options.origin) {
+    params.set('origin', options.origin);
+  }
+  
   return `${baseUrl}?${params.toString()}`;
 }
 
 /**
  * Generate an iframe HTML element for embedding
+ * @param options - Configuration options including optional origin for postMessage security
  */
 export function generateEmbedIframe(options: EmbedOptions): string {
   const url = generateEmbedUrl(options);

@@ -30,6 +30,11 @@ function initializeEmbedPlayground() {
     description: urlParams.get('description') || undefined,
   };
 
+  // Get allowed origin for postMessage security
+  const allowedOrigin = urlParams.get('origin') || 
+    container.getAttribute('data-origin') || 
+    undefined;
+
   // If no code in URL, try to get from data attributes
   if (!config.code) {
     config.code = container.getAttribute('data-code') || 'PRINT "Hello, World!"';
@@ -42,7 +47,14 @@ function initializeEmbedPlayground() {
 
   // Listen for configuration updates via postMessage (for dynamic examples)
   window.addEventListener('message', (event) => {
-    if (event.data.type === 'UPDATE_PLAYGROUND_CONFIG') {
+    // Validate message source
+    if (event.source !== window.parent) return;
+    
+    // Validate origin if specified
+    if (allowedOrigin && event.origin !== allowedOrigin) return;
+    
+    // Check message structure
+    if (event.data?.type === 'UPDATE_PLAYGROUND_CONFIG') {
       const newConfig = { ...config, ...event.data.config };
       renderPlayground(newConfig);
     }
@@ -67,7 +79,10 @@ function initializeEmbedPlayground() {
 
   // Notify parent window that playground is ready
   if (window.parent !== window) {
-    window.parent.postMessage({ type: 'PLAYGROUND_READY' }, '*');
+    window.parent.postMessage(
+      { type: 'PLAYGROUND_READY' }, 
+      allowedOrigin ?? '*'
+    );
   }
 }
 
