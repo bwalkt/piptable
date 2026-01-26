@@ -210,9 +210,6 @@ fn process_sales_data() -> Result<()> {
     // Use first row as column names
     sheet.name_columns_by_row(0)?;
     
-    // Remove the header row from data
-    sheet.row_delete(0)?;
-    
     // Convert Price column to float
     sheet.format_column_by_name("Price", |cell| {
         match cell.as_str().parse::<f64>() {
@@ -221,17 +218,25 @@ fn process_sales_data() -> Result<()> {
         }
     })?;
     
-    // Filter out rows with null prices
-    sheet.filter_rows(|_, row| {
-        !matches!(row[2], CellValue::Null)
+    // Filter out rows with null prices (use named access for safety)
+    sheet.filter_rows(|idx, row| {
+        // Keep header row
+        if idx == 0 { return true; }
+        
+        // Check Price column by name
+        if let Some(price_col_idx) = sheet.column_names()
+            .and_then(|names| names.iter().position(|n| n == "Price")) {
+            !matches!(row.get(price_col_idx), Some(CellValue::Null))
+        } else {
+            true  // Keep row if Price column not found
+        }
     });
     
-    // Apply 10% discount using A1 notation
-    for i in 1..=sheet.row_count() {
-        let notation = format!("C{}", i);
-        if let Ok(cell) = sheet.get_a1_mut(&notation) {
-            if let CellValue::Float(price) = cell {
-                *cell = CellValue::Float(*price * 0.9);
+    // Apply 10% discount using named access (safer after filtering)
+    for row_idx in 1..sheet.row_count() {  // Skip header
+        if let Ok(price) = sheet.get_by_name(row_idx, "Price") {
+            if let Some(price_val) = price.as_float() {
+                sheet.set_by_name(row_idx, "Price", price_val * 0.9)?;
             }
         }
     }

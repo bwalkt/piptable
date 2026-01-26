@@ -122,7 +122,7 @@ For now, users should:
 
 ## Future Enhancement Issue
 
-A separate GitHub issue should be created to track DSL integration of Sheet operations, including:
+DSL integration of Sheet operations is tracked in issue #138, which covers:
 
 - Design decisions on syntax
 - Performance implications

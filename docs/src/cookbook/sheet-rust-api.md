@@ -175,9 +175,8 @@ fn analyze_sales() -> Result<(), Box<dyn std::error::Error>> {
     // Load and prepare data
     let mut sales = Sheet::from_csv("sales.csv")?;
     sales.name_columns_by_row(0)?;
-    sales.remove_rows(&[0])?;  // Remove header from data
     
-    // Clean and format data
+    // Clean and format data (keep header for now)
     sales.format_column_by_name("Price", |cell| {
         match cell.as_str() {
             s if s.starts_with('$') => {
@@ -192,18 +191,12 @@ fn analyze_sales() -> Result<(), Box<dyn std::error::Error>> {
         }
     })?;
     
-    // Calculate totals using A1 notation
-    let mut row = 1;
-    while row <= sales.row_count() {
-        let price_ref = format!("C{}", row);  // Assuming Price is column C
-        let qty_ref = format!("D{}", row);    // Assuming Quantity is column D
-        let total_ref = format!("E{}", row);  // Total goes in column E
-        
-        if let (Ok(price), Ok(qty)) = (sales.get_a1(&price_ref), sales.get_a1(&qty_ref)) {
-            let total = price.as_float().unwrap_or(0.0) * qty.as_int().unwrap_or(0) as f64;
-            sales.set_a1(&total_ref, total)?;
-        }
-        row += 1;
+    // Calculate totals using named access (safer than A1 notation after row operations)
+    for row_idx in 1..sales.row_count() {  // Skip header row
+        let price = sales.get_by_name(row_idx, "Price")?;
+        let qty = sales.get_by_name(row_idx, "Quantity")?;
+        let total = price.as_float().unwrap_or(0.0) * qty.as_int().unwrap_or(0) as f64;
+        sales.set_by_name(row_idx, "Total", total)?;
     }
     
     // Filter out invalid entries
@@ -230,7 +223,7 @@ fn analyze_sales() -> Result<(), Box<dyn std::error::Error>> {
 If you're coming from pyexcel, here's how to translate common operations:
 
 ```rust
-use piptable_sheet::Sheet;
+use piptable_sheet::{Sheet, CellValue};
 
 fn pyexcel_migration() -> Result<(), Box<dyn std::error::Error>> {
     let mut sheet = Sheet::from_csv("data.csv")?;

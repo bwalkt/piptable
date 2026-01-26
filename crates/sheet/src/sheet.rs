@@ -843,6 +843,9 @@ impl Sheet {
     }
 
     /// Filter columns based on a predicate
+    /// 
+    /// The predicate receives the column index and name. If columns are not 
+    /// named, the name parameter will be an empty string.
     pub fn filter_columns<F>(&mut self, f: F) -> Result<()>
     where
         F: Fn(usize, &str) -> bool,
@@ -946,7 +949,12 @@ impl Sheet {
         for col in 0..cols {
             let mut new_row = Vec::with_capacity(rows);
             for row in 0..rows {
-                new_row.push(self.data[row][col].clone());
+                new_row.push(
+                    self.data[row]
+                        .get(col)
+                        .cloned()
+                        .unwrap_or(CellValue::Null)
+                );
             }
             transposed.push(new_row);
         }
