@@ -21,7 +21,7 @@ function initializeEmbedPlayground() {
 
   // Get configuration from URL parameters
   const urlParams = new URLSearchParams(window.location.search);
-  const config: EmbedConfig = {
+  let currentConfig: EmbedConfig = {
     code: urlParams.get('code') || '',
     height: urlParams.get('height') || '200px',
     readonly: urlParams.get('readonly') === 'true',
@@ -36,13 +36,13 @@ function initializeEmbedPlayground() {
     undefined;
 
   // If no code in URL, try to get from data attributes
-  if (!config.code) {
-    config.code = container.getAttribute('data-code') || 'PRINT "Hello, World!"';
-    config.height = container.getAttribute('data-height') || config.height;
-    config.readonly = container.getAttribute('data-readonly') === 'true';
-    config.showOutput = container.getAttribute('data-show-output') !== 'false';
-    config.title = container.getAttribute('data-title') || undefined;
-    config.description = container.getAttribute('data-description') || undefined;
+  if (!currentConfig.code) {
+    currentConfig.code = container.getAttribute('data-code') || 'PRINT "Hello, World!"';
+    currentConfig.height = container.getAttribute('data-height') || currentConfig.height;
+    currentConfig.readonly = container.getAttribute('data-readonly') === 'true';
+    currentConfig.showOutput = container.getAttribute('data-show-output') !== 'false';
+    currentConfig.title = container.getAttribute('data-title') || undefined;
+    currentConfig.description = container.getAttribute('data-description') || undefined;
   }
 
   // Listen for configuration updates via postMessage (for dynamic examples)
@@ -55,13 +55,13 @@ function initializeEmbedPlayground() {
     
     // Check message structure
     if (event.data?.type === 'UPDATE_PLAYGROUND_CONFIG') {
-      const newConfig = { ...config, ...event.data.config };
-      renderPlayground(newConfig);
+      currentConfig = { ...currentConfig, ...event.data.config };
+      renderPlayground(currentConfig);
     }
   });
 
   // Initial render
-  renderPlayground(config);
+  renderPlayground(currentConfig);
 
   function renderPlayground(playgroundConfig: EmbedConfig) {
     render(
