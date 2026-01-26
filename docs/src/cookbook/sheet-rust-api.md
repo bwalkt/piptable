@@ -103,6 +103,8 @@ raw_sales = sheet_select_columns(raw_sales, [
 ])
 
 // Add calculated total column using cell access
+// Note: row 0 is headers, data starts at row 1
+// DSL for loops use inclusive bounds, so "1 to row_count - 1" processes all data rows
 dim row_count = sheet_row_count(raw_sales)
 for i in 1 to row_count - 1 {
     dim qty = sheet_get_by_name(raw_sales, i, "Quantity")

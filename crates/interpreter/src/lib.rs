@@ -1431,6 +1431,9 @@ impl Interpreter {
                 }
                 match (&args[0], &args[1]) {
                     (Value::Sheet(sheet), Value::Int(row_idx)) => {
+                        if *row_idx < 0 {
+                            return Err(PipError::runtime(line, "Row index cannot be negative"));
+                        }
                         let mut new_sheet = sheet.clone();
                         new_sheet
                             .name_columns_by_row(*row_idx as usize)
@@ -1686,6 +1689,9 @@ impl Interpreter {
                 }
                 match (&args[0], &args[1], &args[2]) {
                     (Value::Sheet(sheet), Value::Int(row), Value::String(col_name)) => {
+                        if *row < 0 {
+                            return Err(PipError::runtime(line, "Row index cannot be negative"));
+                        }
                         use piptable_sheet::CellValue;
                         let cell = sheet.get_by_name(*row as usize, col_name).map_err(|e| {
                             PipError::runtime(
@@ -1717,6 +1723,9 @@ impl Interpreter {
                 }
                 match (&args[0], &args[1], &args[2], &args[3]) {
                     (Value::Sheet(sheet), Value::Int(row), Value::String(col_name), value) => {
+                        if *row < 0 {
+                            return Err(PipError::runtime(line, "Row index cannot be negative"));
+                        }
                         use piptable_sheet::CellValue;
                         let mut sheet_clone = sheet.clone();
 
@@ -2474,14 +2483,15 @@ impl Interpreter {
     /// Set a variable, searching scopes for existing bindings first.
     /// Use this for assignment statements where we want to update existing variables.
     pub async fn set_var(&self, name: &str, value: Value) {
-        // If we're setting a Sheet variable, clear any registered table for it
-        // This ensures re-registration if the sheet changes
-        if matches!(value, Value::Sheet(_)) {
+        // Clear any cached table for this variable, regardless of new type.
+        // This prevents stale table registrations when a Sheet variable is reassigned.
+        let table_to_drop = {
             let mut sheet_tables = self.sheet_tables.write().await;
-            if let Some(table_name) = sheet_tables.remove(name) {
-                // Also deregister from SQL context
-                let _ = self.sql.deregister_table(&table_name).await;
-            }
+            sheet_tables.remove(name)
+        };
+        if let Some(table_name) = table_to_drop {
+            // Deregister from SQL context (drop lock before await)
+            let _ = self.sql.deregister_table(&table_name).await;
         }
 
         let mut scopes = self.scopes.write().await;
