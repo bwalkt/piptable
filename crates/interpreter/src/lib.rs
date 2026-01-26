@@ -1689,10 +1689,10 @@ impl Interpreter {
                 }
                 match (&args[0], &args[1], &args[2]) {
                     (Value::Sheet(sheet), Value::Int(row), Value::String(col_name)) => {
+                        use piptable_sheet::CellValue;
                         if *row < 0 {
                             return Err(PipError::runtime(line, "Row index cannot be negative"));
                         }
-                        use piptable_sheet::CellValue;
                         let cell = sheet.get_by_name(*row as usize, col_name).map_err(|e| {
                             PipError::runtime(
                                 line,
@@ -1723,10 +1723,10 @@ impl Interpreter {
                 }
                 match (&args[0], &args[1], &args[2], &args[3]) {
                     (Value::Sheet(sheet), Value::Int(row), Value::String(col_name), value) => {
+                        use piptable_sheet::CellValue;
                         if *row < 0 {
                             return Err(PipError::runtime(line, "Row index cannot be negative"));
                         }
-                        use piptable_sheet::CellValue;
                         let mut sheet_clone = sheet.clone();
 
                         let cell_value = match value {
