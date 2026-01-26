@@ -1,5 +1,4 @@
 import { useState } from 'preact/hooks';
-import { signal } from '@preact/signals';
 import { generateShareURL, copyToClipboard, generateCodeDescription, type ShareableState } from '../lib/share';
 import { cn } from '../lib/utils';
 
@@ -8,10 +7,9 @@ interface ShareButtonProps {
   className?: string;
 }
 
-const isShareModalOpen = signal(false);
-
 export function ShareButton({ getState, className }: ShareButtonProps) {
   const [copyStatus, setCopyStatus] = useState<'idle' | 'copying' | 'success' | 'error'>('idle');
+  const [isShareModalOpen, setIsShareModalOpen] = useState(false);
 
   const handleShare = async () => {
     try {
@@ -34,7 +32,7 @@ export function ShareButton({ getState, className }: ShareButtonProps) {
   };
 
   const handleOpenModal = () => {
-    isShareModalOpen.value = true;
+    setIsShareModalOpen(true);
   };
 
   return (
@@ -59,12 +57,12 @@ export function ShareButton({ getState, className }: ShareButtonProps) {
       </button>
 
       {/* Share Modal */}
-      {isShareModalOpen.value && (
+      {isShareModalOpen && (
         <ShareModal 
           getState={getState} 
           copyStatus={copyStatus} 
           onShare={handleShare}
-          onClose={() => isShareModalOpen.value = false}
+          onClose={() => setIsShareModalOpen(false)}
         />
       )}
     </>

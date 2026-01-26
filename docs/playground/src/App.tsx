@@ -269,26 +269,13 @@ export function App() {
             <div className="px-3 sm:px-4 py-2 border-b bg-muted/50 flex items-center justify-between">
               <h3 className="text-sm font-medium">Output</h3>
               <div className="flex items-center gap-2">
-                {/* Show export button on mobile when hidden from header */}
-                <div className="xs:hidden">
-                  {!isRunning.value && !error.value && output.value && (
-                    <ExportButton 
-                      code={code.value}
-                      output={output.value}
-                      className="h-6 px-2 text-xs"
-                    />
-                  )}
-                </div>
-                {/* Always show small export button in output panel */}
-                <div className="hidden xs:block lg:block">
-                  {!isRunning.value && !error.value && output.value && (
-                    <ExportButton 
-                      code={code.value}
-                      output={output.value}
-                      className="h-7 px-2 text-xs"
-                    />
-                  )}
-                </div>
+                {!isRunning.value && !error.value && output.value && (
+                  <ExportButton 
+                    code={code.value}
+                    output={output.value}
+                    className="h-6 xs:h-7 px-2 text-xs"
+                  />
+                )}
               </div>
             </div>
             <div className="flex-1 overflow-auto p-3 sm:p-4">
