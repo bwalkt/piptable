@@ -1,17 +1,21 @@
 //! Import and export operations for files.
 
 use piptable_core::{ImportOptions, Value};
-use piptable_sheet::Sheet;
+use piptable_sheet::{CsvOptions, Sheet};
 use std::collections::HashMap;
 use std::path::Path;
 
 /// Export a sheet to a file based on extension.
 pub fn export_sheet(sheet: &Sheet, path: &str) -> Result<(), String> {
     let path_lower = path.to_lowercase();
-    if path_lower.ends_with(".csv") || path_lower.ends_with(".tsv") {
+    if path_lower.ends_with(".csv") {
         sheet
             .save_as_csv(path)
             .map_err(|e| format!("Failed to export CSV: {}", e))
+    } else if path_lower.ends_with(".tsv") {
+        sheet
+            .save_as_csv_with_options(path, CsvOptions::tsv())
+            .map_err(|e| format!("Failed to export TSV: {}", e))
     } else if path_lower.ends_with(".json") {
         sheet
             .save_as_json(path)
@@ -86,11 +90,19 @@ pub fn import_multi_files(paths: &[String], options: &ImportOptions) -> Result<V
 
     for path in paths {
         let path_obj = Path::new(path);
-        let name = path_obj
+        let base_name = path_obj
             .file_stem()
             .and_then(|s| s.to_str())
             .unwrap_or("sheet")
             .to_string();
+
+        // Handle duplicate file stems by appending a suffix
+        let mut name = base_name.clone();
+        let mut counter = 1;
+        while sheets.contains_key(&name) {
+            name = format!("{}_{}", base_name, counter);
+            counter += 1;
+        }
 
         let sheet = import_sheet(path, None, options.has_headers.unwrap_or(true))?;
         sheets.insert(name, Value::Sheet(sheet));
