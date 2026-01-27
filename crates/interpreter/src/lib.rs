@@ -18,7 +18,7 @@ mod sql_builder;
 #[cfg(feature = "python")]
 mod python;
 
-use crate::sheet_conversions::{build_sheet_arrow_array, infer_sheet_column_type};
+use crate::sheet_conversions::{build_sheet_arrow_array, cell_to_value, infer_sheet_column_type};
 use async_recursion::async_recursion;
 use piptable_core::{
     BinaryOp, Expr, LValue, Literal, PipError, PipResult, Program, Statement, UnaryOp, Value,
@@ -29,17 +29,6 @@ use piptable_sql::SqlEngine;
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::RwLock;
-
-/// Convert a CellValue to a Value
-fn cell_value_to_value(cell: &CellValue) -> Value {
-    match cell {
-        CellValue::Null => Value::Null,
-        CellValue::String(s) => Value::String(s.clone()),
-        CellValue::Int(i) => Value::Int(*i),
-        CellValue::Float(f) => Value::Float(*f),
-        CellValue::Bool(b) => Value::Bool(*b),
-    }
-}
 
 /// Interpreter for piptable scripts.
 pub struct Interpreter {
@@ -756,7 +745,7 @@ impl Interpreter {
                             for (col_idx, col_name) in col_names.iter().enumerate() {
                                 let cell_value =
                                     sheet.get(actual_idx, col_idx).unwrap_or(&CellValue::Null);
-                                row_obj.insert(col_name.clone(), cell_value_to_value(cell_value));
+                                row_obj.insert(col_name.clone(), cell_to_value(cell_value.clone()));
                             }
                             Ok(Value::Object(row_obj))
                         } else {
@@ -765,7 +754,7 @@ impl Interpreter {
                             for col_idx in 0..sheet.col_count() {
                                 let cell_value =
                                     sheet.get(actual_idx, col_idx).unwrap_or(&CellValue::Null);
-                                row_arr.push(cell_value_to_value(cell_value));
+                                row_arr.push(cell_to_value(cell_value.clone()));
                             }
                             Ok(Value::Array(row_arr))
                         }
