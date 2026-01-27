@@ -2481,13 +2481,18 @@ export data to "{}""#,
 
         // Verify data was loaded
         let data = interp.get_var("data").await.unwrap();
-        assert!(matches!(&data, Value::Array(arr) if arr.len() == 2));
+        assert!(matches!(&data, Value::Sheet(sheet) if sheet.row_count() == 3)); // header + 2 data rows
 
-        // Check first record has the right name
-        if let Value::Array(arr) = &data {
-            if let Value::Object(obj) = &arr[0] {
-                assert!(matches!(obj.get("name"), Some(Value::String(s)) if s == "alice"));
-            }
+        // Check the sheet has the right data
+        if let Value::Sheet(sheet) = &data {
+            // Check column names
+            let col_names = sheet.column_names().unwrap();
+            assert_eq!(col_names[0], "name");
+            assert_eq!(col_names[1], "age");
+            
+            // Check first data row
+            let row = &sheet.data()[1]; // row 0 is header, row 1 is first data row
+            assert!(matches!(&row[0], piptable_sheet::CellValue::String(s) if s == "alice"));
         }
     }
 
@@ -2542,17 +2547,23 @@ export data to "{}""#,
         let program = PipParser::parse_str(&script).unwrap();
         interp.eval(program).await.unwrap();
 
-        // Verify data was loaded with default column names
+        // Verify data was loaded without headers
         let data = interp.get_var("data").await.unwrap();
-        assert!(matches!(&data, Value::Array(arr) if arr.len() == 2));
-
-        // Check that default column names were used (col0, col1, etc.)
-        if let Value::Array(arr) = &data {
-            if let Value::Object(obj) = &arr[0] {
-                assert!(obj.contains_key("col0"));
-                assert!(obj.contains_key("col1"));
-                assert!(matches!(obj.get("col0"), Some(Value::String(s)) if s == "alice"));
-            }
+        assert!(matches!(&data, Value::Sheet(sheet) if sheet.row_count() == 2)); // 2 data rows, no header
+        
+        // Check that no column names exist
+        if let Value::Sheet(sheet) = &data {
+            // With headers=false, there should be no column names
+            assert!(sheet.column_names().is_none());
+            
+            // First row should be "alice,30"
+            let row = &sheet.data()[0];
+            assert!(matches!(&row[0], piptable_sheet::CellValue::String(s) if s == "alice"));
+            // CSV parser might parse "30" as an integer
+            assert!(
+                matches!(&row[1], piptable_sheet::CellValue::Int(30)) || 
+                matches!(&row[1], piptable_sheet::CellValue::String(s) if s == "30")
+            );
         }
     }
 
@@ -2714,7 +2725,7 @@ combined = consolidate(stores, "_store")
 
         // Data should still be imported
         let data = interp.get_var("data").await.unwrap();
-        assert!(matches!(&data, Value::Array(arr) if arr.len() == 1));
+        assert!(matches!(&data, Value::Sheet(sheet) if sheet.row_count() == 2)); // header + 1 data row
     }
 
     #[tokio::test]
