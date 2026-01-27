@@ -33,13 +33,28 @@ pub async fn call_core_builtin(
                 Value::Array(arr) => Value::Int(arr.len() as i64),
                 Value::Object(obj) => Value::Int(obj.len() as i64),
                 Value::Sheet(sheet) => {
-                    // Return data row count, excluding header row if column names exist
-                    let row_count = if sheet.column_names().is_some() {
-                        sheet.row_count().saturating_sub(1)
-                    } else {
-                        sheet.row_count()
+                    // Return data row count, excluding header row only if it exists in data
+                    let header_offset = match sheet.column_names() {
+                        Some(names) => {
+                            // Check if first row matches column names
+                            usize::from(
+                                sheet
+                                    .data()
+                                    .first()
+                                    .map(|row| {
+                                        names.iter().enumerate().all(|(idx, name)| {
+                                            row.get(idx)
+                                                .map(|cell| cell.as_str() == name.as_str())
+                                                .unwrap_or(false)
+                                        })
+                                    })
+                                    .unwrap_or(false),
+                            )
+                        }
+                        None => 0,
                     };
-                    Value::Int(row_count as i64)
+                    let data_row_count = sheet.row_count().saturating_sub(header_offset);
+                    Value::Int(data_row_count as i64)
                 }
                 Value::Table(batches) => {
                     let total: usize = batches.iter().map(|b| b.num_rows()).sum();
