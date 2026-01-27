@@ -231,6 +231,13 @@ pub enum Expr {
         join_type: JoinType,
         condition: JoinCondition,
     },
+
+    /// Method call: `object.method(args)`
+    MethodCall {
+        object: Box<Expr>,
+        method: String,
+        args: Vec<Expr>,
+    },
 }
 
 /// Literal values.
