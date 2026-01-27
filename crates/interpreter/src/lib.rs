@@ -189,6 +189,15 @@ impl Interpreter {
                         // Convert table rows to array of objects
                         self.table_to_array(&batches)?
                     }
+                    Value::Sheet(sheet) => {
+                        // Convert sheet to array of objects for iteration
+                        let value = sheet_conversions::sheet_to_value(&sheet);
+                        if let Value::Array(arr) = value {
+                            arr
+                        } else {
+                            Vec::new()
+                        }
+                    }
                     _ => {
                         return Err(PipError::runtime(
                             line,
@@ -2701,6 +2710,31 @@ combined = consolidate(stores, "_store")
         // Should error because source column must be a string
         assert!(result.is_err());
         assert!(result.unwrap_err().to_string().contains("must be a string"));
+    }
+
+    #[tokio::test]
+    async fn test_foreach_sheet() {
+        let dir = tempfile::tempdir().unwrap();
+        let file_path = dir.path().join("test.csv");
+        std::fs::write(&file_path, "name,age\nalice,30\nbob,25").unwrap();
+
+        let mut interp = Interpreter::new();
+        let script = format!(
+            r#"
+            import "{}" into data
+            dim count = 0
+            for each row in data
+                count = count + 1
+            next
+            "#,
+            file_path.display()
+        );
+        let program = PipParser::parse_str(&script).unwrap();
+        interp.eval(program).await.unwrap();
+
+        // Verify the for each loop worked with Sheet
+        let count = interp.get_var("count").await.unwrap();
+        assert!(matches!(count, Value::Int(2))); // Should have iterated over 2 rows
     }
 
     #[tokio::test]

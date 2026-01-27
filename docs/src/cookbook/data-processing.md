@@ -90,15 +90,10 @@ end if
 
 ```piptable
 ' @title Query Variables Directly
-' @description Run SQL on variables without exporting to files
+' @description Run SQL on Sheet/Table variables without exporting to files
 
-' Create or import data into variables
-dim users = [
-    {"id": 1, "name": "Alice", "dept": "Sales"},
-    {"id": 2, "name": "Bob", "dept": "Engineering"},
-    {"id": 3, "name": "Charlie", "dept": "Sales"}
-]
-
+' Import data into Sheet variables (SQL-compatible)
+import "users.csv" into users
 import "transactions.csv" into transactions
 
 ' Query variables directly with SQL
@@ -125,6 +120,9 @@ dim high_performers = query(
 )
 
 print dept_summary
+
+' Note: Only Sheet and Table variables are auto-registered for SQL.
+' Array variables need to be converted to Sheet first.
 ```
 
 ## Next Steps
