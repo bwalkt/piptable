@@ -185,11 +185,10 @@ import "report_jan.xlsx", "report_feb.xlsx", "report_mar.xlsx" into quarterly
 dim combined: table = consolidate(quarterly)
 
 ' Add quarter column 
-' Note: The DSL requires file references in FROM clauses for SQL queries,
-' so we must export the table variable to a file first before querying it
-export combined to "temp_combined.csv"
+' SQL queries can reference table variables directly (auto-registered).
+' Export to a temp file only if you specifically need file-based workflows.
 dim with_quarter: table = query(
-  SELECT *, 'Q1' as quarter FROM "temp_combined.csv"
+  SELECT *, 'Q1' as quarter FROM combined
 )
 
 export with_quarter to "quarterly_report.xlsx"
@@ -209,16 +208,15 @@ import "departments.xlsx" into departments
 dim analysis: table = employees inner join departments on "dept_id" = "id"
 
 ' Calculate department summaries
-' Note: SQL SELECT queries require file references, not table variables,
-' so we export the joined data first before querying
-export analysis to "temp_analysis.csv"
+' SQL SELECT queries can use table variables directly.
+' Export only when you need a file-backed workflow.
 dim dept_summary: table = query(
   SELECT 
     department_name,
     COUNT(*) as employee_count,
     AVG(salary) as avg_salary,
     SUM(salary) as total_payroll
-  FROM "temp_analysis.csv"
+  FROM analysis
   GROUP BY department_name
   ORDER BY total_payroll DESC
 )
@@ -263,14 +261,13 @@ import "sales.csv" into sales
 import "customers.csv" into customers
 
 ' Create summaries for different sheets
-' Note: SQL queries require file references ("sales.csv") in FROM clauses,
-' not the variable names (sales) that hold the imported data
+' SQL queries can use variable names (sales) directly now.
 dim monthly_summary: table = query(
   SELECT 
     month,
     COUNT(*) as transactions,
     SUM(amount) as total_sales
-  FROM "sales.csv"
+  FROM sales
   GROUP BY month
 )
 
