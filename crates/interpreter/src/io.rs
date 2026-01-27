@@ -1,7 +1,7 @@
 //! Import and export operations for files.
 
 use piptable_core::{ImportOptions, Value};
-use piptable_sheet::{CsvOptions, Sheet};
+use piptable_sheet::{CsvOptions, Sheet, XlsxReadOptions};
 use std::collections::HashMap;
 use std::path::Path;
 
@@ -62,19 +62,22 @@ pub fn import_sheet(
     } else if path_lower.ends_with(".jsonl") {
         Sheet::from_jsonl(path).map_err(|e| format!("Failed to import JSONL: {}", e))
     } else if path_lower.ends_with(".xlsx") || path_lower.ends_with(".xls") {
-        let mut sheet = if let Some(_name) = sheet_name {
-            // For now, just load the first sheet and ignore sheet_name
-            // TODO: implement proper sheet selection
-            Sheet::from_excel(path).map_err(|e| format!("Failed to import Excel: {}", e))?
+        let options = XlsxReadOptions::default().with_headers(has_headers);
+
+        if let Some(name) = sheet_name {
+            // Load specific sheet by name
+            if path_lower.ends_with(".xlsx") {
+                Sheet::from_xlsx_sheet_with_options(path, name, options)
+                    .map_err(|e| format!("Failed to import Excel sheet '{}': {}", name, e))
+            } else {
+                Sheet::from_xls_sheet_with_options(path, name, options)
+                    .map_err(|e| format!("Failed to import Excel sheet '{}': {}", name, e))
+            }
         } else {
-            Sheet::from_excel(path).map_err(|e| format!("Failed to import Excel: {}", e))?
-        };
-        if has_headers {
-            sheet
-                .name_columns_by_row(0)
-                .map_err(|e| format!("Failed to name columns: {}", e))?;
+            // Load the first sheet (default behavior)
+            Sheet::from_excel_with_options(path, options)
+                .map_err(|e| format!("Failed to import Excel: {}", e))
         }
-        Ok(sheet)
     } else if path_lower.ends_with(".parquet") {
         Sheet::from_parquet(path).map_err(|e| format!("Failed to import Parquet: {}", e))
     } else if path_lower.ends_with(".toon") {

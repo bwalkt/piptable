@@ -238,7 +238,8 @@ impl Interpreter {
                 if name == "*" {
                     Ok("*".to_string())
                 } else {
-                    Ok(name.clone())
+                    // Quote identifier to avoid conflicts with SQL keywords
+                    Ok(format!("\"{}\"", name))
                 }
             }
             Expr::Binary { left, op, right } => {

@@ -3487,6 +3487,55 @@ combined = consolidate(stores, "_store")
     }
 
     #[tokio::test]
+    async fn test_excel_sheet_selection() {
+        use tempfile::NamedTempFile;
+
+        // Create a test Excel file with multiple sheets
+        let file = NamedTempFile::new().unwrap();
+        let path = file.path().to_str().unwrap();
+
+        // Create a book with multiple sheets
+        let mut book = piptable_sheet::Book::new();
+
+        let mut sheet1 = piptable_sheet::Sheet::new();
+        sheet1.data_mut().push(vec![
+            piptable_sheet::CellValue::String("Name".to_string()),
+            piptable_sheet::CellValue::String("Value".to_string()),
+        ]);
+        sheet1.data_mut().push(vec![
+            piptable_sheet::CellValue::String("Alice".to_string()),
+            piptable_sheet::CellValue::Int(100),
+        ]);
+        book.add_sheet("Sheet1", sheet1).unwrap();
+
+        let mut sheet2 = piptable_sheet::Sheet::new();
+        sheet2.data_mut().push(vec![
+            piptable_sheet::CellValue::String("Product".to_string()),
+            piptable_sheet::CellValue::String("Price".to_string()),
+        ]);
+        sheet2.data_mut().push(vec![
+            piptable_sheet::CellValue::String("Apple".to_string()),
+            piptable_sheet::CellValue::Float(1.99),
+        ]);
+        book.add_sheet("Data", sheet2).unwrap();
+
+        // Save as Excel file
+        let xlsx_path = format!("{}.xlsx", path);
+        book.save_as_xlsx(&xlsx_path).unwrap();
+
+        // Test that our io module can load specific sheets
+        let result1 = io::import_sheet(&xlsx_path, None, true).unwrap();
+        assert_eq!(result1.row_count(), 2);
+
+        let result2 = io::import_sheet(&xlsx_path, Some("Data"), true).unwrap();
+        assert_eq!(result2.row_count(), 2);
+        assert_eq!(
+            result2.data()[1][0],
+            piptable_sheet::CellValue::String("Apple".to_string())
+        );
+    }
+
+    #[tokio::test]
     async fn test_sheet_map() {
         let mut interp = Interpreter::new();
 
