@@ -32,7 +32,15 @@ pub async fn call_core_builtin(
                 Value::String(s) => Value::Int(s.len() as i64),
                 Value::Array(arr) => Value::Int(arr.len() as i64),
                 Value::Object(obj) => Value::Int(obj.len() as i64),
-                Value::Sheet(sheet) => Value::Int(sheet.row_count() as i64),
+                Value::Sheet(sheet) => {
+                    // Return data row count, excluding header row if column names exist
+                    let row_count = if sheet.column_names().is_some() {
+                        sheet.row_count().saturating_sub(1)
+                    } else {
+                        sheet.row_count()
+                    };
+                    Value::Int(row_count as i64)
+                }
                 Value::Table(batches) => {
                     let total: usize = batches.iter().map(|b| b.num_rows()).sum();
                     Value::Int(total as i64)
