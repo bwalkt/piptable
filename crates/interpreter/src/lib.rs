@@ -1759,6 +1759,8 @@ impl Interpreter {
     }
 
     /// Register a sheet as a table and return the table name.
+    /// Note: Sheet variables are registered with a "sheet_" prefix to avoid conflicts with other table types.
+    /// This is handled transparently when referencing variables in SQL queries.
     async fn register_sheet_as_table(&mut self, name: &str, sheet: &Sheet) -> PipResult<String> {
         let table_name = format!("sheet_{}", name.replace(['-', '.', ' '], "_"));
 

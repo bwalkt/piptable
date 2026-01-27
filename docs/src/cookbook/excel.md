@@ -48,8 +48,9 @@ print "Loaded workbook with " + str(len(report_book.sheets())) + " sheets"
 ### Important: Excel Table Naming in SQL
 
 When using Excel files in SQL queries:
-- **Via import**: When you import an Excel file into a variable (e.g., `import "data.xlsx" into sales`), use the variable name in SQL: `FROM sales`
-- **Direct file reference**: When referencing Excel files directly in SQL without importing, the table name gets a `sheet_` prefix internally. However, it's recommended to always import Excel files first for consistency.
+- **Via import**: When you import an Excel file into a variable (e.g., `import "data.xlsx" into sales`), use the variable name in SQL: `FROM sales`. The system handles the internal registration transparently.
+- **Direct file reference**: When referencing Excel files directly in SQL (e.g., `FROM 'data.xlsx'`), the file is registered using the filename as the table name.
+- **Best Practice**: Always import Excel files first for better control over naming and to ensure consistency across your scripts.
 
 ### Query Excel Data with SQL
 ```piptable
