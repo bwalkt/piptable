@@ -2,8 +2,9 @@
 
 #![allow(clippy::needless_raw_string_hashes)]
 
-#[path = "_common.rs"]
-mod common;
+mod common {
+    include!("common_impl.txt");
+}
 use common::*;
 
 /// Asserts that evaluating a script which references an undefined variable produces an interpreter error.

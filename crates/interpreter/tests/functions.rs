@@ -2,8 +2,9 @@
 
 #![allow(clippy::needless_raw_string_hashes)]
 
-#[path = "_common.rs"]
-mod common;
+mod common {
+    include!("common_impl.txt");
+}
 use common::*;
 
 use piptable_core::Value;
