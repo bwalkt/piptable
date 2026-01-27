@@ -356,7 +356,7 @@ fn build_export_stmt(pair: Pair<Rule>, line: usize) -> BuildResult<Statement> {
     let mut append = false;
     let mut options = None;
 
-    while let Some(next_pair) = inner.next() {
+    for next_pair in inner {
         match next_pair.as_rule() {
             Rule::export_mode => {
                 append = true;
