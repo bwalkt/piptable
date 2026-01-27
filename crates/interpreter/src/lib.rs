@@ -1710,17 +1710,6 @@ impl Interpreter {
             return Ok(vec![batch]);
         }
 
-        if sheet.row_count() <= 1 {
-            // Only header row or empty - create empty table with schema
-            let fields: Vec<Field> = column_names
-                .iter()
-                .map(|name| Field::new(name, DataType::Utf8, true))
-                .collect();
-            let schema = Arc::new(Schema::new(fields));
-            let batch = RecordBatch::new_empty(schema.clone());
-            return Ok(vec![batch]);
-        }
-
         // Determine if we should skip the first row
         // Only skip if column_names were set AND the first row matches those names
         let should_skip_first = if sheet.column_names().is_some() && !sheet.data().is_empty() {
@@ -2809,6 +2798,43 @@ combined = consolidate(stores, "_store")
     // TODO: Add test_sheet_integer_indexing once issue #163 (Sheet column name detection) is fixed
     // The feature is implemented and working, but the test needs Sheet::from_csv_str_with_options
     // to properly detect column names
+
+    #[tokio::test]
+    async fn test_single_row_headerless_sheet() {
+        // Test that single-row headerless sheets are correctly handled in SQL
+        let mut interp = Interpreter::new();
+
+        // Create a single-row sheet without headers
+        let single_row_sheet = Sheet::from_data(vec![vec![
+            CellValue::String("value1".to_string()),
+            CellValue::String("value2".to_string()),
+            CellValue::Int(42),
+        ]]);
+        
+        interp
+            .set_var("single_row", Value::Sheet(single_row_sheet))
+            .await;
+
+        // This should work and not treat the single row as header-only
+        let script = r#"
+            dim result = query(SELECT * FROM single_row)
+        "#;
+
+        let program = PipParser::parse_str(script).unwrap();
+        let result = interp.eval(program).await;
+        
+        // Should succeed
+        assert!(result.is_ok(), "Query on single-row sheet failed: {:?}", result);
+        
+        // Verify we got the data row
+        let query_result = interp.get_var("result").await.unwrap();
+        if let Value::Table(batches) = query_result {
+            let total_rows: usize = batches.iter().map(|b| b.num_rows()).sum();
+            assert_eq!(total_rows, 1, "Expected 1 data row, got {}", total_rows);
+        } else {
+            panic!("Expected Table result");
+        }
+    }
 
     #[tokio::test]
     async fn test_sheet_len_excludes_header() {
