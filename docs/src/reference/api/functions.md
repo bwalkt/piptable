@@ -58,6 +58,23 @@ These functions are available in the current version of PipTable:
 | `values(object)` | Get object values | `values({"a": 1, "b": 2})` → `[1, 2]` | ✅ Implemented |
 | `consolidate(book)` | Consolidate book sheets | `consolidate(book)` | ✅ Implemented |
 
+### Sheet Functions
+
+| Function | Description | Example | Status |
+|----------|-------------|---------|--------|
+| `sheet_map(sheet, operation)` | Transform sheet cell values | `sheet_map(data, "upper")` | ✅ Implemented |
+| `sheet_filter_rows(sheet, column, value)` | Filter sheet rows by column value | `sheet_filter_rows(data, "status", "active")` | ✅ Implemented |
+
+**sheet_map operations:**
+- `"upper"` - Convert string cells to uppercase
+- `"lower"` - Convert string cells to lowercase  
+- `"trim"` - Trim whitespace from string cells
+
+**sheet_filter_rows:**
+- Filters rows where the specified column matches the given value
+- Preserves the header row
+- Returns a new sheet with only matching rows
+
 ### Array Functions (Planned) 📋
 
 | Function | Description | Example | Status |
@@ -270,6 +287,12 @@ dim maximum = max(3, 1, 5)
 ' Object operations
 dim object_keys = keys(data)
 dim object_values = values(data)
+
+' Sheet operations
+import "data.csv" as data has_headers
+dim upper_data = sheet_map(data, "upper")  ' Convert all text to uppercase
+dim clean_data = sheet_map(data, "trim")   ' Trim whitespace from all cells
+dim active_only = sheet_filter_rows(data, "status", "active")  ' Filter to active rows
 ```
 
 ### Using Python UDFs (When Python Available)
