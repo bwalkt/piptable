@@ -37,8 +37,18 @@ jobs:
             ${{ runner.os }}-cargo-
 
       # piptable-python excluded: requires Python/PyO3 setup
-      - name: Run tests
-        run: cargo test --workspace --exclude piptable-python --jobs 2
+      # Run tests in smaller batches to avoid linker bus error from memory exhaustion
+      - name: Run core tests
+        run: cargo test --package piptable-core --package piptable-parser
+      
+      - name: Run sheet tests
+        run: cargo test --package piptable-sheet --package piptable-sql
+        
+      - name: Run interpreter tests
+        run: cargo test --package piptable-interpreter
+        
+      - name: Run remaining tests
+        run: cargo test --workspace --exclude piptable-python --exclude piptable-core --exclude piptable-parser --exclude piptable-sheet --exclude piptable-sql --exclude piptable-interpreter
 
   coverage:
     name: Coverage
