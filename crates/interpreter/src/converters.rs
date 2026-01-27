@@ -133,6 +133,7 @@ pub fn sheet_to_arrow(sheet: &Sheet, skip_first_row: usize) -> PipResult<RecordB
                             match cell {
                                 CellValue::Float(f) => values.push(Some(*f)),
                                 CellValue::Int(i) => values.push(Some(*i as f64)),
+                                CellValue::Bool(b) => values.push(Some(if *b { 1.0 } else { 0.0 })),
                                 _ => values.push(None),
                             }
                         } else {
@@ -151,6 +152,7 @@ pub fn sheet_to_arrow(sheet: &Sheet, skip_first_row: usize) -> PipResult<RecordB
                         if let Some(cell) = row.get(col_idx) {
                             match cell {
                                 CellValue::Int(i) => values.push(Some(*i)),
+                                CellValue::Bool(b) => values.push(Some(if *b { 1 } else { 0 })),
                                 _ => values.push(None),
                             }
                         } else {
