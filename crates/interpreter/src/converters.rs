@@ -265,33 +265,36 @@ pub fn consolidate_book(
         let value = &book[*sheet_name];
         match value {
             Value::Array(records) => {
-                for record in records {
+                for (row_idx, record) in records.iter().enumerate() {
                     if let Value::Object(obj) = record {
-                        // Skip header rows: check if this row contains mostly column names as string values
-                        let string_values: Vec<&String> = obj
-                            .values()
-                            .filter_map(|v| {
-                                if let Value::String(s) = v {
-                                    Some(s)
-                                } else {
-                                    None
-                                }
-                            })
-                            .collect();
+                        // Only check for header row on the first row of each sheet
+                        if row_idx == 0 {
+                            // Skip header rows: check if this row contains mostly column names as string values
+                            let string_values: Vec<&String> = obj
+                                .values()
+                                .filter_map(|v| {
+                                    if let Value::String(s) = v {
+                                        Some(s)
+                                    } else {
+                                        None
+                                    }
+                                })
+                                .collect();
 
-                        let is_header_row = if string_values.len() >= 2 {
-                            // If ALL string values are column names, it's definitely a header row
-                            let matching_columns = string_values
-                                .iter()
-                                .filter(|s| all_columns.contains(s.as_str()))
-                                .count();
-                            matching_columns == string_values.len() // All string values must match column names
-                        } else {
-                            false
-                        };
+                            let is_header_row = if string_values.len() >= 2 {
+                                // If ALL string values are column names, it's likely a header row
+                                let matching_columns = string_values
+                                    .iter()
+                                    .filter(|s| all_columns.contains(s.as_str()))
+                                    .count();
+                                matching_columns == string_values.len() // All string values must match column names
+                            } else {
+                                false
+                            };
 
-                        if is_header_row {
-                            continue; // Skip header rows
+                            if is_header_row {
+                                continue; // Skip header rows
+                            }
                         }
 
                         let mut new_row: IndexMap<String, Value> = IndexMap::new();
