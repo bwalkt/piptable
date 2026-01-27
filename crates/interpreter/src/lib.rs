@@ -1634,7 +1634,9 @@ impl Interpreter {
             // Load Excel file as Sheet and register it
             use crate::io::import_sheet;
             let sheet = import_sheet(path, None, true) // Assume Excel files have headers by default
-                .map_err(|e| PipError::runtime(0, format!("Failed to load Excel file '{}': {}", path, e)))?;
+                .map_err(|e| {
+                    PipError::runtime(0, format!("Failed to load Excel file '{}': {}", path, e))
+                })?;
             // Use the existing register_sheet_as_table method
             // but return the original table_name for consistency
             let _ = self.register_sheet_as_table(&table_name, &sheet).await?;
