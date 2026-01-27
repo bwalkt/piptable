@@ -2041,6 +2041,9 @@ impl Interpreter {
                 let row_index = args[0]
                     .as_int()
                     .ok_or_else(|| PipError::runtime(0, "Row index must be an integer"))?;
+                if row_index < 0 {
+                    return Err(PipError::runtime(0, "Row index cannot be negative"));
+                }
                 let mut new_sheet = sheet.clone();
                 new_sheet
                     .name_columns_by_row(row_index as usize)
@@ -3683,6 +3686,25 @@ combined = consolidate(stores, "_store")
         } else {
             panic!("Expected transposed sheet");
         }
+    }
+
+    #[tokio::test]
+    async fn test_method_call_negative_index_error() {
+        // Test that negative indices are properly rejected
+        let mut interp = Interpreter::new();
+
+        // Create a simple sheet with data
+        let sheet = Sheet::from_data(vec![vec!["Name", "Age"], vec!["Alice", "30"]]);
+
+        // Set the sheet as a variable
+        interp.set_var("data", Value::Sheet(sheet)).await;
+
+        // Try to use negative index - should fail
+        let program = PipParser::parse_str("dim result = data.name_columns_by_row(-1)").unwrap();
+        let error = interp.eval(program).await;
+        assert!(error.is_err());
+        let err_msg = error.unwrap_err().to_string();
+        assert!(err_msg.contains("Row index cannot be negative"));
     }
 
     #[tokio::test]
