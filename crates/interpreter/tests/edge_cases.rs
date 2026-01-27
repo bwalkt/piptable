@@ -1,6 +1,5 @@
 //! Edge_Cases tests for the PipTable interpreter.
 
-#![allow(clippy::approx_constant)]
 #![allow(clippy::needless_raw_string_hashes)]
 
 mod common;

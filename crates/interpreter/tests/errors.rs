@@ -1,6 +1,5 @@
 //! Errors tests for the PipTable interpreter.
 
-#![allow(clippy::approx_constant)]
 #![allow(clippy::needless_raw_string_hashes)]
 
 mod common;
@@ -99,11 +98,10 @@ async fn test_for_loop_zero_step() {
 #[tokio::test]
 async fn test_type_error_add_string_int() {
     let err = run_script_err(r#"dim x = "hello" + 42"#).await;
-    // This might concatenate or error depending on implementation
-    // If it errors, check the message
+    // Verify the interpreter produces a type error for string + int
     assert!(
-        err.contains("Type error") || err.contains("Cannot") || err.is_empty(),
-        "Got unexpected error: {}",
+        err.contains("Type error") || err.contains("Cannot"),
+        "Expected type error, got: {}",
         err
     );
 }
