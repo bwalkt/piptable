@@ -37,20 +37,70 @@ print "Loaded " + str(len(data)) + " typed records from TOON"
 ' @description Leverage TOON's type information for safe processing
 
 import "employees.toon" into employees
-export employees to "temp_employees.csv"
 
-' Type information is preserved - use file reference
+' TOON files can now be queried directly with SQL
 dim high_earners: table = query(
   SELECT 
     name,
     age,
     salary,
     salary * 0.15 as bonus
-  FROM "temp_employees.csv"
+  FROM employees
   WHERE salary > 70000 AND active = true
 )
 
 export high_earners to "high_earners.toon"
+```
+
+## SQL Queries on TOON Files
+
+### Direct File Queries
+```piptable
+' @title Query TOON Files with SQL
+' @description TOON files can be referenced directly in SQL FROM clauses
+
+' Query a TOON file directly by filename
+dim results: table = query(
+  SELECT * FROM "products.toon"
+  WHERE price > 20.00
+  ORDER BY name
+)
+```
+
+### Joining TOON with Other Formats
+```piptable
+' @title Cross-Format SQL Joins
+' @description Join TOON files with CSV, Excel, or other formats
+
+' Join TOON product data with CSV sales data
+dim sales_analysis: table = query(
+  SELECT 
+    p.name as product_name,
+    p.price,
+    s.quantity,
+    p.price * s.quantity as total_value
+  FROM "products.toon" as p
+  JOIN "sales.csv" as s ON p.id = s.product_id
+  ORDER BY total_value DESC
+)
+```
+
+### Variable-Based Queries
+```piptable
+' @title Query TOON Variables
+' @description In-memory TOON data can be queried directly
+
+import "inventory.toon" into inventory
+
+' Query the imported variable directly
+dim low_stock: table = query(
+  SELECT name, quantity, reorder_point
+  FROM inventory
+  WHERE quantity < reorder_point
+  ORDER BY quantity ASC
+)
+
+print "Found " + str(len(low_stock)) + " items below reorder point"
 ```
 
 ## Converting Between Formats
