@@ -3485,4 +3485,188 @@ combined = consolidate(stores, "_store")
             // The new query should have Bob's data, not Alice's
         }
     }
+
+    #[tokio::test]
+    async fn test_sheet_map() {
+        let mut interp = Interpreter::new();
+
+        // Create a test sheet with some string data
+        let mut sheet = piptable_sheet::Sheet::new();
+        sheet.data_mut().push(vec![
+            piptable_sheet::CellValue::String("Name".to_string()),
+            piptable_sheet::CellValue::String("Age".to_string()),
+        ]);
+        sheet.data_mut().push(vec![
+            piptable_sheet::CellValue::String("alice".to_string()),
+            piptable_sheet::CellValue::Int(30),
+        ]);
+        sheet.data_mut().push(vec![
+            piptable_sheet::CellValue::String("  bob  ".to_string()),
+            piptable_sheet::CellValue::Int(25),
+        ]);
+        sheet.name_columns_by_row(0).unwrap();
+
+        // Set the sheet as a variable
+        interp.set_var("sheet", Value::Sheet(sheet)).await;
+
+        // Test upper operation
+        let upper_result = interp
+            .eval_expr(&piptable_core::Expr::Call {
+                function: "sheet_map".to_string(),
+                args: vec![
+                    piptable_core::Expr::Variable("sheet".to_string()),
+                    piptable_core::Expr::Literal(piptable_core::Literal::String(
+                        "upper".to_string(),
+                    )),
+                ],
+            })
+            .await
+            .unwrap();
+
+        if let Value::Sheet(result_sheet) = upper_result {
+            // Check that string values are uppercased
+            assert_eq!(
+                result_sheet.data()[0][0],
+                piptable_sheet::CellValue::String("NAME".to_string())
+            );
+            assert_eq!(
+                result_sheet.data()[1][0],
+                piptable_sheet::CellValue::String("ALICE".to_string())
+            );
+            assert_eq!(
+                result_sheet.data()[2][0],
+                piptable_sheet::CellValue::String("  BOB  ".to_string())
+            );
+            // Non-string values should remain unchanged
+            assert_eq!(
+                result_sheet.data()[1][1],
+                piptable_sheet::CellValue::Int(30)
+            );
+        } else {
+            panic!("Expected Sheet result");
+        }
+
+        // Test lower operation
+        let lower_result = interp
+            .eval_expr(&piptable_core::Expr::Call {
+                function: "sheet_map".to_string(),
+                args: vec![
+                    piptable_core::Expr::Variable("sheet".to_string()),
+                    piptable_core::Expr::Literal(piptable_core::Literal::String(
+                        "lower".to_string(),
+                    )),
+                ],
+            })
+            .await
+            .unwrap();
+
+        if let Value::Sheet(result_sheet) = lower_result {
+            // Check that string values are lowercased
+            assert_eq!(
+                result_sheet.data()[0][0],
+                piptable_sheet::CellValue::String("name".to_string())
+            );
+            assert_eq!(
+                result_sheet.data()[1][0],
+                piptable_sheet::CellValue::String("alice".to_string())
+            );
+            assert_eq!(
+                result_sheet.data()[2][0],
+                piptable_sheet::CellValue::String("  bob  ".to_string())
+            );
+        } else {
+            panic!("Expected Sheet result");
+        }
+
+        // Test trim operation
+        let trim_result = interp
+            .eval_expr(&piptable_core::Expr::Call {
+                function: "sheet_map".to_string(),
+                args: vec![
+                    piptable_core::Expr::Variable("sheet".to_string()),
+                    piptable_core::Expr::Literal(piptable_core::Literal::String(
+                        "trim".to_string(),
+                    )),
+                ],
+            })
+            .await
+            .unwrap();
+
+        if let Value::Sheet(result_sheet) = trim_result {
+            // Check that string values are trimmed
+            assert_eq!(
+                result_sheet.data()[0][0],
+                piptable_sheet::CellValue::String("Name".to_string())
+            );
+            assert_eq!(
+                result_sheet.data()[1][0],
+                piptable_sheet::CellValue::String("alice".to_string())
+            );
+            assert_eq!(
+                result_sheet.data()[2][0],
+                piptable_sheet::CellValue::String("bob".to_string())
+            );
+        } else {
+            panic!("Expected Sheet result");
+        }
+    }
+
+    #[tokio::test]
+    async fn test_sheet_filter_rows() {
+        let mut interp = Interpreter::new();
+
+        // Create a test sheet
+        let mut sheet = piptable_sheet::Sheet::new();
+        sheet.data_mut().push(vec![
+            piptable_sheet::CellValue::String("Name".to_string()),
+            piptable_sheet::CellValue::String("Status".to_string()),
+        ]);
+        sheet.data_mut().push(vec![
+            piptable_sheet::CellValue::String("Alice".to_string()),
+            piptable_sheet::CellValue::String("Active".to_string()),
+        ]);
+        sheet.data_mut().push(vec![
+            piptable_sheet::CellValue::String("Bob".to_string()),
+            piptable_sheet::CellValue::String("Inactive".to_string()),
+        ]);
+        sheet.data_mut().push(vec![
+            piptable_sheet::CellValue::String("Charlie".to_string()),
+            piptable_sheet::CellValue::String("Active".to_string()),
+        ]);
+        sheet.name_columns_by_row(0).unwrap();
+
+        interp.set_var("sheet", Value::Sheet(sheet)).await;
+
+        // Test filtering for Active status
+        let filter_result = interp
+            .eval_expr(&piptable_core::Expr::Call {
+                function: "sheet_filter_rows".to_string(),
+                args: vec![
+                    piptable_core::Expr::Variable("sheet".to_string()),
+                    piptable_core::Expr::Literal(piptable_core::Literal::String(
+                        "Status".to_string(),
+                    )),
+                    piptable_core::Expr::Literal(piptable_core::Literal::String(
+                        "Active".to_string(),
+                    )),
+                ],
+            })
+            .await
+            .unwrap();
+
+        if let Value::Sheet(result_sheet) = filter_result {
+            // Should have only 2 active rows (header row is also filtered)
+            assert_eq!(result_sheet.row_count(), 2);
+            assert_eq!(
+                result_sheet.data()[0][0],
+                piptable_sheet::CellValue::String("Alice".to_string())
+            );
+            assert_eq!(
+                result_sheet.data()[1][0],
+                piptable_sheet::CellValue::String("Charlie".to_string())
+            );
+        } else {
+            panic!("Expected Sheet result");
+        }
+    }
 }
