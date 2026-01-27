@@ -2,8 +2,8 @@
 
 #![allow(clippy::needless_raw_string_hashes)]
 
-mod common;
-use common::*;
+mod _common;
+use _common::*;
 
 use piptable_core::Value;
 use wiremock::matchers::{method, path};

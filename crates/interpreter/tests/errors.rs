@@ -2,8 +2,8 @@
 
 #![allow(clippy::needless_raw_string_hashes)]
 
-mod common;
-use common::*;
+mod _common;
+use _common::*;
 
 /// Asserts that evaluating a script which references an undefined variable produces an interpreter error.
 ///
