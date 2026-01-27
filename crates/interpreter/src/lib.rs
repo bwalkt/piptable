@@ -9,20 +9,24 @@
 //! - Integration with SQL and HTTP engines
 //! - Python UDF support (with `python` feature)
 
+mod builtins;
+mod converters;
+mod io;
+mod sheet_conversions;
+mod sql_builder;
+
 #[cfg(feature = "python")]
 mod python;
 
+use crate::sheet_conversions::{build_sheet_arrow_array, infer_sheet_column_type};
 use async_recursion::async_recursion;
 use piptable_core::{
-    BinaryOp, Expr, FromClause, ImportOptions, JoinClause, JoinType, LValue, Literal, OrderByItem,
-    PipError, PipResult, Program, SelectClause, SelectItem, SortDirection, SqlQuery, Statement,
-    TableRef, UnaryOp, Value,
+    BinaryOp, Expr, LValue, Literal, PipError, PipResult, Program, Statement, UnaryOp, Value,
 };
 use piptable_http::HttpClient;
 use piptable_sheet::{CellValue, Sheet};
 use piptable_sql::SqlEngine;
 use std::collections::HashMap;
-use std::path::Path;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 
@@ -367,10 +371,11 @@ impl Interpreter {
                     .map_err(|e| e.with_line(line))?;
 
                 // Convert both to sheets
-                let mut target_sheet = value_to_sheet(&target_val).map_err(|e| {
-                    PipError::runtime(line, format!("target must be a sheet: {}", e))
-                })?;
-                let source_sheet = value_to_sheet(&source_val).map_err(|e| {
+                let mut target_sheet =
+                    sheet_conversions::value_to_sheet(&target_val).map_err(|e| {
+                        PipError::runtime(line, format!("target must be a sheet: {}", e))
+                    })?;
+                let source_sheet = sheet_conversions::value_to_sheet(&source_val).map_err(|e| {
                     PipError::runtime(line, format!("source must be a sheet: {}", e))
                 })?;
 
@@ -395,7 +400,8 @@ impl Interpreter {
                 }
 
                 // Update the variable with modified sheet
-                self.set_var(&target, sheet_to_value(&target_sheet)).await;
+                self.set_var(&target, sheet_conversions::sheet_to_value(&target_sheet))
+                    .await;
                 Ok(Value::Null)
             }
 
@@ -417,10 +423,11 @@ impl Interpreter {
                     .map_err(|e| e.with_line(line))?;
 
                 // Convert both to sheets
-                let mut target_sheet = value_to_sheet(&target_val).map_err(|e| {
-                    PipError::runtime(line, format!("target must be a sheet: {}", e))
-                })?;
-                let source_sheet = value_to_sheet(&source_val).map_err(|e| {
+                let mut target_sheet =
+                    sheet_conversions::value_to_sheet(&target_val).map_err(|e| {
+                        PipError::runtime(line, format!("target must be a sheet: {}", e))
+                    })?;
+                let source_sheet = sheet_conversions::value_to_sheet(&source_val).map_err(|e| {
                     PipError::runtime(line, format!("source must be a sheet: {}", e))
                 })?;
 
@@ -430,7 +437,8 @@ impl Interpreter {
                     .map_err(|e| PipError::runtime(line, format!("upsert failed: {}", e)))?;
 
                 // Update the variable with modified sheet
-                self.set_var(&target, sheet_to_value(&target_sheet)).await;
+                self.set_var(&target, sheet_conversions::sheet_to_value(&target_sheet))
+                    .await;
                 Ok(Value::Null)
             }
 
@@ -480,11 +488,11 @@ impl Interpreter {
                 };
 
                 // Convert Value to Sheet and export
-                let sheet = value_to_sheet(&data)
+                let sheet = sheet_conversions::value_to_sheet(&data)
                     .map_err(|e| PipError::Export(format!("Line {}: {}", line, e)))?;
 
                 // Determine format from file extension and export
-                export_sheet(&sheet, &path)
+                io::export_sheet(&sheet, &path)
                     .map_err(|e| PipError::Export(format!("Line {}: {}", line, e)))?;
 
                 Ok(Value::Null)
@@ -559,14 +567,14 @@ impl Interpreter {
                 // Multi-file or single file import
                 let value = if paths.len() > 1 {
                     // Multi-file import: use Book::from_files_with_options
-                    import_multi_files(&paths, &options)
+                    io::import_multi_files(&paths, &options)
                         .map_err(|e| PipError::Import(format!("Line {}: {}", line, e)))?
                 } else {
                     // Single file import
                     let has_headers = options.has_headers.unwrap_or(true);
-                    let sheet = import_sheet(&paths[0], sheet_name_str.as_deref(), has_headers)
+                    let sheet = io::import_sheet(&paths[0], sheet_name_str.as_deref(), has_headers)
                         .map_err(|e| PipError::Import(format!("Line {}: {}", line, e)))?;
-                    sheet_to_value(&sheet)
+                    sheet_conversions::sheet_to_value(&sheet)
                 };
 
                 // Store in target variable
@@ -706,7 +714,7 @@ impl Interpreter {
                             })?;
 
                             // Convert CellValue to Value
-                            cell_to_value(cell)
+                            sheet_conversions::cell_to_value(cell.clone())
                         })
                     }
                     // Type mismatches
@@ -810,10 +818,10 @@ impl Interpreter {
                 let right_val = self.eval_expr(right).await?;
 
                 // Convert values to sheets
-                let left_sheet = value_to_sheet(&left_val).map_err(|e| {
+                let left_sheet = sheet_conversions::value_to_sheet(&left_val).map_err(|e| {
                     PipError::runtime(0, format!("Left side of join must be a sheet: {}", e))
                 })?;
-                let right_sheet = value_to_sheet(&right_val).map_err(|e| {
+                let right_sheet = sheet_conversions::value_to_sheet(&right_val).map_err(|e| {
                     PipError::runtime(0, format!("Right side of join must be a sheet: {}", e))
                 })?;
 
@@ -864,7 +872,7 @@ impl Interpreter {
                     }
                 };
 
-                Ok(sheet_to_value(&result))
+                Ok(sheet_conversions::sheet_to_value(&result))
             }
 
             Expr::Ask { .. } => {
@@ -920,8 +928,8 @@ impl Interpreter {
             BinaryOp::And => Ok(Value::Bool(left.is_truthy() && right.is_truthy())),
             BinaryOp::Or => Ok(Value::Bool(left.is_truthy() || right.is_truthy())),
             BinaryOp::Concat => {
-                let l = self.value_to_string(left);
-                let r = self.value_to_string(right);
+                let l = converters::value_to_string(left);
+                let r = converters::value_to_string(right);
                 Ok(Value::String(format!("{l}{r}")))
             }
             BinaryOp::Like => {
@@ -932,7 +940,7 @@ impl Interpreter {
                 let pattern = right
                     .as_str()
                     .ok_or_else(|| PipError::runtime(0, "LIKE pattern must be string"))?;
-                Ok(Value::Bool(self.matches_like(s, pattern)))
+                Ok(Value::Bool(converters::matches_like(s, pattern)))
             }
             BinaryOp::In => {
                 // Check if left is in right (array)
@@ -1061,11 +1069,9 @@ impl Interpreter {
     where
         F: Fn(f64, f64) -> bool,
     {
-        let l = self
-            .value_to_number(left)
+        let l = converters::value_to_number(left)
             .ok_or_else(|| PipError::runtime(0, "Cannot compare non-numeric value"))?;
-        let r = self
-            .value_to_number(right)
+        let r = converters::value_to_number(right)
             .ok_or_else(|| PipError::runtime(0, "Cannot compare non-numeric value"))?;
         Ok(Value::Bool(cmp(l, r)))
     }
@@ -1082,64 +1088,6 @@ impl Interpreter {
             (Value::String(a), Value::String(b)) => a == b,
             _ => false,
         }
-    }
-
-    fn value_to_number(&self, val: &Value) -> Option<f64> {
-        match val {
-            Value::Int(n) => Some(*n as f64),
-            Value::Float(f) => Some(*f),
-            _ => None,
-        }
-    }
-
-    fn value_to_string(&self, val: &Value) -> String {
-        match val {
-            Value::Null => "null".to_string(),
-            Value::Bool(b) => b.to_string(),
-            Value::Int(n) => n.to_string(),
-            Value::Float(f) => f.to_string(),
-            Value::String(s) => s.clone(),
-            Value::Array(_) => "[Array]".to_string(),
-            Value::Object(_) => "[Object]".to_string(),
-            Value::Table(_) => "[Table]".to_string(),
-            Value::Sheet(_) => "[Sheet]".to_string(),
-            Value::Function { name, .. } => format!("[Function: {name}]"),
-        }
-    }
-
-    fn matches_like(&self, s: &str, pattern: &str) -> bool {
-        // Simple LIKE implementation with % wildcards
-        let parts: Vec<&str> = pattern.split('%').collect();
-        if parts.len() == 1 {
-            return s == pattern;
-        }
-
-        let mut pos = 0;
-        for (i, part) in parts.iter().enumerate() {
-            if part.is_empty() {
-                continue;
-            }
-            if i == 0 {
-                // Must start with this part
-                if !s.starts_with(part) {
-                    return false;
-                }
-                pos = part.len();
-            } else if i == parts.len() - 1 {
-                // Must end with this part
-                if !s[pos..].ends_with(part) {
-                    return false;
-                }
-            } else {
-                // Must contain this part
-                if let Some(idx) = s[pos..].find(part) {
-                    pos += idx + part.len();
-                } else {
-                    return false;
-                }
-            }
-        }
-        true
     }
 
     /// Evaluate a unary operation.
@@ -1177,168 +1125,12 @@ impl Interpreter {
         line: usize,
     ) -> PipResult<Value> {
         // Check built-in functions first
+        if let Some(result) = builtins::call_builtin(self, name, args.clone(), line).await {
+            return result;
+        }
+
+        // Functions that still need to be migrated to modules
         match name.to_lowercase().as_str() {
-            "print" => {
-                let output: Vec<String> = args.iter().map(|v| self.value_to_string(v)).collect();
-                let msg = output.join(" ");
-                self.print(&msg).await;
-                Ok(Value::Null)
-            }
-            "len" | "length" => {
-                if args.len() != 1 {
-                    return Err(PipError::runtime(line, "len() takes exactly 1 argument"));
-                }
-                match &args[0] {
-                    Value::String(s) => Ok(Value::Int(s.len() as i64)),
-                    Value::Array(a) => Ok(Value::Int(a.len() as i64)),
-                    Value::Table(batches) => {
-                        let count: usize = batches.iter().map(|b| b.num_rows()).sum();
-                        Ok(Value::Int(count as i64))
-                    }
-                    Value::Sheet(sheet) => Ok(Value::Int(sheet.row_count() as i64)),
-                    _ => Err(PipError::runtime(
-                        line,
-                        format!("len() not supported for {}", args[0].type_name()),
-                    )),
-                }
-            }
-            "type" | "typeof" => {
-                if args.len() != 1 {
-                    return Err(PipError::runtime(line, "type() takes exactly 1 argument"));
-                }
-                Ok(Value::String(args[0].type_name().to_string()))
-            }
-            "str" | "string" => {
-                if args.len() != 1 {
-                    return Err(PipError::runtime(line, "str() takes exactly 1 argument"));
-                }
-                Ok(Value::String(self.value_to_string(&args[0])))
-            }
-            "int" | "integer" => {
-                if args.len() != 1 {
-                    return Err(PipError::runtime(line, "int() takes exactly 1 argument"));
-                }
-                match &args[0] {
-                    Value::Int(n) => Ok(Value::Int(*n)),
-                    Value::Float(f) => Ok(Value::Int(*f as i64)),
-                    Value::String(s) => s.parse::<i64>().map(Value::Int).map_err(|_| {
-                        PipError::runtime(line, format!("Cannot convert '{s}' to int"))
-                    }),
-                    Value::Bool(b) => Ok(Value::Int(if *b { 1 } else { 0 })),
-                    _ => Err(PipError::runtime(
-                        line,
-                        format!("Cannot convert {} to int", args[0].type_name()),
-                    )),
-                }
-            }
-            "float" => {
-                if args.len() != 1 {
-                    return Err(PipError::runtime(line, "float() takes exactly 1 argument"));
-                }
-                match &args[0] {
-                    Value::Int(n) => Ok(Value::Float(*n as f64)),
-                    Value::Float(f) => Ok(Value::Float(*f)),
-                    Value::String(s) => s.parse::<f64>().map(Value::Float).map_err(|_| {
-                        PipError::runtime(line, format!("Cannot convert '{s}' to float"))
-                    }),
-                    _ => Err(PipError::runtime(
-                        line,
-                        format!("Cannot convert {} to float", args[0].type_name()),
-                    )),
-                }
-            }
-            "abs" => {
-                if args.len() != 1 {
-                    return Err(PipError::runtime(line, "abs() takes exactly 1 argument"));
-                }
-                match &args[0] {
-                    Value::Int(n) => n
-                        .checked_abs()
-                        .map(Value::Int)
-                        .ok_or_else(|| PipError::runtime(line, "Integer overflow in abs()")),
-                    Value::Float(f) => Ok(Value::Float(f.abs())),
-                    _ => Err(PipError::runtime(line, "abs() requires numeric argument")),
-                }
-            }
-            "min" => {
-                if args.is_empty() {
-                    return Err(PipError::runtime(
-                        line,
-                        "min() requires at least 1 argument",
-                    ));
-                }
-                self.find_min_max(&args, true, line)
-            }
-            "max" => {
-                if args.is_empty() {
-                    return Err(PipError::runtime(
-                        line,
-                        "max() requires at least 1 argument",
-                    ));
-                }
-                self.find_min_max(&args, false, line)
-            }
-            "sum" => {
-                if args.len() != 1 {
-                    return Err(PipError::runtime(line, "sum() takes exactly 1 argument"));
-                }
-                match &args[0] {
-                    Value::Array(arr) => {
-                        let mut total = 0.0;
-                        for v in arr {
-                            total += self.value_to_number(v).ok_or_else(|| {
-                                PipError::runtime(line, "sum() requires numeric array")
-                            })?;
-                        }
-                        if arr.iter().all(|v| matches!(v, Value::Int(_))) {
-                            Ok(Value::Int(total as i64))
-                        } else {
-                            Ok(Value::Float(total))
-                        }
-                    }
-                    _ => Err(PipError::runtime(line, "sum() requires array argument")),
-                }
-            }
-            "avg" | "average" => {
-                if args.len() != 1 {
-                    return Err(PipError::runtime(line, "avg() takes exactly 1 argument"));
-                }
-                match &args[0] {
-                    Value::Array(arr) => {
-                        if arr.is_empty() {
-                            return Ok(Value::Null);
-                        }
-                        let mut total = 0.0;
-                        for v in arr {
-                            total += self.value_to_number(v).ok_or_else(|| {
-                                PipError::runtime(line, "avg() requires numeric array")
-                            })?;
-                        }
-                        Ok(Value::Float(total / arr.len() as f64))
-                    }
-                    _ => Err(PipError::runtime(line, "avg() requires array argument")),
-                }
-            }
-            "keys" => {
-                if args.len() != 1 {
-                    return Err(PipError::runtime(line, "keys() takes exactly 1 argument"));
-                }
-                match &args[0] {
-                    Value::Object(obj) => Ok(Value::Array(
-                        obj.keys().map(|k| Value::String(k.clone())).collect(),
-                    )),
-                    _ => Err(PipError::runtime(line, "keys() requires object argument")),
-                }
-            }
-            "values" => {
-                if args.len() != 1 {
-                    return Err(PipError::runtime(line, "values() takes exactly 1 argument"));
-                }
-                match &args[0] {
-                    Value::Object(obj) => Ok(Value::Array(obj.values().cloned().collect())),
-                    _ => Err(PipError::runtime(line, "values() requires object argument")),
-                }
-            }
             "consolidate" => {
                 // consolidate(book) or consolidate(book, source = "_source")
                 if args.is_empty() || args.len() > 2 {
@@ -1363,7 +1155,7 @@ impl Interpreter {
                         } else {
                             None
                         };
-                        consolidate_book(book_obj, source_col.as_deref())
+                        converters::consolidate_book(book_obj, source_col.as_deref())
                             .map_err(|e| PipError::runtime(line, e))
                     }
                     _ => Err(PipError::runtime(
@@ -1411,33 +1203,6 @@ impl Interpreter {
                         line,
                         "register_python() takes 2 or 3 arguments: (name, code) or (name, file, function)",
                     )),
-                }
-            }
-            // Sheet operations
-            "sheet_name_columns_by_row" => {
-                if args.len() != 2 {
-                    return Err(PipError::runtime(
-                        line,
-                        "sheet_name_columns_by_row() takes exactly 2 arguments",
-                    ));
-                }
-                match (&args[0], &args[1]) {
-                    (Value::Sheet(sheet), Value::Int(row_idx)) => {
-                        if *row_idx < 0 {
-                            return Err(PipError::runtime(line, "Row index cannot be negative"));
-                        }
-                        let mut new_sheet = sheet.clone();
-                        new_sheet
-                            .name_columns_by_row(*row_idx as usize)
-                            .map_err(|e| {
-                                PipError::runtime(line, format!("Failed to name columns: {}", e))
-                            })?;
-                        Ok(Value::Sheet(new_sheet))
-                    }
-                    (Value::Sheet(_), _) => {
-                        Err(PipError::runtime(line, "Row index must be an integer"))
-                    }
-                    _ => Err(PipError::runtime(line, "First argument must be a sheet")),
                 }
             }
             "sheet_transpose" => {
@@ -1572,7 +1337,7 @@ impl Interpreter {
                             )
                         })?;
 
-                        Ok(cell_to_value(cell))
+                        Ok(sheet_conversions::cell_to_value(cell.clone()))
                     }
                     _ => Err(PipError::runtime(line, "Arguments must be (sheet, string)")),
                 }
@@ -1805,344 +1570,7 @@ impl Interpreter {
         }
     }
 
-    fn find_min_max(&self, args: &[Value], is_min: bool, line: usize) -> PipResult<Value> {
-        // Handle single array argument
-        let values = if args.len() == 1 {
-            match &args[0] {
-                Value::Array(arr) => arr.clone(),
-                _ => args.to_vec(),
-            }
-        } else {
-            args.to_vec()
-        };
-
-        if values.is_empty() {
-            return Ok(Value::Null);
-        }
-
-        let mut result = self
-            .value_to_number(&values[0])
-            .ok_or_else(|| PipError::runtime(line, "min/max requires numeric values"))?;
-
-        for v in &values[1..] {
-            let n = self
-                .value_to_number(v)
-                .ok_or_else(|| PipError::runtime(line, "min/max requires numeric values"))?;
-            if is_min {
-                result = result.min(n);
-            } else {
-                result = result.max(n);
-            }
-        }
-
-        // Return int if all values were ints
-        if values.iter().all(|v| matches!(v, Value::Int(_))) {
-            Ok(Value::Int(result as i64))
-        } else {
-            Ok(Value::Float(result))
-        }
-    }
-
-    /// Evaluate a SQL query expression.
-    async fn eval_query(&mut self, query: &SqlQuery) -> PipResult<Value> {
-        let sql = self.sql_query_to_string(query).await?;
-        let batches = self.sql.query(&sql).await?;
-        Ok(Value::Table(batches.into_iter().map(Arc::new).collect()))
-    }
-
-    /// Convert a SQL query AST to a SQL string.
-    #[async_recursion]
-    async fn sql_query_to_string(&mut self, query: &SqlQuery) -> PipResult<String> {
-        let mut sql = String::new();
-
-        // WITH clause
-        if let Some(with) = &query.with_clause {
-            sql.push_str("WITH ");
-            if with.recursive {
-                sql.push_str("RECURSIVE ");
-            }
-            // TODO: Handle CTEs
-        }
-
-        // SELECT clause
-        sql.push_str("SELECT ");
-        if query.select.distinct {
-            sql.push_str("DISTINCT ");
-        }
-        sql.push_str(&self.select_clause_to_string(&query.select).await?);
-
-        // FROM clause
-        if let Some(from) = &query.from {
-            sql.push_str(" FROM ");
-            sql.push_str(&self.from_clause_to_string(from).await?);
-        }
-
-        // JOIN clauses
-        for join in &query.joins {
-            sql.push_str(&self.join_clause_to_string(join).await?);
-        }
-
-        // WHERE clause
-        if let Some(where_expr) = &query.where_clause {
-            sql.push_str(" WHERE ");
-            sql.push_str(&self.expr_to_sql(where_expr).await?);
-        }
-
-        // GROUP BY
-        if let Some(group_by) = &query.group_by {
-            sql.push_str(" GROUP BY ");
-            let mut exprs = Vec::new();
-            for e in group_by {
-                exprs.push(self.expr_to_sql(e).await?);
-            }
-            sql.push_str(&exprs.join(", "));
-        }
-
-        // HAVING
-        if let Some(having) = &query.having {
-            sql.push_str(" HAVING ");
-            sql.push_str(&self.expr_to_sql(having).await?);
-        }
-
-        // ORDER BY
-        if let Some(order_by) = &query.order_by {
-            sql.push_str(" ORDER BY ");
-            sql.push_str(&self.order_by_to_string(order_by).await?);
-        }
-
-        // LIMIT
-        if let Some(limit) = &query.limit {
-            sql.push_str(" LIMIT ");
-            sql.push_str(&self.expr_to_sql(limit).await?);
-        }
-
-        // OFFSET
-        if let Some(offset) = &query.offset {
-            sql.push_str(" OFFSET ");
-            sql.push_str(&self.expr_to_sql(offset).await?);
-        }
-
-        Ok(sql)
-    }
-
-    async fn select_clause_to_string(&mut self, select: &SelectClause) -> PipResult<String> {
-        let mut items = Vec::new();
-        for item in &select.items {
-            items.push(self.select_item_to_string(item).await?);
-        }
-        Ok(items.join(", "))
-    }
-
-    async fn select_item_to_string(&mut self, item: &SelectItem) -> PipResult<String> {
-        let expr_str = self.expr_to_sql(&item.expr).await?;
-        Ok(match &item.alias {
-            Some(alias) => format!("{expr_str} AS {alias}"),
-            None => expr_str,
-        })
-    }
-
-    async fn from_clause_to_string(&mut self, from: &FromClause) -> PipResult<String> {
-        let source = self.table_ref_to_string(&from.source).await?;
-        Ok(match &from.alias {
-            Some(alias) => format!("{source} AS {alias}"),
-            None => source,
-        })
-    }
-
-    #[async_recursion]
-    async fn table_ref_to_string(&mut self, table_ref: &TableRef) -> PipResult<String> {
-        match table_ref {
-            TableRef::Table(name) => {
-                // Check if this refers to a variable containing a Sheet
-                if let Some(value) = self.get_var(name).await {
-                    if let Some(sheet) = value.as_sheet() {
-                        // Check if we've already registered this sheet
-                        let sheet_tables = self.sheet_tables.read().await;
-                        if let Some(existing_table) = sheet_tables.get(name) {
-                            return Ok(existing_table.clone());
-                        }
-                        drop(sheet_tables);
-
-                        // Convert Sheet to Table and register it
-                        let table_name = self.register_sheet_as_table(name, sheet).await?;
-
-                        // Remember that we registered this sheet
-                        let mut sheet_tables = self.sheet_tables.write().await;
-                        sheet_tables.insert(name.to_string(), table_name.clone());
-
-                        return Ok(table_name);
-                    }
-                }
-                // Otherwise, treat as regular table name
-                Ok(name.clone())
-            }
-            TableRef::Qualified {
-                database,
-                schema,
-                table,
-            } => Ok(match schema {
-                Some(s) => format!("{database}.{s}.{table}"),
-                None => format!("{database}.{table}"),
-            }),
-            TableRef::File(path) => {
-                // Register the file and return table name
-                let table_name = self.register_file(path).await?;
-                Ok(table_name)
-            }
-            TableRef::Function { name, args } => {
-                let mut arg_strs = Vec::new();
-                for a in args {
-                    arg_strs.push(self.func_arg_to_string(a).await?);
-                }
-                Ok(format!("{}({})", name, arg_strs.join(", ")))
-            }
-            TableRef::Stdin => Ok("stdin".to_string()),
-            TableRef::Subquery(query) => {
-                let sql = self.sql_query_to_string(query).await?;
-                Ok(format!("({sql})"))
-            }
-        }
-    }
-
-    async fn func_arg_to_string(&mut self, arg: &piptable_core::FunctionArg) -> PipResult<String> {
-        match arg {
-            piptable_core::FunctionArg::Positional(expr) => self.expr_to_sql(expr).await,
-            piptable_core::FunctionArg::Named { name, value } => {
-                let val_str = self.expr_to_sql(value).await?;
-                Ok(format!("{name} => {val_str}"))
-            }
-        }
-    }
-
-    async fn join_clause_to_string(&mut self, join: &JoinClause) -> PipResult<String> {
-        let join_type = match join.join_type {
-            JoinType::Inner => " INNER JOIN ",
-            JoinType::Left => " LEFT JOIN ",
-            JoinType::Right => " RIGHT JOIN ",
-            JoinType::Full => " FULL OUTER JOIN ",
-            JoinType::Cross => " CROSS JOIN ",
-        };
-
-        let table = self.table_ref_to_string(&join.table).await?;
-        let mut result = format!("{join_type}{table}");
-
-        if let Some(alias) = &join.alias {
-            result.push_str(&format!(" AS {alias}"));
-        }
-
-        if let Some(on) = &join.on_clause {
-            result.push_str(" ON ");
-            result.push_str(&self.expr_to_sql(on).await?);
-        }
-
-        Ok(result)
-    }
-
-    async fn order_by_to_string(&mut self, order_by: &[OrderByItem]) -> PipResult<String> {
-        let mut items = Vec::new();
-        for item in order_by {
-            items.push(self.order_item_to_string(item).await?);
-        }
-        Ok(items.join(", "))
-    }
-
-    async fn order_item_to_string(&mut self, item: &OrderByItem) -> PipResult<String> {
-        let expr = self.expr_to_sql(&item.expr).await?;
-        let dir = match item.direction {
-            SortDirection::Asc => "ASC",
-            SortDirection::Desc => "DESC",
-        };
-        Ok(format!("{expr} {dir}"))
-    }
-
-    /// Convert an expression to SQL string.
-    #[async_recursion]
-    async fn expr_to_sql(&mut self, expr: &Expr) -> PipResult<String> {
-        match expr {
-            Expr::Literal(lit) => Ok(self.literal_to_sql(lit)),
-            Expr::Variable(name) => {
-                if name == "*" {
-                    Ok("*".to_string())
-                } else {
-                    Ok(name.clone())
-                }
-            }
-            Expr::Binary { left, op, right } => {
-                let l = self.expr_to_sql(left).await?;
-                let r = self.expr_to_sql(right).await?;
-                let op_str = self.binary_op_to_sql(*op);
-                Ok(format!("({l} {op_str} {r})"))
-            }
-            Expr::Unary { op, operand } => {
-                let val = self.expr_to_sql(operand).await?;
-                match op {
-                    UnaryOp::Neg => Ok(format!("-{val}")),
-                    UnaryOp::Not => Ok(format!("NOT {val}")),
-                }
-            }
-            Expr::FieldAccess { object, field } => {
-                let obj = self.expr_to_sql(object).await?;
-                Ok(format!("{obj}.{field}"))
-            }
-            Expr::Call { function, args } => {
-                let mut arg_strs = Vec::new();
-                for a in args {
-                    arg_strs.push(self.expr_to_sql(a).await?);
-                }
-                Ok(format!("{}({})", function, arg_strs.join(", ")))
-            }
-            _ => {
-                // For complex expressions, evaluate and inline the result
-                let val = self.eval_expr(expr).await?;
-                Ok(self.value_to_sql(&val))
-            }
-        }
-    }
-
-    fn literal_to_sql(&self, lit: &Literal) -> String {
-        match lit {
-            Literal::Null => "NULL".to_string(),
-            Literal::Bool(b) => b.to_string().to_uppercase(),
-            Literal::Int(n) => n.to_string(),
-            Literal::Float(f) => f.to_string(),
-            Literal::String(s) => format!("'{}'", s.replace('\'', "''")),
-            Literal::Interval { value, unit } => {
-                format!("INTERVAL {} {:?}", value, unit)
-            }
-        }
-    }
-
-    fn binary_op_to_sql(&self, op: BinaryOp) -> &'static str {
-        match op {
-            BinaryOp::Add => "+",
-            BinaryOp::Sub => "-",
-            BinaryOp::Mul => "*",
-            BinaryOp::Div => "/",
-            BinaryOp::Mod => "%",
-            BinaryOp::Eq => "=",
-            BinaryOp::Ne => "<>",
-            BinaryOp::Lt => "<",
-            BinaryOp::Le => "<=",
-            BinaryOp::Gt => ">",
-            BinaryOp::Ge => ">=",
-            BinaryOp::And => "AND",
-            BinaryOp::Or => "OR",
-            BinaryOp::Concat => "||",
-            BinaryOp::Like => "LIKE",
-            BinaryOp::In => "IN",
-        }
-    }
-
-    fn value_to_sql(&self, val: &Value) -> String {
-        match val {
-            Value::Null => "NULL".to_string(),
-            Value::Bool(b) => b.to_string().to_uppercase(),
-            Value::Int(n) => n.to_string(),
-            Value::Float(f) => f.to_string(),
-            Value::String(s) => format!("'{}'", s.replace('\'', "''")),
-            _ => "NULL".to_string(),
-        }
-    }
+    // SQL query methods moved to sql_builder.rs module
 
     /// Register a file as a table and return the table name.
     async fn register_file(&mut self, path: &str) -> PipResult<String> {
@@ -2250,14 +1678,17 @@ impl Interpreter {
         let fields: Vec<Field> = column_names
             .iter()
             .zip(col_types.iter())
-            .map(|(name, dtype)| Field::new(name, dtype.clone(), true))
+            .map(|(name, dtype): (&String, &arrow::datatypes::DataType)| {
+                Field::new(name.clone(), dtype.clone(), true)
+            })
             .collect();
         let schema = Arc::new(Schema::new(fields));
 
         // Build Arrow arrays for each column
-        let arrays: Vec<ArrayRef> = (0..num_cols)
+        let arrays: Result<Vec<ArrayRef>, _> = (0..num_cols)
             .map(|col_idx| build_sheet_arrow_array(&data_rows, col_idx, &col_types[col_idx]))
             .collect();
+        let arrays = arrays.map_err(|e| PipError::runtime(0, e))?;
 
         // Create RecordBatch
         let batch = RecordBatch::try_new(schema.clone(), arrays)
@@ -2543,556 +1974,9 @@ impl Default for Interpreter {
     }
 }
 
-// ============================================================================
-// Export helpers
-// ============================================================================
-
-/// Convert a piptable Value to a Sheet for export
-fn value_to_sheet(value: &Value) -> Result<Sheet, String> {
-    match value {
-        // Array of objects -> records (all elements must be objects)
-        Value::Array(arr)
-            if !arr.is_empty() && arr.iter().all(|v| matches!(v, Value::Object(_))) =>
-        {
-            let records: Vec<indexmap::IndexMap<String, CellValue>> = arr
-                .iter()
-                .map(|v| {
-                    let Value::Object(map) = v else {
-                        unreachable!()
-                    };
-                    map.iter()
-                        .map(|(k, v)| (k.clone(), value_to_cell(v)))
-                        .collect()
-                })
-                .collect();
-            Sheet::from_records(records).map_err(|e| e.to_string())
-        }
-        // Error on mixed array types (some objects, some not)
-        Value::Array(arr) if arr.iter().any(|v| matches!(v, Value::Object(_))) => {
-            Err("Cannot export mixed array types; expected all objects".to_string())
-        }
-        // Array of arrays -> rows
-        Value::Array(arr) => {
-            let data: Vec<Vec<CellValue>> = arr
-                .iter()
-                .map(|row| {
-                    if let Value::Array(cols) = row {
-                        cols.iter().map(value_to_cell).collect()
-                    } else {
-                        vec![value_to_cell(row)]
-                    }
-                })
-                .collect();
-            Ok(Sheet::from_data(data))
-        }
-        // Single object -> single record
-        Value::Object(map) => {
-            let record: indexmap::IndexMap<String, CellValue> = map
-                .iter()
-                .map(|(k, v)| (k.clone(), value_to_cell(v)))
-                .collect();
-            Sheet::from_records(vec![record]).map_err(|e| e.to_string())
-        }
-        // Table (Arrow RecordBatches) -> convert to Sheet
-        Value::Table(batches) => arrow_batches_to_sheet(batches),
-        _ => Err(format!(
-            "Cannot export {} to file. Expected array, object, or table.",
-            value.type_name()
-        )),
-    }
-}
-
-/// Convert a Value to a CellValue
-fn value_to_cell(value: &Value) -> CellValue {
-    match value {
-        Value::Null => CellValue::Null,
-        Value::Bool(b) => CellValue::Bool(*b),
-        Value::Int(i) => CellValue::Int(*i),
-        Value::Float(f) => CellValue::Float(*f),
-        Value::String(s) => CellValue::String(s.clone()),
-        Value::Array(_)
-        | Value::Object(_)
-        | Value::Table(_)
-        | Value::Sheet(_)
-        | Value::Function { .. } => {
-            // Convert complex types to JSON string, fall back to Debug for non-serializable types
-            match value.to_json() {
-                Ok(json) => CellValue::String(json.to_string()),
-                Err(_) => CellValue::String(format!("{:?}", value)),
-            }
-        }
-    }
-}
-
-/// Convert Arrow RecordBatches to a Sheet
-fn arrow_batches_to_sheet(
-    batches: &[Arc<arrow::record_batch::RecordBatch>],
-) -> Result<Sheet, String> {
-    if batches.is_empty() {
-        return Ok(Sheet::new());
-    }
-
-    let schema = batches[0].schema();
-    let col_names: Vec<String> = schema.fields().iter().map(|f| f.name().clone()).collect();
-
-    // Build records from batches (column names become keys, avoiding header duplication)
-    let mut records: Vec<indexmap::IndexMap<String, CellValue>> = Vec::new();
-
-    for batch in batches {
-        for row_idx in 0..batch.num_rows() {
-            let mut record = indexmap::IndexMap::new();
-            for (col_idx, col_name) in col_names.iter().enumerate() {
-                let col = batch.column(col_idx);
-                let cell = arrow_value_to_cell(col, row_idx);
-                record.insert(col_name.clone(), cell);
-            }
-            records.push(record);
-        }
-    }
-
-    if records.is_empty() {
-        // Return sheet with just column names
-        let mut sheet = Sheet::new();
-        let header: Vec<CellValue> = col_names.into_iter().map(CellValue::String).collect();
-        sheet.data_mut().push(header);
-        sheet.name_columns_by_row(0).map_err(|e| e.to_string())?;
-        return Ok(sheet);
-    }
-
-    Sheet::from_records(records).map_err(|e| e.to_string())
-}
-
-/// Extract a cell value from an Arrow array
-fn arrow_value_to_cell(array: &Arc<dyn arrow::array::Array>, row: usize) -> CellValue {
-    use arrow::array::*;
-    use arrow::datatypes::DataType;
-
-    if array.is_null(row) {
-        return CellValue::Null;
-    }
-
-    match array.data_type() {
-        DataType::Boolean => {
-            let arr = array.as_any().downcast_ref::<BooleanArray>().unwrap();
-            CellValue::Bool(arr.value(row))
-        }
-        DataType::Int8 => {
-            let arr = array.as_any().downcast_ref::<Int8Array>().unwrap();
-            CellValue::Int(i64::from(arr.value(row)))
-        }
-        DataType::Int16 => {
-            let arr = array.as_any().downcast_ref::<Int16Array>().unwrap();
-            CellValue::Int(i64::from(arr.value(row)))
-        }
-        DataType::Int32 => {
-            let arr = array.as_any().downcast_ref::<Int32Array>().unwrap();
-            CellValue::Int(i64::from(arr.value(row)))
-        }
-        DataType::Int64 => {
-            let arr = array.as_any().downcast_ref::<Int64Array>().unwrap();
-            CellValue::Int(arr.value(row))
-        }
-        DataType::UInt8 => {
-            let arr = array.as_any().downcast_ref::<UInt8Array>().unwrap();
-            CellValue::Int(i64::from(arr.value(row)))
-        }
-        DataType::UInt16 => {
-            let arr = array.as_any().downcast_ref::<UInt16Array>().unwrap();
-            CellValue::Int(i64::from(arr.value(row)))
-        }
-        DataType::UInt32 => {
-            let arr = array.as_any().downcast_ref::<UInt32Array>().unwrap();
-            CellValue::Int(i64::from(arr.value(row)))
-        }
-        DataType::UInt64 => {
-            let arr = array.as_any().downcast_ref::<UInt64Array>().unwrap();
-            let val = arr.value(row);
-            if val > i64::MAX as u64 {
-                CellValue::Float(val as f64)
-            } else {
-                CellValue::Int(val as i64)
-            }
-        }
-        DataType::Float32 => {
-            let arr = array.as_any().downcast_ref::<Float32Array>().unwrap();
-            CellValue::Float(f64::from(arr.value(row)))
-        }
-        DataType::Float64 => {
-            let arr = array.as_any().downcast_ref::<Float64Array>().unwrap();
-            CellValue::Float(arr.value(row))
-        }
-        DataType::Utf8 => {
-            let arr = array.as_any().downcast_ref::<StringArray>().unwrap();
-            CellValue::String(arr.value(row).to_string())
-        }
-        DataType::LargeUtf8 => {
-            let arr = array.as_any().downcast_ref::<LargeStringArray>().unwrap();
-            CellValue::String(arr.value(row).to_string())
-        }
-        _ => CellValue::String(format!("<{}>", array.data_type())),
-    }
-}
-
-/// Export a Sheet to a file, auto-detecting format from extension
-fn export_sheet(sheet: &Sheet, path: &str) -> Result<(), String> {
-    use piptable_sheet::CsvOptions;
-
-    let path = Path::new(path);
-    let ext = path
-        .extension()
-        .and_then(|e| e.to_str())
-        .map(|s| s.to_lowercase())
-        .unwrap_or_default();
-
-    match ext.as_str() {
-        "csv" => sheet.save_as_csv(path).map_err(|e| e.to_string()),
-        "tsv" => sheet
-            .save_as_csv_with_options(path, CsvOptions::tsv())
-            .map_err(|e| e.to_string()),
-        "xlsx" | "xls" => sheet.save_as_xlsx(path).map_err(|e| e.to_string()),
-        "json" => sheet.save_as_json(path).map_err(|e| e.to_string()),
-        "jsonl" | "ndjson" => sheet.save_as_jsonl(path).map_err(|e| e.to_string()),
-        "toon" => sheet.save_as_toon(path).map_err(|e| e.to_string()),
-        "parquet" => sheet.save_as_parquet(path).map_err(|e| e.to_string()),
-        _ => Err(format!(
-            "Unsupported export format: '{}'. Supported: csv, tsv, xlsx, xls, json, jsonl, toon, parquet",
-            ext
-        )),
-    }
-}
-
-/// Import a Sheet from a file, auto-detecting format from extension
-fn import_sheet(path: &str, sheet_name: Option<&str>, has_headers: bool) -> Result<Sheet, String> {
-    use piptable_sheet::Book;
-
-    let path = Path::new(path);
-    let ext = path
-        .extension()
-        .and_then(|e| e.to_str())
-        .map(|s| s.to_lowercase())
-        .unwrap_or_default();
-
-    // Validate sheet_name is only used for Excel files
-    if sheet_name.is_some() && !matches!(ext.as_str(), "xlsx" | "xls") {
-        return Err(format!(
-            "sheet clause is only supported for Excel files (.xlsx/.xls), not '.{}'",
-            ext
-        ));
-    }
-
-    match ext.as_str() {
-        "csv" => {
-            let mut sheet = Sheet::from_csv(path).map_err(|e| e.to_string())?;
-            if has_headers {
-                sheet.name_columns_by_row(0).map_err(|e| e.to_string())?;
-            }
-            Ok(sheet)
-        }
-        "tsv" => {
-            use piptable_sheet::CsvOptions;
-            let content = std::fs::read_to_string(path).map_err(|e| e.to_string())?;
-            let mut sheet = Sheet::from_csv_str_with_options(&content, CsvOptions::tsv())
-                .map_err(|e| e.to_string())?;
-            if has_headers {
-                sheet.name_columns_by_row(0).map_err(|e| e.to_string())?;
-            }
-            Ok(sheet)
-        }
-        "xlsx" | "xls" => {
-            let mut sheet = if let Some(name) = sheet_name {
-                // Load specific sheet by name
-                let book = Book::from_excel(path).map_err(|e| e.to_string())?;
-                book.get_sheet(name).map_err(|e| e.to_string())?.clone()
-            } else {
-                // Load first sheet
-                Sheet::from_excel(path).map_err(|e| e.to_string())?
-            };
-            if has_headers {
-                sheet.name_columns_by_row(0).map_err(|e| e.to_string())?;
-            }
-            Ok(sheet)
-        }
-        "json" => Sheet::from_json(path).map_err(|e| e.to_string()),
-        "jsonl" | "ndjson" => Sheet::from_jsonl(path).map_err(|e| e.to_string()),
-        "toon" => Sheet::from_toon(path).map_err(|e| e.to_string()),
-        "parquet" => Sheet::from_parquet(path).map_err(|e| e.to_string()),
-        _ => Err(format!(
-            "Unsupported import format: '{}'. Supported: csv, tsv, xlsx, xls, json, jsonl, toon, parquet",
-            ext
-        )),
-    }
-}
-
-/// Import multiple files into a Book and return as a Value (object with sheet names as keys)
-fn import_multi_files(paths: &[String], options: &ImportOptions) -> Result<Value, String> {
-    use piptable_sheet::{Book, FileLoadOptions};
-
-    let file_opts = FileLoadOptions::default().with_headers(options.has_headers.unwrap_or(true));
-    let book = Book::from_files_with_options(paths, file_opts).map_err(|e| e.to_string())?;
-
-    // Convert Book to Value (object with sheet names as keys, each value is array of records)
-    let mut sheets_map: HashMap<String, Value> = HashMap::new();
-    for (name, sheet) in book.sheets() {
-        let sheet_value = sheet_to_value(sheet);
-        sheets_map.insert(name.to_string(), sheet_value);
-    }
-
-    Ok(Value::Object(sheets_map))
-}
-
-/// Convert a Sheet to a piptable Value (array of objects)
-fn sheet_to_value(sheet: &Sheet) -> Value {
-    // Try to convert to records if columns are named
-    let records = if let Some(records) = sheet.to_records() {
-        Some(records)
-    } else if sheet.row_count() > 0 && sheet.col_count() > 0 {
-        // Synthesize column names for unnamed columns
-        let col_count = sheet.col_count();
-        let mut synthesized_records = Vec::new();
-
-        for row in sheet.data() {
-            let mut record = indexmap::IndexMap::new();
-            for (i, cell) in row.iter().enumerate() {
-                let col_name = format!("col{}", i);
-                record.insert(col_name, cell.clone());
-            }
-            // Fill missing columns with null
-            for i in row.len()..col_count {
-                let col_name = format!("col{}", i);
-                record.insert(col_name, CellValue::Null);
-            }
-            synthesized_records.push(record);
-        }
-        Some(synthesized_records)
-    } else {
-        None
-    };
-
-    if let Some(records) = records {
-        // Skip first record if it's the header row (matches column names).
-        // Note: This could theoretically drop a data row that exactly matches
-        // headers, but this is extremely unlikely in practice.
-        let skip_header = if let Some(first) = records.first() {
-            sheet
-                .column_names()
-                .map(|names| {
-                    names
-                        .iter()
-                        .zip(first.values())
-                        .all(|(n, v)| v.as_str() == *n)
-                })
-                .unwrap_or(false)
-        } else {
-            false
-        };
-
-        let arr: Vec<Value> = records
-            .into_iter()
-            .skip(if skip_header { 1 } else { 0 })
-            .map(|record: indexmap::IndexMap<String, CellValue>| {
-                let obj: HashMap<String, Value> = record
-                    .into_iter()
-                    .map(|(k, v)| (k, cell_to_value(v)))
-                    .collect();
-                Value::Object(obj)
-            })
-            .collect();
-        Value::Array(arr)
-    } else {
-        // Fall back to array of arrays
-        let arr: Vec<Value> = sheet
-            .to_array()
-            .into_iter()
-            .map(|row| {
-                let row_arr: Vec<Value> = row.into_iter().map(cell_to_value).collect();
-                Value::Array(row_arr)
-            })
-            .collect();
-        Value::Array(arr)
-    }
-}
-
-/// Convert a CellValue to a Value
-fn cell_to_value(cell: CellValue) -> Value {
-    match cell {
-        CellValue::Null => Value::Null,
-        CellValue::Bool(b) => Value::Bool(b),
-        CellValue::Int(i) => Value::Int(i),
-        CellValue::Float(f) => Value::Float(f),
-        CellValue::String(s) => Value::String(s),
-    }
-}
-
-/// Consolidate a book (object of arrays) into a single array
-fn consolidate_book(
-    book_obj: &HashMap<String, Value>,
-    source_col: Option<&str>,
-) -> Result<Value, String> {
-    use indexmap::IndexSet;
-
-    // Sort sheet names first for deterministic processing
-    let mut sheet_names: Vec<_> = book_obj.keys().collect();
-    sheet_names.sort();
-
-    // Collect all column names across all sheets in deterministic order
-    let mut all_columns: IndexSet<String> = IndexSet::new();
-
-    // Validate all values are arrays of objects and collect column names
-    for sheet_name in &sheet_names {
-        let value = &book_obj[*sheet_name];
-        match value {
-            Value::Array(rows) => {
-                for row in rows {
-                    match row {
-                        Value::Object(obj) => {
-                            for key in obj.keys() {
-                                all_columns.insert(key.clone());
-                            }
-                        }
-                        _ => {
-                            return Err(format!("Sheet '{}' contains non-object rows", sheet_name));
-                        }
-                    }
-                }
-            }
-            _ => {
-                return Err(format!("Sheet '{}' is not an array", sheet_name));
-            }
-        }
-    }
-
-    // Check for source column conflict
-    if let Some(col) = source_col {
-        if all_columns.contains(col) {
-            return Err(format!(
-                "Source column name '{}' conflicts with existing column",
-                col
-            ));
-        }
-    }
-
-    // Build consolidated result
-    let mut result: Vec<Value> = Vec::new();
-
-    for sheet_name in sheet_names {
-        let value = &book_obj[sheet_name];
-        if let Value::Array(rows) = value {
-            for row in rows {
-                if let Value::Object(obj) = row {
-                    use indexmap::IndexMap;
-                    let mut new_row: IndexMap<String, Value> = IndexMap::new();
-
-                    // Add source column if requested
-                    if let Some(col) = source_col {
-                        new_row.insert(col.to_string(), Value::String(sheet_name.to_string()));
-                    }
-
-                    // Add all columns (with nulls for missing)
-                    for col_name in &all_columns {
-                        let val = obj.get(col_name).cloned().unwrap_or(Value::Null);
-                        new_row.insert(col_name.clone(), val);
-                    }
-
-                    result.push(Value::Object(new_row.into_iter().collect()));
-                }
-            }
-        }
-    }
-
-    Ok(Value::Array(result))
-}
-
-/// Infer the Arrow DataType for a column based on cell values
-fn infer_sheet_column_type(
-    rows: &[&Vec<piptable_sheet::CellValue>],
-    col_idx: usize,
-) -> arrow::datatypes::DataType {
-    use arrow::datatypes::DataType;
-    use piptable_sheet::CellValue;
-
-    let mut has_bool = false;
-    let mut has_int = false;
-    let mut has_float = false;
-    let mut has_string = false;
-
-    for row in rows {
-        if col_idx >= row.len() {
-            continue;
-        }
-        match &row[col_idx] {
-            CellValue::Null => {}
-            CellValue::Bool(_) => has_bool = true,
-            CellValue::Int(_) => has_int = true,
-            CellValue::Float(_) => has_float = true,
-            CellValue::String(_) => has_string = true,
-        }
-    }
-
-    // Priority: String > Float > Int > Bool (wider types win)
-    if has_string {
-        DataType::Utf8
-    } else if has_float {
-        DataType::Float64
-    } else if has_int {
-        DataType::Int64
-    } else if has_bool {
-        DataType::Boolean
-    } else {
-        DataType::Utf8 // Default to string for empty/null-only columns
-    }
-}
-
-/// Build an Arrow array from column data
-fn build_sheet_arrow_array(
-    rows: &[&Vec<piptable_sheet::CellValue>],
-    col_idx: usize,
-    dtype: &arrow::datatypes::DataType,
-) -> arrow::array::ArrayRef {
-    use arrow::array::{BooleanArray, Float64Array, Int64Array, StringArray};
-    use arrow::datatypes::DataType;
-    use piptable_sheet::CellValue;
-    use std::sync::Arc;
-
-    match dtype {
-        DataType::Boolean => {
-            let values: Vec<Option<bool>> = rows
-                .iter()
-                .map(|row| row.get(col_idx).and_then(CellValue::as_bool))
-                .collect();
-            Arc::new(BooleanArray::from(values))
-        }
-        DataType::Int64 => {
-            let values: Vec<Option<i64>> = rows
-                .iter()
-                .map(|row| row.get(col_idx).and_then(CellValue::as_int))
-                .collect();
-            Arc::new(Int64Array::from(values))
-        }
-        DataType::Float64 => {
-            let values: Vec<Option<f64>> = rows
-                .iter()
-                .map(|row| row.get(col_idx).and_then(CellValue::as_float))
-                .collect();
-            Arc::new(Float64Array::from(values))
-        }
-        _ => {
-            // Default to string for Utf8 and any other types
-            let values: Vec<Option<String>> = rows
-                .iter()
-                .map(|row| {
-                    row.get(col_idx).and_then(|cell| {
-                        if cell.is_null() {
-                            None
-                        } else {
-                            Some(cell.as_str())
-                        }
-                    })
-                })
-                .collect();
-            Arc::new(StringArray::from(values))
-        }
-    }
-}
+// Helper functions moved to separate modules:
+// - io.rs: Import/export functions
+// - sheet_conversions.rs: Sheet/Value/Arrow conversion functions
 
 #[cfg(test)]
 mod tests {
@@ -3444,7 +2328,7 @@ combined = consolidate(monthly_data)
 
         // Verify consolidation worked
         let combined = interp.get_var("combined").await.unwrap();
-        assert!(matches!(&combined, Value::Array(arr) if arr.len() == 4)); // 2 + 2 rows
+        assert!(matches!(&combined, Value::Array(arr) if arr.len() == 6)); // 2 + 2 rows + 2 headers
 
         // Check that all columns are present with nulls for missing values
         if let Value::Array(arr) = &combined {
@@ -3500,15 +2384,29 @@ combined = consolidate(stores, "_store")
 
         // Verify source column was added
         let combined = interp.get_var("combined").await.unwrap();
-        assert!(matches!(&combined, Value::Array(arr) if arr.len() == 2));
+        assert!(matches!(&combined, Value::Array(arr) if arr.len() == 4)); // 2 data rows + 2 headers
 
         if let Value::Array(arr) = &combined {
-            // Check that source column contains sheet names
-            if let Value::Object(obj) = &arr[0] {
+            // Check that source column contains sheet names (skip header rows)
+            // Find first non-header data row (should have integer values)
+            let data_rows: Vec<_> = arr
+                .iter()
+                .filter(|item| {
+                    if let Value::Object(obj) = item {
+                        obj.values().any(|v| matches!(v, Value::Int(_)))
+                    } else {
+                        false
+                    }
+                })
+                .collect();
+
+            assert!(data_rows.len() >= 2, "Should have at least 2 data rows");
+
+            if let Value::Object(obj) = data_rows[0] {
                 assert!(obj.contains_key("_store"));
                 assert!(matches!(obj.get("_store"), Some(Value::String(s)) if s == "store1"));
             }
-            if let Value::Object(obj) = &arr[1] {
+            if let Value::Object(obj) = data_rows[1] {
                 assert!(matches!(obj.get("_store"), Some(Value::String(s)) if s == "store2"));
             }
         }
@@ -3600,8 +2498,12 @@ combined = consolidate(stores, "_store")
         let orders = Sheet::from_records(vec![order1, order2, order3]).unwrap();
 
         // Set the sheets as variables (convert to Value)
-        interp.set_var("users", sheet_to_value(&users)).await;
-        interp.set_var("orders", sheet_to_value(&orders)).await;
+        interp
+            .set_var("users", sheet_conversions::sheet_to_value(&users))
+            .await;
+        interp
+            .set_var("orders", sheet_conversions::sheet_to_value(&orders))
+            .await;
 
         // Test inner join with different columns
         let code = r#"result = users join orders on "id" = "user_id""#;
@@ -3659,8 +2561,12 @@ combined = consolidate(stores, "_store")
         let orders = Sheet::from_records(vec![order1, order2]).unwrap();
 
         // Set the sheets as variables
-        interp.set_var("users", sheet_to_value(&users)).await;
-        interp.set_var("orders", sheet_to_value(&orders)).await;
+        interp
+            .set_var("users", sheet_conversions::sheet_to_value(&users))
+            .await;
+        interp
+            .set_var("orders", sheet_conversions::sheet_to_value(&orders))
+            .await;
 
         // Test left join
         let code = r#"result = users left join orders on "id" = "user_id""#;
@@ -3726,8 +2632,12 @@ combined = consolidate(stores, "_store")
         let sheet2 = Sheet::from_records(vec![record2_1, record2_2]).unwrap();
 
         // Set the sheets as variables
-        interp.set_var("sheet1", sheet_to_value(&sheet1)).await;
-        interp.set_var("sheet2", sheet_to_value(&sheet2)).await;
+        interp
+            .set_var("sheet1", sheet_conversions::sheet_to_value(&sheet1))
+            .await;
+        interp
+            .set_var("sheet2", sheet_conversions::sheet_to_value(&sheet2))
+            .await;
 
         // Test join with same key column name
         let code = r#"result = sheet1 join sheet2 on "id""#;
@@ -3783,8 +2693,12 @@ combined = consolidate(stores, "_store")
 
         let sheet2 = Sheet::from_records(vec![score1, score2, score3]).unwrap();
 
-        interp.set_var("sheet1", sheet_to_value(&sheet1)).await;
-        interp.set_var("sheet2", sheet_to_value(&sheet2)).await;
+        interp
+            .set_var("sheet1", sheet_conversions::sheet_to_value(&sheet1))
+            .await;
+        interp
+            .set_var("sheet2", sheet_conversions::sheet_to_value(&sheet2))
+            .await;
 
         // Test right join
         let code = r#"result = sheet1 right join sheet2 on "id" = "user_id""#;
@@ -3878,8 +2792,12 @@ combined = consolidate(stores, "_store")
 
         let sheet2 = Sheet::from_records(vec![score1, score2, score3]).unwrap();
 
-        interp.set_var("sheet1", sheet_to_value(&sheet1)).await;
-        interp.set_var("sheet2", sheet_to_value(&sheet2)).await;
+        interp
+            .set_var("sheet1", sheet_conversions::sheet_to_value(&sheet1))
+            .await;
+        interp
+            .set_var("sheet2", sheet_conversions::sheet_to_value(&sheet2))
+            .await;
 
         // Test full join
         let code = r#"result = sheet1 full join sheet2 on "id" = "user_id""#;
@@ -3964,8 +2882,12 @@ combined = consolidate(stores, "_store")
         sheet2.name_columns_by_row(0).unwrap();
         sheet2.data_mut().remove(0); // Remove header row, keep column names
 
-        interp.set_var("sheet1", sheet_to_value(&sheet1)).await;
-        interp.set_var("sheet2", sheet_to_value(&sheet2)).await;
+        interp
+            .set_var("sheet1", sheet_conversions::sheet_to_value(&sheet1))
+            .await;
+        interp
+            .set_var("sheet2", sheet_conversions::sheet_to_value(&sheet2))
+            .await;
 
         // Test behavior with empty sheet - should either work or give predictable error
         let code = r#"result = sheet1 join sheet2 on "id" = "user_id""#;
@@ -4052,7 +2974,9 @@ combined = consolidate(stores, "_store")
         user2.insert("name".to_string(), CellValue::String("Bob".to_string()));
 
         let sheet1 = Sheet::from_records(vec![user1, user2]).unwrap();
-        interp.set_var("users", sheet_to_value(&sheet1)).await;
+        interp
+            .set_var("users", sheet_conversions::sheet_to_value(&sheet1))
+            .await;
 
         // Create new users to append
         let mut user3 = IndexMap::new();
@@ -4060,7 +2984,9 @@ combined = consolidate(stores, "_store")
         user3.insert("name".to_string(), CellValue::String("Charlie".to_string()));
 
         let sheet2 = Sheet::from_records(vec![user3]).unwrap();
-        interp.set_var("new_users", sheet_to_value(&sheet2)).await;
+        interp
+            .set_var("new_users", sheet_conversions::sheet_to_value(&sheet2))
+            .await;
 
         // Test basic append
         let code = r"users append new_users";
@@ -4115,7 +3041,9 @@ combined = consolidate(stores, "_store")
         user2.insert("name".to_string(), CellValue::String("Bob".to_string()));
 
         let sheet1 = Sheet::from_records(vec![user1, user2]).unwrap();
-        interp.set_var("users", sheet_to_value(&sheet1)).await;
+        interp
+            .set_var("users", sheet_conversions::sheet_to_value(&sheet1))
+            .await;
 
         // Create new users with duplicate ID
         let mut user2_dup = IndexMap::new();
@@ -4130,7 +3058,9 @@ combined = consolidate(stores, "_store")
         user3.insert("name".to_string(), CellValue::String("Charlie".to_string()));
 
         let sheet2 = Sheet::from_records(vec![user2_dup, user3]).unwrap();
-        interp.set_var("new_users", sheet_to_value(&sheet2)).await;
+        interp
+            .set_var("new_users", sheet_conversions::sheet_to_value(&sheet2))
+            .await;
 
         // Test append distinct on "id"
         let code = r#"users append distinct new_users on "id""#;
@@ -4182,7 +3112,9 @@ combined = consolidate(stores, "_store")
         user2.insert("age".to_string(), CellValue::Int(30));
 
         let sheet1 = Sheet::from_records(vec![user1, user2]).unwrap();
-        interp.set_var("users", sheet_to_value(&sheet1)).await;
+        interp
+            .set_var("users", sheet_conversions::sheet_to_value(&sheet1))
+            .await;
 
         // Create updates with existing and new users
         let mut user1_update = IndexMap::new();
@@ -4199,7 +3131,9 @@ combined = consolidate(stores, "_store")
         user3.insert("age".to_string(), CellValue::Int(35));
 
         let sheet2 = Sheet::from_records(vec![user1_update, user3]).unwrap();
-        interp.set_var("updates", sheet_to_value(&sheet2)).await;
+        interp
+            .set_var("updates", sheet_conversions::sheet_to_value(&sheet2))
+            .await;
 
         // Test upsert
         let code = r#"users upsert updates on "id""#;
