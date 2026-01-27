@@ -14,10 +14,22 @@ pub fn value_to_sheet(value: &Value) -> Result<Sheet, String> {
         Value::Sheet(sheet) => Ok(sheet.clone()),
         Value::Array(rows) => {
             let mut sheet = Sheet::new();
-            // Determine columns from the first object
-            if let Some(Value::Object(first_row)) = rows.first() {
-                let columns: Vec<String> = first_row.keys().cloned().collect();
 
+            // Collect all unique columns from all objects
+            let mut columns_set = std::collections::HashSet::new();
+            for row_value in rows {
+                if let Value::Object(obj) = row_value {
+                    for key in obj.keys() {
+                        columns_set.insert(key.clone());
+                    }
+                }
+            }
+
+            // Convert to sorted Vec for consistent column ordering
+            let mut columns: Vec<String> = columns_set.into_iter().collect();
+            columns.sort();
+
+            if !columns.is_empty() {
                 // Add header row
                 let header_cells: Vec<CellValue> = columns
                     .iter()
