@@ -38,7 +38,7 @@ jobs:
 
       # piptable-python excluded: requires Python/PyO3 setup
       - name: Run tests
-        run: cargo test --workspace --exclude piptable-python
+        run: cargo test --workspace --exclude piptable-python --jobs 2
 
   coverage:
     name: Coverage
