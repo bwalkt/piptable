@@ -1807,6 +1807,17 @@ impl Interpreter {
             let batches = self.convert_sheet_to_batches(&sheet, &table_name)?;
             self.sql.register_table(&table_name, batches).await?;
             return Ok(table_name);
+        } else if path_lower.ends_with(".toon") {
+            // Load TOON file as Sheet and register it
+            use crate::io::import_sheet;
+            let sheet = import_sheet(path, None, true) // TOON files have structured format with headers
+                .map_err(|e| {
+                    PipError::runtime(0, format!("Failed to load TOON file '{}': {}", path, e))
+                })?;
+            // Convert sheet to RecordBatches and register directly
+            let batches = self.convert_sheet_to_batches(&sheet, &table_name)?;
+            self.sql.register_table(&table_name, batches).await?;
+            return Ok(table_name);
         } else {
             // Default to CSV
             self.sql.register_csv(&table_name, path).await?;
@@ -4742,5 +4753,140 @@ combined = consolidate(stores, "_store")
         // Sheet3: 2 rows (no column names, all rows are data)
         let len3 = interp.get_var("len3").await.unwrap();
         assert!(matches!(len3, Value::Int(2)), "Sheet3 should have 2 rows");
+    }
+
+    #[tokio::test]
+    async fn test_toon_sql_query() {
+        // Test that TOON files can be queried with SQL
+        use std::io::Write;
+        use tempfile::NamedTempFile;
+
+        let mut interp = Interpreter::new();
+
+        // Create a temporary TOON file
+        let mut file = NamedTempFile::with_suffix(".toon").expect("Failed to create temp file");
+        writeln!(file, "data[3]{{id,name,value}}:").unwrap();
+        writeln!(file, "  1,Widget,100").unwrap();
+        writeln!(file, "  2,Gadget,200").unwrap();
+        writeln!(file, "  3,Doohickey,300").unwrap();
+        file.flush().unwrap();
+
+        let path = file.path().to_string_lossy().replace('\\', "/");
+        let script = format!(
+            r#"dim result = query(SELECT * FROM "{}" ORDER BY id)"#,
+            path
+        );
+
+        let program = PipParser::parse_str(&script).unwrap();
+        let result = interp.eval(program).await;
+        assert!(
+            result.is_ok(),
+            "TOON SQL query should succeed: {:?}",
+            result.err()
+        );
+
+        let query_result = interp.get_var("result").await.unwrap();
+        if let Value::Table(batches) = query_result {
+            let total_rows: usize = batches.iter().map(|b| b.num_rows()).sum();
+            assert_eq!(total_rows, 3, "Should have 3 data rows");
+        } else {
+            panic!("Expected Table result");
+        }
+    }
+
+    #[tokio::test]
+    async fn test_toon_sql_with_order() {
+        // Test TOON SQL queries with ORDER BY clause
+        use std::io::Write;
+        use tempfile::NamedTempFile;
+
+        let mut interp = Interpreter::new();
+
+        // Create a TOON file with more data
+        let mut file = NamedTempFile::with_suffix(".toon").expect("Failed to create temp file");
+        writeln!(file, "products[4]{{product,category,price,stock}}:").unwrap();
+        writeln!(file, "  Widget,Tools,19.99,50").unwrap();
+        writeln!(file, "  Gadget,Electronics,29.99,30").unwrap();
+        writeln!(file, "  Gizmo,Tools,15.99,75").unwrap();
+        writeln!(file, "  Doohickey,Electronics,39.99,20").unwrap();
+        file.flush().unwrap();
+
+        let path = file.path().to_string_lossy().replace('\\', "/");
+        // Query with ORDER BY to test sorting functionality
+        let script = format!(
+            r#"dim products = query(SELECT * FROM "{}" ORDER BY product)"#,
+            path
+        );
+
+        let program = PipParser::parse_str(&script).unwrap();
+        let result = interp.eval(program).await;
+        assert!(
+            result.is_ok(),
+            "TOON SQL query with ORDER BY should succeed: {:?}",
+            result.err()
+        );
+
+        let query_result = interp.get_var("products").await.unwrap();
+        if let Value::Table(batches) = query_result {
+            let total_rows: usize = batches.iter().map(|b| b.num_rows()).sum();
+            assert_eq!(total_rows, 4, "Should have 4 products");
+        } else {
+            panic!("Expected Table result");
+        }
+    }
+
+    #[tokio::test]
+    async fn test_toon_join_with_csv() {
+        // Test JOIN between TOON and CSV files
+        use std::io::Write;
+        use tempfile::NamedTempFile;
+
+        let mut interp = Interpreter::new();
+
+        // Create a TOON file with product data
+        let mut toon_file =
+            NamedTempFile::with_suffix(".toon").expect("Failed to create temp file");
+        writeln!(toon_file, "products[3]{{id,name,price}}:").unwrap();
+        writeln!(toon_file, "  1,Widget,19.99").unwrap();
+        writeln!(toon_file, "  2,Gadget,29.99").unwrap();
+        writeln!(toon_file, "  3,Gizmo,15.99").unwrap();
+        toon_file.flush().unwrap();
+
+        // Create a CSV file with sales data
+        let mut csv_file = NamedTempFile::with_suffix(".csv").expect("Failed to create temp file");
+        writeln!(csv_file, "product_id,quantity").unwrap();
+        writeln!(csv_file, "1,10").unwrap();
+        writeln!(csv_file, "2,5").unwrap();
+        writeln!(csv_file, "1,7").unwrap();
+        csv_file.flush().unwrap();
+
+        let toon_path = toon_file.path().to_string_lossy().replace('\\', "/");
+        let csv_path = csv_file.path().to_string_lossy().replace('\\', "/");
+
+        let script = format!(
+            r#"dim result = query(
+                SELECT p.name, s.quantity, p.price 
+                FROM "{}" as p
+                JOIN "{}" as s ON p.id = s.product_id
+                ORDER BY p.name
+            )"#,
+            toon_path, csv_path
+        );
+
+        let program = PipParser::parse_str(&script).unwrap();
+        let result = interp.eval(program).await;
+        assert!(
+            result.is_ok(),
+            "TOON-CSV JOIN should succeed: {:?}",
+            result.err()
+        );
+
+        let query_result = interp.get_var("result").await.unwrap();
+        if let Value::Table(batches) = query_result {
+            let total_rows: usize = batches.iter().map(|b| b.num_rows()).sum();
+            assert_eq!(total_rows, 3, "Should have 3 sales records after join");
+        } else {
+            panic!("Expected Table result");
+        }
     }
 }

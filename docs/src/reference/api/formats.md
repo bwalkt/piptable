@@ -193,6 +193,15 @@ export sheet to "data.toon"
 
 ' Load preserving all types
 dim data = import "data.toon" into sheet
+
+' Direct SQL queries on TOON files
+dim results = query(SELECT * FROM "data.toon" WHERE value > 100)
+
+' Join TOON with other formats
+dim joined = query(
+  SELECT * FROM "data.toon" t
+  JOIN "other.csv" c ON t.id = c.id
+)
 ```
 
 ### TOON Features
@@ -200,6 +209,7 @@ dim data = import "data.toon" into sheet
 - **Metadata**: Column names, sheet names preserved
 - **Compact**: Binary serialization
 - **Version compatible**: Forward/backward compatibility
+- **SQL support**: Direct queries without conversion
 
 ## Format Selection Guide
 
