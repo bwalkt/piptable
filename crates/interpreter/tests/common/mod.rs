@@ -1,0 +1,43 @@
+//! Common test utilities and helpers for interpreter integration tests.
+
+use piptable_core::Value;
+use piptable_interpreter::Interpreter;
+use piptable_parser::PipParser;
+use std::io::Write;
+use tempfile::NamedTempFile;
+
+/// Execute a PipTable script and return the interpreter state and final evaluation value.
+///
+/// Returns a tuple `(Interpreter, Value)` where the `Interpreter` contains the post-execution state
+/// (variables, output capture, etc.) and the `Value` is the result of evaluating the script.
+pub async fn run_script(script: &str) -> (Interpreter, Value) {
+    let mut interp = Interpreter::new();
+    let program = PipParser::parse_str(script).expect("Failed to parse script");
+    let result = interp.eval(program).await.expect("Failed to eval script");
+    (interp, result)
+}
+
+/// Executes the given PipTable script and returns the interpreter's error message.
+///
+/// Parses `script` and evaluates it using a fresh Interpreter, returning the error's string
+/// representation. Panics if parsing fails or if evaluation unexpectedly succeeds.
+pub async fn run_script_err(script: &str) -> String {
+    let mut interp = Interpreter::new();
+    let program = PipParser::parse_str(script).expect("Failed to parse script");
+    interp
+        .eval(program)
+        .await
+        .expect_err("Expected error")
+        .to_string()
+}
+
+/// Creates a temporary file with a `.csv` suffix, writes `content` into it, flushes, and returns the open `NamedTempFile`.
+///
+/// The returned `NamedTempFile` keeps the file alive for the duration of the handle; the file is created in the system temp directory.
+pub fn create_temp_csv(content: &str) -> NamedTempFile {
+    let mut file = NamedTempFile::with_suffix(".csv").expect("Failed to create temp file");
+    file.write_all(content.as_bytes())
+        .expect("Failed to write temp file");
+    file.flush().expect("Failed to flush temp file");
+    file
+}
