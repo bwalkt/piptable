@@ -3792,6 +3792,31 @@ combined = consolidate(stores, "_store")
     }
 
     #[tokio::test]
+    async fn test_sql_with_explicit_aliases() {
+        // Test that explicit aliases don't cause double aliasing
+        let mut interp = Interpreter::new();
+
+        // Create a table (use simpler query due to parser limitations)
+        let program1 = PipParser::parse_str(r#"dim users = query(SELECT 1 as id)"#).unwrap();
+        interp.eval(program1).await.unwrap();
+
+        // Query with explicit alias - should NOT produce "table_users AS users AS u"
+        let program2 =
+            PipParser::parse_str(r#"dim result = query(SELECT u.id FROM users AS u)"#).unwrap();
+        interp.eval(program2).await.unwrap();
+
+        // Verify it works
+        match interp.get_var("result").await {
+            Some(Value::Table(batches)) => {
+                assert!(!batches.is_empty(), "Query should return results");
+                let total_rows: usize = batches.iter().map(|b| b.num_rows()).sum();
+                assert_eq!(total_rows, 1, "Should have one row");
+            }
+            _ => panic!("Expected Table result"),
+        }
+    }
+
+    #[tokio::test]
     async fn test_method_call_syntax() {
         // Test sheet.row_count() method call
         let mut interp = Interpreter::new();
