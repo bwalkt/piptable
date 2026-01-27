@@ -121,20 +121,33 @@ impl Interpreter {
     pub(crate) async fn table_ref_to_string(&mut self, table_ref: &TableRef) -> PipResult<String> {
         match table_ref {
             TableRef::Table(name) => {
-                // Check if this refers to a variable containing a Sheet
+                // Check if this refers to a variable containing a Sheet or Table
                 if let Some(value) = self.get_var(name).await {
-                    if let Some(sheet) = value.as_sheet() {
-                        // Check if we've already registered this sheet
-                        let sheet_tables = self.sheet_tables.read().await;
-                        if let Some(existing_table) = sheet_tables.get(name) {
-                            return Ok(existing_table.clone());
-                        }
-                        drop(sheet_tables);
+                    // Check if we've already registered this variable
+                    let sheet_tables = self.sheet_tables.read().await;
+                    if let Some(existing_table) = sheet_tables.get(name) {
+                        return Ok(existing_table.clone());
+                    }
+                    drop(sheet_tables);
 
+                    // Handle Sheet variables
+                    if let Some(sheet) = value.as_sheet() {
                         // Convert Sheet to Table and register it
                         let table_name = self.register_sheet_as_table(name, sheet).await?;
 
                         // Remember that we registered this sheet
+                        let mut sheet_tables = self.sheet_tables.write().await;
+                        sheet_tables.insert(name.to_string(), table_name.clone());
+
+                        return Ok(table_name);
+                    }
+
+                    // Handle Table variables (RecordBatch vectors)
+                    if let Some(batches) = value.as_table() {
+                        // Register the table directly
+                        let table_name = self.register_table_variable(name, batches).await?;
+
+                        // Remember that we registered this table
                         let mut sheet_tables = self.sheet_tables.write().await;
                         sheet_tables.insert(name.to_string(), table_name.clone());
 
