@@ -1,5 +1,7 @@
 //! Common test utilities and helpers for interpreter integration tests.
 
+#![allow(dead_code)]
+
 use piptable_core::Value;
 use piptable_interpreter::Interpreter;
 use piptable_parser::PipParser;

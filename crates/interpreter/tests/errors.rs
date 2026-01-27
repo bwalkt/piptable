@@ -6,8 +6,6 @@
 mod common;
 use common::*;
 
-use piptable_core::Value;
-
 /// Asserts that evaluating a script which references an undefined variable produces an interpreter error.
 ///
 /// # Examples
