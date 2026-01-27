@@ -738,6 +738,46 @@ impl Interpreter {
                 self.call_function(function, arg_vals, 0).await
             }
 
+            Expr::MethodCall {
+                object,
+                method,
+                args,
+            } => {
+                let obj_val = self.eval_expr(object).await?;
+                let arg_vals = self.eval_args(args, 0).await?;
+
+                // Dispatch method call based on object type
+                match &obj_val {
+                    Value::Sheet(sheet) => {
+                        // Handle Sheet methods
+                        self.call_sheet_method(sheet, method, arg_vals).await
+                    }
+                    Value::Table(_) => {
+                        // Handle Table methods (if any)
+                        Err(PipError::runtime(
+                            0,
+                            format!("Table method '{}' not yet implemented", method),
+                        ))
+                    }
+                    Value::Object(_map) => {
+                        // Check if this is a Book (object with sheets as values)
+                        // For now, we'll assume Object methods are not supported
+                        Err(PipError::runtime(
+                            0,
+                            format!("Object method '{}' not yet implemented", method),
+                        ))
+                    }
+                    _ => Err(PipError::runtime(
+                        0,
+                        format!(
+                            "Method '{}' not supported on {}",
+                            method,
+                            obj_val.type_name()
+                        ),
+                    )),
+                }
+            }
+
             Expr::Query(query) => self.eval_query(query).await,
 
             Expr::Fetch { url, options } => {
@@ -1971,6 +2011,129 @@ impl Interpreter {
 impl Default for Interpreter {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+impl Interpreter {
+    /// Call a method on a Sheet object
+    async fn call_sheet_method(
+        &mut self,
+        sheet: &Sheet,
+        method: &str,
+        args: Vec<Value>,
+    ) -> PipResult<Value> {
+        match method {
+            "transpose" => {
+                if !args.is_empty() {
+                    return Err(PipError::runtime(0, "transpose() takes no arguments"));
+                }
+                let mut transposed = sheet.clone();
+                transposed.transpose();
+                Ok(Value::Sheet(transposed))
+            }
+            "name_columns_by_row" => {
+                if args.len() != 1 {
+                    return Err(PipError::runtime(
+                        0,
+                        "name_columns_by_row() takes exactly 1 argument",
+                    ));
+                }
+                let row_index = args[0]
+                    .as_int()
+                    .ok_or_else(|| PipError::runtime(0, "Row index must be an integer"))?;
+                let mut new_sheet = sheet.clone();
+                new_sheet
+                    .name_columns_by_row(row_index as usize)
+                    .map_err(|e| PipError::runtime(0, format!("Failed to name columns: {}", e)))?;
+                Ok(Value::Sheet(new_sheet))
+            }
+            "select_columns" => {
+                if args.len() != 1 {
+                    return Err(PipError::runtime(
+                        0,
+                        "select_columns() takes exactly 1 argument",
+                    ));
+                }
+                let columns = match &args[0] {
+                    Value::Array(arr) => {
+                        let mut cols = Vec::new();
+                        for val in arr {
+                            cols.push(
+                                val.as_str()
+                                    .ok_or_else(|| {
+                                        PipError::runtime(0, "Column names must be strings")
+                                    })?
+                                    .to_string(),
+                            );
+                        }
+                        cols
+                    }
+                    _ => {
+                        return Err(PipError::runtime(
+                            0,
+                            "select_columns() requires an array of column names",
+                        ))
+                    }
+                };
+                let col_refs: Vec<&str> = columns.iter().map(|s| s.as_str()).collect();
+                let mut selected = sheet.clone();
+                selected.select_columns(&col_refs).map_err(|e| {
+                    PipError::runtime(0, format!("Failed to select columns: {}", e))
+                })?;
+                Ok(Value::Sheet(selected))
+            }
+            "remove_columns" => {
+                if args.len() != 1 {
+                    return Err(PipError::runtime(
+                        0,
+                        "remove_columns() takes exactly 1 argument",
+                    ));
+                }
+                let columns = match &args[0] {
+                    Value::Array(arr) => {
+                        let mut cols = Vec::new();
+                        for val in arr {
+                            cols.push(
+                                val.as_str()
+                                    .ok_or_else(|| {
+                                        PipError::runtime(0, "Column names must be strings")
+                                    })?
+                                    .to_string(),
+                            );
+                        }
+                        cols
+                    }
+                    _ => {
+                        return Err(PipError::runtime(
+                            0,
+                            "remove_columns() requires an array of column names",
+                        ))
+                    }
+                };
+                let mut new_sheet = sheet.clone();
+                let col_refs: Vec<&str> = columns.iter().map(|s| s.as_str()).collect();
+                new_sheet.remove_columns(&col_refs).map_err(|e| {
+                    PipError::runtime(0, format!("Failed to remove columns: {}", e))
+                })?;
+                Ok(Value::Sheet(new_sheet))
+            }
+            "row_count" => {
+                if !args.is_empty() {
+                    return Err(PipError::runtime(0, "row_count() takes no arguments"));
+                }
+                Ok(Value::Int(sheet.row_count() as i64))
+            }
+            "column_count" | "col_count" => {
+                if !args.is_empty() {
+                    return Err(PipError::runtime(0, "column_count() takes no arguments"));
+                }
+                Ok(Value::Int(sheet.col_count() as i64))
+            }
+            _ => Err(PipError::runtime(
+                0,
+                format!("Unknown sheet method: {}", method),
+            )),
+        }
     }
 }
 
@@ -3483,6 +3646,42 @@ combined = consolidate(stores, "_store")
         if let Some(Value::Table(batches)) = result2 {
             assert!(!batches.is_empty());
             // The new query should have Bob's data, not Alice's
+        }
+    }
+
+    #[tokio::test]
+    async fn test_method_call_syntax() {
+        // Test sheet.row_count() method call
+        let mut interp = Interpreter::new();
+
+        // Create a simple sheet with data
+        let sheet = Sheet::from_data(vec![
+            vec!["Name", "Age"],
+            vec!["Alice", "30"],
+            vec!["Bob", "25"],
+        ]);
+
+        // Set the sheet as a variable
+        interp.set_var("data", Value::Sheet(sheet)).await;
+
+        // Parse and evaluate a method call
+        let program = PipParser::parse_str("dim count = data.row_count()").unwrap();
+        interp.eval(program).await.unwrap();
+
+        // Check result
+        let count = interp.get_var("count").await;
+        assert!(matches!(count, Some(Value::Int(3))));
+
+        // Test sheet.transpose() method
+        let program = PipParser::parse_str("dim transposed = data.transpose()").unwrap();
+        interp.eval(program).await.unwrap();
+
+        let transposed = interp.get_var("transposed").await;
+        if let Some(Value::Sheet(t_sheet)) = transposed {
+            assert_eq!(t_sheet.row_count(), 2); // After transpose: 2 rows (Name, Age)
+            assert_eq!(t_sheet.col_count(), 3); // After transpose: 3 cols (header + 2 data rows)
+        } else {
+            panic!("Expected transposed sheet");
         }
     }
 

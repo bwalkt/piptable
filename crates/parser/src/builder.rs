@@ -979,32 +979,65 @@ fn build_postfix_expr(pair: Pair<Rule>) -> BuildResult<Expr> {
     let mut inner = pair.into_inner();
     let mut expr = build_primary_expr(inner.next().unwrap())?;
 
-    for postfix in inner {
+    // Collect all postfix operations first to look ahead
+    let postfixes: Vec<_> = inner.collect();
+    let mut i = 0;
+
+    while i < postfixes.len() {
+        let postfix = &postfixes[i];
         match postfix.as_rule() {
             Rule::field_access => {
-                let field = postfix.into_inner().next().unwrap().as_str().to_string();
-                expr = Expr::FieldAccess {
-                    object: Box::new(expr),
-                    field,
-                };
+                let field = postfix
+                    .clone()
+                    .into_inner()
+                    .next()
+                    .unwrap()
+                    .as_str()
+                    .to_string();
+
+                // Look ahead to see if this is followed by call_args (method call)
+                if i + 1 < postfixes.len() && postfixes[i + 1].as_rule() == Rule::call_args {
+                    // This is a method call: object.method(args)
+                    let mut args = Vec::new();
+                    if let Some(arg_list) = postfixes[i + 1].clone().into_inner().next() {
+                        for arg in arg_list.into_inner() {
+                            args.push(build_expr(arg)?);
+                        }
+                    }
+                    expr = Expr::MethodCall {
+                        object: Box::new(expr),
+                        method: field,
+                        args,
+                    };
+                    i += 2; // Skip both field_access and call_args
+                } else {
+                    // Regular field access
+                    expr = Expr::FieldAccess {
+                        object: Box::new(expr),
+                        field,
+                    };
+                    i += 1;
+                }
             }
             Rule::array_index => {
-                let index = build_expr(postfix.into_inner().next().unwrap())?;
+                let index = build_expr(postfix.clone().into_inner().next().unwrap())?;
                 expr = Expr::ArrayIndex {
                     array: Box::new(expr),
                     index: Box::new(index),
                 };
+                i += 1;
             }
             Rule::type_assertion => {
-                let type_name = build_type_name(postfix.into_inner().next().unwrap())?;
+                let type_name = build_type_name(postfix.clone().into_inner().next().unwrap())?;
                 expr = Expr::TypeAssertion {
                     expr: Box::new(expr),
                     type_name,
                 };
+                i += 1;
             }
             Rule::call_args => {
                 let mut args = Vec::new();
-                if let Some(arg_list) = postfix.into_inner().next() {
+                if let Some(arg_list) = postfix.clone().into_inner().next() {
                     for arg in arg_list.into_inner() {
                         args.push(build_expr(arg)?);
                     }
@@ -1014,6 +1047,13 @@ fn build_postfix_expr(pair: Pair<Rule>) -> BuildResult<Expr> {
                         function: name,
                         args,
                     };
+                } else if let Expr::FieldAccess { .. } = expr {
+                    // This shouldn't happen if we correctly handle method calls above
+                    return Err(BuildError::new(
+                        0,
+                        0,
+                        "Unexpected field access before function call",
+                    ));
                 } else {
                     // Chained calls like getFunc()() require AST support for callee expressions
                     return Err(BuildError::new(
@@ -1022,8 +1062,11 @@ fn build_postfix_expr(pair: Pair<Rule>) -> BuildResult<Expr> {
                         "Function calls on non-identifier expressions are not yet supported",
                     ));
                 }
+                i += 1;
             }
-            _ => {}
+            _ => {
+                i += 1;
+            }
         }
     }
 
