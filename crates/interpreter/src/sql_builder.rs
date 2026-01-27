@@ -282,7 +282,18 @@ impl Interpreter {
             Literal::Float(f) => f.to_string(),
             Literal::String(s) => format!("'{}'", s.replace('\'', "''")),
             Literal::Interval { value, unit } => {
-                format!("INTERVAL {} {:?}", value, unit)
+                use piptable_core::IntervalUnit;
+                let unit_str = match unit {
+                    IntervalUnit::Millisecond => "MILLISECOND",
+                    IntervalUnit::Second => "SECOND",
+                    IntervalUnit::Minute => "MINUTE",
+                    IntervalUnit::Hour => "HOUR",
+                    IntervalUnit::Day => "DAY",
+                    IntervalUnit::Week => "WEEK",
+                    IntervalUnit::Month => "MONTH",
+                    IntervalUnit::Year => "YEAR",
+                };
+                format!("INTERVAL '{}' {}", value, unit_str)
             }
         }
     }
