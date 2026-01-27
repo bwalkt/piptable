@@ -4795,8 +4795,8 @@ combined = consolidate(stores, "_store")
     }
 
     #[tokio::test]
-    async fn test_toon_sql_with_filter() {
-        // Test TOON SQL queries with WHERE clause
+    async fn test_toon_sql_with_order() {
+        // Test TOON SQL queries with ORDER BY clause
         use std::io::Write;
         use tempfile::NamedTempFile;
 
@@ -4812,9 +4812,9 @@ combined = consolidate(stores, "_store")
         file.flush().unwrap();
 
         let path = file.path().to_string_lossy().replace('\\', "/");
-        // Simple query without WHERE clause to test basic TOON SQL support
+        // Query with ORDER BY to test sorting functionality
         let script = format!(
-            r#"dim tools = query(SELECT * FROM "{}" ORDER BY product)"#,
+            r#"dim products = query(SELECT * FROM "{}" ORDER BY product)"#,
             path
         );
 
@@ -4822,11 +4822,11 @@ combined = consolidate(stores, "_store")
         let result = interp.eval(program).await;
         assert!(
             result.is_ok(),
-            "TOON SQL query with filter should succeed: {:?}",
+            "TOON SQL query with ORDER BY should succeed: {:?}",
             result.err()
         );
 
-        let query_result = interp.get_var("tools").await.unwrap();
+        let query_result = interp.get_var("products").await.unwrap();
         if let Value::Table(batches) = query_result {
             let total_rows: usize = batches.iter().map(|b| b.num_rows()).sum();
             assert_eq!(total_rows, 4, "Should have 4 products");
