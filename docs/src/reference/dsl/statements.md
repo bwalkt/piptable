@@ -259,10 +259,10 @@ dim report = import "workbook.xlsx" sheet "Report" into sheet
 
 ### export
 
-Save data to files.
+Save data to files, with optional append mode for incremental data building.
 
 ```piptable
-export data to file
+export data to file [append]
 ```
 
 **Examples:**
@@ -273,9 +273,22 @@ export data to "output.xlsx"
 export data to "output.json"
 export data to "output.parquet"
 
+' Append mode (currently supported for CSV and TSV)
+export new_data to "existing.csv" append
+export log_entries to "events.tsv" append
+
+' Append creates file if it doesn't exist
+export first_batch to "new_file.csv" append
+
 ' Note: Export options are planned but not yet implemented
 ' Future: export data to "output.csv" with {"delimiter": "|"}
 ```
+
+**Append Mode Notes:**
+- Currently supported only for CSV and TSV files
+- Automatically validates column compatibility when appending
+- Creates the file if it doesn't exist
+- Preserves the existing data and adds new rows at the end
 
 ### append
 

@@ -96,10 +96,11 @@ pub enum Statement {
         line: usize,
     },
 
-    /// Export statement: `export data to "file.csv"`
+    /// Export statement: `export data to "file.csv"` or `export data to "file.csv" append`
     Export {
         source: Expr,
         destination: Expr,
+        append: bool,
         options: Option<Expr>,
         line: usize,
     },
