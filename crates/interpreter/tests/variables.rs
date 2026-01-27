@@ -49,7 +49,8 @@ async fn test_dim_float() {
 /// # Examples
 ///
 /// ```no_run
-/// # use crate::{run_script, Value};
+/// # use crate::common::run_script;
+/// # use piptable_core::Value;
 /// # tokio_test::block_on(async {
 /// let (interp, _) = run_script(r#"dim x = "hello""#).await;
 /// assert!(matches!(interp.get_var("x").await, Some(Value::String(s)) if s == "hello"));

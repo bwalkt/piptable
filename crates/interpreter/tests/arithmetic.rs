@@ -13,7 +13,8 @@ use piptable_core::Value;
 /// # Examples
 ///
 /// ```
-/// # use crate::{run_script, Value};
+/// # use crate::common::run_script;
+/// # use piptable_core::Value;
 /// # #[tokio::test]
 /// # async fn _example() {
 /// let (interp, _) = run_script("dim x = 10 + 5").await;
