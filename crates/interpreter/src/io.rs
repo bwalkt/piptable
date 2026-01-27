@@ -58,7 +58,7 @@ pub fn import_sheet(
     } else if path_lower.ends_with(".jsonl") {
         Sheet::from_jsonl(path).map_err(|e| format!("Failed to import JSONL: {}", e))
     } else if path_lower.ends_with(".xlsx") || path_lower.ends_with(".xls") {
-        let mut sheet = if let Some(name) = sheet_name {
+        let mut sheet = if let Some(_name) = sheet_name {
             // For now, just load the first sheet and ignore sheet_name
             // TODO: implement proper sheet selection
             Sheet::from_excel(path).map_err(|e| format!("Failed to import Excel: {}", e))?

@@ -274,7 +274,7 @@ pub fn infer_sheet_column_type(
 
     if all_null || has_string || (has_int && has_bool) || (has_float && has_bool) {
         DataType::Utf8
-    } else if has_float || (has_int && has_float) {
+    } else if has_float {
         DataType::Float64
     } else if has_int {
         DataType::Int64

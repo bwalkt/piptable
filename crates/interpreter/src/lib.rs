@@ -19,7 +19,6 @@ mod sql_builder;
 mod python;
 
 use crate::sheet_conversions::{build_sheet_arrow_array, infer_sheet_column_type};
-use arrow::datatypes::{Field, Schema};
 use async_recursion::async_recursion;
 use piptable_core::{
     BinaryOp, Expr, LValue, Literal, PipError, PipResult, Program, Statement, UnaryOp, Value,
