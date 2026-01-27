@@ -22,12 +22,11 @@ impl Interpreter {
         let mut sql = String::new();
 
         // WITH clause
-        if let Some(with) = &query.with_clause {
-            sql.push_str("WITH ");
-            if with.recursive {
-                sql.push_str("RECURSIVE ");
-            }
-            // TODO: Handle CTEs
+        if let Some(_with) = &query.with_clause {
+            return Err(piptable_core::PipError::runtime(
+                0,
+                "WITH clause (Common Table Expressions) is not yet supported",
+            ));
         }
 
         // SELECT clause
