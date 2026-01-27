@@ -374,6 +374,117 @@ pub async fn call_sheet_builtin(
             }
         }
 
+        "sheet_map" => {
+            // Simple version: map all cells to uppercase if they're strings
+            if args.len() != 2 {
+                return Some(Err(PipError::runtime(
+                    line,
+                    "sheet_map() takes exactly 2 arguments (sheet, operation)",
+                )));
+            }
+            match (&args[0], &args[1]) {
+                (Value::Sheet(sheet), Value::String(operation)) => {
+                    let mut new_sheet = sheet.clone();
+                    match operation.as_str() {
+                        "upper" => {
+                            new_sheet.map(|cell| {
+                                if let CellValue::String(s) = cell {
+                                    CellValue::String(s.to_uppercase())
+                                } else {
+                                    cell.clone()
+                                }
+                            });
+                            Some(Ok(Value::Sheet(new_sheet)))
+                        }
+                        "lower" => {
+                            new_sheet.map(|cell| {
+                                if let CellValue::String(s) = cell {
+                                    CellValue::String(s.to_lowercase())
+                                } else {
+                                    cell.clone()
+                                }
+                            });
+                            Some(Ok(Value::Sheet(new_sheet)))
+                        }
+                        "trim" => {
+                            new_sheet.map(|cell| {
+                                if let CellValue::String(s) = cell {
+                                    CellValue::String(s.trim().to_string())
+                                } else {
+                                    cell.clone()
+                                }
+                            });
+                            Some(Ok(Value::Sheet(new_sheet)))
+                        }
+                        _ => Some(Err(PipError::runtime(
+                            line,
+                            format!(
+                                "Unknown operation '{}'. Supported: upper, lower, trim",
+                                operation
+                            ),
+                        ))),
+                    }
+                }
+                _ => Some(Err(PipError::runtime(
+                    line,
+                    "Arguments must be (sheet, string_operation)",
+                ))),
+            }
+        }
+
+        "sheet_filter_rows" => {
+            // Simple version: filter rows where a specific column matches a value
+            if args.len() != 3 {
+                return Some(Err(PipError::runtime(
+                    line,
+                    "sheet_filter_rows() takes exactly 3 arguments (sheet, column_name, value)",
+                )));
+            }
+            match (&args[0], &args[1], &args[2]) {
+                (Value::Sheet(sheet), Value::String(col_name), filter_value) => {
+                    // Find the column index
+                    let col_names = sheet.column_names();
+                    if col_names.is_none() {
+                        return Some(Err(PipError::runtime(
+                            line,
+                            "Sheet must have named columns for filtering",
+                        )));
+                    }
+                    let col_names = col_names.unwrap();
+                    let col_idx = col_names.iter().position(|n| n == col_name);
+
+                    if col_idx.is_none() {
+                        return Some(Err(PipError::runtime(
+                            line,
+                            format!("Column '{}' not found", col_name),
+                        )));
+                    }
+                    let col_idx = col_idx.unwrap();
+
+                    let mut new_sheet = sheet.clone();
+                    let filter_cell = value_to_cell(filter_value);
+                    if filter_cell.is_none() {
+                        return Some(Err(PipError::runtime(line, "Invalid filter value type")));
+                    }
+                    let filter_cell = filter_cell.unwrap();
+
+                    new_sheet.filter_rows(|_row_idx, row| {
+                        if col_idx < row.len() {
+                            row[col_idx] == filter_cell
+                        } else {
+                            false
+                        }
+                    });
+
+                    Some(Ok(Value::Sheet(new_sheet)))
+                }
+                _ => Some(Err(PipError::runtime(
+                    line,
+                    "Arguments must be (sheet, column_name, filter_value)",
+                ))),
+            }
+        }
+
         _ => None,
     }
 }
