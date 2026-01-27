@@ -1740,6 +1740,46 @@ impl Interpreter {
         Ok(table_name)
     }
 
+    /// Register a Value::Table variable as a table and return the table name.
+    async fn register_table_variable(
+        &mut self,
+        name: &str,
+        batches: &[Arc<arrow::array::RecordBatch>],
+    ) -> PipResult<String> {
+        let table_name = format!("table_{}", name.replace(['-', '.', ' '], "_"));
+
+        if batches.is_empty() {
+            // For empty results, we can't preserve schema without at least one batch
+            // Return error to avoid silent failures with column queries
+            return Err(PipError::runtime(
+                0,
+                format!(
+                    "Cannot register empty table '{}' - no schema information available",
+                    name
+                ),
+            ));
+        }
+
+        // Check if all batches have 0 rows but preserve the schema
+        let all_empty = batches.iter().all(|b| b.num_rows() == 0);
+        if all_empty {
+            // We have schema but no rows - create empty batch with correct schema
+            use arrow::array::RecordBatch;
+            let schema = batches[0].schema();
+            let batch = RecordBatch::new_empty(schema);
+            self.sql.register_table(&table_name, vec![batch]).await?;
+        } else {
+            // Convert Arc<RecordBatch> to RecordBatch by cloning
+            let mut batch_vec = Vec::new();
+            for batch in batches {
+                batch_vec.push((**batch).clone());
+            }
+            self.sql.register_table(&table_name, batch_vec).await?;
+        }
+
+        Ok(table_name)
+    }
+
     /// Convert table batches to array of objects.
     fn table_to_array(&self, batches: &[Arc<arrow::array::RecordBatch>]) -> PipResult<Vec<Value>> {
         let mut rows = Vec::new();
@@ -3686,6 +3726,93 @@ combined = consolidate(stores, "_store")
         if let Some(Value::Table(batches)) = result2 {
             assert!(!batches.is_empty());
             // The new query should have Bob's data, not Alice's
+        }
+    }
+
+    #[tokio::test]
+    async fn test_sql_query_on_table_variable() {
+        // Test that SQL can query Value::Table variables directly
+        let mut interp = Interpreter::new();
+
+        // First create a table from a query (simplest version)
+        let program1 = PipParser::parse_str(r#"dim data = query(SELECT 1 as id)"#).unwrap();
+        interp.eval(program1).await.unwrap();
+
+        // Verify we have a table
+        let data = interp.get_var("data").await;
+        assert!(matches!(data, Some(Value::Table(_))));
+
+        // Now query the in-memory table variable
+        let program2 = PipParser::parse_str(r#"dim result = query(SELECT * FROM data)"#).unwrap();
+        interp.eval(program2).await.unwrap();
+
+        // Verify the result
+        match interp.get_var("result").await {
+            Some(Value::Table(batches)) => {
+                assert!(!batches.is_empty(), "Query should return results");
+                let total_rows: usize = batches.iter().map(|b| b.num_rows()).sum();
+                assert_eq!(total_rows, 1, "Should have one row");
+            }
+            _ => panic!("Expected Table result"),
+        }
+    }
+
+    #[tokio::test]
+    async fn test_sql_join_on_table_variables() {
+        // Test that SQL can join multiple Value::Table variables
+        let mut interp = Interpreter::new();
+
+        // Create first table
+        let program1 = PipParser::parse_str(r#"dim users = query(SELECT 1 as uid)"#).unwrap();
+        interp.eval(program1).await.unwrap();
+
+        // Create second table
+        let program2 =
+            PipParser::parse_str(r#"dim scores = query(SELECT 1 as uid, 100 as points)"#).unwrap();
+        interp.eval(program2).await.unwrap();
+
+        // Join the two tables - now using natural names thanks to automatic aliasing
+        let program3 = PipParser::parse_str(
+            r#"dim joined = query(SELECT users.uid, scores.points FROM users JOIN scores ON users.uid = scores.uid)"#,
+        )
+        .unwrap();
+        interp.eval(program3).await.unwrap();
+
+        // Verify the joined result
+        match interp.get_var("joined").await {
+            Some(Value::Table(batches)) => {
+                assert!(!batches.is_empty(), "Query should return results");
+                let total_rows: usize = batches.iter().map(|b| b.num_rows()).sum();
+                assert_eq!(total_rows, 1, "Should have one joined row");
+                let batch = &batches[0];
+                assert_eq!(batch.num_columns(), 2, "Should have uid and points columns");
+            }
+            _ => panic!("Expected Table result"),
+        }
+    }
+
+    #[tokio::test]
+    async fn test_sql_with_explicit_aliases() {
+        // Test that explicit aliases don't cause double aliasing
+        let mut interp = Interpreter::new();
+
+        // Create a table (use simpler query due to parser limitations)
+        let program1 = PipParser::parse_str(r#"dim users = query(SELECT 1 as id)"#).unwrap();
+        interp.eval(program1).await.unwrap();
+
+        // Query with explicit alias - should NOT produce "table_users AS users AS u"
+        let program2 =
+            PipParser::parse_str(r#"dim result = query(SELECT u.id FROM users AS u)"#).unwrap();
+        interp.eval(program2).await.unwrap();
+
+        // Verify it works
+        match interp.get_var("result").await {
+            Some(Value::Table(batches)) => {
+                assert!(!batches.is_empty(), "Query should return results");
+                let total_rows: usize = batches.iter().map(|b| b.num_rows()).sum();
+                assert_eq!(total_rows, 1, "Should have one row");
+            }
+            _ => panic!("Expected Table result"),
         }
     }
 

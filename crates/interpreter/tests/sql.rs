@@ -39,6 +39,12 @@ async fn test_query_multiple_columns() {
     }
 }
 
+// TODO: SQL variable tests moved to lib.rs due to parser limitations
+// The parser currently has issues with certain SQL aliases and keywords
+// Tests for SQL queries on in-memory variables are in src/lib.rs:
+// - test_sql_query_on_table_variable
+// - test_sql_join_on_table_variables
+
 // TODO: WHERE clause parsing has issues with the current grammar
 /// Verifies that a CSV-backed SQL query filters rows correctly using a WHERE clause.
 ///

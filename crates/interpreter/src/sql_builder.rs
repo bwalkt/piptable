@@ -110,27 +110,39 @@ impl Interpreter {
     }
 
     pub(crate) async fn from_clause_to_string(&mut self, from: &FromClause) -> PipResult<String> {
-        let source = self.table_ref_to_string(&from.source).await?;
+        // Pass the alias info to table_ref_to_string to avoid double aliasing
+        let source = self
+            .table_ref_to_string_with_context(&from.source, from.alias.is_some())
+            .await?;
         Ok(match &from.alias {
             Some(alias) => format!("{source} AS {alias}"),
             None => source,
         })
     }
 
-    #[async_recursion]
-    pub(crate) async fn table_ref_to_string(&mut self, table_ref: &TableRef) -> PipResult<String> {
+    // Helper that knows if an external alias will be applied
+    async fn table_ref_to_string_with_context(
+        &mut self,
+        table_ref: &TableRef,
+        has_external_alias: bool,
+    ) -> PipResult<String> {
         match table_ref {
             TableRef::Table(name) => {
-                // Check if this refers to a variable containing a Sheet
+                // Check if this refers to a variable containing a Sheet or Table
                 if let Some(value) = self.get_var(name).await {
-                    if let Some(sheet) = value.as_sheet() {
-                        // Check if we've already registered this sheet
-                        let sheet_tables = self.sheet_tables.read().await;
-                        if let Some(existing_table) = sheet_tables.get(name) {
+                    // Check if we've already registered this variable
+                    let sheet_tables = self.sheet_tables.read().await;
+                    if let Some(existing_table) = sheet_tables.get(name) {
+                        // Only auto-alias if no external alias is provided
+                        if has_external_alias {
                             return Ok(existing_table.clone());
                         }
-                        drop(sheet_tables);
+                        return Ok(format!("{} AS {}", existing_table, name));
+                    }
+                    drop(sheet_tables);
 
+                    // Handle Sheet variables
+                    if let Some(sheet) = value.as_sheet() {
                         // Convert Sheet to Table and register it
                         let table_name = self.register_sheet_as_table(name, sheet).await?;
 
@@ -138,11 +150,44 @@ impl Interpreter {
                         let mut sheet_tables = self.sheet_tables.write().await;
                         sheet_tables.insert(name.to_string(), table_name.clone());
 
-                        return Ok(table_name);
+                        // Only auto-alias if no external alias is provided
+                        if has_external_alias {
+                            return Ok(table_name);
+                        }
+                        return Ok(format!("{} AS {}", table_name, name));
+                    }
+
+                    // Handle Table variables (RecordBatch vectors)
+                    if let Some(batches) = value.as_table() {
+                        // Register the table directly
+                        let table_name = self.register_table_variable(name, batches).await?;
+
+                        // Remember that we registered this table
+                        let mut sheet_tables = self.sheet_tables.write().await;
+                        sheet_tables.insert(name.to_string(), table_name.clone());
+
+                        // Only auto-alias if no external alias is provided
+                        if has_external_alias {
+                            return Ok(table_name);
+                        }
+                        return Ok(format!("{} AS {}", table_name, name));
                     }
                 }
                 // Otherwise, treat as regular table name
                 Ok(name.clone())
+            }
+            // For other TableRef variants, delegate to the regular method
+            _ => self.table_ref_to_string(table_ref).await,
+        }
+    }
+
+    #[async_recursion]
+    pub(crate) async fn table_ref_to_string(&mut self, table_ref: &TableRef) -> PipResult<String> {
+        // Default to no external alias context
+        match table_ref {
+            TableRef::Table(_) => {
+                self.table_ref_to_string_with_context(table_ref, false)
+                    .await
             }
             TableRef::Qualified {
                 database,
@@ -194,7 +239,10 @@ impl Interpreter {
             JoinType::Cross => " CROSS JOIN ",
         };
 
-        let table = self.table_ref_to_string(&join.table).await?;
+        // Pass alias context to avoid double aliasing
+        let table = self
+            .table_ref_to_string_with_context(&join.table, join.alias.is_some())
+            .await?;
         let mut result = format!("{join_type}{table}");
 
         if let Some(alias) = &join.alias {
