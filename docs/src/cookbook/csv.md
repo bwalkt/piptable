@@ -198,6 +198,128 @@ print "Exported " + str(len(south_orders)) + " orders for South"
 4. **Filter early** in your queries to reduce memory usage
 5. **Use appropriate data types** in queries for better performance
 
+## Incremental Data Building with Append Mode
+
+### Basic Append Mode
+```piptable
+' @title Append Data to Existing CSV
+' @description Add new records to an existing CSV file
+
+' Initial batch
+dim batch1 = [
+  {"id": 1, "name": "Alice", "status": "active"},
+  {"id": 2, "name": "Bob", "status": "pending"}
+]
+export batch1 to "users.csv"
+
+' Append additional records
+dim batch2 = [
+  {"id": 3, "name": "Charlie", "status": "active"},
+  {"id": 4, "name": "Diana", "status": "inactive"}
+]
+export batch2 to "users.csv" append
+
+print "users.csv now contains all 4 records"
+```
+
+### Building Daily Log Files
+```piptable
+' @title Append to Daily Logs
+' @description Continuously add log entries to a daily file
+
+dim log_file = "logs_" + format_date(now(), "YYYY-MM-DD") + ".csv"
+
+' Process and append log entries throughout the day
+for each event in incoming_events
+  dim log_entry = {
+    "timestamp": now(),
+    "event_type": event.type,
+    "user_id": event.user_id,
+    "details": event.details
+  }
+  
+  ' Append each entry as it comes in
+  export [log_entry] to log_file append
+next
+
+print "Log entries appended to " + log_file
+```
+
+### Incremental Data Collection
+```piptable
+' @title Incremental Data Collection
+' @description Collect data from multiple sources incrementally
+
+' Start with empty or non-existent file
+dim output_file = "collected_data.csv"
+
+' Collect from multiple sources
+import "source1.csv" into data1
+export data1 to output_file append
+
+import "source2.csv" into data2  
+export data2 to output_file append
+
+' Process API data and append
+dim api_data = fetch("https://api.example.com/data")
+export api_data to output_file append
+
+print "All data collected in " + output_file
+```
+
+### Batch Processing with Progress
+```piptable
+' @title Batch Processing with Append
+' @description Process large datasets in chunks
+
+dim total_records = 0
+dim output_file = "processed_records.csv"
+
+' Process data in manageable batches
+for batch_num = 1 to 10
+  dim batch_file = "batch_" + str(batch_num) + ".csv"
+  import batch_file into batch
+  
+  ' Transform the batch
+  dim processed: table = query(
+    SELECT 
+      id,
+      upper(name) as name,
+      calculate_score(value) as score
+    FROM batch
+  )
+  
+  ' Append processed batch to output
+  export processed to output_file append
+  
+  total_records = total_records + len(processed)
+  print "Processed batch " + str(batch_num) + ": " + str(len(processed)) + " records"
+next
+
+print "Total records processed: " + str(total_records)
+```
+
+### Append with Column Validation
+```piptable
+' @title Safe Append with Validation
+' @description Append only if columns match
+
+' Initial data structure
+dim template = [{"id": 0, "name": "", "email": ""}]
+export template to "contacts.csv"
+
+' Try to append matching data (succeeds)
+dim new_contacts = [
+  {"id": 1, "name": "Alice", "email": "alice@example.com"},
+  {"id": 2, "name": "Bob", "email": "bob@example.com"}
+]
+export new_contacts to "contacts.csv" append
+
+' Try to append mismatched columns (fails with error)
+' dim wrong_format = [{"user_id": 3, "full_name": "Charlie"}]
+' export wrong_format to "contacts.csv" append  ' Error: Column mismatch
+```
+
 ## Next Steps
 
 - [Excel Processing](excel.md) - Working with Excel files
