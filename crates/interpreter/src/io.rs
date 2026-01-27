@@ -38,12 +38,19 @@ pub fn export_sheet(sheet: &Sheet, path: &str) -> Result<(), String> {
 }
 
 /// Import a sheet from a file based on extension.
-pub fn import_sheet(path: &str, sheet_name: Option<&str>, has_headers: bool) -> Result<Sheet, String> {
+pub fn import_sheet(
+    path: &str,
+    sheet_name: Option<&str>,
+    has_headers: bool,
+) -> Result<Sheet, String> {
     let path_lower = path.to_lowercase();
     if path_lower.ends_with(".csv") || path_lower.ends_with(".tsv") {
-        let mut sheet = Sheet::from_csv(path).map_err(|e| format!("Failed to import CSV: {}", e))?;
+        let mut sheet =
+            Sheet::from_csv(path).map_err(|e| format!("Failed to import CSV: {}", e))?;
         if has_headers {
-            sheet.name_columns_by_row(0).map_err(|e| format!("Failed to name columns: {}", e))?;
+            sheet
+                .name_columns_by_row(0)
+                .map_err(|e| format!("Failed to name columns: {}", e))?;
         }
         Ok(sheet)
     } else if path_lower.ends_with(".json") {
@@ -59,7 +66,9 @@ pub fn import_sheet(path: &str, sheet_name: Option<&str>, has_headers: bool) -> 
             Sheet::from_excel(path).map_err(|e| format!("Failed to import Excel: {}", e))?
         };
         if has_headers {
-            sheet.name_columns_by_row(0).map_err(|e| format!("Failed to name columns: {}", e))?;
+            sheet
+                .name_columns_by_row(0)
+                .map_err(|e| format!("Failed to name columns: {}", e))?;
         }
         Ok(sheet)
     } else if path_lower.ends_with(".parquet") {
@@ -74,7 +83,7 @@ pub fn import_sheet(path: &str, sheet_name: Option<&str>, has_headers: bool) -> 
 /// Import multiple files based on options.
 pub fn import_multi_files(paths: &[String], options: &ImportOptions) -> Result<Value, String> {
     let mut sheets = HashMap::new();
-    
+
     for path in paths {
         let path_obj = Path::new(path);
         let name = path_obj
@@ -82,11 +91,11 @@ pub fn import_multi_files(paths: &[String], options: &ImportOptions) -> Result<V
             .and_then(|s| s.to_str())
             .unwrap_or("sheet")
             .to_string();
-            
+
         let sheet = import_sheet(path, None, options.has_headers.unwrap_or(true))?;
         sheets.insert(name, Value::Sheet(sheet));
     }
-    
+
     if sheets.len() == 1 {
         Ok(sheets.into_values().next().unwrap())
     } else {

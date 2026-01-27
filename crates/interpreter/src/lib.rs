@@ -18,18 +18,16 @@ mod sql_builder;
 #[cfg(feature = "python")]
 mod python;
 
+use crate::sheet_conversions::{build_sheet_arrow_array, infer_sheet_column_type};
+use arrow::datatypes::{Field, Schema};
 use async_recursion::async_recursion;
 use piptable_core::{
-    BinaryOp, Expr, LValue, Literal,
-    PipError, PipResult, Program, Statement,
-    UnaryOp, Value,
+    BinaryOp, Expr, LValue, Literal, PipError, PipResult, Program, Statement, UnaryOp, Value,
 };
 use piptable_http::HttpClient;
 use piptable_sheet::{CellValue, Sheet};
 use piptable_sql::SqlEngine;
 use std::collections::HashMap;
-use crate::sheet_conversions::{build_sheet_arrow_array, infer_sheet_column_type};
-use arrow::datatypes::{Field, Schema};
 use std::sync::Arc;
 use tokio::sync::RwLock;
 
@@ -374,9 +372,10 @@ impl Interpreter {
                     .map_err(|e| e.with_line(line))?;
 
                 // Convert both to sheets
-                let mut target_sheet = sheet_conversions::value_to_sheet(&target_val).map_err(|e| {
-                    PipError::runtime(line, format!("target must be a sheet: {}", e))
-                })?;
+                let mut target_sheet =
+                    sheet_conversions::value_to_sheet(&target_val).map_err(|e| {
+                        PipError::runtime(line, format!("target must be a sheet: {}", e))
+                    })?;
                 let source_sheet = sheet_conversions::value_to_sheet(&source_val).map_err(|e| {
                     PipError::runtime(line, format!("source must be a sheet: {}", e))
                 })?;
@@ -402,7 +401,8 @@ impl Interpreter {
                 }
 
                 // Update the variable with modified sheet
-                self.set_var(&target, sheet_conversions::sheet_to_value(&target_sheet)).await;
+                self.set_var(&target, sheet_conversions::sheet_to_value(&target_sheet))
+                    .await;
                 Ok(Value::Null)
             }
 
@@ -424,9 +424,10 @@ impl Interpreter {
                     .map_err(|e| e.with_line(line))?;
 
                 // Convert both to sheets
-                let mut target_sheet = sheet_conversions::value_to_sheet(&target_val).map_err(|e| {
-                    PipError::runtime(line, format!("target must be a sheet: {}", e))
-                })?;
+                let mut target_sheet =
+                    sheet_conversions::value_to_sheet(&target_val).map_err(|e| {
+                        PipError::runtime(line, format!("target must be a sheet: {}", e))
+                    })?;
                 let source_sheet = sheet_conversions::value_to_sheet(&source_val).map_err(|e| {
                     PipError::runtime(line, format!("source must be a sheet: {}", e))
                 })?;
@@ -437,7 +438,8 @@ impl Interpreter {
                     .map_err(|e| PipError::runtime(line, format!("upsert failed: {}", e)))?;
 
                 // Update the variable with modified sheet
-                self.set_var(&target, sheet_conversions::sheet_to_value(&target_sheet)).await;
+                self.set_var(&target, sheet_conversions::sheet_to_value(&target_sheet))
+                    .await;
                 Ok(Value::Null)
             }
 
@@ -1677,7 +1679,9 @@ impl Interpreter {
         let fields: Vec<Field> = column_names
             .iter()
             .zip(col_types.iter())
-            .map(|(name, dtype): (&String, &arrow::datatypes::DataType)| Field::new(name.clone(), dtype.clone(), true))
+            .map(|(name, dtype): (&String, &arrow::datatypes::DataType)| {
+                Field::new(name.clone(), dtype.clone(), true)
+            })
             .collect();
         let schema = Arc::new(Schema::new(fields));
 
@@ -2386,7 +2390,8 @@ combined = consolidate(stores, "_store")
         if let Value::Array(arr) = &combined {
             // Check that source column contains sheet names (skip header rows)
             // Find first non-header data row (should have integer values)
-            let data_rows: Vec<_> = arr.iter()
+            let data_rows: Vec<_> = arr
+                .iter()
                 .filter(|item| {
                     if let Value::Object(obj) = item {
                         obj.values().any(|v| matches!(v, Value::Int(_)))
@@ -2395,9 +2400,9 @@ combined = consolidate(stores, "_store")
                     }
                 })
                 .collect();
-            
+
             assert!(data_rows.len() >= 2, "Should have at least 2 data rows");
-            
+
             if let Value::Object(obj) = data_rows[0] {
                 assert!(obj.contains_key("_store"));
                 assert!(matches!(obj.get("_store"), Some(Value::String(s)) if s == "store1"));
@@ -2494,8 +2499,12 @@ combined = consolidate(stores, "_store")
         let orders = Sheet::from_records(vec![order1, order2, order3]).unwrap();
 
         // Set the sheets as variables (convert to Value)
-        interp.set_var("users", sheet_conversions::sheet_to_value(&users)).await;
-        interp.set_var("orders", sheet_conversions::sheet_to_value(&orders)).await;
+        interp
+            .set_var("users", sheet_conversions::sheet_to_value(&users))
+            .await;
+        interp
+            .set_var("orders", sheet_conversions::sheet_to_value(&orders))
+            .await;
 
         // Test inner join with different columns
         let code = r#"result = users join orders on "id" = "user_id""#;
@@ -2553,8 +2562,12 @@ combined = consolidate(stores, "_store")
         let orders = Sheet::from_records(vec![order1, order2]).unwrap();
 
         // Set the sheets as variables
-        interp.set_var("users", sheet_conversions::sheet_to_value(&users)).await;
-        interp.set_var("orders", sheet_conversions::sheet_to_value(&orders)).await;
+        interp
+            .set_var("users", sheet_conversions::sheet_to_value(&users))
+            .await;
+        interp
+            .set_var("orders", sheet_conversions::sheet_to_value(&orders))
+            .await;
 
         // Test left join
         let code = r#"result = users left join orders on "id" = "user_id""#;
@@ -2620,8 +2633,12 @@ combined = consolidate(stores, "_store")
         let sheet2 = Sheet::from_records(vec![record2_1, record2_2]).unwrap();
 
         // Set the sheets as variables
-        interp.set_var("sheet1", sheet_conversions::sheet_to_value(&sheet1)).await;
-        interp.set_var("sheet2", sheet_conversions::sheet_to_value(&sheet2)).await;
+        interp
+            .set_var("sheet1", sheet_conversions::sheet_to_value(&sheet1))
+            .await;
+        interp
+            .set_var("sheet2", sheet_conversions::sheet_to_value(&sheet2))
+            .await;
 
         // Test join with same key column name
         let code = r#"result = sheet1 join sheet2 on "id""#;
@@ -2677,8 +2694,12 @@ combined = consolidate(stores, "_store")
 
         let sheet2 = Sheet::from_records(vec![score1, score2, score3]).unwrap();
 
-        interp.set_var("sheet1", sheet_conversions::sheet_to_value(&sheet1)).await;
-        interp.set_var("sheet2", sheet_conversions::sheet_to_value(&sheet2)).await;
+        interp
+            .set_var("sheet1", sheet_conversions::sheet_to_value(&sheet1))
+            .await;
+        interp
+            .set_var("sheet2", sheet_conversions::sheet_to_value(&sheet2))
+            .await;
 
         // Test right join
         let code = r#"result = sheet1 right join sheet2 on "id" = "user_id""#;
@@ -2772,8 +2793,12 @@ combined = consolidate(stores, "_store")
 
         let sheet2 = Sheet::from_records(vec![score1, score2, score3]).unwrap();
 
-        interp.set_var("sheet1", sheet_conversions::sheet_to_value(&sheet1)).await;
-        interp.set_var("sheet2", sheet_conversions::sheet_to_value(&sheet2)).await;
+        interp
+            .set_var("sheet1", sheet_conversions::sheet_to_value(&sheet1))
+            .await;
+        interp
+            .set_var("sheet2", sheet_conversions::sheet_to_value(&sheet2))
+            .await;
 
         // Test full join
         let code = r#"result = sheet1 full join sheet2 on "id" = "user_id""#;
@@ -2858,8 +2883,12 @@ combined = consolidate(stores, "_store")
         sheet2.name_columns_by_row(0).unwrap();
         sheet2.data_mut().remove(0); // Remove header row, keep column names
 
-        interp.set_var("sheet1", sheet_conversions::sheet_to_value(&sheet1)).await;
-        interp.set_var("sheet2", sheet_conversions::sheet_to_value(&sheet2)).await;
+        interp
+            .set_var("sheet1", sheet_conversions::sheet_to_value(&sheet1))
+            .await;
+        interp
+            .set_var("sheet2", sheet_conversions::sheet_to_value(&sheet2))
+            .await;
 
         // Test behavior with empty sheet - should either work or give predictable error
         let code = r#"result = sheet1 join sheet2 on "id" = "user_id""#;
@@ -2946,7 +2975,9 @@ combined = consolidate(stores, "_store")
         user2.insert("name".to_string(), CellValue::String("Bob".to_string()));
 
         let sheet1 = Sheet::from_records(vec![user1, user2]).unwrap();
-        interp.set_var("users", sheet_conversions::sheet_to_value(&sheet1)).await;
+        interp
+            .set_var("users", sheet_conversions::sheet_to_value(&sheet1))
+            .await;
 
         // Create new users to append
         let mut user3 = IndexMap::new();
@@ -2954,7 +2985,9 @@ combined = consolidate(stores, "_store")
         user3.insert("name".to_string(), CellValue::String("Charlie".to_string()));
 
         let sheet2 = Sheet::from_records(vec![user3]).unwrap();
-        interp.set_var("new_users", sheet_conversions::sheet_to_value(&sheet2)).await;
+        interp
+            .set_var("new_users", sheet_conversions::sheet_to_value(&sheet2))
+            .await;
 
         // Test basic append
         let code = r"users append new_users";
@@ -3009,7 +3042,9 @@ combined = consolidate(stores, "_store")
         user2.insert("name".to_string(), CellValue::String("Bob".to_string()));
 
         let sheet1 = Sheet::from_records(vec![user1, user2]).unwrap();
-        interp.set_var("users", sheet_conversions::sheet_to_value(&sheet1)).await;
+        interp
+            .set_var("users", sheet_conversions::sheet_to_value(&sheet1))
+            .await;
 
         // Create new users with duplicate ID
         let mut user2_dup = IndexMap::new();
@@ -3024,7 +3059,9 @@ combined = consolidate(stores, "_store")
         user3.insert("name".to_string(), CellValue::String("Charlie".to_string()));
 
         let sheet2 = Sheet::from_records(vec![user2_dup, user3]).unwrap();
-        interp.set_var("new_users", sheet_conversions::sheet_to_value(&sheet2)).await;
+        interp
+            .set_var("new_users", sheet_conversions::sheet_to_value(&sheet2))
+            .await;
 
         // Test append distinct on "id"
         let code = r#"users append distinct new_users on "id""#;
@@ -3076,7 +3113,9 @@ combined = consolidate(stores, "_store")
         user2.insert("age".to_string(), CellValue::Int(30));
 
         let sheet1 = Sheet::from_records(vec![user1, user2]).unwrap();
-        interp.set_var("users", sheet_conversions::sheet_to_value(&sheet1)).await;
+        interp
+            .set_var("users", sheet_conversions::sheet_to_value(&sheet1))
+            .await;
 
         // Create updates with existing and new users
         let mut user1_update = IndexMap::new();
@@ -3093,7 +3132,9 @@ combined = consolidate(stores, "_store")
         user3.insert("age".to_string(), CellValue::Int(35));
 
         let sheet2 = Sheet::from_records(vec![user1_update, user3]).unwrap();
-        interp.set_var("updates", sheet_conversions::sheet_to_value(&sheet2)).await;
+        interp
+            .set_var("updates", sheet_conversions::sheet_to_value(&sheet2))
+            .await;
 
         // Test upsert
         let code = r#"users upsert updates on "id""#;

@@ -17,29 +17,25 @@ pub fn value_to_sheet(value: &Value) -> Result<Sheet, String> {
             // Determine columns from the first object
             if let Some(Value::Object(first_row)) = rows.first() {
                 let columns: Vec<String> = first_row.keys().cloned().collect();
-                
+
                 // Add header row
                 let header_cells: Vec<CellValue> = columns
                     .iter()
                     .map(|col| CellValue::String(col.clone()))
                     .collect();
                 sheet.data_mut().push(header_cells);
-                
+
                 // Add data rows
                 for row_value in rows {
                     if let Value::Object(row) = row_value {
                         let cells: Vec<CellValue> = columns
                             .iter()
-                            .map(|col| {
-                                row.get(col)
-                                    .map(value_to_cell)
-                                    .unwrap_or(CellValue::Null)
-                            })
+                            .map(|col| row.get(col).map(value_to_cell).unwrap_or(CellValue::Null))
                             .collect();
                         sheet.data_mut().push(cells);
                     }
                 }
-                
+
                 // Name columns by first row
                 sheet
                     .name_columns_by_row(0)
@@ -79,9 +75,7 @@ pub fn value_to_cell(value: &Value) -> CellValue {
 }
 
 /// Convert Arrow RecordBatches to a Sheet.
-pub fn arrow_batches_to_sheet(
-    batches: &[Arc<RecordBatch>],
-) -> Result<Sheet, String> {
+pub fn arrow_batches_to_sheet(batches: &[Arc<RecordBatch>]) -> Result<Sheet, String> {
     if batches.is_empty() {
         return Ok(Sheet::new());
     }
@@ -123,10 +117,8 @@ pub fn arrow_batches_to_sheet(
 /// Convert an Arrow array value at a specific row to CellValue.
 pub fn arrow_value_to_cell(array: &Arc<dyn arrow::array::Array>, row: usize) -> CellValue {
     use arrow::array::{
-        BooleanArray, Float32Array, Float64Array,
-        Int16Array, Int32Array, Int64Array, Int8Array, LargeStringArray,
-        StringArray, UInt16Array, UInt32Array, UInt64Array,
-        UInt8Array,
+        BooleanArray, Float32Array, Float64Array, Int16Array, Int32Array, Int64Array, Int8Array,
+        LargeStringArray, StringArray, UInt16Array, UInt32Array, UInt64Array, UInt8Array,
     };
     use arrow::datatypes::DataType;
 
@@ -203,30 +195,30 @@ pub fn arrow_value_to_cell(array: &Arc<dyn arrow::array::Array>, row: usize) -> 
 pub fn sheet_to_value(sheet: &Sheet) -> Value {
     if let Some(column_names) = sheet.column_names() {
         let mut rows = Vec::new();
-        
+
         // Skip the header row (row 0) which contains column names
         for row_idx in 1..sheet.row_count() {
             let mut row_obj = HashMap::new();
-            
+
             if let Some(row_data) = sheet.data().get(row_idx) {
                 for (col_idx, col_name) in column_names.iter().enumerate() {
-                    let cell_value = row_data
-                        .get(col_idx)
-                        .cloned()
-                        .unwrap_or(CellValue::Null);
+                    let cell_value = row_data.get(col_idx).cloned().unwrap_or(CellValue::Null);
                     row_obj.insert(col_name.clone(), cell_to_value(cell_value));
                 }
             }
-            
+
             rows.push(Value::Object(row_obj));
         }
-        
+
         Value::Array(rows)
     } else {
         // No column names, return as array of arrays
         let mut rows = Vec::new();
         for row_data in sheet.data() {
-            let row: Vec<Value> = row_data.iter().map(|cell| cell_to_value(cell.clone())).collect();
+            let row: Vec<Value> = row_data
+                .iter()
+                .map(|cell| cell_to_value(cell.clone()))
+                .collect();
             rows.push(Value::Array(row));
         }
         Value::Array(rows)
@@ -303,44 +295,52 @@ pub fn build_sheet_arrow_array(
         DataType::Boolean => {
             let values: Vec<Option<bool>> = rows
                 .iter()
-                .map(|row| row.get(col_idx).and_then(|cell| match cell {
-                    CellValue::Bool(b) => Some(*b),
-                    _ => None,
-                }))
+                .map(|row| {
+                    row.get(col_idx).and_then(|cell| match cell {
+                        CellValue::Bool(b) => Some(*b),
+                        _ => None,
+                    })
+                })
                 .collect();
             Ok(Arc::new(BooleanArray::from(values)))
         }
         DataType::Int64 => {
             let values: Vec<Option<i64>> = rows
                 .iter()
-                .map(|row| row.get(col_idx).and_then(|cell| match cell {
-                    CellValue::Int(i) => Some(*i),
-                    _ => None,
-                }))
+                .map(|row| {
+                    row.get(col_idx).and_then(|cell| match cell {
+                        CellValue::Int(i) => Some(*i),
+                        _ => None,
+                    })
+                })
                 .collect();
             Ok(Arc::new(Int64Array::from(values)))
         }
         DataType::Float64 => {
             let values: Vec<Option<f64>> = rows
                 .iter()
-                .map(|row| row.get(col_idx).and_then(|cell| match cell {
-                    CellValue::Float(f) => Some(*f),
-                    CellValue::Int(i) => Some(*i as f64),
-                    _ => None,
-                }))
+                .map(|row| {
+                    row.get(col_idx).and_then(|cell| match cell {
+                        CellValue::Float(f) => Some(*f),
+                        CellValue::Int(i) => Some(*i as f64),
+                        _ => None,
+                    })
+                })
                 .collect();
             Ok(Arc::new(Float64Array::from(values)))
         }
         DataType::Utf8 => {
             let values: Vec<Option<String>> = rows
                 .iter()
-                .map(|row| row.get(col_idx).and_then(|cell| match cell {
-                    CellValue::String(s) => Some(s.clone()),
-                    CellValue::Int(i) => Some(i.to_string()),
-                    CellValue::Float(f) => Some(f.to_string()),
-                    CellValue::Bool(b) => Some(b.to_string()),
-                    CellValue::Null => None,
-                }))
+                .map(|row| {
+                    row.get(col_idx).and_then(|cell| match cell {
+                        CellValue::String(s) => Some(s.clone()),
+                        CellValue::Int(i) => Some(i.to_string()),
+                        CellValue::Float(f) => Some(f.to_string()),
+                        CellValue::Bool(b) => Some(b.to_string()),
+                        CellValue::Null => None,
+                    })
+                })
                 .collect();
             Ok(Arc::new(StringArray::from(values)))
         }
