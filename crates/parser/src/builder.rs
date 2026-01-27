@@ -351,11 +351,11 @@ fn build_export_stmt(pair: Pair<Rule>, line: usize) -> BuildResult<Statement> {
     let mut inner = pair.into_inner();
     let source = build_expr(inner.next().unwrap())?;
     let destination = build_expr(inner.next().unwrap())?;
-    
+
     // Check for append mode and with_clause
     let mut append = false;
     let mut options = None;
-    
+
     while let Some(next_pair) = inner.next() {
         match next_pair.as_rule() {
             Rule::export_mode => {

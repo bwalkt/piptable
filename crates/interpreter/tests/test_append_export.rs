@@ -1,6 +1,6 @@
 use piptable_interpreter::Interpreter;
 use piptable_parser::PipParser;
-use piptable_sheet::{Sheet, CellValue};
+use piptable_sheet::{CellValue, Sheet};
 use std::fs;
 use tempfile::tempdir;
 
@@ -58,13 +58,20 @@ async fn test_csv_append_mode() {
     assert!(final_content.contains("Bob"));
     assert!(final_content.contains("Charlie"));
     assert!(final_content.contains("Diana"));
-    
+
     let final_line_count = final_content.lines().count();
     assert_eq!(final_line_count, 5); // header + 4 data rows
-    
+
     // Verify header appears only once (note: columns may be in different order)
-    let header_count = final_content.lines()
-        .filter(|line| line.contains("age") && line.contains("id") && line.contains("name") && !line.contains("Alice") && !line.contains("Bob"))
+    let header_count = final_content
+        .lines()
+        .filter(|line| {
+            line.contains("age")
+                && line.contains("id")
+                && line.contains("name")
+                && !line.contains("Alice")
+                && !line.contains("Bob")
+        })
         .count();
     assert_eq!(header_count, 1, "Header should appear only once");
 }
@@ -188,7 +195,7 @@ async fn test_tsv_append_mode() {
     assert!(content.contains("Widget"));
     assert!(content.contains("Gadget"));
     assert!(content.contains("Doohickey"));
-    
+
     let lines: Vec<_> = content.lines().collect();
     assert_eq!(lines.len(), 4); // header + 3 data rows
 }
@@ -209,7 +216,7 @@ async fn test_append_mode_not_supported_for_json() {
 
     let program = PipParser::parse_str(&script).unwrap();
     let result = interp.eval(program).await;
-    
+
     assert!(result.is_err());
     let err_msg = result.unwrap_err().to_string();
     assert!(err_msg.contains("Append mode is only supported for CSV and TSV"));
@@ -254,17 +261,23 @@ async fn test_sheet_append_mode() {
     // Append more sheet data
     {
         let mut interp = Interpreter::new();
-        
+
         // Create a sheet with matching columns
         let mut sheet = Sheet::from_data(vec![
-            vec![CellValue::String("A".to_string()), CellValue::String("B".to_string()), CellValue::String("C".to_string())],
+            vec![
+                CellValue::String("A".to_string()),
+                CellValue::String("B".to_string()),
+                CellValue::String("C".to_string()),
+            ],
             vec![CellValue::Int(7), CellValue::Int(8), CellValue::Int(9)],
             vec![CellValue::Int(10), CellValue::Int(11), CellValue::Int(12)],
         ]);
         sheet.name_columns_by_row(0).unwrap();
-        
-        interp.set_var("append_data", piptable_core::Value::Sheet(sheet)).await;
-        
+
+        interp
+            .set_var("append_data", piptable_core::Value::Sheet(sheet))
+            .await;
+
         let script = format!(
             r#"
             export append_data to "{}" append

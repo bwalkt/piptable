@@ -5,11 +5,10 @@ use piptable_sheet::{CsvOptions, Sheet, XlsxReadOptions};
 use std::collections::HashMap;
 use std::path::Path;
 
-
 /// Export a sheet to a file with optional append mode.
 pub fn export_sheet_with_mode(sheet: &Sheet, path: &str, append: bool) -> Result<(), String> {
     let path_lower = path.to_lowercase();
-    
+
     // For append mode, we need to handle CSV specially
     if append && (path_lower.ends_with(".csv") || path_lower.ends_with(".tsv")) {
         // If file exists, load it first and append new data
@@ -17,11 +16,11 @@ pub fn export_sheet_with_mode(sheet: &Sheet, path: &str, append: bool) -> Result
             // Load existing data
             let mut existing_sheet = import_sheet(path, None, true)
                 .map_err(|e| format!("Failed to load existing file for append: {}", e))?;
-            
+
             // Append new data to existing sheet
             append_sheet_data(&mut existing_sheet, sheet)
                 .map_err(|e| format!("Failed to append data: {}", e))?;
-            
+
             // Save the combined sheet
             if path_lower.ends_with(".tsv") {
                 existing_sheet
@@ -46,7 +45,9 @@ pub fn export_sheet_with_mode(sheet: &Sheet, path: &str, append: bool) -> Result
         }
     } else if append {
         // Append mode not supported for other formats yet
-        Err(format!("Append mode is only supported for CSV and TSV files"))
+        Err(format!(
+            "Append mode is only supported for CSV and TSV files"
+        ))
     } else {
         // Normal export without append
         if path_lower.ends_with(".csv") {
@@ -88,7 +89,7 @@ fn append_sheet_data(existing: &mut Sheet, new_data: &Sheet) -> Result<(), Strin
     // Check if columns match
     let existing_cols = existing.column_names();
     let new_cols = new_data.column_names();
-    
+
     match (existing_cols, new_cols) {
         (Some(e_cols), Some(n_cols)) => {
             // Both have column names - verify they match
@@ -101,38 +102,46 @@ fn append_sheet_data(existing: &mut Sheet, new_data: &Sheet) -> Result<(), Strin
         }
         (None, None) => {
             // Neither has column names - check column count
-            if existing.data().get(0).map(|r| r.len()).unwrap_or(0) 
-                != new_data.data().get(0).map(|r| r.len()).unwrap_or(0) {
+            if existing.data().get(0).map(|r| r.len()).unwrap_or(0)
+                != new_data.data().get(0).map(|r| r.len()).unwrap_or(0)
+            {
                 return Err("Column count mismatch between existing and new data".to_string());
             }
         }
         _ => {
-            return Err("Cannot append: one sheet has column names while the other doesn't".to_string());
+            return Err(
+                "Cannot append: one sheet has column names while the other doesn't".to_string(),
+            );
         }
     }
-    
+
     // Determine if new_data has a physical header row to skip
     let skip_header = match new_data.column_names() {
         Some(names) => {
             // Check if first row matches column names
-            new_data.data().first()
-                .map(|row| names.iter().enumerate().all(|(idx, name)| {
-                    row.get(idx)
-                        .map(|cell| cell.as_str() == name.as_str())
-                        .unwrap_or(false)
-                }))
+            new_data
+                .data()
+                .first()
+                .map(|row| {
+                    names.iter().enumerate().all(|(idx, name)| {
+                        row.get(idx)
+                            .map(|cell| cell.as_str() == name.as_str())
+                            .unwrap_or(false)
+                    })
+                })
                 .unwrap_or(false)
         }
         None => false,
     };
-    
+
     // Append rows, skipping header if present
     let start_index = if skip_header { 1 } else { 0 };
     for row in new_data.data().iter().skip(start_index) {
-        existing.row_append(row.clone())
+        existing
+            .row_append(row.clone())
             .map_err(|e| format!("Failed to append row: {}", e))?;
     }
-    
+
     Ok(())
 }
 
