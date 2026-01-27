@@ -45,9 +45,7 @@ pub fn export_sheet_with_mode(sheet: &Sheet, path: &str, append: bool) -> Result
         }
     } else if append {
         // Append mode not supported for other formats yet
-        Err(format!(
-            "Append mode is only supported for CSV and TSV files"
-        ))
+        Err("Append mode is only supported for CSV and TSV files".to_string())
     } else {
         // Normal export without append
         if path_lower.ends_with(".csv") {
@@ -102,8 +100,8 @@ fn append_sheet_data(existing: &mut Sheet, new_data: &Sheet) -> Result<(), Strin
         }
         (None, None) => {
             // Neither has column names - check column count
-            if existing.data().get(0).map(|r| r.len()).unwrap_or(0)
-                != new_data.data().get(0).map(|r| r.len()).unwrap_or(0)
+            if existing.data().first().map(|r| r.len()).unwrap_or(0)
+                != new_data.data().first().map(|r| r.len()).unwrap_or(0)
             {
                 return Err("Column count mismatch between existing and new data".to_string());
             }
