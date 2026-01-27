@@ -2132,6 +2132,43 @@ impl Interpreter {
                 }
                 Ok(Value::Int(sheet.col_count() as i64))
             }
+            "column_by_name" => {
+                if args.len() != 1 {
+                    return Err(PipError::runtime(
+                        0,
+                        "column_by_name() takes exactly 1 argument",
+                    ));
+                }
+                let col_name = args[0]
+                    .as_str()
+                    .ok_or_else(|| PipError::runtime(0, "Column name must be a string"))?;
+
+                // Get the column data as an array of values
+                let col_data = sheet.column_by_name(col_name).map_err(|e| {
+                    PipError::runtime(0, format!("Failed to get column '{}': {}", col_name, e))
+                })?;
+
+                // Convert CellValues to Values
+                let values: Vec<Value> = col_data
+                    .into_iter()
+                    .map(|cell| sheet_conversions::cell_to_value(cell.clone()))
+                    .collect();
+
+                Ok(Value::Array(values))
+            }
+            "column_names" => {
+                if !args.is_empty() {
+                    return Err(PipError::runtime(0, "column_names() takes no arguments"));
+                }
+                match sheet.column_names() {
+                    Some(names) => {
+                        let names_vec: Vec<Value> =
+                            names.iter().map(|s| Value::String(s.clone())).collect();
+                        Ok(Value::Array(names_vec))
+                    }
+                    None => Ok(Value::Null),
+                }
+            }
             _ => Err(PipError::runtime(
                 0,
                 format!("Unknown sheet method: {}", method),
@@ -3705,6 +3742,97 @@ combined = consolidate(stores, "_store")
         assert!(error.is_err());
         let err_msg = error.unwrap_err().to_string();
         assert!(err_msg.contains("Row index cannot be negative"));
+    }
+
+    #[tokio::test]
+    async fn test_sheet_column_methods() {
+        // Test column_by_name and column_names methods
+        let mut interp = Interpreter::new();
+
+        // Create a sheet with named columns
+        let mut sheet = Sheet::from_data(vec![
+            vec!["Name", "Age", "City"],
+            vec!["Alice", "30", "NYC"],
+            vec!["Bob", "25", "LA"],
+        ]);
+        sheet.name_columns_by_row(0).unwrap();
+
+        interp.set_var("data", Value::Sheet(sheet)).await;
+
+        // Test column_names() method
+        let program = PipParser::parse_str("dim names = data.column_names()").unwrap();
+        interp.eval(program).await.unwrap();
+
+        let names = interp.get_var("names").await;
+        if let Some(Value::Array(arr)) = names {
+            assert_eq!(arr.len(), 3);
+            match (&arr[0], &arr[1], &arr[2]) {
+                (Value::String(s1), Value::String(s2), Value::String(s3)) => {
+                    assert_eq!(s1, "Name");
+                    assert_eq!(s2, "Age");
+                    assert_eq!(s3, "City");
+                }
+                _ => panic!("Expected string values"),
+            }
+        } else {
+            panic!("Expected array of column names");
+        }
+
+        // Test column_by_name() method
+        let program = PipParser::parse_str("dim ages = data.column_by_name(\"Age\")").unwrap();
+        interp.eval(program).await.unwrap();
+
+        let ages = interp.get_var("ages").await;
+        if let Some(Value::Array(arr)) = ages {
+            assert_eq!(arr.len(), 3); // Three rows including the header
+            match (&arr[0], &arr[1], &arr[2]) {
+                (Value::String(s0), Value::String(s1), Value::String(s2)) => {
+                    assert_eq!(s0, "Age"); // Header row value
+                    assert_eq!(s1, "30");
+                    assert_eq!(s2, "25");
+                }
+                _ => panic!("Expected string values"),
+            }
+        } else {
+            panic!("Expected array of ages");
+        }
+    }
+
+    #[tokio::test]
+    async fn test_sheet_a1_notation_existing() {
+        // This test already exists, just verifying A1 notation works
+        let mut interp = Interpreter::new();
+
+        // Create a sheet with data
+        let sheet = Sheet::from_data(vec![
+            vec!["Name", "Age"],
+            vec!["Alice", "30"],
+            vec!["Bob", "25"],
+        ]);
+
+        interp.set_var("data", Value::Sheet(sheet)).await;
+
+        // Test single cell access
+        let program = PipParser::parse_str("dim val = data[\"A1\"]").unwrap();
+        interp.eval(program).await.unwrap();
+
+        let val = interp.get_var("val").await;
+        match val {
+            Some(Value::String(s)) => assert_eq!(s, "Name"),
+            _ => panic!("Expected string 'Name'"),
+        }
+
+        // Test range access
+        let program = PipParser::parse_str("dim range = data[\"A1:B2\"]").unwrap();
+        interp.eval(program).await.unwrap();
+
+        let range = interp.get_var("range").await;
+        if let Some(Value::Sheet(s)) = range {
+            assert_eq!(s.row_count(), 2);
+            assert_eq!(s.col_count(), 2);
+        } else {
+            panic!("Expected sheet for range");
+        }
     }
 
     #[tokio::test]
