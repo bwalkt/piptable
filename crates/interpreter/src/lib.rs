@@ -1749,13 +1749,24 @@ impl Interpreter {
         let table_name = format!("table_{}", name.replace(['-', '.', ' '], "_"));
 
         if batches.is_empty() {
-            // Empty table - create an empty schema
-            use arrow::array::RecordBatch;
-            use arrow::datatypes::Schema;
-            use std::sync::Arc;
+            // For empty results, we can't preserve schema without at least one batch
+            // Return error to avoid silent failures with column queries
+            return Err(PipError::runtime(
+                0,
+                format!(
+                    "Cannot register empty table '{}' - no schema information available",
+                    name
+                ),
+            ));
+        }
 
-            let schema = Arc::new(Schema::empty());
-            let batch = RecordBatch::new_empty(schema.clone());
+        // Check if all batches have 0 rows but preserve the schema
+        let all_empty = batches.iter().all(|b| b.num_rows() == 0);
+        if all_empty {
+            // We have schema but no rows - create empty batch with correct schema
+            use arrow::array::RecordBatch;
+            let schema = batches[0].schema();
+            let batch = RecordBatch::new_empty(schema);
             self.sql.register_table(&table_name, vec![batch]).await?;
         } else {
             // Convert Arc<RecordBatch> to RecordBatch by cloning
@@ -3760,9 +3771,9 @@ combined = consolidate(stores, "_store")
             PipParser::parse_str(r#"dim scores = query(SELECT 1 as uid, 100 as points)"#).unwrap();
         interp.eval(program2).await.unwrap();
 
-        // Join the two tables
+        // Join the two tables - now using natural names thanks to automatic aliasing
         let program3 = PipParser::parse_str(
-            r#"dim joined = query(SELECT table_users.uid, table_scores.points FROM users JOIN scores ON table_users.uid = table_scores.uid)"#,
+            r#"dim joined = query(SELECT users.uid, scores.points FROM users JOIN scores ON users.uid = scores.uid)"#,
         )
         .unwrap();
         interp.eval(program3).await.unwrap();

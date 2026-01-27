@@ -126,7 +126,8 @@ impl Interpreter {
                     // Check if we've already registered this variable
                     let sheet_tables = self.sheet_tables.read().await;
                     if let Some(existing_table) = sheet_tables.get(name) {
-                        return Ok(existing_table.clone());
+                        // Return with alias to preserve original name for qualified references
+                        return Ok(format!("{} AS {}", existing_table, name));
                     }
                     drop(sheet_tables);
 
@@ -139,7 +140,9 @@ impl Interpreter {
                         let mut sheet_tables = self.sheet_tables.write().await;
                         sheet_tables.insert(name.to_string(), table_name.clone());
 
-                        return Ok(table_name);
+                        // Return with automatic aliasing to preserve original name
+                        // This allows queries like "SELECT users.id FROM users" to work
+                        return Ok(format!("{} AS {}", table_name, name));
                     }
 
                     // Handle Table variables (RecordBatch vectors)
@@ -151,7 +154,9 @@ impl Interpreter {
                         let mut sheet_tables = self.sheet_tables.write().await;
                         sheet_tables.insert(name.to_string(), table_name.clone());
 
-                        return Ok(table_name);
+                        // Return with automatic aliasing to preserve original name
+                        // This allows queries like "SELECT users.id FROM users" to work
+                        return Ok(format!("{} AS {}", table_name, name));
                     }
                 }
                 // Otherwise, treat as regular table name
