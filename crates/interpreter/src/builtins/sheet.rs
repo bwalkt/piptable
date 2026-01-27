@@ -443,30 +443,23 @@ pub async fn call_sheet_builtin(
             match (&args[0], &args[1], &args[2]) {
                 (Value::Sheet(sheet), Value::String(col_name), filter_value) => {
                     // Find the column index
-                    let col_names = sheet.column_names();
-                    if col_names.is_none() {
+                    let Some(col_names) = sheet.column_names() else {
                         return Some(Err(PipError::runtime(
                             line,
                             "Sheet must have named columns for filtering",
                         )));
-                    }
-                    let col_names = col_names.unwrap();
-                    let col_idx = col_names.iter().position(|n| n == col_name);
-
-                    if col_idx.is_none() {
+                    };
+                    let Some(col_idx) = col_names.iter().position(|n| n == col_name) else {
                         return Some(Err(PipError::runtime(
                             line,
                             format!("Column '{}' not found", col_name),
                         )));
-                    }
-                    let col_idx = col_idx.unwrap();
+                    };
 
                     let mut new_sheet = sheet.clone();
-                    let filter_cell = value_to_cell(filter_value);
-                    if filter_cell.is_none() {
+                    let Some(filter_cell) = value_to_cell(filter_value) else {
                         return Some(Err(PipError::runtime(line, "Invalid filter value type")));
-                    }
-                    let filter_cell = filter_cell.unwrap();
+                    };
 
                     new_sheet.filter_rows(|_row_idx, row| {
                         if col_idx < row.len() {
