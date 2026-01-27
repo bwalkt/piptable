@@ -3491,14 +3491,6 @@ combined = consolidate(stores, "_store")
         let mut interp = Interpreter::new();
 
         // Create a test sheet with some string data
-        let _code = r#"
-            dim sheet = import("test_data.csv", has_headers: true)
-            dim upper_sheet = sheet_map(sheet, "upper")
-            dim lower_sheet = sheet_map(sheet, "lower")
-            dim trim_sheet = sheet_map(sheet, "trim")
-        "#;
-
-        // First, create the test data
         let mut sheet = piptable_sheet::Sheet::new();
         sheet.data_mut().push(vec![
             piptable_sheet::CellValue::String("Name".to_string()),
@@ -3534,8 +3526,85 @@ combined = consolidate(stores, "_store")
         if let Value::Sheet(result_sheet) = upper_result {
             // Check that string values are uppercased
             assert_eq!(
+                result_sheet.data()[0][0],
+                piptable_sheet::CellValue::String("NAME".to_string())
+            );
+            assert_eq!(
                 result_sheet.data()[1][0],
                 piptable_sheet::CellValue::String("ALICE".to_string())
+            );
+            assert_eq!(
+                result_sheet.data()[2][0],
+                piptable_sheet::CellValue::String("  BOB  ".to_string())
+            );
+            // Non-string values should remain unchanged
+            assert_eq!(
+                result_sheet.data()[1][1],
+                piptable_sheet::CellValue::Int(30)
+            );
+        } else {
+            panic!("Expected Sheet result");
+        }
+
+        // Test lower operation
+        let lower_result = interp
+            .eval_expr(&piptable_core::Expr::Call {
+                function: "sheet_map".to_string(),
+                args: vec![
+                    piptable_core::Expr::Variable("sheet".to_string()),
+                    piptable_core::Expr::Literal(piptable_core::Literal::String(
+                        "lower".to_string(),
+                    )),
+                ],
+            })
+            .await
+            .unwrap();
+
+        if let Value::Sheet(result_sheet) = lower_result {
+            // Check that string values are lowercased
+            assert_eq!(
+                result_sheet.data()[0][0],
+                piptable_sheet::CellValue::String("name".to_string())
+            );
+            assert_eq!(
+                result_sheet.data()[1][0],
+                piptable_sheet::CellValue::String("alice".to_string())
+            );
+            assert_eq!(
+                result_sheet.data()[2][0],
+                piptable_sheet::CellValue::String("  bob  ".to_string())
+            );
+        } else {
+            panic!("Expected Sheet result");
+        }
+
+        // Test trim operation
+        let trim_result = interp
+            .eval_expr(&piptable_core::Expr::Call {
+                function: "sheet_map".to_string(),
+                args: vec![
+                    piptable_core::Expr::Variable("sheet".to_string()),
+                    piptable_core::Expr::Literal(piptable_core::Literal::String(
+                        "trim".to_string(),
+                    )),
+                ],
+            })
+            .await
+            .unwrap();
+
+        if let Value::Sheet(result_sheet) = trim_result {
+            // Check that string values are trimmed
+            assert_eq!(
+                result_sheet.data()[0][0],
+                piptable_sheet::CellValue::String("Name".to_string())
+            );
+            assert_eq!(
+                result_sheet.data()[1][0],
+                piptable_sheet::CellValue::String("alice".to_string())
+            );
+            assert_eq!(
+                result_sheet.data()[2][0],
+                piptable_sheet::CellValue::String("bob".to_string())
             );
         } else {
             panic!("Expected Sheet result");
