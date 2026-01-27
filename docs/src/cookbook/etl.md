@@ -2,6 +2,54 @@
 
 Build robust Extract, Transform, Load (ETL) pipelines using PipTable's powerful data processing capabilities. These examples show complete workflows from data ingestion to final output.
 
+## Excel-Based ETL with SQL
+
+### Process Multiple Excel Sources
+```piptable
+' @title ETL from Excel Sources
+' @description Combine multiple Excel files with SQL
+
+' Import Excel files
+import "sales_2023.xlsx" into sales_2023
+import "sales_2024.xlsx" into sales_2024
+import "customer_master.xlsx" into customers
+
+' Union sales data across years
+dim all_sales = query(
+    SELECT '2023' as year, * FROM sales_2023
+    UNION ALL
+    SELECT '2024' as year, * FROM sales_2024
+)
+
+' Enrich with customer data
+dim enriched_sales = query(
+    SELECT 
+        s.*,
+        c.customer_name,
+        c.customer_segment,
+        c.region
+    FROM all_sales s
+    LEFT JOIN customers c ON s.customer_id = c.id
+)
+
+' Calculate KPIs
+dim kpis = query(
+    SELECT 
+        year,
+        customer_segment,
+        region,
+        COUNT(*) as transaction_count,
+        SUM(amount) as total_revenue,
+        AVG(amount) as avg_transaction
+    FROM enriched_sales
+    GROUP BY year, customer_segment, region
+    ORDER BY year, total_revenue DESC
+)
+
+' Export results
+export kpis to "sales_kpis.xlsx"
+```
+
 ## Complete ETL Pipeline
 
 ### Sales Data Pipeline

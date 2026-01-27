@@ -208,8 +208,23 @@ pub fn sheet_to_value(sheet: &Sheet) -> Value {
     if let Some(column_names) = sheet.column_names() {
         let mut rows = Vec::new();
 
-        // Skip the header row (row 0) which contains column names
-        for row_idx in 1..sheet.row_count() {
+        // Determine if we should skip the first row
+        // Only skip if the first row matches the column names
+        let should_skip_first = if sheet.data().is_empty() {
+            0
+        } else {
+            let first_row = &sheet.data()[0];
+            let names_match = column_names.iter().enumerate().all(|(idx, name)| {
+                first_row
+                    .get(idx)
+                    .map(|cell| cell.as_str() == name.as_str())
+                    .unwrap_or(false)
+            });
+            usize::from(names_match)
+        };
+
+        // Iterate from the appropriate starting point
+        for row_idx in should_skip_first..sheet.row_count() {
             let mut row_obj = HashMap::new();
 
             if let Some(row_data) = sheet.data().get(row_idx) {

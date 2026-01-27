@@ -198,8 +198,12 @@ call logMessage("INFO", "Process started")
 The `query()` function enables SQL operations on data:
 
 ```vba
-' Basic query
+' Basic query on variables
 dim result = query("SELECT * FROM data")
+
+' Query directly from files (CSV, JSON, Excel, Parquet)
+dim excel_data = query("SELECT * FROM 'sales.xlsx' WHERE amount > 100")
+dim csv_data = query("SELECT * FROM 'users.csv' WHERE active = true")
 
 ' With conditions
 dim filtered = query("
@@ -219,7 +223,7 @@ dim summary = query("
     GROUP BY department
 ")
 
-' Joins
+' Joins between different sources
 dim combined = query("
     SELECT 
         o.order_id,
@@ -227,6 +231,57 @@ dim combined = query("
         o.total
     FROM orders o
     JOIN customers c ON o.customer_id = c.id
+")
+
+' Mix files and variables in queries
+import "customers.xlsx" into customers
+dim sales = query("
+    SELECT c.name, s.amount
+    FROM customers c
+    JOIN 'sales.csv' s ON c.id = s.customer_id
+")
+```
+
+### Supported Data Sources
+
+SQL queries can operate on:
+- **Variables**: Any variable containing table data (automatically registered in SQL engine)
+- **CSV files**: Direct reference: `FROM 'file.csv'`
+- **Excel files**: Direct reference: `FROM 'file.xlsx'` or `FROM 'file.xls'` (Note: internally registered with `sheet_` prefix)
+- **JSON files**: Direct reference: `FROM 'file.json'`
+- **Parquet files**: Direct reference: `FROM 'file.parquet'`
+
+**Best Practice**: Import files into variables first for consistent naming:
+```vba
+import "data.xlsx" into sales_data
+dim result = query("SELECT * FROM sales_data WHERE amount > 100")
+```
+
+### Variable Registration
+
+Variables containing table or sheet data are automatically registered in the SQL engine, eliminating the need to export to temporary files:
+
+```vba
+' Import data into variables
+import "customers.xlsx" into customers
+import "sales.csv" into sales
+
+' Variables are automatically available in SQL queries
+dim report = query("
+    SELECT 
+        c.name,
+        COUNT(*) as order_count,
+        SUM(s.amount) as total_spent
+    FROM customers c
+    JOIN sales s ON c.id = s.customer_id
+    GROUP BY c.name
+    ORDER BY total_spent DESC
+")
+
+' You can also alias variables in queries
+dim top_customers = query("
+    SELECT * FROM customers AS c
+    WHERE c.lifetime_value > 10000
 ")
 ```
 

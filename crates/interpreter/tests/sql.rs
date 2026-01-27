@@ -200,3 +200,173 @@ async fn test_csv_join() {
         _ => panic!("Expected table"),
     }
 }
+
+#[tokio::test]
+async fn test_xlsx_query() {
+    use rust_xlsxwriter::Workbook;
+    use tempfile::NamedTempFile;
+
+    // Create a temporary XLSX file with .xlsx extension
+    let file = NamedTempFile::with_suffix(".xlsx")
+        .expect("Failed to create temp file")
+        .into_temp_path();
+    let path = file.to_path_buf();
+
+    // Create XLSX with sample data
+    let mut workbook = Workbook::new();
+    let worksheet = workbook.add_worksheet();
+
+    // Add headers
+    worksheet.write_string(0, 0, "id").unwrap();
+    worksheet.write_string(0, 1, "name").unwrap();
+    worksheet.write_string(0, 2, "value").unwrap();
+
+    // Add data rows
+    worksheet.write_number(1, 0, 1).unwrap();
+    worksheet.write_string(1, 1, "foo").unwrap();
+    worksheet.write_number(1, 2, 100).unwrap();
+
+    worksheet.write_number(2, 0, 2).unwrap();
+    worksheet.write_string(2, 1, "bar").unwrap();
+    worksheet.write_number(2, 2, 200).unwrap();
+
+    worksheet.write_number(3, 0, 3).unwrap();
+    worksheet.write_string(3, 1, "baz").unwrap();
+    worksheet.write_number(3, 2, 300).unwrap();
+
+    workbook.save(path.to_str().unwrap()).unwrap();
+
+    // Test SELECT query on XLSX file - use import then query
+    let path_str = path.to_string_lossy().replace('\\', "/");
+    let script = format!(
+        r#"
+        import "{}" into xlsx_data
+        dim result = query(SELECT * FROM xlsx_data)
+    "#,
+        path_str
+    );
+    let (interp, _) = run_script(&script).await;
+
+    match interp.get_var("result").await {
+        Some(Value::Table(batches)) => {
+            assert!(!batches.is_empty());
+            let total_rows: usize = batches.iter().map(|b| b.num_rows()).sum();
+            assert_eq!(total_rows, 3); // foo, bar, baz
+            assert_eq!(batches[0].num_columns(), 3); // id, name, value
+        }
+        _ => panic!("Expected table"),
+    }
+}
+
+#[tokio::test]
+async fn test_xlsx_query_with_filter() {
+    use rust_xlsxwriter::Workbook;
+    use tempfile::NamedTempFile;
+
+    // Create a temporary XLSX file with .xlsx extension
+    let file = NamedTempFile::with_suffix(".xlsx")
+        .expect("Failed to create temp file")
+        .into_temp_path();
+    let path = file.to_path_buf();
+
+    // Create XLSX with sample data
+    let mut workbook = Workbook::new();
+    let worksheet = workbook.add_worksheet();
+
+    // Add headers
+    worksheet.write_string(0, 0, "category").unwrap();
+    worksheet.write_string(0, 1, "amount").unwrap();
+
+    // Add data rows
+    worksheet.write_string(1, 0, "A").unwrap();
+    worksheet.write_number(1, 1, 100).unwrap();
+
+    worksheet.write_string(2, 0, "B").unwrap();
+    worksheet.write_number(2, 1, 200).unwrap();
+
+    worksheet.write_string(3, 0, "A").unwrap();
+    worksheet.write_number(3, 1, 150).unwrap();
+
+    worksheet.write_string(4, 0, "B").unwrap();
+    worksheet.write_number(4, 1, 50).unwrap();
+
+    workbook.save(path.to_str().unwrap()).unwrap();
+
+    // Test SELECT with simple filter on XLSX file - use import then query
+    let path_str = path.to_string_lossy().replace('\\', "/");
+    let script = format!(
+        r#"
+        import "{}" into xlsx_data
+        dim result = query(SELECT * FROM xlsx_data WHERE amount > 100)
+    "#,
+        path_str
+    );
+    let (interp, _) = run_script(&script).await;
+
+    match interp.get_var("result").await {
+        Some(Value::Table(batches)) => {
+            assert!(!batches.is_empty());
+            let total_rows: usize = batches.iter().map(|b| b.num_rows()).sum();
+            assert_eq!(total_rows, 2); // Rows with amount > 100: B,200 and A,150
+        }
+        _ => panic!("Expected table"),
+    }
+}
+
+#[tokio::test]
+async fn test_xlsx_join_with_csv() {
+    use rust_xlsxwriter::Workbook;
+    use tempfile::NamedTempFile;
+
+    // Create a temporary XLSX file for users with .xlsx extension
+    let xlsx_file = NamedTempFile::with_suffix(".xlsx")
+        .expect("Failed to create temp file")
+        .into_temp_path();
+    let xlsx_path = xlsx_file.to_path_buf();
+
+    // Create XLSX with user data
+    let mut workbook = Workbook::new();
+    let worksheet = workbook.add_worksheet();
+
+    worksheet.write_string(0, 0, "id").unwrap();
+    worksheet.write_string(0, 1, "username").unwrap();
+
+    worksheet.write_number(1, 0, 1).unwrap();
+    worksheet.write_string(1, 1, "alice").unwrap();
+
+    worksheet.write_number(2, 0, 2).unwrap();
+    worksheet.write_string(2, 1, "bob").unwrap();
+
+    workbook.save(xlsx_path.to_str().unwrap()).unwrap();
+
+    // Create a CSV file for orders
+    let orders_csv = "user_id,amount\n1,100\n1,200\n2,50";
+    let csv_file = create_temp_csv(orders_csv);
+
+    let xlsx_str = xlsx_path.to_string_lossy().replace('\\', "/");
+    let csv_str = csv_file.path().to_string_lossy().replace('\\', "/");
+
+    // Test JOIN between XLSX and CSV - use import then query
+    let script = format!(
+        r#"
+        import "{}" into xlsx_users
+        import "{}" into csv_orders
+        dim result = query(
+            SELECT u.username, o.amount
+            FROM xlsx_users as u
+            JOIN csv_orders as o ON u.id = o.user_id
+            ORDER BY u.username, o.amount
+        )"#,
+        xlsx_str, csv_str
+    );
+    let (interp, _) = run_script(&script).await;
+
+    match interp.get_var("result").await {
+        Some(Value::Table(batches)) => {
+            assert!(!batches.is_empty());
+            let total_rows: usize = batches.iter().map(|b| b.num_rows()).sum();
+            assert_eq!(total_rows, 3); // alice:100, alice:200, bob:50
+        }
+        _ => panic!("Expected table"),
+    }
+}

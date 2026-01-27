@@ -18,7 +18,7 @@ mod sql_builder;
 #[cfg(feature = "python")]
 mod python;
 
-use crate::sheet_conversions::{build_sheet_arrow_array, infer_sheet_column_type};
+use crate::sheet_conversions::{build_sheet_arrow_array, cell_to_value, infer_sheet_column_type};
 use async_recursion::async_recursion;
 use piptable_core::{
     BinaryOp, Expr, LValue, Literal, PipError, PipResult, Program, Statement, UnaryOp, Value,
@@ -188,6 +188,19 @@ impl Interpreter {
                     Value::Table(batches) => {
                         // Convert table rows to array of objects
                         self.table_to_array(&batches)?
+                    }
+                    Value::Sheet(sheet) => {
+                        // Convert sheet to array of objects for iteration
+                        let value = sheet_conversions::sheet_to_value(&sheet);
+                        match value {
+                            Value::Array(arr) => arr,
+                            other => {
+                                return Err(PipError::runtime(
+                                    line,
+                                    format!("Sheet conversion returned unexpected type: {} (expected Array)", other.type_name()),
+                                ))
+                            }
+                        }
                     }
                     _ => {
                         return Err(PipError::runtime(
@@ -574,7 +587,8 @@ impl Interpreter {
                     let has_headers = options.has_headers.unwrap_or(true);
                     let sheet = io::import_sheet(&paths[0], sheet_name_str.as_deref(), has_headers)
                         .map_err(|e| PipError::Import(format!("Line {}: {}", line, e)))?;
-                    sheet_conversions::sheet_to_value(&sheet)
+                    // Return as Sheet value to enable SQL queries
+                    Value::Sheet(sheet)
                 };
 
                 // Store in target variable
@@ -690,6 +704,70 @@ impl Interpreter {
                             .get(idx_usize)
                             .cloned()
                             .ok_or_else(|| PipError::runtime(0, "Array index out of bounds"))
+                    }
+                    // Sheet integer indexing - return row as object
+                    (Value::Sheet(sheet), Value::Int(idx_int)) => {
+                        // Determine whether a physical header row exists
+                        // Only skip if column_names were set AND the first row matches those names
+                        let header_offset = if let Some(names) = sheet.column_names() {
+                            if sheet.data().is_empty() {
+                                0
+                            } else {
+                                let first_row = &sheet.data()[0];
+                                let names_match = names.iter().enumerate().all(|(idx, name)| {
+                                    first_row
+                                        .get(idx)
+                                        .map(|cell| cell.as_str() == name.as_str())
+                                        .unwrap_or(false)
+                                });
+                                usize::from(names_match)
+                            }
+                        } else {
+                            0
+                        };
+
+                        let data_row_count = sheet.row_count().saturating_sub(header_offset);
+
+                        // Handle negative indexing first
+                        let actual_idx = if *idx_int < 0 {
+                            let adjusted = data_row_count as i64 + idx_int;
+                            if adjusted < 0 {
+                                return Err(PipError::runtime(0, "Sheet row index out of bounds"));
+                            }
+                            (adjusted as usize) + header_offset
+                        } else {
+                            // Positive indexing
+                            let idx_usize = *idx_int as usize;
+                            if idx_usize >= data_row_count {
+                                return Err(PipError::runtime(0, "Sheet row index out of bounds"));
+                            }
+                            idx_usize + header_offset
+                        };
+
+                        // Get the row data
+                        if actual_idx >= sheet.row_count() {
+                            return Err(PipError::runtime(0, "Sheet row index out of bounds"));
+                        }
+
+                        // Convert row to object using column names if available
+                        if let Some(col_names) = sheet.column_names() {
+                            let mut row_obj = std::collections::HashMap::new();
+                            for (col_idx, col_name) in col_names.iter().enumerate() {
+                                let cell_value =
+                                    sheet.get(actual_idx, col_idx).unwrap_or(&CellValue::Null);
+                                row_obj.insert(col_name.clone(), cell_to_value(cell_value.clone()));
+                            }
+                            Ok(Value::Object(row_obj))
+                        } else {
+                            // No column names - return as array
+                            let mut row_arr = Vec::new();
+                            for col_idx in 0..sheet.col_count() {
+                                let cell_value =
+                                    sheet.get(actual_idx, col_idx).unwrap_or(&CellValue::Null);
+                                row_arr.push(cell_to_value(cell_value.clone()));
+                            }
+                            Ok(Value::Array(row_arr))
+                        }
                     }
                     // Object bracket access with string key
                     (Value::Object(map), Value::String(key)) => map
@@ -1612,39 +1690,17 @@ impl Interpreter {
 
     // SQL query methods moved to sql_builder.rs module
 
-    /// Register a file as a table and return the table name.
-    async fn register_file(&mut self, path: &str) -> PipResult<String> {
-        // Generate table name from file path
-        let table_name = std::path::Path::new(path)
-            .file_stem()
-            .and_then(|s| s.to_str())
-            .unwrap_or("data")
-            .replace(['-', '.', ' '], "_");
-
-        // Determine file type and register
-        if path.ends_with(".csv") {
-            self.sql.register_csv(&table_name, path).await?;
-        } else if path.ends_with(".json") || path.ends_with(".ndjson") {
-            self.sql.register_json(&table_name, path).await?;
-        } else if path.ends_with(".parquet") {
-            self.sql.register_parquet(&table_name, path).await?;
-        } else {
-            // Default to CSV
-            self.sql.register_csv(&table_name, path).await?;
-        }
-
-        Ok(table_name)
-    }
-
-    /// Register a sheet as a table and return the table name.
-    async fn register_sheet_as_table(&mut self, name: &str, sheet: &Sheet) -> PipResult<String> {
+    /// Convert a Sheet to RecordBatches for SQL registration
+    fn convert_sheet_to_batches(
+        &self,
+        sheet: &Sheet,
+        _table_name: &str,
+    ) -> PipResult<Vec<arrow::array::RecordBatch>> {
         use arrow::array::ArrayRef;
         use arrow::array::RecordBatch;
         use arrow::datatypes::{DataType, Field, Schema};
         use piptable_sheet::CellValue;
         use std::sync::Arc;
-
-        let table_name = format!("sheet_{}", name.replace(['-', '.', ' '], "_"));
 
         // Check if sheet has named columns
         let column_names = match sheet.column_names() {
@@ -1661,20 +1717,7 @@ impl Interpreter {
             // Empty sheet - create schema with no fields
             let schema = Arc::new(Schema::empty());
             let batch = RecordBatch::new_empty(schema.clone());
-            self.sql.register_table(&table_name, vec![batch]).await?;
-            return Ok(table_name);
-        }
-
-        if sheet.row_count() <= 1 {
-            // Only header row or empty - create empty table with schema
-            let fields: Vec<Field> = column_names
-                .iter()
-                .map(|name| Field::new(name, DataType::Utf8, true))
-                .collect();
-            let schema = Arc::new(Schema::new(fields));
-            let batch = RecordBatch::new_empty(schema.clone());
-            self.sql.register_table(&table_name, vec![batch]).await?;
-            return Ok(table_name);
+            return Ok(vec![batch]);
         }
 
         // Determine if we should skip the first row
@@ -1703,8 +1746,7 @@ impl Interpreter {
                 .collect();
             let schema = Arc::new(Schema::new(fields));
             let batch = RecordBatch::new_empty(schema.clone());
-            self.sql.register_table(&table_name, vec![batch]).await?;
-            return Ok(table_name);
+            return Ok(vec![batch]);
         }
 
         let num_cols = column_names.len();
@@ -1734,8 +1776,56 @@ impl Interpreter {
         let batch = RecordBatch::try_new(schema.clone(), arrays)
             .map_err(|e| PipError::runtime(0, format!("Failed to create RecordBatch: {}", e)))?;
 
-        // Register the batch with the SQL engine
-        self.sql.register_table(&table_name, vec![batch]).await?;
+        Ok(vec![batch])
+    }
+
+    /// Register a file as a table and return the table name.
+    async fn register_file(&mut self, path: &str) -> PipResult<String> {
+        // Generate table name from file path
+        let table_name = std::path::Path::new(path)
+            .file_stem()
+            .and_then(|s| s.to_str())
+            .unwrap_or("data")
+            .replace(['-', '.', ' '], "_");
+
+        // Determine file type and register
+        let path_lower = path.to_lowercase();
+        if path_lower.ends_with(".csv") {
+            self.sql.register_csv(&table_name, path).await?;
+        } else if path_lower.ends_with(".json") || path_lower.ends_with(".ndjson") {
+            self.sql.register_json(&table_name, path).await?;
+        } else if path_lower.ends_with(".parquet") {
+            self.sql.register_parquet(&table_name, path).await?;
+        } else if path_lower.ends_with(".xlsx") || path_lower.ends_with(".xls") {
+            // Load Excel file as Sheet and register it
+            use crate::io::import_sheet;
+            let sheet = import_sheet(path, None, true) // Assume Excel files have headers by default
+                .map_err(|e| {
+                    PipError::runtime(0, format!("Failed to load Excel file '{}': {}", path, e))
+                })?;
+            // Convert sheet to RecordBatches and register directly with consistent naming
+            let batches = self.convert_sheet_to_batches(&sheet, &table_name)?;
+            self.sql.register_table(&table_name, batches).await?;
+            return Ok(table_name);
+        } else {
+            // Default to CSV
+            self.sql.register_csv(&table_name, path).await?;
+        }
+
+        Ok(table_name)
+    }
+
+    /// Register a sheet as a table and return the table name.
+    /// Note: Sheet variables are registered with a "sheet_" prefix to avoid conflicts with other table types.
+    /// This is handled transparently when referencing variables in SQL queries.
+    async fn register_sheet_as_table(&mut self, name: &str, sheet: &Sheet) -> PipResult<String> {
+        let table_name = format!("sheet_{}", name.replace(['-', '.', ' '], "_"));
+
+        // Convert sheet to batches using the shared helper
+        let batches = self.convert_sheet_to_batches(sheet, &table_name)?;
+
+        // Register the batches with the SQL engine
+        self.sql.register_table(&table_name, batches).await?;
 
         Ok(table_name)
     }
@@ -2468,13 +2558,18 @@ export data to "{}""#,
 
         // Verify data was loaded
         let data = interp.get_var("data").await.unwrap();
-        assert!(matches!(&data, Value::Array(arr) if arr.len() == 2));
+        assert!(matches!(&data, Value::Sheet(sheet) if sheet.row_count() == 3)); // header + 2 data rows
 
-        // Check first record has the right name
-        if let Value::Array(arr) = &data {
-            if let Value::Object(obj) = &arr[0] {
-                assert!(matches!(obj.get("name"), Some(Value::String(s)) if s == "alice"));
-            }
+        // Check the sheet has the right data
+        if let Value::Sheet(sheet) = &data {
+            // Check column names
+            let col_names = sheet.column_names().unwrap();
+            assert_eq!(col_names[0], "name");
+            assert_eq!(col_names[1], "age");
+
+            // Check first data row
+            let row = &sheet.data()[1]; // row 0 is header, row 1 is first data row
+            assert!(matches!(&row[0], piptable_sheet::CellValue::String(s) if s == "alice"));
         }
     }
 
@@ -2529,17 +2624,23 @@ export data to "{}""#,
         let program = PipParser::parse_str(&script).unwrap();
         interp.eval(program).await.unwrap();
 
-        // Verify data was loaded with default column names
+        // Verify data was loaded without headers
         let data = interp.get_var("data").await.unwrap();
-        assert!(matches!(&data, Value::Array(arr) if arr.len() == 2));
+        assert!(matches!(&data, Value::Sheet(sheet) if sheet.row_count() == 2)); // 2 data rows, no header
 
-        // Check that default column names were used (col0, col1, etc.)
-        if let Value::Array(arr) = &data {
-            if let Value::Object(obj) = &arr[0] {
-                assert!(obj.contains_key("col0"));
-                assert!(obj.contains_key("col1"));
-                assert!(matches!(obj.get("col0"), Some(Value::String(s)) if s == "alice"));
-            }
+        // Check that no column names exist
+        if let Value::Sheet(sheet) = &data {
+            // With headers=false, there should be no column names
+            assert!(sheet.column_names().is_none());
+
+            // First row should be "alice,30"
+            let row = &sheet.data()[0];
+            assert!(matches!(&row[0], piptable_sheet::CellValue::String(s) if s == "alice"));
+            // CSV parser might parse "30" as an integer
+            assert!(
+                matches!(&row[1], piptable_sheet::CellValue::Int(30))
+                    || matches!(&row[1], piptable_sheet::CellValue::String(s) if s == "30")
+            );
         }
     }
 
@@ -2680,6 +2781,227 @@ combined = consolidate(stores, "_store")
     }
 
     #[tokio::test]
+    async fn test_foreach_sheet() {
+        let dir = tempfile::tempdir().unwrap();
+        let file_path = dir.path().join("test.csv");
+        std::fs::write(&file_path, "name,age\nalice,30\nbob,25").unwrap();
+
+        let mut interp = Interpreter::new();
+        let script = format!(
+            r#"
+            import "{}" into data
+            dim count = 0
+            for each row in data
+                count = count + 1
+            next
+            "#,
+            file_path.display()
+        );
+        let program = PipParser::parse_str(&script).unwrap();
+        interp.eval(program).await.unwrap();
+
+        // Verify the for each loop worked with Sheet
+        let count = interp.get_var("count").await.unwrap();
+        assert!(matches!(count, Value::Int(2))); // Should have iterated over 2 rows
+    }
+
+    #[tokio::test]
+    async fn test_sheet_foreach_without_header_row() {
+        // Test that for each correctly iterates when column_names exist but no physical header row
+        let mut interp = Interpreter::new();
+
+        // Create a sheet with a header row, then remove it
+        // This simulates Sheet::from_records or after header removal
+        let mut sheet = Sheet::from_data(vec![
+            vec![
+                CellValue::String("name".to_string()),
+                CellValue::String("age".to_string()),
+            ],
+            vec![
+                CellValue::String("Alice".to_string()),
+                CellValue::String("30".to_string()),
+            ],
+            vec![
+                CellValue::String("Bob".to_string()),
+                CellValue::String("25".to_string()),
+            ],
+        ]);
+
+        // Name columns using the first row
+        sheet.name_columns_by_row(0).unwrap();
+
+        // Now remove the header row, leaving only data rows
+        // This creates a situation where column_names exist but no physical header
+        sheet.row_delete(0).unwrap();
+
+        interp.set_var("data", Value::Sheet(sheet)).await;
+
+        let script = r#"
+            dim count = 0
+            dim name1 = ""
+            dim name2 = ""
+            
+            for each row in data
+                count = count + 1
+                if count = 1 then
+                    name1 = row.name
+                else
+                    name2 = row.name
+                end if
+            next
+        "#;
+
+        let program = PipParser::parse_str(script).unwrap();
+        let result = interp.eval(program).await;
+        assert!(result.is_ok(), "Script failed: {:?}", result);
+
+        // Should iterate over both data rows
+        let count = interp.get_var("count").await.unwrap();
+        assert!(
+            matches!(count, Value::Int(2)),
+            "Expected 2 iterations, got {:?}",
+            count
+        );
+
+        // Should have both names
+        let name1 = interp.get_var("name1").await.unwrap();
+        assert!(matches!(name1, Value::String(s) if s == "Alice"));
+
+        let name2 = interp.get_var("name2").await.unwrap();
+        assert!(matches!(name2, Value::String(s) if s == "Bob"));
+    }
+
+    #[tokio::test]
+    async fn test_sheet_sql_without_header_row() {
+        // Test that SQL correctly handles sheets with column_names but no physical header
+        let mut interp = Interpreter::new();
+
+        // Create a sheet with header, name columns, then remove header
+        let mut sheet = Sheet::from_data(vec![
+            vec![
+                CellValue::String("product".to_string()),
+                CellValue::String("price".to_string()),
+            ],
+            vec![CellValue::String("Widget".to_string()), CellValue::Int(100)],
+            vec![CellValue::String("Gadget".to_string()), CellValue::Int(200)],
+        ]);
+
+        sheet.name_columns_by_row(0).unwrap();
+        sheet.row_delete(0).unwrap();
+
+        interp.set_var("products", Value::Sheet(sheet)).await;
+
+        let script = r#"
+            dim result = query(SELECT * FROM products WHERE price > 150)
+        "#;
+
+        let program = PipParser::parse_str(script).unwrap();
+        let result = interp.eval(program).await;
+        assert!(result.is_ok(), "SQL query failed: {:?}", result);
+
+        // Should have one row (Gadget with price 200)
+        let query_result = interp.get_var("result").await.unwrap();
+        if let Value::Table(batches) = query_result {
+            let total_rows: usize = batches.iter().map(|b| b.num_rows()).sum();
+            assert_eq!(total_rows, 1, "Expected 1 row, got {}", total_rows);
+        } else {
+            panic!("Expected Table result");
+        }
+    }
+
+    // TODO: Add test_sheet_integer_indexing once issue #163 (Sheet column name detection) is fixed
+    // The feature is implemented and working, but the test needs Sheet::from_csv_str_with_options
+    // to properly detect column names
+
+    #[tokio::test]
+    async fn test_single_row_headerless_sheet() {
+        // Test that single-row headerless sheets are correctly handled in SQL
+        let mut interp = Interpreter::new();
+
+        // Create a single-row sheet without headers
+        let single_row_sheet = Sheet::from_data(vec![vec![
+            CellValue::String("value1".to_string()),
+            CellValue::String("value2".to_string()),
+            CellValue::Int(42),
+        ]]);
+
+        interp
+            .set_var("single_row", Value::Sheet(single_row_sheet))
+            .await;
+
+        // This should work and not treat the single row as header-only
+        let script = r#"
+            dim result = query(SELECT * FROM single_row)
+        "#;
+
+        let program = PipParser::parse_str(script).unwrap();
+        let result = interp.eval(program).await;
+
+        // Should succeed
+        assert!(
+            result.is_ok(),
+            "Query on single-row sheet failed: {:?}",
+            result
+        );
+
+        // Verify we got the data row
+        let query_result = interp.get_var("result").await.unwrap();
+        if let Value::Table(batches) = query_result {
+            let total_rows: usize = batches.iter().map(|b| b.num_rows()).sum();
+            assert_eq!(total_rows, 1, "Expected 1 data row, got {}", total_rows);
+        } else {
+            panic!("Expected Table result");
+        }
+    }
+
+    #[tokio::test]
+    async fn test_sheet_len_excludes_header() {
+        // Test that len(sheet) returns data row count, excluding header
+        let mut interp = Interpreter::new();
+
+        // Sheet with column names
+        let csv_with_header = "col1,col2\na,b\nc,d\ne,f";
+        let mut csv_options = piptable_sheet::CsvOptions::default();
+        csv_options.has_headers = true;
+        let sheet_with_header =
+            Sheet::from_csv_str_with_options(csv_with_header, csv_options).unwrap();
+        interp
+            .set_var("data", Value::Sheet(sheet_with_header))
+            .await;
+
+        // Sheet without column names - use from_data
+        let sheet_no_header = Sheet::from_data(vec![
+            vec![
+                CellValue::String("a".to_string()),
+                CellValue::String("b".to_string()),
+            ],
+            vec![
+                CellValue::String("c".to_string()),
+                CellValue::String("d".to_string()),
+            ],
+        ]);
+        interp
+            .set_var("raw_data", Value::Sheet(sheet_no_header))
+            .await;
+
+        let script = r#"
+            dim data_len = len(data)
+            dim raw_len = len(raw_data)
+        "#;
+
+        let program = PipParser::parse_str(script).unwrap();
+        interp.eval(program).await.unwrap();
+
+        // Sheet with header should return 3 (data rows only)
+        let data_len = interp.get_var("data_len").await.unwrap();
+        assert!(matches!(data_len, Value::Int(3)));
+
+        // Sheet without header should return 2 (all rows)
+        let raw_len = interp.get_var("raw_len").await.unwrap();
+        assert!(matches!(raw_len, Value::Int(2)));
+    }
+
+    #[tokio::test]
     async fn test_backward_compat_with_clause() {
         let dir = tempfile::tempdir().unwrap();
         let file_path = dir.path().join("test.csv");
@@ -2701,7 +3023,8 @@ combined = consolidate(stores, "_store")
 
         // Data should still be imported
         let data = interp.get_var("data").await.unwrap();
-        assert!(matches!(&data, Value::Array(arr) if arr.len() == 1));
+        assert!(matches!(&data, Value::Sheet(sheet) if sheet.row_count() == 2));
+        // header + 1 data row
     }
 
     #[tokio::test]
@@ -4193,5 +4516,231 @@ combined = consolidate(stores, "_store")
         } else {
             panic!("Expected Sheet result");
         }
+    }
+
+    #[tokio::test]
+    async fn test_sheet_indexing_without_header_row() {
+        use indexmap::IndexMap;
+        use piptable_sheet::{CellValue, Sheet};
+
+        let mut interp = Interpreter::new();
+
+        // Test case 1: Sheet created via from_records (column_names set but no header row)
+        let mut record1 = IndexMap::new();
+        record1.insert("Name".to_string(), CellValue::String("Alice".to_string()));
+        record1.insert("Age".to_string(), CellValue::Int(30));
+
+        let mut record2 = IndexMap::new();
+        record2.insert("Name".to_string(), CellValue::String("Bob".to_string()));
+        record2.insert("Age".to_string(), CellValue::Int(25));
+
+        let sheet1 = Sheet::from_records(vec![record1, record2]).unwrap();
+        interp.set_var("sheet1", Value::Sheet(sheet1)).await;
+
+        // Test positive indexing
+        let program = PipParser::parse_str(
+            r#"
+            dim row0 = sheet1[0]
+            dim row1 = sheet1[1]
+        "#,
+        )
+        .unwrap();
+        interp.eval(program).await.unwrap();
+
+        let row0 = interp.get_var("row0").await.unwrap();
+        if let Value::Object(obj) = row0 {
+            assert!(matches!(obj.get("Name"), Some(Value::String(s)) if s == "Alice"));
+            assert!(matches!(obj.get("Age"), Some(Value::Int(30))));
+        } else {
+            panic!("Expected object for row0");
+        }
+
+        let row1 = interp.get_var("row1").await.unwrap();
+        if let Value::Object(obj) = row1 {
+            assert!(matches!(obj.get("Name"), Some(Value::String(s)) if s == "Bob"));
+            assert!(matches!(obj.get("Age"), Some(Value::Int(25))));
+        } else {
+            panic!("Expected object for row1");
+        }
+
+        // Test negative indexing
+        let program = PipParser::parse_str(
+            r#"
+            dim last_row = sheet1[-1]
+            dim second_last = sheet1[-2]
+        "#,
+        )
+        .unwrap();
+        interp.eval(program).await.unwrap();
+
+        let last_row = interp.get_var("last_row").await.unwrap();
+        if let Value::Object(obj) = last_row {
+            assert!(matches!(obj.get("Name"), Some(Value::String(s)) if s == "Bob"));
+            assert!(matches!(obj.get("Age"), Some(Value::Int(25))));
+        } else {
+            panic!("Expected object for last_row");
+        }
+
+        let second_last = interp.get_var("second_last").await.unwrap();
+        if let Value::Object(obj) = second_last {
+            assert!(matches!(obj.get("Name"), Some(Value::String(s)) if s == "Alice"));
+            assert!(matches!(obj.get("Age"), Some(Value::Int(30))));
+        } else {
+            panic!("Expected object for second_last");
+        }
+
+        // Test out of bounds
+        let program = PipParser::parse_str(r#"dim oob = sheet1[2]"#).unwrap();
+        let result = interp.eval(program).await;
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("out of bounds"));
+
+        let program = PipParser::parse_str(r#"dim neg_oob = sheet1[-3]"#).unwrap();
+        let result = interp.eval(program).await;
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("out of bounds"));
+
+        // Test case 2: Sheet with actual header row
+        let mut sheet2 = Sheet::new();
+        sheet2.data_mut().push(vec![
+            CellValue::String("Name".to_string()),
+            CellValue::String("Age".to_string()),
+        ]);
+        sheet2.data_mut().push(vec![
+            CellValue::String("Charlie".to_string()),
+            CellValue::Int(40),
+        ]);
+        sheet2.name_columns_by_row(0).unwrap();
+        interp.set_var("sheet2", Value::Sheet(sheet2)).await;
+
+        // Sheet2 has column_names AND first row matches those names, so it should skip header
+        let program = PipParser::parse_str(r#"dim sheet2_row0 = sheet2[0]"#).unwrap();
+        interp.eval(program).await.unwrap();
+
+        let sheet2_row0 = interp.get_var("sheet2_row0").await.unwrap();
+        if let Value::Object(obj) = sheet2_row0 {
+            assert!(matches!(obj.get("Name"), Some(Value::String(s)) if s == "Charlie"));
+            assert!(matches!(obj.get("Age"), Some(Value::Int(40))));
+        } else {
+            panic!("Expected object for sheet2_row0");
+        }
+    }
+
+    #[tokio::test]
+    async fn test_single_row_sheet_sql() {
+        // Test that sheets with a single data row work correctly in SQL
+        use indexmap::IndexMap;
+        use piptable_sheet::{CellValue, Sheet};
+
+        let mut interp = Interpreter::new();
+
+        // Create a sheet with a single data row via from_records
+        let mut record = IndexMap::new();
+        record.insert("Name".to_string(), CellValue::String("Alice".to_string()));
+        record.insert("Age".to_string(), CellValue::Int(30));
+
+        let sheet = Sheet::from_records(vec![record]).unwrap();
+        // This sheet has column_names but no physical header row
+
+        interp.set_var("single_row", Value::Sheet(sheet)).await;
+
+        // Try to query it with SQL
+        let program =
+            PipParser::parse_str(r#"dim result = query(SELECT * FROM single_row)"#).unwrap();
+
+        let result = interp.eval(program).await;
+        assert!(
+            result.is_ok(),
+            "SQL query on single-row sheet should succeed: {:?}",
+            result.err()
+        );
+
+        let query_result = interp.get_var("result").await.unwrap();
+        if let Value::Table(batches) = query_result {
+            // Should have one row of data
+            let total_rows: usize = batches.iter().map(|b| b.num_rows()).sum();
+            assert_eq!(total_rows, 1, "Should have exactly one data row");
+        } else {
+            panic!("Expected Table result");
+        }
+    }
+
+    #[tokio::test]
+    async fn test_len_sheet_without_header_row() {
+        // Test that len() correctly counts data rows for sheets with/without physical headers
+        use indexmap::IndexMap;
+        use piptable_sheet::{CellValue, Sheet};
+
+        let mut interp = Interpreter::new();
+
+        // Test case 1: Sheet from records (has column_names but no physical header)
+        let mut record1 = IndexMap::new();
+        record1.insert("Name".to_string(), CellValue::String("Alice".to_string()));
+        record1.insert("Age".to_string(), CellValue::Int(30));
+
+        let mut record2 = IndexMap::new();
+        record2.insert("Name".to_string(), CellValue::String("Bob".to_string()));
+        record2.insert("Age".to_string(), CellValue::Int(25));
+
+        let sheet1 = Sheet::from_records(vec![record1, record2]).unwrap();
+        interp.set_var("sheet1", Value::Sheet(sheet1)).await;
+
+        // Test case 2: Sheet with actual header row
+        let mut sheet2 = Sheet::new();
+        sheet2.data_mut().push(vec![
+            CellValue::String("Name".to_string()),
+            CellValue::String("Age".to_string()),
+        ]);
+        sheet2.data_mut().push(vec![
+            CellValue::String("Charlie".to_string()),
+            CellValue::Int(40),
+        ]);
+        sheet2.data_mut().push(vec![
+            CellValue::String("David".to_string()),
+            CellValue::Int(35),
+        ]);
+        sheet2.name_columns_by_row(0).unwrap();
+        interp.set_var("sheet2", Value::Sheet(sheet2)).await;
+
+        // Test case 3: Sheet with no column names
+        let mut sheet3 = Sheet::new();
+        sheet3.data_mut().push(vec![
+            CellValue::String("Eve".to_string()),
+            CellValue::Int(28),
+        ]);
+        sheet3.data_mut().push(vec![
+            CellValue::String("Frank".to_string()),
+            CellValue::Int(32),
+        ]);
+        interp.set_var("sheet3", Value::Sheet(sheet3)).await;
+
+        // Test len() for each sheet
+        let program = PipParser::parse_str(
+            r#"
+            dim len1 = len(sheet1)
+            dim len2 = len(sheet2)
+            dim len3 = len(sheet3)
+        "#,
+        )
+        .unwrap();
+        interp.eval(program).await.unwrap();
+
+        // Sheet1: 2 data rows (no physical header)
+        let len1 = interp.get_var("len1").await.unwrap();
+        assert!(
+            matches!(len1, Value::Int(2)),
+            "Sheet1 should have 2 data rows"
+        );
+
+        // Sheet2: 2 data rows (has physical header, which is excluded)
+        let len2 = interp.get_var("len2").await.unwrap();
+        assert!(
+            matches!(len2, Value::Int(2)),
+            "Sheet2 should have 2 data rows"
+        );
+
+        // Sheet3: 2 rows (no column names, all rows are data)
+        let len3 = interp.get_var("len3").await.unwrap();
+        assert!(matches!(len3, Value::Int(2)), "Sheet3 should have 2 rows");
     }
 }
