@@ -45,15 +45,21 @@ print "Loaded workbook with " + str(len(report_book.sheets())) + " sheets"
 
 ## SQL Queries on Excel Files
 
+### Important: Excel Table Naming in SQL
+
+When using Excel files in SQL queries:
+- **Via import**: When you import an Excel file into a variable (e.g., `import "data.xlsx" into sales`), use the variable name in SQL: `FROM sales`
+- **Direct file reference**: When referencing Excel files directly in SQL without importing, the table name gets a `sheet_` prefix internally. However, it's recommended to always import Excel files first for consistency.
+
 ### Query Excel Data with SQL
 ```piptable
 ' @title SQL Query on Excel File
-' @description Run SQL queries directly on Excel files
+' @description Run SQL queries on imported Excel data
 
-' Import Excel file
+' Import Excel file into a variable
 import "sales_data.xlsx" into sales
 
-' Query the data using SQL
+' Query the data using the variable name
 dim high_value_sales = query(
     SELECT * FROM sales 
     WHERE amount > 10000 

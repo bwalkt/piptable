@@ -246,10 +246,16 @@ dim sales = query("
 
 SQL queries can operate on:
 - **Variables**: Any variable containing table data (automatically registered in SQL engine)
-- **CSV files**: `FROM 'file.csv'`
-- **Excel files**: `FROM 'file.xlsx'` or `FROM 'file.xls'`
-- **JSON files**: `FROM 'file.json'`
-- **Parquet files**: `FROM 'file.parquet'`
+- **CSV files**: Direct reference: `FROM 'file.csv'`
+- **Excel files**: Direct reference: `FROM 'file.xlsx'` or `FROM 'file.xls'` (Note: internally registered with `sheet_` prefix)
+- **JSON files**: Direct reference: `FROM 'file.json'`
+- **Parquet files**: Direct reference: `FROM 'file.parquet'`
+
+**Best Practice**: Import files into variables first for consistent naming:
+```vba
+import "data.xlsx" into sales_data
+dim result = query("SELECT * FROM sales_data WHERE amount > 100")
+```
 
 ### Variable Registration
 

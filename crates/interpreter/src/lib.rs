@@ -1622,51 +1622,17 @@ impl Interpreter {
 
     // SQL query methods moved to sql_builder.rs module
 
-    /// Register a file as a table and return the table name.
-    async fn register_file(&mut self, path: &str) -> PipResult<String> {
-        // Generate table name from file path
-        let table_name = std::path::Path::new(path)
-            .file_stem()
-            .and_then(|s| s.to_str())
-            .unwrap_or("data")
-            .replace(['-', '.', ' '], "_");
-
-        // Determine file type and register
-        let path_lower = path.to_lowercase();
-        if path_lower.ends_with(".csv") {
-            self.sql.register_csv(&table_name, path).await?;
-        } else if path_lower.ends_with(".json") || path_lower.ends_with(".ndjson") {
-            self.sql.register_json(&table_name, path).await?;
-        } else if path_lower.ends_with(".parquet") {
-            self.sql.register_parquet(&table_name, path).await?;
-        } else if path_lower.ends_with(".xlsx") || path_lower.ends_with(".xls") {
-            // Load Excel file as Sheet and register it
-            use crate::io::import_sheet;
-            let sheet = import_sheet(path, None, true) // Assume Excel files have headers by default
-                .map_err(|e| {
-                    PipError::runtime(0, format!("Failed to load Excel file '{}': {}", path, e))
-                })?;
-            // Use the existing register_sheet_as_table method
-            // but return the original table_name for consistency
-            let _ = self.register_sheet_as_table(&table_name, &sheet).await?;
-            return Ok(format!("sheet_{}", table_name));
-        } else {
-            // Default to CSV
-            self.sql.register_csv(&table_name, path).await?;
-        }
-
-        Ok(table_name)
-    }
-
-    /// Register a sheet as a table and return the table name.
-    async fn register_sheet_as_table(&mut self, name: &str, sheet: &Sheet) -> PipResult<String> {
+    /// Convert a Sheet to RecordBatches for SQL registration
+    fn convert_sheet_to_batches(
+        &self,
+        sheet: &Sheet,
+        _table_name: &str,
+    ) -> PipResult<Vec<arrow::array::RecordBatch>> {
         use arrow::array::ArrayRef;
         use arrow::array::RecordBatch;
         use arrow::datatypes::{DataType, Field, Schema};
         use piptable_sheet::CellValue;
         use std::sync::Arc;
-
-        let table_name = format!("sheet_{}", name.replace(['-', '.', ' '], "_"));
 
         // Check if sheet has named columns
         let column_names = match sheet.column_names() {
@@ -1683,8 +1649,7 @@ impl Interpreter {
             // Empty sheet - create schema with no fields
             let schema = Arc::new(Schema::empty());
             let batch = RecordBatch::new_empty(schema.clone());
-            self.sql.register_table(&table_name, vec![batch]).await?;
-            return Ok(table_name);
+            return Ok(vec![batch]);
         }
 
         if sheet.row_count() <= 1 {
@@ -1695,8 +1660,7 @@ impl Interpreter {
                 .collect();
             let schema = Arc::new(Schema::new(fields));
             let batch = RecordBatch::new_empty(schema.clone());
-            self.sql.register_table(&table_name, vec![batch]).await?;
-            return Ok(table_name);
+            return Ok(vec![batch]);
         }
 
         // Determine if we should skip the first row
@@ -1725,8 +1689,7 @@ impl Interpreter {
                 .collect();
             let schema = Arc::new(Schema::new(fields));
             let batch = RecordBatch::new_empty(schema.clone());
-            self.sql.register_table(&table_name, vec![batch]).await?;
-            return Ok(table_name);
+            return Ok(vec![batch]);
         }
 
         let num_cols = column_names.len();
@@ -1756,8 +1719,54 @@ impl Interpreter {
         let batch = RecordBatch::try_new(schema.clone(), arrays)
             .map_err(|e| PipError::runtime(0, format!("Failed to create RecordBatch: {}", e)))?;
 
-        // Register the batch with the SQL engine
-        self.sql.register_table(&table_name, vec![batch]).await?;
+        Ok(vec![batch])
+    }
+
+    /// Register a file as a table and return the table name.
+    async fn register_file(&mut self, path: &str) -> PipResult<String> {
+        // Generate table name from file path
+        let table_name = std::path::Path::new(path)
+            .file_stem()
+            .and_then(|s| s.to_str())
+            .unwrap_or("data")
+            .replace(['-', '.', ' '], "_");
+
+        // Determine file type and register
+        let path_lower = path.to_lowercase();
+        if path_lower.ends_with(".csv") {
+            self.sql.register_csv(&table_name, path).await?;
+        } else if path_lower.ends_with(".json") || path_lower.ends_with(".ndjson") {
+            self.sql.register_json(&table_name, path).await?;
+        } else if path_lower.ends_with(".parquet") {
+            self.sql.register_parquet(&table_name, path).await?;
+        } else if path_lower.ends_with(".xlsx") || path_lower.ends_with(".xls") {
+            // Load Excel file as Sheet and register it
+            use crate::io::import_sheet;
+            let sheet = import_sheet(path, None, true) // Assume Excel files have headers by default
+                .map_err(|e| {
+                    PipError::runtime(0, format!("Failed to load Excel file '{}': {}", path, e))
+                })?;
+            // Convert sheet to RecordBatches and register directly with consistent naming
+            let batches = self.convert_sheet_to_batches(&sheet, &table_name)?;
+            self.sql.register_table(&table_name, batches).await?;
+            return Ok(table_name);
+        } else {
+            // Default to CSV
+            self.sql.register_csv(&table_name, path).await?;
+        }
+
+        Ok(table_name)
+    }
+
+    /// Register a sheet as a table and return the table name.
+    async fn register_sheet_as_table(&mut self, name: &str, sheet: &Sheet) -> PipResult<String> {
+        let table_name = format!("sheet_{}", name.replace(['-', '.', ' '], "_"));
+
+        // Convert sheet to batches using the shared helper
+        let batches = self.convert_sheet_to_batches(sheet, &table_name)?;
+
+        // Register the batches with the SQL engine
+        self.sql.register_table(&table_name, batches).await?;
 
         Ok(table_name)
     }
