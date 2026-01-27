@@ -203,10 +203,14 @@ impl Interpreter {
                     Value::Sheet(sheet) => {
                         // Convert sheet to array of objects for iteration
                         let value = sheet_conversions::sheet_to_value(&sheet);
-                        if let Value::Array(arr) = value {
-                            arr
-                        } else {
-                            Vec::new()
+                        match value {
+                            Value::Array(arr) => arr,
+                            other => {
+                                return Err(PipError::runtime(
+                                    line,
+                                    format!("Sheet conversion returned unexpected type: {} (expected Array)", other.type_name()),
+                                ))
+                            }
                         }
                     }
                     _ => {
