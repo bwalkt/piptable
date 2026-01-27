@@ -86,6 +86,47 @@ if len(duplicates) > 0 then
 end if
 ```
 
+### SQL on In-Memory Variables
+
+```piptable
+' @title Query Variables Directly
+' @description Run SQL on variables without exporting to files
+
+' Create or import data into variables
+dim users = [
+    {"id": 1, "name": "Alice", "dept": "Sales"},
+    {"id": 2, "name": "Bob", "dept": "Engineering"},
+    {"id": 3, "name": "Charlie", "dept": "Sales"}
+]
+
+import "transactions.csv" into transactions
+
+' Query variables directly with SQL
+dim dept_summary = query(
+    SELECT 
+        u.dept,
+        COUNT(DISTINCT u.id) as employees,
+        COUNT(t.id) as transactions,
+        SUM(t.amount) as total_revenue
+    FROM users u
+    LEFT JOIN transactions t ON u.id = t.user_id
+    GROUP BY u.dept
+    ORDER BY total_revenue DESC
+)
+
+' Variables are automatically registered in SQL engine
+dim high_performers = query(
+    SELECT * FROM users
+    WHERE id IN (
+        SELECT user_id 
+        FROM transactions 
+        WHERE amount > 1000
+    )
+)
+
+print dept_summary
+```
+
 ## Next Steps
 
 - [CSV Operations](csv.md) - Working with CSV files

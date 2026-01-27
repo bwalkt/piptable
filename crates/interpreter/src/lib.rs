@@ -574,7 +574,8 @@ impl Interpreter {
                     let has_headers = options.has_headers.unwrap_or(true);
                     let sheet = io::import_sheet(&paths[0], sheet_name_str.as_deref(), has_headers)
                         .map_err(|e| PipError::Import(format!("Line {}: {}", line, e)))?;
-                    sheet_conversions::sheet_to_value(&sheet)
+                    // Return as Sheet value to enable SQL queries
+                    Value::Sheet(sheet)
                 };
 
                 // Store in target variable
@@ -1622,12 +1623,22 @@ impl Interpreter {
             .replace(['-', '.', ' '], "_");
 
         // Determine file type and register
-        if path.ends_with(".csv") {
+        let path_lower = path.to_lowercase();
+        if path_lower.ends_with(".csv") {
             self.sql.register_csv(&table_name, path).await?;
-        } else if path.ends_with(".json") || path.ends_with(".ndjson") {
+        } else if path_lower.ends_with(".json") || path_lower.ends_with(".ndjson") {
             self.sql.register_json(&table_name, path).await?;
-        } else if path.ends_with(".parquet") {
+        } else if path_lower.ends_with(".parquet") {
             self.sql.register_parquet(&table_name, path).await?;
+        } else if path_lower.ends_with(".xlsx") || path_lower.ends_with(".xls") {
+            // Load Excel file as Sheet and register it
+            use crate::io::import_sheet;
+            let sheet = import_sheet(path, None, true) // Assume Excel files have headers by default
+                .map_err(|e| PipError::runtime(0, format!("Failed to load Excel file '{}': {}", path, e)))?;
+            // Use the existing register_sheet_as_table method
+            // but return the original table_name for consistency
+            let _ = self.register_sheet_as_table(&table_name, &sheet).await?;
+            return Ok(format!("sheet_{}", table_name));
         } else {
             // Default to CSV
             self.sql.register_csv(&table_name, path).await?;

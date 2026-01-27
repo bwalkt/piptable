@@ -2708,6 +2708,7 @@ dependencies = [
  "piptable-sheet",
  "piptable-sql",
  "pyo3",
+ "rust_xlsxwriter",
  "serde",
  "serde_json",
  "tempfile",

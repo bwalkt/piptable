@@ -43,6 +43,109 @@ print "Sheet names: " + str(report_book.sheet_names())
 print "Loaded workbook with " + str(len(report_book.sheets())) + " sheets"
 ```
 
+## SQL Queries on Excel Files
+
+### Query Excel Data with SQL
+```piptable
+' @title SQL Query on Excel File
+' @description Run SQL queries directly on Excel files
+
+' Import Excel file
+import "sales_data.xlsx" into sales
+
+' Query the data using SQL
+dim high_value_sales = query(
+    SELECT * FROM sales 
+    WHERE amount > 10000 
+    ORDER BY date DESC
+)
+
+' Export results
+export high_value_sales to "high_value_sales.csv"
+```
+
+### Join Excel with CSV
+```piptable
+' @title Join Excel with CSV Data
+' @description Combine data from Excel and CSV files using SQL
+
+' Import data sources
+import "customers.xlsx" into customers
+import "orders.csv" into orders
+
+' Join the tables
+dim customer_orders = query(
+    SELECT 
+        c.customer_name,
+        c.email,
+        o.order_id,
+        o.amount,
+        o.order_date
+    FROM customers c
+    JOIN orders o ON c.customer_id = o.customer_id
+    WHERE o.amount > 100
+    ORDER BY o.order_date DESC
+)
+
+' Export results to new Excel file
+export customer_orders to "customer_orders.xlsx"
+```
+
+### Aggregate Excel Data
+```piptable
+' @title Aggregate Excel Data with SQL
+' @description Calculate summaries from Excel data
+
+' Import sales data from Excel
+import "monthly_sales.xlsx" into sales
+
+' Calculate monthly summaries
+dim monthly_summary = query(
+    SELECT 
+        month,
+        COUNT(*) as transaction_count,
+        SUM(amount) as total_sales,
+        AVG(amount) as avg_sale,
+        MAX(amount) as largest_sale
+    FROM sales
+    GROUP BY month
+    ORDER BY month
+)
+
+' Display results
+print monthly_summary
+```
+
+### Cross-Sheet Analysis
+```piptable
+' @title Cross-Sheet SQL Analysis
+' @description Analyze data across multiple Excel sheets
+
+' Import different sheets
+import "data.xlsx" sheet "Q1_Sales" into q1
+import "data.xlsx" sheet "Q2_Sales" into q2
+
+' Union data from multiple quarters
+dim half_year_sales = query(
+    SELECT 'Q1' as quarter, * FROM q1
+    UNION ALL
+    SELECT 'Q2' as quarter, * FROM q2
+)
+
+' Analyze combined data
+dim product_summary = query(
+    SELECT 
+        product_id,
+        COUNT(*) as total_transactions,
+        SUM(amount) as total_revenue
+    FROM half_year_sales
+    GROUP BY product_id
+    ORDER BY total_revenue DESC
+)
+
+export product_summary to "half_year_summary.xlsx"
+```
+
 ## Working with Legacy Excel (XLS)
 
 ### Read XLS Files
