@@ -265,6 +265,25 @@ pub fn consolidate_book(
             Value::Array(records) => {
                 for record in records {
                     if let Value::Object(obj) = record {
+                        // Skip header rows: check if this row contains mostly column names as string values
+                        let string_values: Vec<&String> = obj.values()
+                            .filter_map(|v| if let Value::String(s) = v { Some(s) } else { None })
+                            .collect();
+                        
+                        let is_header_row = if string_values.len() >= 2 {
+                            // If ALL string values are column names, it's definitely a header row
+                            let matching_columns = string_values.iter()
+                                .filter(|s| all_columns.contains(s.as_str()))
+                                .count();
+                            matching_columns == string_values.len() // All string values must match column names
+                        } else {
+                            false
+                        };
+                        
+                        if is_header_row {
+                            continue; // Skip header rows
+                        }
+
                         let mut new_row: IndexMap<String, Value> = IndexMap::new();
 
                         // Add source column if requested
