@@ -40,18 +40,18 @@ impl PdfExtractor {
         } else {
             None
         };
-        
+
         Self {
             options,
             detector,
             ocr_engine,
         }
     }
-    
+
     pub fn extract_tables_from_path(&self, path: &Path) -> Result<Vec<TableRegion>> {
         // First try to extract text directly
         let text = self.extract_text_from_pdf(path)?;
-        
+
         if text.trim().is_empty() && self.ocr_engine.is_some() {
             // If no text found and OCR is enabled, try OCR
             tracing::info!("No text found in PDF, attempting OCR extraction");
@@ -59,7 +59,7 @@ impl PdfExtractor {
         } else {
             // Detect tables from extracted text
             let tables = self.detector.detect_tables(&text);
-            
+
             if tables.is_empty() {
                 Err(PdfError::NoTablesFound)
             } else {
@@ -67,7 +67,7 @@ impl PdfExtractor {
             }
         }
     }
-    
+
     fn extract_text_from_pdf(&self, path: &Path) -> Result<String> {
         // Use pdf-extract for text extraction
         match extract_text(path) {
@@ -79,20 +79,20 @@ impl PdfExtractor {
             }
         }
     }
-    
+
     fn extract_text_with_lopdf(&self, path: &Path) -> Result<String> {
         let doc = Document::load(path)
             .map_err(|e| PdfError::ParseError(format!("Failed to load PDF: {}", e)))?;
-        
+
         let mut all_text = String::new();
         let pages = doc.get_pages();
-        
+
         let (start, end) = if let Some((s, e)) = self.options.page_range {
             (s.max(1), e.min(pages.len()))
         } else {
             (1, pages.len())
         };
-        
+
         for page_num in start..=end {
             // Extract text from page using lopdf
             // lopdf expects page numbers directly
@@ -101,13 +101,15 @@ impl PdfExtractor {
                 all_text.push('\n');
             }
         }
-        
+
         Ok(all_text)
     }
-    
+
     fn extract_tables_with_ocr(&self, _path: &Path) -> Result<Vec<TableRegion>> {
         // OCR implementation would go here
         // For Phase 1, we're focusing on text-based extraction
-        Err(PdfError::OcrError("OCR extraction not fully implemented in Phase 1".to_string()))
+        Err(PdfError::OcrError(
+            "OCR extraction not fully implemented in Phase 1".to_string(),
+        ))
     }
 }

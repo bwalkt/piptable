@@ -21,14 +21,18 @@ impl OcrEngine {
             language: language.into(),
         }
     }
-    
+
     pub fn extract_text_from_image(&self, _image_path: &Path) -> Result<String> {
         // OCR disabled for Phase 1 - focusing on text-based PDFs only
-        Err(PdfError::OcrError("OCR not available in Phase 1 implementation".to_string()))
+        Err(PdfError::OcrError(
+            "OCR not available in Phase 1 implementation".to_string(),
+        ))
     }
-    
+
     pub fn extract_text_from_bytes(&self, _image_data: &[u8]) -> Result<String> {
         // OCR disabled for Phase 1 - focusing on text-based PDFs only
-        Err(PdfError::OcrError("OCR not available in Phase 1 implementation".to_string()))
+        Err(PdfError::OcrError(
+            "OCR not available in Phase 1 implementation".to_string(),
+        ))
     }
 }
