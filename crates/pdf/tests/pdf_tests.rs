@@ -62,7 +62,7 @@ fn test_cell_value_parsing() {
     
     // Test the private parse_cell_value function via public API
     // We'll create a minimal table to test parsing
-    let table_text = "Integer    Float    Boolean    Text    Empty\n123    45.67    true    hello    \n";
+    let _table_text = "Integer    Float    Boolean    Text    Empty\n123    45.67    true    hello    \n";
     
     // This would test that our cell parsing correctly identifies:
     // - Integers: 123 -> CellValue::Int(123)

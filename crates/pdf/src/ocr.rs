@@ -3,6 +3,7 @@ use std::path::Path;
 // use tesseract::Tesseract; // Disabled for Phase 1
 
 pub struct OcrEngine {
+    #[allow(dead_code)]
     language: String,
 }
 

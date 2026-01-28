@@ -21,6 +21,7 @@ pub struct TableRegion {
 pub struct TableDetector {
     min_rows: usize,
     min_cols: usize,
+    #[allow(dead_code)]
     column_threshold: usize,
 }
 

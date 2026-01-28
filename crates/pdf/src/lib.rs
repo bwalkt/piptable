@@ -24,7 +24,7 @@ pub fn extract_tables_with_options<P: AsRef<Path>>(
     
     let sheets: Vec<Sheet> = table_regions
         .into_iter()
-        .map(|region| convert_table_to_sheet(region))
+        .map(convert_table_to_sheet)
         .collect();
     
     if sheets.is_empty() {
@@ -38,11 +38,16 @@ pub fn extract_tables_with_options<P: AsRef<Path>>(
 fn convert_table_to_sheet(table: TableRegion) -> Sheet {
     let mut sheet = Sheet::new();
     
-    for (row_idx, row_data) in table.rows.iter().enumerate() {
-        for (col_idx, cell_data) in row_data.iter().enumerate() {
-            let value = parse_cell_value(cell_data);
-            sheet.set(row_idx, col_idx, value);
-        }
+    // Convert each row and append to sheet
+    for row_data in table.rows.iter() {
+        let row_values: Vec<CellValue> = row_data
+            .iter()
+            .map(|cell_data| parse_cell_value(cell_data))
+            .collect();
+        
+        // Use row_append which properly handles sheet expansion
+        // Ignore error for empty rows (shouldn't happen with valid tables)
+        let _ = sheet.row_append(row_values);
     }
     
     // Try to detect and set column headers
@@ -51,10 +56,8 @@ fn convert_table_to_sheet(table: TableRegion) -> Sheet {
         let detector = detector::TableDetector::default();
         
         if detector.is_likely_header(first_row) {
-            for (col_idx, header) in first_row.iter().enumerate() {
-                // TODO: Add column naming support in future phase
-                // sheet.set_column_name(col_idx, header.clone());
-            }
+            // TODO: Add column naming support in future phase
+            // Would need to remove first row and set as column names
         }
     }
     
