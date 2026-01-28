@@ -2368,7 +2368,24 @@ impl Interpreter {
                         let column_names = sheet.column_names().cloned();
 
                         // Apply lambda to each data row (skip header if present)
-                        let start_row = if column_names.is_some() { 1 } else { 0 };
+                        // Check if a physical header row exists by comparing first row with column names
+                        let start_row = if let Some(names) = &column_names {
+                            if sheet.data().is_empty() {
+                                0
+                            } else {
+                                let first_row = &sheet.data()[0];
+                                let names_match = names.iter().enumerate().all(|(idx, name)| {
+                                    first_row
+                                        .get(idx)
+                                        .map(|cell| cell.as_str() == name.as_str())
+                                        .unwrap_or(false)
+                                });
+                                usize::from(names_match)
+                            }
+                        } else {
+                            0
+                        };
+
                         for row_idx in start_row..new_sheet.row_count() {
                             let row_value = if let Some(col_names) = &column_names {
                                 let mut row_obj = std::collections::HashMap::new();
@@ -2455,15 +2472,32 @@ impl Interpreter {
                         }
 
                         let mut new_sheet = sheet.clone();
-                        let mut rows_to_keep = Vec::new();
+                        let mut rows_to_keep = std::collections::HashSet::new();
 
                         // Determine which rows to keep (skip header if present)
-                        let start_row = if sheet.column_names().is_some() { 1 } else { 0 };
-
-                        // Always keep the header row if it exists
-                        if start_row > 0 {
-                            rows_to_keep.push(0);
-                        }
+                        // Check if a physical header row exists by comparing first row with column names
+                        let start_row = if let Some(names) = sheet.column_names() {
+                            if sheet.data().is_empty() {
+                                0
+                            } else {
+                                let first_row = &sheet.data()[0];
+                                let names_match = names.iter().enumerate().all(|(idx, name)| {
+                                    first_row
+                                        .get(idx)
+                                        .map(|cell| cell.as_str() == name.as_str())
+                                        .unwrap_or(false)
+                                });
+                                if names_match {
+                                    // Physical header exists, keep it
+                                    rows_to_keep.insert(0);
+                                    1
+                                } else {
+                                    0
+                                }
+                            }
+                        } else {
+                            0
+                        };
 
                         for row_idx in start_row..sheet.row_count() {
                             let row_value = if let Some(col_names) = sheet.column_names() {
@@ -2492,7 +2526,7 @@ impl Interpreter {
                             match self.apply_lambda(params, body, &[row_value]).await {
                                 Ok(result) => {
                                     if result.is_truthy() {
-                                        rows_to_keep.push(row_idx);
+                                        rows_to_keep.insert(row_idx);
                                     }
                                 }
                                 Err(e) => {
@@ -2507,7 +2541,7 @@ impl Interpreter {
                             }
                         }
 
-                        // Filter the sheet to keep only selected rows
+                        // Filter the sheet to keep only selected rows (HashSet for O(1) lookup)
                         new_sheet.filter_rows(|row_idx, _row| rows_to_keep.contains(&row_idx));
 
                         Ok(Value::Sheet(new_sheet))

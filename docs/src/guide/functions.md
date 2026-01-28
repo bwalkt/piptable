@@ -109,15 +109,18 @@ export clean_data to "processed_sales.csv"
 ### Custom Calculations
 
 ```pip
-# Define custom calculation lambdas
-dim calculate_tax = |amount| amount * 0.08
-dim format_currency = |value| "$" + string(round(value, 2))
-
-# Apply to data
+# Apply calculations directly in the lambda
 dim results = data.map(|row| {
     ...row,
-    tax: calculate_tax(row.subtotal),
-    total: format_currency(row.subtotal + calculate_tax(row.subtotal))
+    tax: row.subtotal * 0.08,
+    total: "$" + string(round(row.subtotal * 1.08, 2))
+})
+
+# Or define reusable calculation logic inline
+dim with_tax = data.map(|row| {
+    dim tax_rate = 0.08
+    dim tax_amount = row.subtotal * tax_rate
+    return {...row, tax: tax_amount, total: row.subtotal + tax_amount}
 })
 ```
 
@@ -132,16 +135,19 @@ dim transform = |x| round(x * 1.1, 2)
 dim result = data.map(transform)
 ```
 
-### Higher-Order Operations
+### Chaining Operations
 ```pip
-# Functions that work with lambdas
-function apply_to_column(sheet, column, transform)
-    return sheet.map(|row| {
-        ...row,
-        [column]: transform(row[column])
-    })
-end function
+# Chain multiple transformations using map and filter
+dim processed = data
+    .filter(|row| row.status = "active")
+    .map(|row| {...row, price: row.price * 1.1})
+    .filter(|row| row.price > 100)
 
-# Usage
-dim updated = apply_to_column(data, "price", |x| x * 1.1)
+# Or combine transformations in a single map
+dim result = data.map(|row| {
+    dim new_price = row.price * 1.1
+    return row.status = "active" and new_price > 100 
+        ? {...row, price: new_price, eligible: true}
+        : {...row, eligible: false}
+})
 ```
