@@ -137,7 +137,8 @@ impl TableDetector {
         // Check if row contains mostly uppercase text or common header keywords
         row.iter().any(|cell| {
             let upper = cell.to_uppercase();
-            cell == &upper || HEADER_PATTERN.is_match(cell)
+            let has_alpha = cell.chars().any(|c| c.is_alphabetic());
+            (has_alpha && cell == &upper) || HEADER_PATTERN.is_match(cell)
         })
     }
 }
