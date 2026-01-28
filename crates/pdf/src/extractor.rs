@@ -111,7 +111,8 @@ impl PdfExtractor {
             if s > clamped_end {
                 return Err(PdfError::InvalidPageRange(format!(
                     "Start page {} exceeds document length of {} pages",
-                    s, pages.len()
+                    s,
+                    pages.len()
                 )));
             }
             (s, clamped_end)
