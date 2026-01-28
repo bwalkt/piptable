@@ -36,7 +36,7 @@ impl OcrEngine {
         debug!("Starting OCR extraction from image: {:?}", image_path);
 
         // Check if Tesseract is available
-        let mut tesseract = Tesseract::new(None, Some(&self.language))
+        let tesseract = Tesseract::new(None, Some(&self.language))
             .map_err(|e| PdfError::OcrSetupError(format!("Failed to initialize Tesseract: {}", e)))?;
 
         // Load and preprocess the image
@@ -68,7 +68,7 @@ impl OcrEngine {
         debug!("Starting OCR extraction from {} bytes", image_data.len());
 
         // Initialize Tesseract
-        let mut tesseract = Tesseract::new(None, Some(&self.language))
+        let tesseract = Tesseract::new(None, Some(&self.language))
             .map_err(|e| PdfError::OcrSetupError(format!("Failed to initialize Tesseract: {}", e)))?;
 
         // Load image from bytes
@@ -108,7 +108,7 @@ impl OcrEngine {
             .map_err(|e| PdfError::OcrProcessingError(format!("Failed to encode image: {}", e)))?;
 
         // Initialize Tesseract
-        let mut tesseract = Tesseract::new(None, Some(&self.language))
+        let tesseract = Tesseract::new(None, Some(&self.language))
             .map_err(|e| PdfError::OcrSetupError(format!("Failed to initialize Tesseract: {}", e)))?;
 
         // Perform OCR
