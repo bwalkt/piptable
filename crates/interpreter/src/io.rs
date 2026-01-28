@@ -64,7 +64,7 @@ fn detect_csv_headers(path: &str, delimiter: u8) -> Result<bool, String> {
     let second_row = second_line.as_ref().map(|l| parse_csv_line(l, delimiter));
 
     // Check if first row is likely headers:
-    // 1. All values in first row are non-numeric strings  
+    // 1. All values in first row are non-numeric strings
     // 2. Second row (if exists) has numeric values OR significantly different patterns
     let all_strings = first_row.iter().all(|v| {
         // Check if it's a non-empty string that doesn't parse as a number
@@ -74,27 +74,31 @@ fn detect_csv_headers(path: &str, delimiter: u8) -> Result<bool, String> {
     let has_numbers_or_different_pattern = second_row
         .as_ref()
         .map(|row| {
-            // Check for numeric/bool values  
-            let has_numbers = row.iter()
+            // Check for numeric/bool values
+            let has_numbers = row
+                .iter()
                 .any(|v| v.parse::<f64>().is_ok() || v == "true" || v == "false");
-            
+
             // For string-only data, only consider it headers if there are STRONG indicators:
             // - Headers contain underscores/descriptive terms vs normal names
             // - Headers are significantly longer/shorter than data
             // - Headers contain common header words
             let different_patterns = !has_numbers && {
-                let header_indicators = first_row.iter().any(|h| 
-                    h.contains('_') || h.to_lowercase().contains("id") || h.to_lowercase().contains("name") 
-                    || h.to_lowercase().contains("type") || h.to_lowercase().contains("value")
-                );
-                
+                let header_indicators = first_row.iter().any(|h| {
+                    h.contains('_')
+                        || h.to_lowercase().contains("id")
+                        || h.to_lowercase().contains("name")
+                        || h.to_lowercase().contains("type")
+                        || h.to_lowercase().contains("value")
+                });
+
                 let size_difference = row.iter().zip(first_row.iter()).any(|(data, header)| {
                     data.len() > 30 && header.len() < 15 // Significantly longer data vs short headers
                 });
-                
+
                 header_indicators || size_difference
             };
-            
+
             has_numbers || different_patterns
         })
         .unwrap_or(false);
@@ -419,7 +423,7 @@ fn normalize_column_names(existing: &mut Sheet, new_data: &Sheet) -> Result<(), 
         }
         _ => {} // Other cases are handled by regular validation
     }
-    
+
     Ok(())
 }
 
@@ -431,7 +435,7 @@ fn append_sheet_distinct(
 ) -> Result<(), String> {
     // Normalize column names first
     normalize_column_names(existing, new_data)?;
-    
+
     // Then do the same column validation as regular append
     let existing_cols = existing.column_names();
     let new_cols = new_data.column_names();
@@ -481,7 +485,7 @@ fn append_sheet_distinct(
     let mut existing_keys = std::collections::HashSet::new();
     let skip_existing_header = has_header_row(existing);
     let start_existing = if skip_existing_header { 1 } else { 0 };
-    
+
     for row in existing.data().iter().skip(start_existing) {
         if let Some(key) = row.get(key_col) {
             existing_keys.insert(key.as_str().to_string());
@@ -516,7 +520,7 @@ fn append_sheet_or_update(
 ) -> Result<(), String> {
     // Normalize column names first
     normalize_column_names(existing, new_data)?;
-    
+
     // Then do column validation
     let existing_cols = existing.column_names();
     let new_cols = new_data.column_names();

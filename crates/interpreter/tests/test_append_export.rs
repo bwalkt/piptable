@@ -299,7 +299,7 @@ fn test_append_or_update_mode() {
 #[test]
 fn test_append_or_update_with_column_names_no_header_row() {
     use piptable_interpreter::io::{export_sheet_with_mode, ExportMode};
-    
+
     let dir = tempdir().unwrap();
     let csv_path = dir.path().join("update_no_header_test.csv");
 
@@ -310,7 +310,9 @@ fn test_append_or_update_with_column_names_no_header_row() {
     // Create new sheet with column names but data that should update first row
     let mut new_sheet = Sheet::new();
     new_sheet.row_append(vec!["id", "name", "value"]).unwrap();
-    new_sheet.row_append(vec!["1", "Alice Updated", "150"]).unwrap(); // Should update first data row
+    new_sheet
+        .row_append(vec!["1", "Alice Updated", "150"])
+        .unwrap(); // Should update first data row
     new_sheet.name_columns_by_row(0).unwrap();
 
     // Append with update mode
@@ -326,7 +328,7 @@ fn test_append_or_update_with_column_names_no_header_row() {
     // Read result and verify
     let content = fs::read_to_string(&csv_path).unwrap();
     let lines: Vec<_> = content.lines().collect();
-    
+
     // Should have updated the first row (Alice)
     assert_eq!(lines.len(), 3); // Same number of rows
     assert!(content.contains("1,Alice Updated,150")); // Updated Alice
@@ -338,7 +340,7 @@ fn test_append_or_update_with_column_names_no_header_row() {
 #[test]
 fn test_string_only_csv_header_detection() {
     use piptable_interpreter::io::{export_sheet_with_mode, ExportMode};
-    
+
     let dir = tempdir().unwrap();
     let csv_path = dir.path().join("string_only_test.csv");
 
@@ -348,8 +350,12 @@ fn test_string_only_csv_header_detection() {
 
     // Create new sheet to append
     let mut new_sheet = Sheet::new();
-    new_sheet.row_append(vec!["Product", "Category", "Description"]).unwrap();
-    new_sheet.row_append(vec!["Doohickey", "Misc", "Something mysterious and useful"]).unwrap();
+    new_sheet
+        .row_append(vec!["Product", "Category", "Description"])
+        .unwrap();
+    new_sheet
+        .row_append(vec!["Doohickey", "Misc", "Something mysterious and useful"])
+        .unwrap();
     new_sheet.name_columns_by_row(0).unwrap();
 
     // Append normally (should detect headers correctly)
@@ -363,13 +369,13 @@ fn test_string_only_csv_header_detection() {
     // Read result and verify
     let content = fs::read_to_string(&csv_path).unwrap();
     let lines: Vec<_> = content.lines().collect();
-    
+
     // Should have header + 2 original + 1 new = 4 rows (no duplicate header)
     assert_eq!(lines.len(), 4);
     assert!(content.contains("Product,Category,Description")); // Header present once
     assert!(content.contains("Widget,Tools,A small useful tool")); // Original data
     assert!(content.contains("Doohickey,Misc,Something mysterious and useful")); // New data
-    
+
     // Count header occurrences - should only appear once
     let header_count = content.matches("Product,Category,Description").count();
     assert_eq!(header_count, 1, "Header should only appear once");
@@ -378,7 +384,7 @@ fn test_string_only_csv_header_detection() {
 #[test]
 fn test_append_distinct_ignores_header_keys() {
     use piptable_interpreter::io::{export_sheet_with_mode, ExportMode};
-    
+
     let dir = tempdir().unwrap();
     let csv_path = dir.path().join("distinct_header_test.csv");
 
@@ -389,7 +395,9 @@ fn test_append_distinct_ignores_header_keys() {
     // Create new sheet with "id" as a data value (should not be blocked by header)
     let mut new_sheet = Sheet::new();
     new_sheet.row_append(vec!["id", "name", "value"]).unwrap();
-    new_sheet.row_append(vec!["id", "New Entry", "200"]).unwrap(); // This should be blocked by existing data, not header
+    new_sheet
+        .row_append(vec!["id", "New Entry", "200"])
+        .unwrap(); // This should be blocked by existing data, not header
     new_sheet.row_append(vec!["2", "Bob", "300"]).unwrap(); // This should be added
     new_sheet.name_columns_by_row(0).unwrap();
 
@@ -406,7 +414,7 @@ fn test_append_distinct_ignores_header_keys() {
     // Read result and verify
     let content = fs::read_to_string(&csv_path).unwrap();
     let lines: Vec<_> = content.lines().collect();
-    
+
     // Should have header + 2 original + 1 new = 4 rows
     assert_eq!(lines.len(), 4);
     assert!(content.contains("1,Alice,100")); // Original Alice
@@ -874,7 +882,7 @@ async fn test_empty_sheet_append() {
 #[test]
 fn test_key_column_bounds_validation() {
     use piptable_interpreter::io::{export_sheet_with_mode, ExportMode};
-    
+
     let dir = tempdir().unwrap();
     let csv_path = dir.path().join("bounds_test.csv");
 
@@ -883,9 +891,7 @@ fn test_key_column_bounds_validation() {
     fs::write(&csv_path, initial_data).unwrap();
 
     // Create new sheet with 2 columns
-    let new_sheet = Sheet::from_data(vec![
-        vec!["3", "Charlie"],
-    ]);
+    let new_sheet = Sheet::from_data(vec![vec!["3", "Charlie"]]);
 
     // Test with key column index 2 (out of bounds for 2 columns)
     let result = export_sheet_with_mode(
@@ -897,7 +903,9 @@ fn test_key_column_bounds_validation() {
     );
 
     assert!(result.is_err());
-    assert!(result.unwrap_err().contains("Key column index 2 is out of bounds"));
+    assert!(result
+        .unwrap_err()
+        .contains("Key column index 2 is out of bounds"));
 
     // Test with valid key column index
     let result = export_sheet_with_mode(
@@ -914,7 +922,7 @@ fn test_key_column_bounds_validation() {
 #[test]
 fn test_key_column_bounds_validation_update_mode() {
     use piptable_interpreter::io::{export_sheet_with_mode, ExportMode};
-    
+
     let dir = tempdir().unwrap();
     let csv_path = dir.path().join("bounds_update_test.csv");
 
@@ -923,9 +931,7 @@ fn test_key_column_bounds_validation_update_mode() {
     fs::write(&csv_path, initial_data).unwrap();
 
     // Create new sheet with 2 columns
-    let new_sheet = Sheet::from_data(vec![
-        vec!["3", "Charlie"],
-    ]);
+    let new_sheet = Sheet::from_data(vec![vec!["3", "Charlie"]]);
 
     // Test with key column index 3 (out of bounds for 2 columns)
     let result = export_sheet_with_mode(
@@ -937,5 +943,7 @@ fn test_key_column_bounds_validation_update_mode() {
     );
 
     assert!(result.is_err());
-    assert!(result.unwrap_err().contains("Key column index 3 is out of bounds"));
+    assert!(result
+        .unwrap_err()
+        .contains("Key column index 3 is out of bounds"));
 }
