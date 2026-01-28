@@ -40,73 +40,169 @@ fn has_header_row(sheet: &Sheet) -> bool {
     }
 }
 
-/// Export a sheet to a file with optional append mode.
-pub fn export_sheet_with_mode(sheet: &Sheet, path: &str, append: bool) -> Result<(), String> {
+/// Detect if a CSV file has headers by reading only the first few rows
+fn detect_csv_headers(path: &str, delimiter: u8) -> Result<bool, String> {
+    use std::fs::File;
+    use std::io::{BufRead, BufReader};
+
+    let file = File::open(path).map_err(|e| format!("Failed to open file: {}", e))?;
+    let reader = BufReader::new(file);
+    let mut lines = reader.lines();
+
+    // Read first row
+    let first_line = match lines.next() {
+        Some(Ok(line)) => line,
+        Some(Err(e)) => return Err(format!("Failed to read first line: {}", e)),
+        None => return Ok(false), // Empty file, no headers
+    };
+
+    // Read second row if it exists
+    let second_line = lines.next().and_then(|r| r.ok());
+
+    // Parse rows
+    let first_row = parse_csv_line(&first_line, delimiter);
+    let second_row = second_line.as_ref().map(|l| parse_csv_line(l, delimiter));
+
+    // Check if first row is likely headers:
+    // 1. All values in first row are non-numeric strings
+    // 2. Second row (if exists) has numeric values OR significantly different patterns
+    let all_strings = first_row.iter().all(|v| {
+        // Check if it's a non-empty string that doesn't parse as a number
+        !v.is_empty() && v.parse::<f64>().is_err() && v != "true" && v != "false"
+    });
+
+    let has_numbers_or_different_pattern = second_row
+        .as_ref()
+        .map(|row| {
+            // Check for numeric/bool values
+            let has_numbers = row
+                .iter()
+                .any(|v| v.parse::<f64>().is_ok() || v == "true" || v == "false");
+
+            // For string-only data, only consider it headers if there are STRONG indicators:
+            // - Headers contain underscores/descriptive terms vs normal names
+            // - Headers are significantly longer/shorter than data
+            // - Headers contain common header words
+            let different_patterns = !has_numbers && {
+                let header_indicators = first_row.iter().any(|h| {
+                    h.contains('_')
+                        || h.to_lowercase().contains("id")
+                        || h.to_lowercase().contains("name")
+                        || h.to_lowercase().contains("type")
+                        || h.to_lowercase().contains("value")
+                });
+
+                let size_difference = row.iter().zip(first_row.iter()).any(|(data, header)| {
+                    data.len() > 30 && header.len() < 15 // Significantly longer data vs short headers
+                });
+
+                header_indicators || size_difference
+            };
+
+            has_numbers || different_patterns
+        })
+        .unwrap_or(false);
+
+    Ok(all_strings && (second_row.is_none() || has_numbers_or_different_pattern))
+}
+
+/// Simple CSV line parser for header detection
+fn parse_csv_line(line: &str, delimiter: u8) -> Vec<String> {
+    let delimiter_char = delimiter as char;
+    let mut result = Vec::new();
+    let mut current = String::new();
+    let mut in_quotes = false;
+    let mut chars = line.chars().peekable();
+
+    while let Some(ch) = chars.next() {
+        if ch == '"' {
+            if in_quotes && chars.peek() == Some(&'"') {
+                // Escaped quote
+                current.push('"');
+                chars.next();
+            } else {
+                in_quotes = !in_quotes;
+            }
+        } else if ch == delimiter_char && !in_quotes {
+            result.push(current.trim().to_string());
+            current.clear();
+        } else {
+            current.push(ch);
+        }
+    }
+    result.push(current.trim().to_string());
+    result
+}
+
+/// Export mode options
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum ExportMode {
+    /// Overwrite the file
+    Overwrite,
+    /// Append all rows
+    Append,
+    /// Append only distinct rows based on a key
+    AppendDistinct { key_column: Option<usize> },
+    /// Update existing rows or append new ones based on a key
+    AppendOrUpdate { key_column: Option<usize> },
+}
+
+/// Export a sheet to a file with specified mode.
+pub fn export_sheet_with_mode(sheet: &Sheet, path: &str, mode: ExportMode) -> Result<(), String> {
+    export_sheet_with_mode_impl(sheet, path, mode)
+}
+
+/// Export a sheet to a file with optional append mode (for backward compatibility).
+pub fn export_sheet_with_append(sheet: &Sheet, path: &str, append: bool) -> Result<(), String> {
+    let mode = if append {
+        ExportMode::Append
+    } else {
+        ExportMode::Overwrite
+    };
+    export_sheet_with_mode_impl(sheet, path, mode)
+}
+
+/// Internal implementation of export with mode.
+fn export_sheet_with_mode_impl(sheet: &Sheet, path: &str, mode: ExportMode) -> Result<(), String> {
+    // For backward compatibility
+    let append = matches!(
+        mode,
+        ExportMode::Append | ExportMode::AppendDistinct { .. } | ExportMode::AppendOrUpdate { .. }
+    );
     let path_lower = path.to_lowercase();
 
     // For append mode, we need to handle CSV specially
     if append && (path_lower.ends_with(".csv") || path_lower.ends_with(".tsv")) {
         // If file exists, load it first and append new data
         if std::path::Path::new(path).exists() {
-            // First, load the file without assuming headers to detect if headers exist
-            // TODO: Consider optimizing to avoid double I/O for large files by transforming in-place
-            let raw_sheet = if path_lower.ends_with(".tsv") {
-                Sheet::from_csv_with_options(path, CsvOptions::tsv())
-                    .map_err(|e| format!("Failed to load existing TSV: {}", e))?
+            // Efficiently detect if the existing file has headers by reading only the first few rows
+            let delimiter = if path_lower.ends_with(".tsv") {
+                b'\t'
             } else {
-                Sheet::from_csv(path).map_err(|e| format!("Failed to load existing CSV: {}", e))?
+                b','
             };
+            let has_headers = detect_csv_headers(path, delimiter)?;
 
-            // Detect if the existing file has headers by checking:
-            // 1. The first row contains all strings (typical of headers)
-            // 2. Second row (if exists) has different types (typical of data)
-            let has_headers = raw_sheet
-                .data()
-                .first()
-                .map(|first_row| {
-                    // Check if all values in first row are strings
-                    let all_strings = first_row
-                        .iter()
-                        .all(|cell| matches!(cell, CellValue::String(_)));
+            // Load the file with proper header handling
+            let mut existing_sheet = import_sheet(path, None, has_headers)
+                .map_err(|e| format!("Failed to load existing file: {}", e))?;
 
-                    // If we have a second row, check if it has different types (indicates headers)
-                    let has_different_types = raw_sheet
-                        .data()
-                        .get(1)
-                        .map(|second_row| {
-                            // If second row has any non-string values, first row is likely headers
-                            second_row
-                                .iter()
-                                .any(|cell| !matches!(cell, CellValue::String(_)))
-                        })
-                        .unwrap_or(false);
-
-                    // If new sheet has column names, also check if column count matches
-                    let column_count_matches = if let Some(new_cols) = sheet.column_names() {
-                        first_row.len() == new_cols.len()
-                    } else {
-                        false
-                    };
-
-                    // Consider it has headers if:
-                    // - All first row values are strings AND
-                    // - Either second row has different types OR (if new sheet has columns) column count matches
-                    all_strings && (has_different_types || column_count_matches)
-                })
-                .unwrap_or(false);
-
-            // Now reload with proper header handling
-            let mut existing_sheet = if has_headers {
-                import_sheet(path, None, true)
-                    .map_err(|e| format!("Failed to load existing file with headers: {}", e))?
-            } else {
-                import_sheet(path, None, false)
-                    .map_err(|e| format!("Failed to load existing file without headers: {}", e))?
-            };
-
-            // Append new data to existing sheet
-            append_sheet_data(&mut existing_sheet, sheet)
-                .map_err(|e| format!("Failed to append data: {}", e))?;
+            // Append new data to existing sheet based on mode
+            match mode {
+                ExportMode::Append => {
+                    append_sheet_data(&mut existing_sheet, sheet)
+                        .map_err(|e| format!("Failed to append data: {}", e))?;
+                }
+                ExportMode::AppendDistinct { key_column } => {
+                    append_sheet_distinct(&mut existing_sheet, sheet, key_column)
+                        .map_err(|e| format!("Failed to append distinct data: {}", e))?;
+                }
+                ExportMode::AppendOrUpdate { key_column } => {
+                    append_sheet_or_update(&mut existing_sheet, sheet, key_column)
+                        .map_err(|e| format!("Failed to append or update data: {}", e))?;
+                }
+                ExportMode::Overwrite => unreachable!(),
+            }
 
             // Save the combined sheet
             if path_lower.ends_with(".tsv") {
@@ -137,9 +233,22 @@ pub fn export_sheet_with_mode(sheet: &Sheet, path: &str, append: bool) -> Result
             let mut existing_sheet = import_sheet(path, None, false)
                 .map_err(|e| format!("Failed to load existing JSON: {}", e))?;
 
-            // Append new data to existing sheet
-            append_sheet_data(&mut existing_sheet, sheet)
-                .map_err(|e| format!("Failed to append data: {}", e))?;
+            // Append new data to existing sheet based on mode
+            match mode {
+                ExportMode::Append => {
+                    append_sheet_data(&mut existing_sheet, sheet)
+                        .map_err(|e| format!("Failed to append data: {}", e))?;
+                }
+                ExportMode::AppendDistinct { key_column } => {
+                    append_sheet_distinct(&mut existing_sheet, sheet, key_column)
+                        .map_err(|e| format!("Failed to append distinct data: {}", e))?;
+                }
+                ExportMode::AppendOrUpdate { key_column } => {
+                    append_sheet_or_update(&mut existing_sheet, sheet, key_column)
+                        .map_err(|e| format!("Failed to append or update data: {}", e))?;
+                }
+                ExportMode::Overwrite => unreachable!(),
+            }
 
             // Save the combined sheet
             existing_sheet
@@ -264,9 +373,24 @@ fn append_sheet_data(existing: &mut Sheet, new_data: &Sheet) -> Result<(), Strin
                 }
             }
         }
-        _ => {
+        (None, Some(_)) => {
+            // Existing has no column names, new data has column names
+            // This is allowed for regular append - we skip the new data's header row
+            let existing_cols = existing.data().first().map(|r| r.len());
+            let new_cols = new_data.data().get(1).map(|r| r.len()); // Skip header row
+            match (existing_cols, new_cols) {
+                (Some(e), Some(n)) if e != n => {
+                    return Err(format!(
+                        "Column count mismatch: existing has {} columns, new data has {} columns",
+                        e, n
+                    ));
+                }
+                _ => {}
+            }
+        }
+        (Some(_), None) => {
             return Err(
-                "Cannot append: one sheet has column names while the other doesn't".to_string(),
+                "Cannot append: existing file has column names but new data doesn't".to_string(),
             );
         }
     }
@@ -280,6 +404,212 @@ fn append_sheet_data(existing: &mut Sheet, new_data: &Sheet) -> Result<(), Strin
         existing
             .row_append(row.clone())
             .map_err(|e| format!("Failed to append row: {}", e))?;
+    }
+
+    Ok(())
+}
+
+/// Helper function to normalize column name state between two sheets
+fn normalize_column_names(existing: &mut Sheet, new_data: &Sheet) -> Result<(), String> {
+    let existing_cols = existing.column_names().cloned();
+    let new_cols = new_data.column_names().cloned();
+
+    if let (None, Some(_)) = (existing_cols, new_cols) {
+        // Existing has no column names but new data does
+        // Only name columns if the existing data looks like headers (detect_csv_headers would help)
+        // For now, don't auto-assign column names to avoid data/header confusion
+        // The append functions will handle this case appropriately
+    }
+
+    Ok(())
+}
+
+/// Helper function to append only distinct rows from one sheet to another.
+fn append_sheet_distinct(
+    existing: &mut Sheet,
+    new_data: &Sheet,
+    key_column: Option<usize>,
+) -> Result<(), String> {
+    // Normalize column names first
+    normalize_column_names(existing, new_data)?;
+
+    // Then do the same column validation as regular append
+    let existing_cols = existing.column_names();
+    let new_cols = new_data.column_names();
+
+    match (existing_cols, new_cols) {
+        (Some(e_cols), Some(n_cols)) => {
+            if e_cols != n_cols {
+                return Err(format!(
+                    "Column mismatch: existing file has {:?}, new data has {:?}",
+                    e_cols, n_cols
+                ));
+            }
+        }
+        (None, None) => {
+            let existing_cols = existing.data().first().map(|r| r.len());
+            let new_cols = new_data.data().first().map(|r| r.len());
+            match (existing_cols, new_cols) {
+                (Some(e), Some(n)) if e != n => {
+                    return Err(format!(
+                        "Column count mismatch: existing has {} columns, new data has {} columns",
+                        e, n
+                    ));
+                }
+                _ => {}
+            }
+        }
+        _ => {
+            return Err(
+                "Cannot append: one sheet has column names while the other doesn't".to_string(),
+            );
+        }
+    }
+
+    // Determine key column index to use for uniqueness check
+    let key_col = key_column.unwrap_or(0); // Default to first column as key
+
+    // Validate key column is in bounds
+    let max_cols = existing.col_count().max(new_data.col_count());
+    if max_cols > 0 && key_col >= max_cols {
+        return Err(format!(
+            "Key column index {} is out of bounds ({} columns)",
+            key_col, max_cols
+        ));
+    }
+
+    // Build a set of existing keys for fast lookup (skip header row if present)
+    let mut existing_keys = std::collections::HashSet::new();
+    let skip_existing_header = has_header_row(existing);
+    let start_existing = if skip_existing_header { 1 } else { 0 };
+
+    for row in existing.data().iter().skip(start_existing) {
+        if let Some(key) = row.get(key_col) {
+            existing_keys.insert(key.as_str().to_string());
+        }
+    }
+
+    // Determine if new_data has a header row to skip
+    let skip_header = has_header_row(new_data);
+    let start_index = if skip_header { 1 } else { 0 };
+
+    // Append only rows with distinct keys
+    for row in new_data.data().iter().skip(start_index) {
+        if let Some(key) = row.get(key_col) {
+            let key_str = key.as_str().to_string();
+            if !existing_keys.contains(&key_str) {
+                existing
+                    .row_append(row.clone())
+                    .map_err(|e| format!("Failed to append row: {}", e))?;
+                existing_keys.insert(key_str);
+            }
+        }
+    }
+
+    Ok(())
+}
+
+/// Helper function to update existing rows or append new ones based on a key.
+fn append_sheet_or_update(
+    existing: &mut Sheet,
+    new_data: &Sheet,
+    key_column: Option<usize>,
+) -> Result<(), String> {
+    // Normalize column names first
+    normalize_column_names(existing, new_data)?;
+
+    // Then do column validation
+    let existing_cols = existing.column_names();
+    let new_cols = new_data.column_names();
+
+    match (existing_cols, new_cols) {
+        (Some(e_cols), Some(n_cols)) => {
+            if e_cols != n_cols {
+                return Err(format!(
+                    "Column mismatch: existing file has {:?}, new data has {:?}",
+                    e_cols, n_cols
+                ));
+            }
+        }
+        (None, None) => {
+            let existing_cols = existing.data().first().map(|r| r.len());
+            let new_cols = new_data.data().first().map(|r| r.len());
+            match (existing_cols, new_cols) {
+                (Some(e), Some(n)) if e != n => {
+                    return Err(format!(
+                        "Column count mismatch: existing has {} columns, new data has {} columns",
+                        e, n
+                    ));
+                }
+                _ => {}
+            }
+        }
+        (None, Some(_)) => {
+            // Existing has no column names, new data has column names
+            // This is allowed - we'll compare data against data (skipping new data's header row)
+            let existing_cols = existing.data().first().map(|r| r.len());
+            let new_cols = new_data.data().get(1).map(|r| r.len()); // Skip header row
+            match (existing_cols, new_cols) {
+                (Some(e), Some(n)) if e != n => {
+                    return Err(format!(
+                        "Column count mismatch: existing has {} columns, new data has {} columns",
+                        e, n
+                    ));
+                }
+                _ => {}
+            }
+        }
+        (Some(_), None) => {
+            return Err(
+                "Cannot append: existing file has column names but new data doesn't".to_string(),
+            );
+        }
+    }
+
+    // Determine key column index
+    let key_col = key_column.unwrap_or(0);
+
+    // Validate key column is in bounds
+    let max_cols = existing.col_count().max(new_data.col_count());
+    if max_cols > 0 && key_col >= max_cols {
+        return Err(format!(
+            "Key column index {} is out of bounds ({} columns)",
+            key_col, max_cols
+        ));
+    }
+
+    // Build a map of existing rows by key for update
+    let mut key_to_row_index = std::collections::HashMap::new();
+    let skip_existing_header = has_header_row(existing);
+    let start_existing = if skip_existing_header { 1 } else { 0 };
+
+    for (idx, row) in existing.data().iter().enumerate().skip(start_existing) {
+        if let Some(key) = row.get(key_col) {
+            key_to_row_index.insert(key.as_str().to_string(), idx);
+        }
+    }
+
+    // Process new data
+    let skip_header = has_header_row(new_data);
+    let start_index = if skip_header { 1 } else { 0 };
+
+    for row in new_data.data().iter().skip(start_index) {
+        if let Some(key) = row.get(key_col) {
+            let key_str = key.as_str().to_string();
+            if let Some(&row_idx) = key_to_row_index.get(&key_str) {
+                // Update existing row
+                for (col_idx, cell) in row.iter().enumerate() {
+                    existing
+                        .set(row_idx, col_idx, cell.clone())
+                        .map_err(|e| format!("Failed to update cell: {}", e))?;
+                }
+            } else {
+                // Append new row
+                existing
+                    .row_append(row.clone())
+                    .map_err(|e| format!("Failed to append row: {}", e))?;
+            }
+        }
     }
 
     Ok(())
