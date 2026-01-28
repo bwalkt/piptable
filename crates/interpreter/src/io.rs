@@ -22,45 +22,43 @@ pub fn export_sheet_with_mode(sheet: &Sheet, path: &str, append: bool) -> Result
                 Sheet::from_csv(path).map_err(|e| format!("Failed to load existing CSV: {}", e))?
             };
 
-            // Detect if the file has headers by checking multiple factors:
-            // 1. If new sheet has column names and existing first row could be headers
-            // 2. The first row contains all strings (typical of headers)
-            // 3. Second row (if exists) has different types (typical of data)
-            let has_headers = if let Some(new_cols) = sheet.column_names() {
-                raw_sheet
-                    .data()
-                    .first()
-                    .map(|first_row| {
-                        // Check if all values in first row are strings
-                        let all_strings = first_row
-                            .iter()
-                            .all(|cell| matches!(cell, CellValue::String(_)));
+            // Detect if the existing file has headers by checking:
+            // 1. The first row contains all strings (typical of headers)
+            // 2. Second row (if exists) has different types (typical of data)
+            let has_headers = raw_sheet
+                .data()
+                .first()
+                .map(|first_row| {
+                    // Check if all values in first row are strings
+                    let all_strings = first_row
+                        .iter()
+                        .all(|cell| matches!(cell, CellValue::String(_)));
 
-                        // If we have a second row, check if it has different types (indicates headers)
-                        let has_different_types = raw_sheet
-                            .data()
-                            .get(1)
-                            .map(|second_row| {
-                                // If second row has any non-string values, first row is likely headers
-                                second_row
-                                    .iter()
-                                    .any(|cell| !matches!(cell, CellValue::String(_)))
-                            })
-                            .unwrap_or(false);
+                    // If we have a second row, check if it has different types (indicates headers)
+                    let has_different_types = raw_sheet
+                        .data()
+                        .get(1)
+                        .map(|second_row| {
+                            // If second row has any non-string values, first row is likely headers
+                            second_row
+                                .iter()
+                                .any(|cell| !matches!(cell, CellValue::String(_)))
+                        })
+                        .unwrap_or(false);
 
-                        // Also check if the column count matches
-                        let column_count_matches = first_row.len() == new_cols.len();
+                    // If new sheet has column names, also check if column count matches
+                    let column_count_matches = if let Some(new_cols) = sheet.column_names() {
+                        first_row.len() == new_cols.len()
+                    } else {
+                        false
+                    };
 
-                        // Consider it has headers if:
-                        // - All first row values are strings AND
-                        // - Either second row has different types OR column count matches expected
-                        all_strings && (has_different_types || column_count_matches)
-                    })
-                    .unwrap_or(false)
-            } else {
-                // If new data has no column names, existing file shouldn't have headers either
-                false
-            };
+                    // Consider it has headers if:
+                    // - All first row values are strings AND
+                    // - Either second row has different types OR (if new sheet has columns) column count matches
+                    all_strings && (has_different_types || column_count_matches)
+                })
+                .unwrap_or(false);
 
             // Now reload with proper header handling
             let mut existing_sheet = if has_headers {

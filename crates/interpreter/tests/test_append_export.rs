@@ -379,7 +379,7 @@ async fn test_mixed_header_append_error() {
         interp.eval(program).await.unwrap();
     }
 
-    // Try to append headerless data - should work as it detects headers exist
+    // Try to append headerless data - should fail due to header mismatch
     {
         let mut interp = Interpreter::new();
 
