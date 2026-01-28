@@ -478,6 +478,66 @@ pub async fn call_sheet_builtin(
             }
         }
 
+        "sheet_map_lambda" => {
+            if args.len() != 2 {
+                return Some(Err(PipError::runtime(
+                    line,
+                    "sheet_map_lambda() takes exactly 2 arguments (sheet, lambda)",
+                )));
+            }
+            match (&args[0], &args[1]) {
+                (Value::Sheet(_sheet), Value::Lambda { params, body: _ }) => {
+                    if params.len() != 1 {
+                        return Some(Err(PipError::runtime(
+                            line,
+                            "Lambda for sheet_map_lambda must take exactly 1 parameter",
+                        )));
+                    }
+
+                    // We need access to the interpreter to evaluate the lambda
+                    // For now, return an error indicating this needs to be implemented differently
+                    Some(Err(PipError::runtime(
+                        line,
+                        "sheet_map_lambda requires interpreter integration - use method call syntax instead",
+                    )))
+                }
+                _ => Some(Err(PipError::runtime(
+                    line,
+                    "Arguments must be (sheet, lambda)",
+                ))),
+            }
+        }
+
+        "sheet_filter_lambda" => {
+            if args.len() != 2 {
+                return Some(Err(PipError::runtime(
+                    line,
+                    "sheet_filter_lambda() takes exactly 2 arguments (sheet, lambda)",
+                )));
+            }
+            match (&args[0], &args[1]) {
+                (Value::Sheet(_sheet), Value::Lambda { params, body: _ }) => {
+                    if params.len() != 1 {
+                        return Some(Err(PipError::runtime(
+                            line,
+                            "Lambda for sheet_filter_lambda must take exactly 1 parameter",
+                        )));
+                    }
+
+                    // We need access to the interpreter to evaluate the lambda
+                    // For now, return an error indicating this needs to be implemented differently
+                    Some(Err(PipError::runtime(
+                        line,
+                        "sheet_filter_lambda requires interpreter integration - use method call syntax instead",
+                    )))
+                }
+                _ => Some(Err(PipError::runtime(
+                    line,
+                    "Arguments must be (sheet, lambda)",
+                ))),
+            }
+        }
+
         _ => None,
     }
 }

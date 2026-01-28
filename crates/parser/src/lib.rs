@@ -765,4 +765,75 @@ mod tests {
         assert!(query.order_by.is_some());
         assert!(query.limit.is_some());
     }
+
+    // ========================================================================
+    // Lambda expression tests
+    // ========================================================================
+
+    #[test]
+    fn parse_lambda_no_params() {
+        let code = "dim f = || 42";
+        let result = PipParser::parse_str(code);
+        assert!(result.is_ok(), "Parse error: {:?}", result.err());
+        let program = result.unwrap();
+        assert!(matches!(
+            &program.statements[0],
+            Statement::Dim { value, .. }
+            if matches!(value, Expr::Lambda { params, .. } if params.is_empty())
+        ));
+    }
+
+    #[test]
+    fn parse_lambda_one_param() {
+        let code = "dim add_one = |x| x + 1";
+        let result = PipParser::parse_str(code);
+        assert!(result.is_ok(), "Parse error: {:?}", result.err());
+        let program = result.unwrap();
+        assert!(matches!(
+            &program.statements[0],
+            Statement::Dim { value, .. }
+            if matches!(value, Expr::Lambda { params, .. } if params.len() == 1 && params[0] == "x")
+        ));
+    }
+
+    #[test]
+    fn parse_lambda_multiple_params() {
+        let code = "dim multiply = |a, b| a * b";
+        let result = PipParser::parse_str(code);
+        assert!(result.is_ok(), "Parse error: {:?}", result.err());
+        let program = result.unwrap();
+        assert!(matches!(
+            &program.statements[0],
+            Statement::Dim { value, .. }
+            if matches!(value, Expr::Lambda { params, .. }
+                if params.len() == 2 && params[0] == "a" && params[1] == "b")
+        ));
+    }
+
+    #[test]
+    fn parse_lambda_complex_body() {
+        let code = "dim complex = |x| x > 5 and x < 10";
+        let result = PipParser::parse_str(code);
+        assert!(result.is_ok(), "Parse error: {:?}", result.err());
+        let program = result.unwrap();
+        assert!(matches!(
+            &program.statements[0],
+            Statement::Dim { value, .. }
+            if matches!(value, Expr::Lambda { .. })
+        ));
+    }
+
+    #[test]
+    fn parse_method_call_with_lambda() {
+        let code = "result = data.map(|x| x * 2)";
+        let result = PipParser::parse_str(code);
+        assert!(result.is_ok(), "Parse error: {:?}", result.err());
+        let program = result.unwrap();
+        assert!(matches!(
+            &program.statements[0],
+            Statement::Assignment { value, .. }
+            if matches!(value, Expr::MethodCall { method, args, .. }
+                if method == "map" && args.len() == 1)
+        ));
+    }
 }

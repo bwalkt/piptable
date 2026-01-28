@@ -999,6 +999,11 @@ impl Interpreter {
                 Ok(sheet_conversions::sheet_to_value(&result))
             }
 
+            Expr::Lambda { params, body } => Ok(Value::Lambda {
+                params: params.clone(),
+                body: (**body).clone(),
+            }),
+
             Expr::Ask { .. } => {
                 // TODO: Implement LLM integration
                 Err(PipError::runtime(0, "Ask expression not yet implemented"))
@@ -2153,6 +2158,56 @@ impl Interpreter {
     pub fn http(&self) -> &HttpClient {
         &self.http
     }
+
+    /// Apply a lambda expression with given arguments
+    async fn apply_lambda(
+        &mut self,
+        lambda_params: &[String],
+        lambda_body: &Expr,
+        args: &[Value],
+    ) -> PipResult<Value> {
+        // Check argument count
+        if args.len() != lambda_params.len() {
+            return Err(PipError::runtime(
+                0,
+                format!(
+                    "Lambda expects {} arguments, got {}",
+                    lambda_params.len(),
+                    args.len()
+                ),
+            ));
+        }
+
+        // Save current variable values for parameters that might be overwritten
+        let mut saved_vars = Vec::new();
+        for param in lambda_params {
+            let saved_value = self.get_var(param).await;
+            saved_vars.push((param.clone(), saved_value));
+        }
+
+        // Set lambda parameters to argument values
+        for (param, arg) in lambda_params.iter().zip(args.iter()) {
+            self.set_var(param, arg.clone()).await;
+        }
+
+        // Evaluate lambda body
+        let result = self.eval_expr(lambda_body).await;
+
+        // Restore original variable values
+        for (param, saved_value) in saved_vars {
+            if let Some(val) = saved_value {
+                self.set_var(&param, val).await;
+            } else {
+                // Remove the variable if it didn't exist before
+                let mut scopes = self.scopes.write().await;
+                if let Some(current_scope) = scopes.last_mut() {
+                    current_scope.remove(&param);
+                }
+            }
+        }
+
+        result
+    }
 }
 
 impl Default for Interpreter {
@@ -2316,6 +2371,110 @@ impl Interpreter {
                     None => Ok(Value::Null),
                 }
             }
+
+            "map" => {
+                if args.len() != 1 {
+                    return Err(PipError::runtime(0, "map() takes exactly 1 argument"));
+                }
+
+                match &args[0] {
+                    Value::Lambda { params, body } => {
+                        if params.len() != 1 {
+                            return Err(PipError::runtime(
+                                0,
+                                "Lambda for map() must take exactly 1 parameter",
+                            ));
+                        }
+
+                        let mut new_sheet = sheet.clone();
+
+                        // Apply lambda to each cell
+                        for row_idx in 0..new_sheet.row_count() {
+                            for col_idx in 0..new_sheet.col_count() {
+                                if let Ok(cell) = new_sheet.get(row_idx, col_idx) {
+                                    let cell_value = sheet_conversions::cell_to_value(cell.clone());
+
+                                    // Apply lambda to the cell value
+                                    match self.apply_lambda(params, body, &[cell_value]).await {
+                                        Ok(result) => {
+                                            // Convert result back to CellValue
+                                            let new_cell =
+                                                sheet_conversions::value_to_cell(&result);
+                                            let _ = new_sheet.set(row_idx, col_idx, new_cell);
+                                        }
+                                        Err(_) => {
+                                            // On error, keep original cell
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
+                        Ok(Value::Sheet(new_sheet))
+                    }
+                    _ => Err(PipError::runtime(0, "map() requires a lambda expression")),
+                }
+            }
+
+            "filter" => {
+                if args.len() != 1 {
+                    return Err(PipError::runtime(0, "filter() takes exactly 1 argument"));
+                }
+
+                match &args[0] {
+                    Value::Lambda { params, body } => {
+                        if params.len() != 1 {
+                            return Err(PipError::runtime(
+                                0,
+                                "Lambda for filter() must take exactly 1 parameter",
+                            ));
+                        }
+
+                        let mut new_sheet = sheet.clone();
+                        let mut rows_to_keep = Vec::new();
+
+                        // Determine which rows to keep
+                        for row_idx in 0..sheet.row_count() {
+                            // Get the whole row as an object or array
+                            if let Some(col_names) = sheet.column_names() {
+                                // Convert row to object
+                                let mut row_obj = std::collections::HashMap::new();
+                                for (col_idx, col_name) in col_names.iter().enumerate() {
+                                    if let Ok(cell) = sheet.get(row_idx, col_idx) {
+                                        row_obj.insert(
+                                            col_name.clone(),
+                                            sheet_conversions::cell_to_value(cell.clone()),
+                                        );
+                                    }
+                                }
+                                let row_value = Value::Object(row_obj);
+
+                                // Apply lambda to the row
+                                match self.apply_lambda(params, body, &[row_value]).await {
+                                    Ok(result) => {
+                                        if result.is_truthy() {
+                                            rows_to_keep.push(row_idx);
+                                        }
+                                    }
+                                    Err(_) => {
+                                        // On error, skip the row
+                                    }
+                                }
+                            }
+                        }
+
+                        // Filter the sheet to keep only selected rows
+                        new_sheet.filter_rows(|row_idx, _row| rows_to_keep.contains(&row_idx));
+
+                        Ok(Value::Sheet(new_sheet))
+                    }
+                    _ => Err(PipError::runtime(
+                        0,
+                        "filter() requires a lambda expression",
+                    )),
+                }
+            }
+
             _ => Err(PipError::runtime(
                 0,
                 format!("Unknown sheet method: {}", method),

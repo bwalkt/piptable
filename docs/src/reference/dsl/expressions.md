@@ -342,6 +342,76 @@ Group expressions to control evaluation order.
 query("SELECT * FROM (" + subquery + ")")
 ```
 
+## Lambda Expressions
+
+Lambda expressions create anonymous functions for functional programming operations.
+
+### Basic Syntax
+
+Lambda expressions use the `|param1, param2, ...| expression` syntax:
+
+```vba
+|x| x * 2              ' Single parameter
+|a, b| a + b            ' Multiple parameters  
+|| 42                   ' No parameters
+|x| x > 0 and x < 100   ' Complex boolean expression
+```
+
+### Assignment to Variables
+
+Lambdas can be stored in variables and used later:
+
+```vba
+dim add_one = |x| x + 1
+dim is_positive = |n| n > 0
+dim multiply = |a, b| a * b
+```
+
+### With Sheet Operations
+
+Lambda expressions are commonly used with sheet transformation methods:
+
+```vba
+' Transform each cell
+dim doubled = data.map(|x| x * 2)
+
+' Filter rows
+dim adults = people.filter(|row| row.age >= 18)
+
+' Complex transformations
+dim processed = sales.map(|row| {
+    ...row,
+    tax: row.amount * 0.08,
+    total: row.amount * 1.08
+})
+```
+
+### Lambda Parameters
+
+Lambdas receive different types of parameters based on the operation:
+
+- **map()**: Receives individual cell values
+- **filter()**: Receives entire row objects (when sheet has named columns)
+- Custom functions: Receive whatever arguments you pass
+
+```vba
+' Cell-level transformation
+numbers.map(|cell| round(cell, 2))
+
+' Row-level filtering  
+data.filter(|row| row.status = "active" and row.score > 50)
+```
+
+### Return Values
+
+The expression after the `|params|` becomes the return value:
+
+```vba
+|x| x * x              ' Returns x squared
+|name| "Hello " + name  ' Returns greeting string
+|row| row.price > 100   ' Returns boolean for filtering
+```
+
 ## See Also
 
 - [Operators](operators.md) - Combining expressions

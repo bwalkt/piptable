@@ -22,6 +22,7 @@ pub fn value_to_string(val: &Value) -> String {
         Value::Table(_) => "[Table]".to_string(),
         Value::Sheet(_) => "[Sheet]".to_string(),
         Value::Function { name, .. } => format!("[Function: {name}]"),
+        Value::Lambda { params, .. } => format!("[Lambda: |{}|]", params.join(", ")),
     }
 }
 

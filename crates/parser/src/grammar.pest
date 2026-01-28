@@ -165,6 +165,7 @@ primary_expr = {
   | async_for_expr
   | parallel_expr
   | await_expr
+  | lambda_expr
   | array_literal
   | object_literal
   | "(" ~ expr ~ ")"
@@ -209,6 +210,8 @@ ask_expr = { "ask" ~ string ~ "from" ~ expr ~ (^"using" ~ (^"model")? ~ string)?
 async_for_expr = { "async" ~ "for" ~ "each" ~ ident ~ "in" ~ expr ~ statement* ~ "end" ~ "async" }
 parallel_expr = { "parallel" ~ expr ~ ("," ~ expr)* ~ "end" ~ "parallel" }
 await_expr = { "await" ~ expr }
+lambda_expr = { "|" ~ lambda_params? ~ "|" ~ expr }
+lambda_params = { ident ~ ("," ~ ident)* }
 
 // =============================================================================
 // SQL Query

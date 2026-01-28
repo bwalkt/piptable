@@ -6,6 +6,8 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::Arc;
 
+use crate::ast::Expr;
+
 /// Runtime value in piptable.
 #[derive(Debug, Clone)]
 pub enum Value {
@@ -42,6 +44,9 @@ pub enum Value {
         params: Vec<String>,
         is_async: bool,
     },
+
+    /// Lambda expression (anonymous function).
+    Lambda { params: Vec<String>, body: Expr },
 }
 
 impl Value {
@@ -65,6 +70,7 @@ impl Value {
             Self::Table(t) => !t.is_empty(),
             Self::Sheet(s) => s.row_count() > 0,
             Self::Function { .. } => true,
+            Self::Lambda { .. } => true,
         }
     }
 
@@ -82,6 +88,7 @@ impl Value {
             Self::Table(_) => "Table",
             Self::Sheet(_) => "Sheet",
             Self::Function { .. } => "Function",
+            Self::Lambda { .. } => "Lambda",
         }
     }
 
@@ -245,6 +252,9 @@ impl Serialize for Value {
             Self::Function { name, .. } => Err(serde::ser::Error::custom(format!(
                 "Function '{name}' is not JSON-serializable"
             ))),
+            Self::Lambda { .. } => Err(serde::ser::Error::custom(
+                "Lambda expressions are not JSON-serializable",
+            )),
         }
     }
 }
@@ -317,6 +327,7 @@ impl Value {
             Self::Table(_) => Err("Table values are not JSON-serializable"),
             Self::Sheet(_) => Err("Sheet values are not JSON-serializable"),
             Self::Function { .. } => Err("Function values are not JSON-serializable"),
+            Self::Lambda { .. } => Err("Lambda expressions are not JSON-serializable"),
         }
     }
 }
