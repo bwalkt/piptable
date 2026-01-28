@@ -170,7 +170,7 @@ fn append_sheet_data(existing: &mut Sheet, new_data: &Sheet) -> Result<(), Strin
                 (None, Some(_)) => {
                     // Existing is empty, will take shape from new data - this is fine
                 }
-                (Some(_), None) | (None, None) => {
+                (Some(_) | None, None) => {
                     // New data is empty or both are empty - nothing to append, but that's ok
                 }
             }
