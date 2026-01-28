@@ -201,6 +201,101 @@ async fn test_tsv_append_mode() {
     assert_eq!(lines.len(), 4); // header + 3 data rows
 }
 
+#[test]
+fn test_append_distinct_mode() {
+    use piptable_interpreter::io::{export_sheet_with_mode, ExportMode};
+
+    let dir = tempdir().unwrap();
+    let csv_path = dir.path().join("distinct_test.csv");
+
+    // Create initial CSV with some data
+    let initial_data = "id,name,value\n1,Alice,100\n2,Bob,200\n3,Charlie,300";
+    fs::write(&csv_path, initial_data).unwrap();
+
+    // Create new sheet with overlapping and new data
+    let mut new_sheet = Sheet::new();
+    new_sheet.row_append(vec!["id", "name", "value"]).unwrap();
+    new_sheet
+        .row_append(vec!["2", "Bob Updated", "250"])
+        .unwrap(); // Duplicate ID (should be skipped)
+    new_sheet.row_append(vec!["4", "David", "400"]).unwrap(); // New ID (should be added)
+    new_sheet
+        .row_append(vec!["1", "Alice Updated", "150"])
+        .unwrap(); // Duplicate ID (should be skipped)
+    new_sheet.row_append(vec!["5", "Eve", "500"]).unwrap(); // New ID (should be added)
+    new_sheet.name_columns_by_row(0).unwrap();
+
+    // Append with distinct mode (key column 0 = id)
+    export_sheet_with_mode(
+        &new_sheet,
+        &csv_path.display().to_string(),
+        ExportMode::AppendDistinct {
+            key_column: Some(0),
+        },
+    )
+    .unwrap();
+
+    // Read result and verify
+    let content = fs::read_to_string(&csv_path).unwrap();
+    let lines: Vec<_> = content.lines().collect();
+
+    // Should have header + 3 original + 2 new = 6 rows
+    assert_eq!(lines.len(), 6);
+    assert!(content.contains("1,Alice,100")); // Original Alice
+    assert!(content.contains("2,Bob,200")); // Original Bob
+    assert!(content.contains("4,David,400")); // New David
+    assert!(content.contains("5,Eve,500")); // New Eve
+    assert!(!content.contains("Bob Updated")); // Should not have updated Bob
+    assert!(!content.contains("Alice Updated")); // Should not have updated Alice
+}
+
+#[test]
+fn test_append_or_update_mode() {
+    use piptable_interpreter::io::{export_sheet_with_mode, ExportMode};
+
+    let dir = tempdir().unwrap();
+    let csv_path = dir.path().join("update_test.csv");
+
+    // Create initial CSV with some data
+    let initial_data = "id,name,value\n1,Alice,100\n2,Bob,200\n3,Charlie,300";
+    fs::write(&csv_path, initial_data).unwrap();
+
+    // Create new sheet with overlapping and new data
+    let mut new_sheet = Sheet::new();
+    new_sheet.row_append(vec!["id", "name", "value"]).unwrap();
+    new_sheet
+        .row_append(vec!["2", "Bob Updated", "250"])
+        .unwrap(); // Update existing
+    new_sheet.row_append(vec!["4", "David", "400"]).unwrap(); // New row
+    new_sheet
+        .row_append(vec!["1", "Alice Updated", "150"])
+        .unwrap(); // Update existing
+    new_sheet.name_columns_by_row(0).unwrap();
+
+    // Append with update mode (key column 0 = id)
+    export_sheet_with_mode(
+        &new_sheet,
+        &csv_path.display().to_string(),
+        ExportMode::AppendOrUpdate {
+            key_column: Some(0),
+        },
+    )
+    .unwrap();
+
+    // Read result and verify
+    let content = fs::read_to_string(&csv_path).unwrap();
+    let lines: Vec<_> = content.lines().collect();
+
+    // Should have header + 3 original + 1 new = 5 rows (updates don't add rows)
+    assert_eq!(lines.len(), 5);
+    assert!(content.contains("1,Alice Updated,150")); // Updated Alice
+    assert!(content.contains("2,Bob Updated,250")); // Updated Bob
+    assert!(content.contains("3,Charlie,300")); // Unchanged Charlie
+    assert!(content.contains("4,David,400")); // New David
+    assert!(!content.contains("Alice,100")); // Should not have original Alice
+    assert!(!content.contains("Bob,200")); // Should not have original Bob
+}
+
 #[tokio::test]
 async fn test_json_append_mode() {
     let dir = tempdir().unwrap();

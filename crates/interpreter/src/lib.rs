@@ -11,7 +11,7 @@
 
 mod builtins;
 mod converters;
-mod io;
+pub mod io;
 mod sheet_conversions;
 mod sql_builder;
 
@@ -506,7 +506,12 @@ impl Interpreter {
                     .map_err(|e| PipError::Export(format!("Line {}: {}", line, e)))?;
 
                 // Determine format from file extension and export
-                io::export_sheet_with_mode(&sheet, &path, append)
+                let mode = if append {
+                    io::ExportMode::Append
+                } else {
+                    io::ExportMode::Overwrite
+                };
+                io::export_sheet_with_mode(&sheet, &path, mode)
                     .map_err(|e| PipError::Export(format!("Line {}: {}", line, e)))?;
 
                 Ok(Value::Null)
