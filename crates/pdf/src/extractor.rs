@@ -99,7 +99,9 @@ impl PdfExtractor {
 
         if tables.is_empty() {
             if content_needs_ocr && !ocr_available {
-                Err(PdfError::OcrSetupError(
+                // Use OcrError (not OcrSetupError) since this is about user configuration,
+                // not missing dependencies - OCR is simply disabled
+                Err(PdfError::OcrError(
                     "No tables found. This appears to be a scanned PDF - enable OCR for better results".to_string()
                 ))
             } else {
