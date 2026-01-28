@@ -13,8 +13,8 @@ thiserror = { workspace = true }
 anyhow = { workspace = true }
 
 # PDF processing
-pdf-extract = "0.7"
-lopdf = "0.34"
+pdf-extract = "0.10"
+lopdf = "0.39"
 
 # OCR support (disabled for Phase 1)
 # tesseract = "0.15"
