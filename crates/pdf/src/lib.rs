@@ -50,16 +50,8 @@ fn convert_table_to_sheet(table: TableRegion) -> Sheet {
         let _ = sheet.row_append(row_values);
     }
     
-    // Try to detect and set column headers
-    if !table.rows.is_empty() {
-        let first_row = &table.rows[0];
-        let detector = detector::TableDetector::default();
-        
-        if detector.is_likely_header(first_row) {
-            // TODO: Add column naming support in future phase
-            // Would need to remove first row and set as column names
-        }
-    }
+    // TODO: Add column header detection support in future phase
+    // Would need to detect headers, remove first row, and set as column names
     
     sheet
 }
