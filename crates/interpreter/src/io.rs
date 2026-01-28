@@ -164,10 +164,13 @@ fn append_sheet_data(existing: &mut Sheet, new_data: &Sheet) -> Result<(), Strin
                         e, n
                     ));
                 }
+                (Some(_), Some(_)) => {
+                    // Column counts match - this is fine, proceed with append
+                }
                 (None, Some(_)) => {
                     // Existing is empty, will take shape from new data - this is fine
                 }
-                (Some(_) | None, None) => {
+                (Some(_), None) | (None, None) => {
                     // New data is empty or both are empty - nothing to append, but that's ok
                 }
             }
