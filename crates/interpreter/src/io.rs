@@ -34,20 +34,22 @@ pub fn export_sheet_with_mode(sheet: &Sheet, path: &str, append: bool) -> Result
                         let all_strings = first_row
                             .iter()
                             .all(|cell| matches!(cell, CellValue::String(_)));
-                        
+
                         // If we have a second row, check if it has different types (indicates headers)
                         let has_different_types = raw_sheet
                             .data()
                             .get(1)
                             .map(|second_row| {
                                 // If second row has any non-string values, first row is likely headers
-                                second_row.iter().any(|cell| !matches!(cell, CellValue::String(_)))
+                                second_row
+                                    .iter()
+                                    .any(|cell| !matches!(cell, CellValue::String(_)))
                             })
                             .unwrap_or(false);
-                        
+
                         // Also check if the column count matches
                         let column_count_matches = first_row.len() == new_cols.len();
-                        
+
                         // Consider it has headers if:
                         // - All first row values are strings AND
                         // - Either second row has different types OR column count matches expected
@@ -153,7 +155,7 @@ fn append_sheet_data(existing: &mut Sheet, new_data: &Sheet) -> Result<(), Strin
             // Neither has column names - check column count
             let existing_cols = existing.data().first().map(|r| r.len());
             let new_cols = new_data.data().first().map(|r| r.len());
-            
+
             match (existing_cols, new_cols) {
                 (Some(e), Some(n)) if e != n => {
                     return Err(format!(
@@ -164,7 +166,7 @@ fn append_sheet_data(existing: &mut Sheet, new_data: &Sheet) -> Result<(), Strin
                 (None, Some(_)) => {
                     // Existing is empty, will take shape from new data - this is fine
                 }
-                (Some(_), None) | (None, None) => {
+                (Some(_) | None, None) => {
                     // New data is empty or both are empty - nothing to append, but that's ok
                 }
             }

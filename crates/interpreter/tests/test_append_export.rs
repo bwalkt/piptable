@@ -490,19 +490,17 @@ async fn test_string_data_header_detection() {
     // Try to append more string data - should work as both are headerless
     {
         let mut interp = Interpreter::new();
-        
-        let append_sheet = Sheet::from_data(vec![
-            vec![
-                CellValue::String("Charlie".to_string()),
-                CellValue::String("Brown".to_string()),
-                CellValue::String("Analyst".to_string()),
-            ],
-        ]);
-        
+
+        let append_sheet = Sheet::from_data(vec![vec![
+            CellValue::String("Charlie".to_string()),
+            CellValue::String("Brown".to_string()),
+            CellValue::String("Analyst".to_string()),
+        ]]);
+
         interp
             .set_var("new_data", piptable_core::Value::Sheet(append_sheet))
             .await;
-        
+
         let script = format!(
             r#"
             export new_data to "{}" append
@@ -537,15 +535,16 @@ async fn test_empty_sheet_append() {
     // Append data to empty file - should work
     {
         let mut interp = Interpreter::new();
-        
-        let data_sheet = Sheet::from_data(vec![
-            vec![CellValue::Int(1), CellValue::String("Test".to_string())],
-        ]);
-        
+
+        let data_sheet = Sheet::from_data(vec![vec![
+            CellValue::Int(1),
+            CellValue::String("Test".to_string()),
+        ]]);
+
         interp
             .set_var("data", piptable_core::Value::Sheet(data_sheet))
             .await;
-        
+
         let script = format!(
             r#"
             export data to "{}" append
