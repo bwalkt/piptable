@@ -14,6 +14,7 @@ pub fn export_sheet_with_mode(sheet: &Sheet, path: &str, append: bool) -> Result
         // If file exists, load it first and append new data
         if std::path::Path::new(path).exists() {
             // First, load the file without assuming headers to detect if headers exist
+            // TODO: Consider optimizing to avoid double I/O for large files by transforming in-place
             let raw_sheet = if path_lower.ends_with(".tsv") {
                 Sheet::from_csv_with_options(path, CsvOptions::tsv())
                     .map_err(|e| format!("Failed to load existing TSV: {}", e))?
