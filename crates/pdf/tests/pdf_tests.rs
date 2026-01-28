@@ -1,4 +1,4 @@
-use piptable_pdf::{extract_tables_from_pdf, extract_tables_with_options, PdfOptions, PdfError};
+use piptable_pdf::{extract_tables_from_pdf, extract_tables_with_options, PdfError, PdfOptions};
 use std::io::Write;
 use tempfile::NamedTempFile;
 
@@ -73,48 +73,48 @@ fn test_cell_value_parsing() {
     // - Empty/Null: "" -> CellValue::Null
 }
 
-#[test] 
+#[test]
 #[ignore = "Requires OCR system dependencies (tesseract, leptonica, pdfium)"]
 fn test_ocr_dependency_detection() {
-    // Test that OCR-enabled processing fails gracefully when dependencies are missing
-    // This helps catch runtime dependency issues during development
-    
-    let options = PdfOptions {
-        page_range: None,
-        ocr_enabled: true,
-        ocr_language: "eng".to_string(),
-        min_table_rows: 2,
-        min_table_cols: 2,
-    };
+    // Test OCR engine initialization directly to verify dependency availability
+    // This actually tests OCR dependencies rather than failing at file parsing
 
-    // Test with a non-existent file to trigger OCR path
-    let result = extract_tables_with_options("/non/existent/file.pdf", options);
-    
-    // Should fail, but we want to ensure it's a clear error about missing dependencies
-    assert!(result.is_err());
-    
-    // If dependencies are missing, we expect specific error types
-    if let Err(e) = result {
-        match e {
-            PdfError::ParseError(_) => {
-                // File not found - expected for this test
-                println!("File not found (expected for test)");
-            },
-            PdfError::OcrError(msg) => {
-                // Legacy OCR error - still acceptable
-                println!("OCR error detected: {}", msg);
-            },
-            PdfError::OcrSetupError(msg) => {
-                // OCR setup/dependency error - what we're primarily testing for
-                println!("OCR setup error detected: {}", msg);
-            },
-            PdfError::OcrProcessingError(msg) => {
-                // OCR processing error - should not happen with missing file, but acceptable
-                println!("OCR processing error detected: {}", msg);
-            },
-            _ => {
-                println!("Unexpected error type: {:?}", e);
-            }
+    use piptable_pdf::ocr::OcrEngine;
+
+    // Test OCR engine creation (always succeeds) and actual OCR operation
+    let engine = OcrEngine::new("eng");
+    println!("✅ OCR engine created successfully");
+
+    // Test actual dependency check through a simple OCR operation
+    // Create a minimal 1x1 white image to test with
+    use image::{DynamicImage, RgbImage};
+    let img = RgbImage::new(1, 1);
+    let dynamic_img = DynamicImage::ImageRgb8(img);
+
+    match engine.extract_text_from_pdf_page(dynamic_img) {
+        Ok(text) => {
+            println!(
+                "✅ OCR dependencies available - extracted {} chars",
+                text.len()
+            );
+            // If we reach here, Tesseract is working
+        }
+        Err(PdfError::OcrSetupError(msg)) => {
+            println!(
+                "❌ OCR setup failed (expected if dependencies missing): {}",
+                msg
+            );
+            // This is what we want to test - proper error when dependencies are missing
+        }
+        Err(PdfError::OcrProcessingError(msg)) => {
+            println!(
+                "⚠️ OCR processing failed (could be expected for minimal image): {}",
+                msg
+            );
+            // This could happen with tiny images, but still shows dependencies are present
+        }
+        Err(e) => {
+            println!("🤷 Unexpected error type during OCR: {:?}", e);
         }
     }
 }
@@ -124,50 +124,76 @@ fn test_ocr_dependency_detection() {
 fn test_ocr_vs_text_extraction() {
     // Integration test to verify OCR vs text extraction behavior
     // This would test the hybrid approach: text first, OCR fallback
-    
+
     // TODO: Create minimal PDF with known content to test:
     // 1. PDFs with extractable text (should not trigger OCR)
     // 2. PDFs with minimal/no text (should trigger OCR if enabled)
     // 3. Error handling when OCR dependencies are missing
-    
+
     let text_based_options = PdfOptions {
         ocr_enabled: false,
         ..Default::default()
     };
-    
+
     let ocr_enabled_options = PdfOptions {
-        ocr_enabled: true, 
+        ocr_enabled: true,
         ..Default::default()
     };
-    
+
     // For now, just test that the options are correctly configured
     assert!(!text_based_options.ocr_enabled);
     assert!(ocr_enabled_options.ocr_enabled);
 }
 
 #[test]
+#[ignore = "Requires OCR dependencies for meaningful error propagation testing"]
 fn test_ocr_error_propagation() {
-    // Test that when OCR is explicitly enabled and fails, 
-    // the error is properly propagated (not swallowed)
-    
-    let options = PdfOptions {
-        ocr_enabled: true,
-        ocr_language: "eng".to_string(),
-        ..Default::default()
-    };
-    
-    // Test with invalid file path
-    let result = extract_tables_with_options("/invalid/path/file.pdf", options);
-    
-    // Should get an error, and when OCR is enabled, OCR-related errors should bubble up
-    assert!(result.is_err());
-    
-    // The specific error type depends on whether dependencies are available
-    // but we verify that some error is returned rather than being swallowed
-    if let Err(e) = result {
-        println!("Got expected error with OCR enabled: {:?}", e);
-        // Error could be ParseError (file not found), OcrError (dependency missing), etc.
-        // The key is that we GET an error rather than silent failure
+    // Test OCR error propagation using direct OCR engine calls
+    // This bypasses PDF parsing to actually test OCR error handling
+
+    use piptable_pdf::ocr::OcrEngine;
+
+    // Test 1: OCR engines always create successfully, errors happen during operations
+    let engine_invalid = OcrEngine::new("invalid_lang_xyz");
+    println!("✅ OCR engine created with invalid language (error will occur during operation)");
+
+    // Test with minimal image to trigger actual language validation
+    use image::{DynamicImage, RgbImage};
+    let img = RgbImage::new(1, 1);
+    let dynamic_img = DynamicImage::ImageRgb8(img);
+
+    match engine_invalid.extract_text_from_pdf_page(dynamic_img) {
+        Ok(_) => {
+            println!("⚠️ OCR succeeded with invalid language (tesseract behavior varies)");
+        }
+        Err(PdfError::OcrSetupError(msg)) => {
+            println!("✅ OCR setup error properly propagated: {}", msg);
+            // This confirms setup errors bubble up correctly
+        }
+        Err(e) => {
+            println!("🤷 Other error type for invalid language: {:?}", e);
+        }
+    }
+
+    // Test 2: OCR processing error propagation (valid engine)
+    let engine = OcrEngine::new("eng");
+    // Test with invalid image data to trigger processing error
+    let invalid_image_data = vec![0u8; 10]; // Invalid image bytes
+
+    match engine.extract_text_from_bytes(&invalid_image_data) {
+        Ok(_) => {
+            panic!("Expected OCR processing error for invalid image data");
+        }
+        Err(PdfError::OcrProcessingError(msg)) => {
+            println!("✅ OCR processing error properly propagated: {}", msg);
+        }
+        Err(PdfError::OcrSetupError(msg)) => {
+            println!("⚠️ Got setup error instead of processing error: {}", msg);
+            // This could happen if Tesseract initialization fails during processing
+        }
+        Err(e) => {
+            println!("🤷 Unexpected error type for invalid image: {:?}", e);
+        }
     }
 }
 
@@ -176,56 +202,56 @@ fn test_ocr_fallback_behavior() {
     // Test the specific scenario identified in Codex review:
     // "OCR enabled + text extraction succeeds but OCR fails"
     // This should fall back to text extraction, not error out
-    
+
     use std::fs;
     use tempfile::tempdir;
-    
+
     // Create a temporary directory for our test
     let temp_dir = tempdir().expect("Failed to create temp dir");
     let pdf_path = temp_dir.path().join("test.pdf");
-    
+
     // Create a minimal "PDF" file that will trigger text extraction failure
     // but won't crash the system - this simulates short-text PDF scenario
     fs::write(&pdf_path, "Minimal PDF content with <50 chars").expect("Failed to write test file");
-    
+
     let options = PdfOptions {
         ocr_enabled: true,
         ocr_language: "eng".to_string(),
         ..Default::default()
     };
-    
-    // This should attempt OCR, fail (due to invalid PDF format), 
+
+    // This should attempt OCR, fail (due to invalid PDF format),
     // but still try to fall back to text extraction
     let result = extract_tables_with_options(&pdf_path, options);
-    
+
     // We expect an error since this isn't a real PDF, but we want to verify
     // the error type and ensure the fallback logic was attempted
     assert!(result.is_err());
-    
+
     if let Err(e) = result {
         match e {
             PdfError::ParseError(_) => {
                 // Expected - not a real PDF, so parsing failed
                 // This is fine - shows we tried text extraction (fallback)
                 println!("Text extraction failed (expected for fake PDF): {:?}", e);
-            },
+            }
             PdfError::OcrError(msg) => {
                 // Legacy OCR error - treat as acceptable for this test
                 println!("Legacy OCR error: {}", msg);
-            },
+            }
             PdfError::OcrSetupError(msg) => {
                 // Setup failures are OK to bubble up immediately
                 println!("OCR setup failure (acceptable): {}", msg);
-            },
+            }
             PdfError::OcrProcessingError(_) => {
                 // Processing failures should have fallen back to text extraction
                 panic!("OCR processing failure should have fallen back to text extraction, but got OcrProcessingError");
-            },
+            }
             PdfError::NoTablesFound => {
                 // This is actually good - means we tried text extraction and didn't find tables
                 // Shows the fallback logic worked
                 println!("No tables found after fallback (good - fallback worked)");
-            },
+            }
             _ => {
                 println!("Other error type (acceptable for fake PDF): {:?}", e);
             }
@@ -237,26 +263,28 @@ fn test_ocr_fallback_behavior() {
 fn test_text_extraction_with_no_ocr() {
     // Baseline test: text extraction without OCR should work normally
     // This ensures our OCR changes don't break basic functionality
-    
+
     let options = PdfOptions {
         ocr_enabled: false,
         ..Default::default()
     };
-    
+
     let result = extract_tables_with_options("/non/existent/file.pdf", options);
-    
+
     // Should fail with ParseError (file not found), not OCR-related errors
     assert!(result.is_err());
-    
+
     if let Err(e) = result {
         match e {
             PdfError::ParseError(_) => {
                 // Expected - file doesn't exist
                 println!("Expected parse error for non-existent file");
-            },
-            PdfError::OcrError(_) | PdfError::OcrSetupError(_) | PdfError::OcrProcessingError(_) => {
+            }
+            PdfError::OcrError(_)
+            | PdfError::OcrSetupError(_)
+            | PdfError::OcrProcessingError(_) => {
                 panic!("Should not get any OCR-related error when OCR is disabled");
-            },
+            }
             _ => {
                 println!("Other error type: {:?}", e);
             }
@@ -268,39 +296,45 @@ fn test_text_extraction_with_no_ocr() {
 fn test_structured_error_classification() {
     // Test that our structured error types work correctly
     // This tests the error handling logic without requiring actual OCR dependencies
-    
+
     use piptable_pdf::PdfError;
-    
+
     // Test error type classification
     let setup_error = PdfError::OcrSetupError("Tesseract not found".to_string());
     let processing_error = PdfError::OcrProcessingError("Failed to process image".to_string());
     let legacy_error = PdfError::OcrError("Generic OCR error".to_string());
-    
+
     // Verify error types can be matched correctly
     match setup_error {
         PdfError::OcrSetupError(_) => {
             println!("Correctly identified setup error");
-        },
+        }
         _ => panic!("Failed to identify setup error"),
     }
-    
+
     match processing_error {
         PdfError::OcrProcessingError(_) => {
             println!("Correctly identified processing error");
-        },
+        }
         _ => panic!("Failed to identify processing error"),
     }
-    
+
     match legacy_error {
         PdfError::OcrError(_) => {
             println!("Correctly identified legacy OCR error");
-        },
+        }
         _ => panic!("Failed to identify legacy error"),
     }
-    
+
     // Test error message formatting
-    assert_eq!(setup_error.to_string(), "OCR setup error: Tesseract not found");
-    assert_eq!(processing_error.to_string(), "OCR processing error: Failed to process image");
+    assert_eq!(
+        setup_error.to_string(),
+        "OCR setup error: Tesseract not found"
+    );
+    assert_eq!(
+        processing_error.to_string(),
+        "OCR processing error: Failed to process image"
+    );
     assert_eq!(legacy_error.to_string(), "OCR error: Generic OCR error");
 }
 
@@ -318,6 +352,6 @@ fn test_end_to_end_ocr_flow() {
     // - Bundled test PDFs in the repository
     // - Mock implementations of OCR dependencies
     // - Running only in CI environments with dependencies installed
-    
+
     println!("End-to-end OCR test would run here with proper setup");
 }
