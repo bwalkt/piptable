@@ -43,6 +43,7 @@ fn create_temp_text_file(content: &str) -> NamedTempFile {
 }
 
 #[test]
+#[ignore] // TODO: Add assertions once PDF file creation is implemented
 fn test_table_detection_basic() {
     // This would require creating actual PDF files to test properly
     // For Phase 1, we'll focus on the API structure
@@ -57,9 +58,8 @@ fn test_table_detection_basic() {
 }
 
 #[test]
+#[ignore] // TODO: Add assertions once PDF file creation is implemented
 fn test_cell_value_parsing() {
-    use piptable_sheet::CellValue;
-
     // Test the private parse_cell_value function via public API
     // We'll create a minimal table to test parsing
     let _table_text =

@@ -127,14 +127,23 @@ impl TableDetector {
 
     fn parse_row(&self, line: &str) -> Option<Vec<String>> {
         // Split by column separators
-        let parts: Vec<&str> = COLUMN_SEPARATOR
+        let mut parts: Vec<String> = COLUMN_SEPARATOR
             .split(line)
-            .map(|s| s.trim())
-            .filter(|s| !s.is_empty())
+            .map(|s| s.trim().to_string())
             .collect();
 
+        // Drop leading/trailing empty cells, but keep interior empties for alignment
+        #[allow(clippy::unnecessary_map_or)]
+        while parts.first().map_or(false, |s| s.is_empty()) {
+            parts.remove(0);
+        }
+        #[allow(clippy::unnecessary_map_or)]
+        while parts.last().map_or(false, |s| s.is_empty()) {
+            parts.pop();
+        }
+
         if parts.len() >= self.min_cols {
-            Some(parts.iter().map(|s| s.to_string()).collect())
+            Some(parts)
         } else {
             None
         }

@@ -69,7 +69,12 @@ impl PdfExtractor {
     }
 
     fn extract_text_from_pdf(&self, path: &Path) -> Result<String> {
-        // Use pdf-extract for text extraction
+        // Use lopdf when a page range is requested, so the range is honored
+        if self.options.page_range.is_some() {
+            return self.extract_text_with_lopdf(path);
+        }
+
+        // Use pdf-extract for full-document extraction
         match extract_text(path) {
             Ok(text) => Ok(text),
             Err(e) => {
@@ -85,9 +90,23 @@ impl PdfExtractor {
             .map_err(|e| PdfError::ParseError(format!("Failed to load PDF: {}", e)))?;
 
         let mut all_text = String::new();
+        let mut any_page_extracted = false;
+        let mut last_error: Option<String> = None;
         let pages = doc.get_pages();
 
         let (start, end) = if let Some((s, e)) = self.options.page_range {
+            // Validate page range
+            if s > e {
+                return Err(PdfError::InvalidPageRange(format!(
+                    "Start page {} is greater than end page {}",
+                    s, e
+                )));
+            }
+            if s < 1 {
+                return Err(PdfError::InvalidPageRange(
+                    "Page numbers must be >= 1".to_string(),
+                ));
+            }
             (s.max(1), e.min(pages.len()))
         } else {
             (1, pages.len())
@@ -96,10 +115,29 @@ impl PdfExtractor {
         for page_num in start..=end {
             // Extract text from page using lopdf
             // lopdf expects page numbers directly
-            if let Ok(content) = doc.extract_text(&[page_num as u32]) {
-                all_text.push_str(&content);
-                all_text.push('\n');
+            match doc.extract_text(&[page_num as u32]) {
+                Ok(content) => {
+                    any_page_extracted = true;
+                    all_text.push_str(&content);
+                    all_text.push('\n');
+                }
+                Err(e) => {
+                    last_error = Some(e.to_string());
+                    tracing::warn!("lopdf extract_text failed on page {}: {}", page_num, e);
+                }
             }
+        }
+
+        // If no pages were successfully extracted, return an error
+        if !any_page_extracted {
+            let error_suffix = last_error
+                .as_ref()
+                .map(|e| format!(": {}", e))
+                .unwrap_or_default();
+            return Err(PdfError::ParseError(format!(
+                "Failed to extract text from any page{}",
+                error_suffix
+            )));
         }
 
         Ok(all_text)
