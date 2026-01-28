@@ -107,7 +107,14 @@ impl PdfExtractor {
                     "Page numbers must be >= 1".to_string(),
                 ));
             }
-            (s.max(1), e.min(pages.len()))
+            let clamped_end = e.min(pages.len());
+            if s > clamped_end {
+                return Err(PdfError::InvalidPageRange(format!(
+                    "Start page {} exceeds document length of {} pages",
+                    s, pages.len()
+                )));
+            }
+            (s, clamped_end)
         } else {
             (1, pages.len())
         };
