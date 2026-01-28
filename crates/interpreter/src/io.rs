@@ -5,6 +5,26 @@ use piptable_sheet::{CellValue, CsvOptions, Sheet, XlsxReadOptions};
 use std::collections::HashMap;
 use std::path::Path;
 
+/// Convert a CellValue to a serde_json Value
+fn cell_to_json_value(cell: CellValue) -> serde_json::Value {
+    use serde_json::Value as JsonValue;
+    match cell {
+        CellValue::Null => JsonValue::Null,
+        CellValue::Bool(b) => JsonValue::Bool(b),
+        CellValue::Int(i) => JsonValue::Number(i.into()),
+        CellValue::Float(f) => {
+            if f.is_finite() {
+                JsonValue::Number(
+                    serde_json::Number::from_f64(f).unwrap_or_else(|| serde_json::Number::from(0)),
+                )
+            } else {
+                JsonValue::Null // NaN and Infinity become null
+            }
+        }
+        CellValue::String(s) => JsonValue::String(s),
+    }
+}
+
 /// Export a sheet to a file with optional append mode.
 pub fn export_sheet_with_mode(sheet: &Sheet, path: &str, append: bool) -> Result<(), String> {
     let path_lower = path.to_lowercase();
@@ -95,9 +115,73 @@ pub fn export_sheet_with_mode(sheet: &Sheet, path: &str, append: bool) -> Result
                     .map_err(|e| format!("Failed to export CSV: {}", e))
             }
         }
+    } else if append && path_lower.ends_with(".json") {
+        // JSON append mode - need to load entire array, append, and save
+        if std::path::Path::new(path).exists() {
+            // Load existing JSON file
+            let mut existing_sheet = import_sheet(path, None, false)
+                .map_err(|e| format!("Failed to load existing JSON: {}", e))?;
+
+            // Append new data to existing sheet
+            append_sheet_data(&mut existing_sheet, sheet)
+                .map_err(|e| format!("Failed to append data: {}", e))?;
+
+            // Save the combined sheet
+            existing_sheet
+                .save_as_json(path)
+                .map_err(|e| format!("Failed to export JSON: {}", e))
+        } else {
+            // File doesn't exist, just save normally
+            sheet
+                .save_as_json(path)
+                .map_err(|e| format!("Failed to export JSON: {}", e))
+        }
+    } else if append && path_lower.ends_with(".jsonl") {
+        // JSONL append mode - each line is a separate JSON object
+        use std::fs::OpenOptions;
+        use std::io::Write;
+
+        let mut file = OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(path)
+            .map_err(|e| format!("Failed to open JSONL file for append: {}", e))?;
+
+        // Convert sheet to records and append each as a JSON line
+        let records = sheet
+            .to_records()
+            .ok_or("Columns must be named to export as JSONL")?;
+
+        // Check if first row is a header that matches column names
+        let skip_header = if let Some(names) = sheet.column_names() {
+            sheet.data().first().is_some_and(|first_row| {
+                names.iter().enumerate().all(|(idx, name)| {
+                    first_row
+                        .get(idx)
+                        .map(|cell| cell.as_str() == name.as_str())
+                        .unwrap_or(false)
+                })
+            })
+        } else {
+            false
+        };
+
+        let start_idx = if skip_header { 1 } else { 0 };
+        for record in records.into_iter().skip(start_idx) {
+            let json_obj: std::collections::HashMap<String, serde_json::Value> = record
+                .into_iter()
+                .map(|(k, v)| (k, cell_to_json_value(v)))
+                .collect();
+
+            serde_json::to_writer(&mut file, &json_obj)
+                .map_err(|e| format!("Failed to serialize record to JSON: {}", e))?;
+            writeln!(file).map_err(|e| format!("Failed to write to JSONL file: {}", e))?;
+        }
+
+        Ok(())
     } else if append {
         // Append mode not supported for other formats yet
-        Err("Append mode is only supported for CSV and TSV files".to_string())
+        Err("Append mode is only supported for CSV, TSV, JSON, and JSONL files".to_string())
     } else {
         // Normal export without append
         if path_lower.ends_with(".csv") {

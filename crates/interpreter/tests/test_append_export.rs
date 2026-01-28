@@ -1,6 +1,7 @@
 use piptable_interpreter::Interpreter;
 use piptable_parser::PipParser;
 use piptable_sheet::{CellValue, CsvOptions, Sheet};
+use serde_json::Value as JsonValue;
 use std::fs;
 use tempfile::tempdir;
 
@@ -201,25 +202,54 @@ async fn test_tsv_append_mode() {
 }
 
 #[tokio::test]
-async fn test_append_mode_not_supported_for_json() {
+async fn test_json_append_mode() {
     let dir = tempdir().unwrap();
     let json_path = dir.path().join("data.json");
 
+    // Initial JSON data (note: keys will be sorted alphabetically when loaded)
+    let initial_json = r#"[{"name":"Alice","age":30},{"name":"Bob","age":25}]"#;
+    std::fs::write(&json_path, initial_json).unwrap();
+
     let mut interp = Interpreter::new();
+
+    // Create sheet to append (columns in alphabetical order to match JSON)
+    let mut append_sheet = Sheet::new();
+    append_sheet.row_append(vec!["age", "name"]).unwrap();
+    append_sheet.row_append(vec!["35", "Charlie"]).unwrap();
+    append_sheet.row_append(vec!["28", "David"]).unwrap();
+    append_sheet.name_columns_by_row(0).unwrap();
+
+    interp
+        .set_var("new_data", piptable_core::Value::Sheet(append_sheet))
+        .await;
+
+    // Append more data using DSL
     let script = format!(
         r#"
-        dim data = [{{"id": 1}}]
-        export data to "{}" append
+        export new_data to "{}" append
         "#,
         json_path.display()
     );
 
     let program = PipParser::parse_str(&script).unwrap();
-    let result = interp.eval(program).await;
+    let _result: piptable_core::Value = interp.eval(program).await.unwrap();
 
-    assert!(result.is_err());
-    let err_msg = result.unwrap_err().to_string();
-    assert!(err_msg.contains("Append mode is only supported for CSV and TSV"));
+    // Load and verify
+    let appended_sheet = Sheet::from_json(&json_path).unwrap();
+
+    // Should have header + 4 data rows (2 original + 2 appended)
+    assert_eq!(appended_sheet.row_count(), 5);
+    assert_eq!(appended_sheet.col_count(), 2);
+
+    // Verify data (columns are in alphabetical order: age, name)
+    assert_eq!(appended_sheet.get(1, 1).unwrap().as_str(), "Alice");
+    assert_eq!(appended_sheet.get(2, 1).unwrap().as_str(), "Bob");
+    assert_eq!(appended_sheet.get(3, 1).unwrap().as_str(), "Charlie");
+    assert_eq!(appended_sheet.get(4, 1).unwrap().as_str(), "David");
+    assert_eq!(appended_sheet.get(1, 0).unwrap().as_int(), Some(30));
+    assert_eq!(appended_sheet.get(2, 0).unwrap().as_int(), Some(25));
+    assert_eq!(appended_sheet.get(3, 0).unwrap().as_int(), Some(35));
+    assert_eq!(appended_sheet.get(4, 0).unwrap().as_int(), Some(28));
 }
 
 #[tokio::test]
@@ -463,6 +493,72 @@ async fn test_headerless_tsv_append() {
 
     let lines: Vec<_> = content.lines().collect();
     assert_eq!(lines.len(), 3); // 3 data rows, no headers
+}
+
+#[tokio::test]
+async fn test_jsonl_append_mode() {
+    let dir = tempdir().unwrap();
+    let jsonl_path = dir.path().join("data.jsonl");
+
+    // First, create initial JSONL file
+    {
+        let mut interp = Interpreter::new();
+        let script = format!(
+            r#"
+            dim data = [
+                {{"id": 1, "name": "Alice"}},
+                {{"id": 2, "name": "Bob"}}
+            ]
+            export data to "{}"
+            "#,
+            jsonl_path.display()
+        );
+
+        let program = PipParser::parse_str(&script).unwrap();
+        interp.eval(program).await.unwrap();
+    }
+
+    // Verify initial file contents
+    let content = fs::read_to_string(&jsonl_path).unwrap();
+    let lines: Vec<_> = content.lines().collect();
+    assert_eq!(lines.len(), 2);
+
+    // Parse and verify first line
+    let first: JsonValue = serde_json::from_str(lines[0]).unwrap();
+    assert_eq!(first["id"], 1);
+    assert_eq!(first["name"], "Alice");
+
+    // Now append more data
+    {
+        let mut interp = Interpreter::new();
+        let script = format!(
+            r#"
+            dim new_data = [
+                {{"id": 3, "name": "Charlie"}},
+                {{"id": 4, "name": "Diana"}}
+            ]
+            export new_data to "{}" append
+            "#,
+            jsonl_path.display()
+        );
+
+        let program = PipParser::parse_str(&script).unwrap();
+        interp.eval(program).await.unwrap();
+    }
+
+    // Verify appended file contents
+    let final_content = fs::read_to_string(&jsonl_path).unwrap();
+    let final_lines: Vec<_> = final_content.lines().collect();
+    assert_eq!(final_lines.len(), 4);
+
+    // Verify all records are present
+    let third: JsonValue = serde_json::from_str(final_lines[2]).unwrap();
+    assert_eq!(third["id"], 3);
+    assert_eq!(third["name"], "Charlie");
+
+    let fourth: JsonValue = serde_json::from_str(final_lines[3]).unwrap();
+    assert_eq!(fourth["id"], 4);
+    assert_eq!(fourth["name"], "Diana");
 }
 
 #[tokio::test]
