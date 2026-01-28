@@ -86,11 +86,9 @@ fn test_ocr_dependency_detection() {
     println!("✅ OCR engine created successfully");
 
     // Test actual dependency check through a simple OCR operation
-    // Create a minimal 1x1 white image to test with
+    // Create a minimal 1x1 black image to test with
     use image::{DynamicImage, RgbImage};
     let img = RgbImage::new(1, 1);
-    let dynamic_img = DynamicImage::ImageRgb8(img);
-
     match engine.extract_text_from_pdf_page(dynamic_img) {
         Ok(text) => {
             println!(
