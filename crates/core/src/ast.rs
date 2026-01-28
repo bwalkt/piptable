@@ -100,7 +100,6 @@ pub enum Statement {
     Export {
         source: Expr,
         destination: Expr,
-        #[serde(default)]
         append: bool,
         options: Option<Expr>,
         line: usize,
