@@ -2921,9 +2921,75 @@ combined = consolidate(stores, "_store")
         }
     }
 
-    // TODO: Add test_sheet_integer_indexing once issue #163 (Sheet column name detection) is fixed
-    // The feature is implemented and working, but the test needs Sheet::from_csv_str_with_options
-    // to properly detect column names
+    #[tokio::test]
+    async fn test_sheet_integer_indexing() {
+        // Test that Sheet values support integer indexing
+        let mut interp = Interpreter::new();
+
+        // Create a sheet with headers using from_csv_str_with_options
+        let csv_content = "name,age,city\nAlice,30,NYC\nBob,25,LA\nCharlie,35,SF";
+        let mut csv_options = piptable_sheet::CsvOptions::default();
+        csv_options.has_headers = true;
+        let sheet = Sheet::from_csv_str_with_options(csv_content, csv_options).unwrap();
+
+        // Verify column names are detected (fixes issue #163)
+        assert!(
+            sheet.column_names().is_some(),
+            "Column names should be detected"
+        );
+
+        interp.set_var("data", Value::Sheet(sheet)).await;
+
+        // Test positive indexing
+        let script = r#"
+            dim first_row = data[0]
+            dim second_row = data[1]
+            dim third_row = data[2]
+            
+            ' Access fields from the row objects
+            dim alice_name = first_row.name
+            dim bob_age = second_row.age
+            dim charlie_city = third_row.city
+        "#;
+
+        let program = PipParser::parse_str(script).unwrap();
+        let result = interp.eval(program).await;
+        assert!(result.is_ok(), "Script execution failed: {:?}", result);
+
+        // Verify the indexed values
+        match interp.get_var("alice_name").await.unwrap() {
+            Value::String(s) => assert_eq!(s, "Alice"),
+            _ => panic!("Expected alice_name to be a string"),
+        }
+        match interp.get_var("bob_age").await.unwrap() {
+            Value::Int(i) => assert_eq!(i, 25),
+            _ => panic!("Expected bob_age to be an integer"),
+        }
+        match interp.get_var("charlie_city").await.unwrap() {
+            Value::String(s) => assert_eq!(s, "SF"),
+            _ => panic!("Expected charlie_city to be a string"),
+        }
+
+        // Test negative indexing
+        let script = r#"
+            dim last_row = data[-1]
+            dim charlie_name = last_row.name
+        "#;
+
+        let program = PipParser::parse_str(script).unwrap();
+        interp.eval(program).await.unwrap();
+
+        match interp.get_var("charlie_name").await.unwrap() {
+            Value::String(s) => assert_eq!(s, "Charlie"),
+            _ => panic!("Expected charlie_name to be a string"),
+        }
+
+        // Test out of bounds
+        let script = r#"dim invalid = data[10]"#;
+        let program = PipParser::parse_str(script).unwrap();
+        let result = interp.eval(program).await;
+        assert!(result.is_err(), "Should fail with index out of bounds");
+    }
 
     #[tokio::test]
     async fn test_single_row_headerless_sheet() {
