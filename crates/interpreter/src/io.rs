@@ -14,14 +14,29 @@ fn cell_to_json_value(cell: CellValue) -> serde_json::Value {
         CellValue::Int(i) => JsonValue::Number(i.into()),
         CellValue::Float(f) => {
             if f.is_finite() {
+                // For finite floats, from_f64 should always succeed
                 JsonValue::Number(
-                    serde_json::Number::from_f64(f).unwrap_or_else(|| serde_json::Number::from(0)),
+                    serde_json::Number::from_f64(f).expect("finite f64 should be representable"),
                 )
             } else {
                 JsonValue::Null // NaN and Infinity become null
             }
         }
         CellValue::String(s) => JsonValue::String(s),
+    }
+}
+
+/// Check if the first row of sheet data matches the column names (i.e., is a header row)
+fn has_header_row(sheet: &Sheet) -> bool {
+    match sheet.column_names() {
+        Some(names) => sheet.data().first().is_some_and(|row| {
+            names.iter().enumerate().all(|(idx, name)| {
+                row.get(idx)
+                    .map(|cell| cell.as_str() == name.as_str())
+                    .unwrap_or(false)
+            })
+        }),
+        None => false,
     }
 }
 
@@ -138,6 +153,8 @@ pub fn export_sheet_with_mode(sheet: &Sheet, path: &str, append: bool) -> Result
         }
     } else if append && path_lower.ends_with(".jsonl") {
         // JSONL append mode - each line is a separate JSON object
+        // Note: JSONL format intentionally allows schema evolution between lines,
+        // so we don't validate column compatibility with existing data
         use std::fs::OpenOptions;
         use std::io::Write;
 
@@ -153,22 +170,12 @@ pub fn export_sheet_with_mode(sheet: &Sheet, path: &str, append: bool) -> Result
             .ok_or("Columns must be named to export as JSONL")?;
 
         // Check if first row is a header that matches column names
-        let skip_header = if let Some(names) = sheet.column_names() {
-            sheet.data().first().is_some_and(|first_row| {
-                names.iter().enumerate().all(|(idx, name)| {
-                    first_row
-                        .get(idx)
-                        .map(|cell| cell.as_str() == name.as_str())
-                        .unwrap_or(false)
-                })
-            })
-        } else {
-            false
-        };
+        let skip_header = has_header_row(sheet);
 
         let start_idx = if skip_header { 1 } else { 0 };
         for record in records.into_iter().skip(start_idx) {
-            let json_obj: std::collections::HashMap<String, serde_json::Value> = record
+            // Use IndexMap for deterministic key ordering
+            let json_obj: indexmap::IndexMap<String, serde_json::Value> = record
                 .into_iter()
                 .map(|(k, v)| (k, cell_to_json_value(v)))
                 .collect();
@@ -265,23 +272,7 @@ fn append_sheet_data(existing: &mut Sheet, new_data: &Sheet) -> Result<(), Strin
     }
 
     // Determine if new_data has a physical header row to skip
-    let skip_header = match new_data.column_names() {
-        Some(names) => {
-            // Check if first row matches column names
-            new_data
-                .data()
-                .first()
-                .map(|row| {
-                    names.iter().enumerate().all(|(idx, name)| {
-                        row.get(idx)
-                            .map(|cell| cell.as_str() == name.as_str())
-                            .unwrap_or(false)
-                    })
-                })
-                .unwrap_or(false)
-        }
-        None => false,
-    };
+    let skip_header = has_header_row(new_data);
 
     // Append rows, skipping header if present
     let start_index = if skip_header { 1 } else { 0 };
