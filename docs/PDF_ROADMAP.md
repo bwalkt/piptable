@@ -18,18 +18,18 @@ This document outlines the phased approach for implementing comprehensive PDF su
 - ✅ Error handling and validation
 - ✅ Basic test coverage
 
-### Phase 1B: Enhanced with OCR 🚧 IN PROGRESS
-**Next Steps**:
-- [ ] Migrate to oxidize-pdf for better PDF handling
-- [ ] Integrate tesseract-rs for OCR capabilities
+### Phase 1B: Add OCR Support 🚧 IN PROGRESS
+**Next Steps** (additions, not replacements):
+- [ ] ADD tesseract-rs for OCR capabilities alongside existing text extraction
 - [ ] Implement automatic detection of scanned vs text PDFs
 - [ ] Add OCR fallback when text extraction yields no results
+- [ ] Keep existing pdf-extract/lopdf as primary method, add OCR as supplementary
 
 ### Technical Implementation Plan:
-- **Primary extraction**: oxidize-pdf for robust PDF parsing
-- **OCR support**: tesseract-rs for scanned documents
-- **Table detection**: Enhanced regex patterns with ML-based detection
-- **Hybrid approach**: Combine text extraction with OCR when needed
+- **Primary extraction**: Keep pdf-extract and lopdf (already working well)
+- **OCR support**: ADD tesseract-rs for scanned/image-based PDFs
+- **Hybrid approach**: Try text extraction first, fall back to OCR if needed
+- **Table detection**: Keep regex patterns, enhance with OCR output processing
 
 ### Limitations:
 - No DSL integration (not available via IMPORT command)
@@ -239,10 +239,10 @@ DIM results = QUERY(
 - `regex` (MIT/Apache) - Pattern matching
 - `lazy_static` (MIT/Apache) - Regex compilation
 
-### Phase 1B Dependencies (In Progress):
-- `oxidize-pdf` - Modern PDF parsing library
-- `tesseract-rs` - Rust bindings for Tesseract OCR
+### Phase 1B Dependencies (To Add):
+- `tesseract-rs` - Rust bindings for Tesseract OCR (ADD to existing)
 - `image` (MIT) - Image preprocessing for OCR
+- Keep existing `pdf-extract` and `lopdf` - they work well for text PDFs
 
 ### Future Dependencies:
 - ML libraries (TBD) - Advanced table detection
