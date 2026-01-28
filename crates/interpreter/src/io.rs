@@ -1,7 +1,7 @@
 //! Import and export operations for files.
 
 use piptable_core::{ImportOptions, Value};
-use piptable_sheet::{CsvOptions, Sheet, XlsxReadOptions};
+use piptable_sheet::{CellValue, CsvOptions, Sheet, XlsxReadOptions};
 use std::collections::HashMap;
 use std::path::Path;
 
@@ -13,9 +13,38 @@ pub fn export_sheet_with_mode(sheet: &Sheet, path: &str, append: bool) -> Result
     if append && (path_lower.ends_with(".csv") || path_lower.ends_with(".tsv")) {
         // If file exists, load it first and append new data
         if std::path::Path::new(path).exists() {
-            // Load existing data
-            let mut existing_sheet = import_sheet(path, None, true)
-                .map_err(|e| format!("Failed to load existing file for append: {}", e))?;
+            // First, load the file without assuming headers to detect if headers exist
+            let raw_sheet = if path_lower.ends_with(".tsv") {
+                Sheet::from_csv_with_options(path, CsvOptions::tsv())
+                    .map_err(|e| format!("Failed to load existing TSV: {}", e))?
+            } else {
+                Sheet::from_csv(path)
+                    .map_err(|e| format!("Failed to load existing CSV: {}", e))?
+            };
+            
+            // Detect if the file has headers by checking if the new sheet has column names
+            // and if they match the first row of the existing file
+            let has_headers = if let Some(_new_cols) = sheet.column_names() {
+                // Check if first row of existing file matches the column names we're appending
+                raw_sheet.data().first()
+                    .map(|first_row| {
+                        // If all values in first row are strings and match column names pattern
+                        first_row.iter().all(|cell| matches!(cell, CellValue::String(_)))
+                    })
+                    .unwrap_or(false)
+            } else {
+                // If new data has no column names, existing file shouldn't have headers either
+                false
+            };
+            
+            // Now reload with proper header handling
+            let mut existing_sheet = if has_headers {
+                import_sheet(path, None, true)
+                    .map_err(|e| format!("Failed to load existing file with headers: {}", e))?
+            } else {
+                import_sheet(path, None, false)
+                    .map_err(|e| format!("Failed to load existing file without headers: {}", e))?
+            };
 
             // Append new data to existing sheet
             append_sheet_data(&mut existing_sheet, sheet)

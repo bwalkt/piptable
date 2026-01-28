@@ -1,6 +1,6 @@
 use piptable_interpreter::Interpreter;
 use piptable_parser::PipParser;
-use piptable_sheet::{CellValue, Sheet};
+use piptable_sheet::{CellValue, CsvOptions, Sheet};
 use std::fs;
 use tempfile::tempdir;
 
@@ -297,4 +297,154 @@ async fn test_sheet_append_mode() {
     assert!(content.contains("4,5,6"));
     assert!(content.contains("7,8,9"));
     assert!(content.contains("10,11,12"));
+}
+
+#[tokio::test]
+async fn test_headerless_csv_append() {
+    let dir = tempdir().unwrap();
+    let csv_path = dir.path().join("headerless.csv");
+
+    // Create initial headerless CSV
+    {
+        let sheet = Sheet::from_data(vec![
+            vec![CellValue::Int(1), CellValue::String("Alice".to_string())],
+            vec![CellValue::Int(2), CellValue::String("Bob".to_string())],
+        ]);
+        sheet.save_as_csv(&csv_path).unwrap();
+    }
+
+    // Verify initial file has no headers (just data)
+    let content = fs::read_to_string(&csv_path).unwrap();
+    assert!(content.contains("1,Alice"));
+    assert!(content.contains("2,Bob"));
+    let line_count = content.lines().count();
+    assert_eq!(line_count, 2);
+
+    // Append more headerless data
+    {
+        let mut interp = Interpreter::new();
+        
+        // Create headerless sheet to append
+        let append_sheet = Sheet::from_data(vec![
+            vec![CellValue::Int(3), CellValue::String("Charlie".to_string())],
+            vec![CellValue::Int(4), CellValue::String("Diana".to_string())],
+        ]);
+        
+        interp.set_var("new_data", piptable_core::Value::Sheet(append_sheet)).await;
+        
+        let script = format!(
+            r#"
+            export new_data to "{}" append
+            "#,
+            csv_path.display()
+        );
+
+        let program = PipParser::parse_str(&script).unwrap();
+        interp.eval(program).await.unwrap();
+    }
+
+    // Verify appended data
+    let final_content = fs::read_to_string(&csv_path).unwrap();
+    assert!(final_content.contains("1,Alice"));
+    assert!(final_content.contains("2,Bob"));
+    assert!(final_content.contains("3,Charlie"));
+    assert!(final_content.contains("4,Diana"));
+    
+    let final_line_count = final_content.lines().count();
+    assert_eq!(final_line_count, 4); // All data rows, no headers
+}
+
+#[tokio::test]
+async fn test_mixed_header_append_error() {
+    let dir = tempdir().unwrap();
+    let csv_path = dir.path().join("mixed.csv");
+
+    // Create CSV with headers
+    {
+        let mut interp = Interpreter::new();
+        let script = format!(
+            r#"
+            dim data = [
+                {{"id": 1, "name": "Alice"}},
+                {{"id": 2, "name": "Bob"}}
+            ]
+            export data to "{}"
+            "#,
+            csv_path.display()
+        );
+
+        let program = PipParser::parse_str(&script).unwrap();
+        interp.eval(program).await.unwrap();
+    }
+
+    // Try to append headerless data - should work as it detects headers exist
+    {
+        let mut interp = Interpreter::new();
+        
+        // Create headerless sheet (but with matching structure)
+        let headerless_sheet = Sheet::from_data(vec![
+            vec![CellValue::Int(3), CellValue::String("Charlie".to_string())],
+        ]);
+        
+        interp.set_var("new_data", piptable_core::Value::Sheet(headerless_sheet)).await;
+        
+        let script = format!(
+            r#"
+            export new_data to "{}" append
+            "#,
+            csv_path.display()
+        );
+
+        let program = PipParser::parse_str(&script).unwrap();
+        let result = interp.eval(program).await;
+        
+        // This should fail due to column name mismatch
+        assert!(result.is_err());
+    }
+}
+
+#[tokio::test]  
+async fn test_headerless_tsv_append() {
+    let dir = tempdir().unwrap();
+    let tsv_path = dir.path().join("headerless.tsv");
+
+    // Create initial headerless TSV
+    {
+        let sheet = Sheet::from_data(vec![
+            vec![CellValue::String("Widget".to_string()), CellValue::Float(10.50)],
+            vec![CellValue::String("Gadget".to_string()), CellValue::Float(25.00)],
+        ]);
+        sheet.save_as_csv_with_options(&tsv_path, CsvOptions::tsv()).unwrap();
+    }
+
+    // Append more headerless data
+    {
+        let mut interp = Interpreter::new();
+        
+        let append_sheet = Sheet::from_data(vec![
+            vec![CellValue::String("Doohickey".to_string()), CellValue::Float(15.75)],
+        ]);
+        
+        interp.set_var("new_data", piptable_core::Value::Sheet(append_sheet)).await;
+        
+        let script = format!(
+            r#"
+            export new_data to "{}" append
+            "#,
+            tsv_path.display()
+        );
+
+        let program = PipParser::parse_str(&script).unwrap();
+        interp.eval(program).await.unwrap();
+    }
+
+    // Verify TSV has tab separators and all data
+    let content = fs::read_to_string(&tsv_path).unwrap();
+    assert!(content.contains("\t")); // Has tab separators
+    assert!(content.contains("Widget"));
+    assert!(content.contains("Gadget"));
+    assert!(content.contains("Doohickey"));
+    
+    let lines: Vec<_> = content.lines().collect();
+    assert_eq!(lines.len(), 3); // 3 data rows, no headers
 }
