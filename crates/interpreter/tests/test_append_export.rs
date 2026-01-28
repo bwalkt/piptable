@@ -464,3 +464,100 @@ async fn test_headerless_tsv_append() {
     let lines: Vec<_> = content.lines().collect();
     assert_eq!(lines.len(), 3); // 3 data rows, no headers
 }
+
+#[tokio::test]
+async fn test_string_data_header_detection() {
+    let dir = tempdir().unwrap();
+    let csv_path = dir.path().join("string_data.csv");
+
+    // Create CSV with all string data (not headers, just string data)
+    {
+        let sheet = Sheet::from_data(vec![
+            vec![
+                CellValue::String("Alice".to_string()),
+                CellValue::String("Smith".to_string()),
+                CellValue::String("Engineer".to_string()),
+            ],
+            vec![
+                CellValue::String("Bob".to_string()),
+                CellValue::String("Jones".to_string()),
+                CellValue::String("Manager".to_string()),
+            ],
+        ]);
+        sheet.save_as_csv(&csv_path).unwrap();
+    }
+
+    // Try to append more string data - should work as both are headerless
+    {
+        let mut interp = Interpreter::new();
+        
+        let append_sheet = Sheet::from_data(vec![
+            vec![
+                CellValue::String("Charlie".to_string()),
+                CellValue::String("Brown".to_string()),
+                CellValue::String("Analyst".to_string()),
+            ],
+        ]);
+        
+        interp
+            .set_var("new_data", piptable_core::Value::Sheet(append_sheet))
+            .await;
+        
+        let script = format!(
+            r#"
+            export new_data to "{}" append
+            "#,
+            csv_path.display()
+        );
+
+        let program = PipParser::parse_str(&script).unwrap();
+        interp.eval(program).await.unwrap();
+    }
+
+    // Verify data was appended correctly
+    let content = fs::read_to_string(&csv_path).unwrap();
+    assert!(content.contains("Alice,Smith,Engineer"));
+    assert!(content.contains("Bob,Jones,Manager"));
+    assert!(content.contains("Charlie,Brown,Analyst"));
+    let lines: Vec<_> = content.lines().collect();
+    assert_eq!(lines.len(), 3); // All data rows, no headers
+}
+
+#[tokio::test]
+async fn test_empty_sheet_append() {
+    let dir = tempdir().unwrap();
+    let csv_path = dir.path().join("empty_append.csv");
+
+    // Create empty CSV file
+    {
+        let sheet = Sheet::new();
+        sheet.save_as_csv(&csv_path).unwrap();
+    }
+
+    // Append data to empty file - should work
+    {
+        let mut interp = Interpreter::new();
+        
+        let data_sheet = Sheet::from_data(vec![
+            vec![CellValue::Int(1), CellValue::String("Test".to_string())],
+        ]);
+        
+        interp
+            .set_var("data", piptable_core::Value::Sheet(data_sheet))
+            .await;
+        
+        let script = format!(
+            r#"
+            export data to "{}" append
+            "#,
+            csv_path.display()
+        );
+
+        let program = PipParser::parse_str(&script).unwrap();
+        interp.eval(program).await.unwrap();
+    }
+
+    // Verify data was added
+    let content = fs::read_to_string(&csv_path).unwrap();
+    assert!(content.contains("1,Test"));
+}

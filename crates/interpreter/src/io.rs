@@ -21,18 +21,37 @@ pub fn export_sheet_with_mode(sheet: &Sheet, path: &str, append: bool) -> Result
                 Sheet::from_csv(path).map_err(|e| format!("Failed to load existing CSV: {}", e))?
             };
 
-            // Detect if the file has headers by checking if the new sheet has column names
-            // and if they match the first row of the existing file
-            let has_headers = if let Some(_new_cols) = sheet.column_names() {
-                // Check if first row of existing file matches the column names we're appending
+            // Detect if the file has headers by checking multiple factors:
+            // 1. If new sheet has column names and existing first row could be headers
+            // 2. The first row contains all strings (typical of headers)
+            // 3. Second row (if exists) has different types (typical of data)
+            let has_headers = if let Some(new_cols) = sheet.column_names() {
                 raw_sheet
                     .data()
                     .first()
                     .map(|first_row| {
-                        // If all values in first row are strings and match column names pattern
-                        first_row
+                        // Check if all values in first row are strings
+                        let all_strings = first_row
                             .iter()
-                            .all(|cell| matches!(cell, CellValue::String(_)))
+                            .all(|cell| matches!(cell, CellValue::String(_)));
+                        
+                        // If we have a second row, check if it has different types (indicates headers)
+                        let has_different_types = raw_sheet
+                            .data()
+                            .get(1)
+                            .map(|second_row| {
+                                // If second row has any non-string values, first row is likely headers
+                                second_row.iter().any(|cell| !matches!(cell, CellValue::String(_)))
+                            })
+                            .unwrap_or(false);
+                        
+                        // Also check if the column count matches
+                        let column_count_matches = first_row.len() == new_cols.len();
+                        
+                        // Consider it has headers if:
+                        // - All first row values are strings AND
+                        // - Either second row has different types OR column count matches expected
+                        all_strings && (has_different_types || column_count_matches)
                     })
                     .unwrap_or(false)
             } else {
@@ -132,10 +151,22 @@ fn append_sheet_data(existing: &mut Sheet, new_data: &Sheet) -> Result<(), Strin
         }
         (None, None) => {
             // Neither has column names - check column count
-            if existing.data().first().map(|r| r.len()).unwrap_or(0)
-                != new_data.data().first().map(|r| r.len()).unwrap_or(0)
-            {
-                return Err("Column count mismatch between existing and new data".to_string());
+            let existing_cols = existing.data().first().map(|r| r.len());
+            let new_cols = new_data.data().first().map(|r| r.len());
+            
+            match (existing_cols, new_cols) {
+                (Some(e), Some(n)) if e != n => {
+                    return Err(format!(
+                        "Column count mismatch: existing has {} columns, new data has {} columns",
+                        e, n
+                    ));
+                }
+                (None, Some(_)) => {
+                    // Existing is empty, will take shape from new data - this is fine
+                }
+                (Some(_), None) | (None, None) => {
+                    // New data is empty or both are empty - nothing to append, but that's ok
+                }
             }
         }
         _ => {
