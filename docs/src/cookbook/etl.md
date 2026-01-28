@@ -109,9 +109,13 @@ dim new_records: table = query(
 )
 
 if len(new_records) > 0 then
-  ' Export new records (can't append and re-export efficiently)
+  ' Append new records to historical file
+  export new_records to "all_historical_records.csv" append
+  
+  ' Also save today's new records separately
   export new_records to "new_records_today.csv"
-  print "Added " + str(len(new_records)) + " new records to new_records_today.csv"
+  
+  print "Added " + str(len(new_records)) + " new records"
 else
   print "No new records to process today"
 end if
@@ -319,15 +323,8 @@ while continue_processing
       FROM "temp_batch.csv"
     )
     
-    ' Export batch
-    if offset = 0 then
-      export processed_batch to "output.csv"
-    else
-      ' Note: Appending requires loading and re-exporting
-      import "output.csv" into existing
-      existing append processed_batch
-      export existing to "output.csv"
-    end if
+    ' Export batch using append mode for efficiency
+    export processed_batch to "output.csv" append
     
     total_processed = total_processed + len(batch)
     offset = offset + batch_size

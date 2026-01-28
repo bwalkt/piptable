@@ -351,11 +351,30 @@ fn build_export_stmt(pair: Pair<Rule>, line: usize) -> BuildResult<Statement> {
     let mut inner = pair.into_inner();
     let source = build_expr(inner.next().unwrap())?;
     let destination = build_expr(inner.next().unwrap())?;
-    let options = inner.next().map(build_expr).transpose()?;
+
+    // Check for append mode and with_clause
+    let mut append = false;
+    let mut options = None;
+
+    for next_pair in inner {
+        match next_pair.as_rule() {
+            Rule::export_mode => {
+                append = true;
+            }
+            Rule::with_clause => {
+                options = Some(build_expr(next_pair.into_inner().next().unwrap())?);
+            }
+            _ => {
+                // Handle any other future options
+                options = Some(build_expr(next_pair)?);
+            }
+        }
+    }
 
     Ok(Statement::Export {
         source,
         destination,
+        append,
         options,
         line,
     })

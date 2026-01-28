@@ -467,6 +467,7 @@ impl Interpreter {
             Statement::Export {
                 source,
                 destination,
+                append,
                 options,
                 line,
             } => {
@@ -505,7 +506,7 @@ impl Interpreter {
                     .map_err(|e| PipError::Export(format!("Line {}: {}", line, e)))?;
 
                 // Determine format from file extension and export
-                io::export_sheet(&sheet, &path)
+                io::export_sheet_with_mode(&sheet, &path, append)
                     .map_err(|e| PipError::Export(format!("Line {}: {}", line, e)))?;
 
                 Ok(Value::Null)
