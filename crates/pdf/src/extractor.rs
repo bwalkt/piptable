@@ -94,13 +94,11 @@ impl PdfExtractor {
         };
         
         for page_num in start..=end {
-            if let Some(page_id) = pages.get(&(page_num as u32)) {
-                // Extract text from page using lopdf
-                // This is a simplified extraction - lopdf requires more complex parsing
-                if let Ok(content) = doc.extract_text(&[page_id.0]) {
-                    all_text.push_str(&content);
-                    all_text.push('\n');
-                }
+            // Extract text from page using lopdf
+            // lopdf expects page numbers directly
+            if let Ok(content) = doc.extract_text(&[page_num as u32]) {
+                all_text.push_str(&content);
+                all_text.push('\n');
             }
         }
         

@@ -85,11 +85,12 @@ pub fn import_sheet(
     } else if path_lower.ends_with(".pdf") {
         let tables = piptable_pdf::extract_tables_from_pdf(path)
             .map_err(|e| format!("Failed to import PDF: {}", e))?;
-        if tables.is_empty() {
-            return Err("No tables found in PDF".to_string());
-        }
+        let first = tables
+            .into_iter()
+            .next()
+            .ok_or_else(|| format!("No tables found in PDF '{}'", path))?;
         // For Phase 1, return the first table found
-        Ok(tables.into_iter().next().unwrap())
+        Ok(first)
     } else {
         Err(format!("Unsupported import format for '{}'", path))
     }

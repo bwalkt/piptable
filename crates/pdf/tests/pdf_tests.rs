@@ -35,8 +35,8 @@ fn test_pdf_options_default() {
     assert_eq!(options.min_table_cols, 2);
 }
 
-// Helper function to create a test file with table-like text
-fn create_test_text_file_as_pdf(content: &str) -> NamedTempFile {
+// Helper function to create a temporary text file for testing
+fn create_temp_text_file(content: &str) -> NamedTempFile {
     let mut temp_file = NamedTempFile::new().expect("Failed to create temp file");
     write!(temp_file, "{}", content).expect("Failed to write to temp file");
     temp_file
@@ -47,7 +47,7 @@ fn test_table_detection_basic() {
     // This would require creating actual PDF files to test properly
     // For Phase 1, we'll focus on the API structure
     let table_text = "Name    Age    City\nJohn    25     NYC\nJane    30     LA";
-    let _test_file = create_test_text_file_as_pdf(table_text);
+    let _test_file = create_temp_text_file(table_text);
     
     // In a full implementation, we would test:
     // 1. PDF text extraction

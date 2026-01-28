@@ -5,8 +5,8 @@ lazy_static! {
     // Column separator patterns
     static ref COLUMN_SEPARATOR: Regex = Regex::new(r"(\s{2,}|\t+|\|)+").unwrap();
     
-    // Row patterns
-    static ref HORIZONTAL_RULE: Regex = Regex::new(r"^[-=]{3,}$").unwrap();
+    // Row patterns - includes ASCII box-drawing and Unicode box-drawing characters
+    static ref HORIZONTAL_RULE: Regex = Regex::new(r"^[\s\-=+|\u{2500}-\u{257F}]{3,}$").unwrap();
     static ref NUMERIC_PATTERN: Regex = Regex::new(r"\d+(\.\d+)?").unwrap();
     static ref HEADER_PATTERN: Regex = Regex::new(r"^[A-Z][A-Z\s]+$").unwrap();
 }
@@ -65,6 +65,7 @@ impl TableDetector {
         let mut rows = Vec::new();
         let mut consistent_columns = None;
         let mut end_line = start;
+        let mut first_row_line = None;
         
         for (idx, line) in lines.iter().enumerate().skip(start) {
             let line = line.trim();
@@ -81,6 +82,11 @@ impl TableDetector {
             
             // Try to parse as table row
             if let Some(columns) = self.parse_row(line) {
+                // Track the line number of the first actual data row
+                if first_row_line.is_none() {
+                    first_row_line = Some(idx);
+                }
+                
                 let col_count = columns.len();
                 
                 // Check column consistency
@@ -111,7 +117,7 @@ impl TableDetector {
         if rows.len() >= self.min_rows {
             Some(TableRegion {
                 rows,
-                start_line: start,
+                start_line: first_row_line.unwrap_or(start),
                 end_line,
             })
         } else {
