@@ -1,12 +1,15 @@
 # PDF Support Roadmap
 
+**Tracking Issue**: [#92 - feat(pdf): add basic PDF table extraction support](https://github.com/bwalkt/piptable/issues/92)
+
 ## Overview
 This document outlines the phased approach for implementing comprehensive PDF support in PipTable, enabling users to extract and manipulate tabular data from PDF documents.
 
-## Phase 1: Basic Text-Based Table Extraction ✅ COMPLETED
-**Status**: Merged to main (PR #166)
+## Phase 1: Foundation - Basic Text-Based Table Extraction 
+**Status**: Partially Complete (Basic implementation merged, OCR pending)
 
-### Completed Features:
+### Phase 1A: Basic Text Extraction ✅ COMPLETED
+**Merged to main (PR #166)**
 - ✅ Basic PDF text extraction using pdf-extract and lopdf libraries
 - ✅ Simple table detection using regex patterns
 - ✅ Conversion of detected tables to Sheet format
@@ -15,11 +18,18 @@ This document outlines the phased approach for implementing comprehensive PDF su
 - ✅ Error handling and validation
 - ✅ Basic test coverage
 
-### Technical Implementation:
-- **Primary extraction**: pdf-extract crate for text extraction
-- **Fallback**: lopdf for when pdf-extract fails
-- **Table detection**: Regex-based pattern matching for column alignment
-- **Cell parsing**: Type inference for strings, numbers, dates, booleans
+### Phase 1B: Enhanced with OCR 🚧 IN PROGRESS
+**Next Steps**:
+- [ ] Migrate to oxidize-pdf for better PDF handling
+- [ ] Integrate tesseract-rs for OCR capabilities
+- [ ] Implement automatic detection of scanned vs text PDFs
+- [ ] Add OCR fallback when text extraction yields no results
+
+### Technical Implementation Plan:
+- **Primary extraction**: oxidize-pdf for robust PDF parsing
+- **OCR support**: tesseract-rs for scanned documents
+- **Table detection**: Enhanced regex patterns with ML-based detection
+- **Hybrid approach**: Combine text extraction with OCR when needed
 
 ### Limitations:
 - No DSL integration (not available via IMPORT command)
@@ -223,16 +233,20 @@ DIM results = QUERY(
 
 ## Dependencies & Licensing
 
-### Current Dependencies:
+### Current Dependencies (Phase 1A):
 - `pdf-extract` (MIT) - Text extraction
 - `lopdf` (MIT) - PDF parsing
 - `regex` (MIT/Apache) - Pattern matching
 - `lazy_static` (MIT/Apache) - Regex compilation
 
+### Phase 1B Dependencies (In Progress):
+- `oxidize-pdf` - Modern PDF parsing library
+- `tesseract-rs` - Rust bindings for Tesseract OCR
+- `image` (MIT) - Image preprocessing for OCR
+
 ### Future Dependencies:
-- `tesseract` (Apache 2.0) - OCR engine
-- `image` (MIT) - Image processing
-- ML libraries (TBD) - Table detection
+- ML libraries (TBD) - Advanced table detection
+- `cairo-rs` - PDF generation capabilities
 
 ## Known Issues & Limitations
 
