@@ -74,18 +74,21 @@ impl PdfExtractor {
                     tracing::warn!("OCR completed but found no tables");
                 }
                 Err(e) => {
-                    // Distinguish between setup failures vs processing failures
-                    let is_setup_failure = e.to_string().contains("Failed to initialize") ||
-                                          e.to_string().contains("PDFium") ||
-                                          e.to_string().contains("Tesseract");
-                    
-                    if is_setup_failure {
-                        // Setup/dependency failures should error immediately when OCR is enabled
-                        tracing::error!("OCR setup failed: {}", e);
-                        return Err(e);
-                    } else {
-                        // Processing failures should fall back to text extraction
-                        tracing::warn!("OCR processing failed, falling back to text extraction: {}", e);
+                    // Use structured error types to distinguish between setup vs processing failures
+                    match e {
+                        PdfError::OcrSetupError(_) => {
+                            // Setup/dependency failures should error immediately when OCR is enabled
+                            tracing::error!("OCR setup failed: {}", e);
+                            return Err(e);
+                        }
+                        PdfError::OcrProcessingError(_) => {
+                            // Processing failures should fall back to text extraction
+                            tracing::warn!("OCR processing failed, falling back to text extraction: {}", e);
+                        }
+                        _ => {
+                            // Other error types (legacy OcrError, etc.) - treat as processing failures for safety
+                            tracing::warn!("OCR failed (unknown type), falling back to text extraction: {}", e);
+                        }
                     }
                 }
             }
@@ -96,7 +99,7 @@ impl PdfExtractor {
 
         if tables.is_empty() {
             if content_needs_ocr && !ocr_available {
-                Err(PdfError::OcrError(
+                Err(PdfError::OcrSetupError(
                     "No tables found. This appears to be a scanned PDF - enable OCR for better results".to_string()
                 ))
             } else {
@@ -194,7 +197,7 @@ impl PdfExtractor {
         let ocr_engine = self
             .ocr_engine
             .as_ref()
-            .ok_or_else(|| PdfError::OcrError("OCR engine not initialized".to_string()))?;
+            .ok_or_else(|| PdfError::OcrSetupError("OCR engine not initialized".to_string()))?;
 
         tracing::info!("Attempting OCR extraction from PDF: {:?}", path);
 
@@ -202,13 +205,13 @@ impl PdfExtractor {
         let pdfium = Pdfium::new(
             Pdfium::bind_to_library(Pdfium::pdfium_platform_library_name_at_path("./"))
                 .or_else(|_| Pdfium::bind_to_system_library())
-                .map_err(|e| PdfError::OcrError(format!("Failed to initialize PDFium: {}", e)))?,
+                .map_err(|e| PdfError::OcrSetupError(format!("Failed to initialize PDFium: {}", e)))?,
         );
 
         // Load the PDF document
         let document = pdfium
             .load_pdf_from_file(path, None)
-            .map_err(|e| PdfError::OcrError(format!("Failed to load PDF for OCR: {}", e)))?;
+            .map_err(|e| PdfError::OcrProcessingError(format!("Failed to load PDF for OCR: {}", e)))?;
 
         let mut all_ocr_text = String::new();
         let total_pages = document.pages().len();
@@ -229,7 +232,7 @@ impl PdfExtractor {
 
             // Get the page
             let page = document.pages().get(page_index).map_err(|e| {
-                PdfError::OcrError(format!("Failed to get page {}: {}", page_index + 1, e))
+                PdfError::OcrProcessingError(format!("Failed to get page {}: {}", page_index + 1, e))
             })?;
 
             // Render page to image at high DPI for better OCR quality
@@ -241,7 +244,7 @@ impl PdfExtractor {
             let image_buffer = page
                 .render_with_config(&render_config)
                 .map_err(|e| {
-                    PdfError::OcrError(format!("Failed to render page {}: {}", page_index + 1, e))
+                    PdfError::OcrProcessingError(format!("Failed to render page {}: {}", page_index + 1, e))
                 })?
                 .as_image();
 

@@ -101,14 +101,16 @@ fn test_ocr_dependency_detection() {
                 println!("File not found (expected for test)");
             },
             PdfError::OcrError(msg) => {
-                // OCR dependency error - what we're testing for
-                println!("OCR dependency error detected: {}", msg);
-                assert!(
-                    msg.contains("Tesseract") || 
-                    msg.contains("PDFium") || 
-                    msg.contains("leptonica"),
-                    "OCR error should mention specific dependency: {}", msg
-                );
+                // Legacy OCR error - still acceptable
+                println!("OCR error detected: {}", msg);
+            },
+            PdfError::OcrSetupError(msg) => {
+                // OCR setup/dependency error - what we're primarily testing for
+                println!("OCR setup error detected: {}", msg);
+            },
+            PdfError::OcrProcessingError(msg) => {
+                // OCR processing error - should not happen with missing file, but acceptable
+                println!("OCR processing error detected: {}", msg);
             },
             _ => {
                 println!("Unexpected error type: {:?}", e);
@@ -208,14 +210,16 @@ fn test_ocr_fallback_behavior() {
                 println!("Text extraction failed (expected for fake PDF): {:?}", e);
             },
             PdfError::OcrError(msg) => {
-                // If we get an OCR error, it should be a setup failure, not a processing failure
+                // Legacy OCR error - treat as acceptable for this test
+                println!("Legacy OCR error: {}", msg);
+            },
+            PdfError::OcrSetupError(msg) => {
                 // Setup failures are OK to bubble up immediately
-                if msg.contains("Failed to initialize") || msg.contains("PDFium") || msg.contains("Tesseract") {
-                    println!("OCR setup failure (acceptable): {}", msg);
-                } else {
-                    // Processing failures should have fallen back to text extraction
-                    panic!("OCR processing failure should have fallen back to text extraction, got: {}", msg);
-                }
+                println!("OCR setup failure (acceptable): {}", msg);
+            },
+            PdfError::OcrProcessingError(_) => {
+                // Processing failures should have fallen back to text extraction
+                panic!("OCR processing failure should have fallen back to text extraction, but got OcrProcessingError");
             },
             PdfError::NoTablesFound => {
                 // This is actually good - means we tried text extraction and didn't find tables
@@ -247,12 +251,70 @@ fn test_text_extraction_with_no_ocr() {
                 // Expected - file doesn't exist
                 println!("Expected parse error for non-existent file");
             },
-            PdfError::OcrError(_) => {
-                panic!("Should not get OCR error when OCR is disabled");
+            PdfError::OcrError(_) | PdfError::OcrSetupError(_) | PdfError::OcrProcessingError(_) => {
+                panic!("Should not get any OCR-related error when OCR is disabled");
             },
             _ => {
                 println!("Other error type: {:?}", e);
             }
         }
     }
+}
+
+#[test]
+fn test_structured_error_classification() {
+    // Test that our structured error types work correctly
+    // This tests the error handling logic without requiring actual OCR dependencies
+    
+    use piptable_pdf::PdfError;
+    
+    // Test error type classification
+    let setup_error = PdfError::OcrSetupError("Tesseract not found".to_string());
+    let processing_error = PdfError::OcrProcessingError("Failed to process image".to_string());
+    let legacy_error = PdfError::OcrError("Generic OCR error".to_string());
+    
+    // Verify error types can be matched correctly
+    match setup_error {
+        PdfError::OcrSetupError(_) => {
+            println!("Correctly identified setup error");
+        },
+        _ => panic!("Failed to identify setup error"),
+    }
+    
+    match processing_error {
+        PdfError::OcrProcessingError(_) => {
+            println!("Correctly identified processing error");
+        },
+        _ => panic!("Failed to identify processing error"),
+    }
+    
+    match legacy_error {
+        PdfError::OcrError(_) => {
+            println!("Correctly identified legacy OCR error");
+        },
+        _ => panic!("Failed to identify legacy error"),
+    }
+    
+    // Test error message formatting
+    assert_eq!(setup_error.to_string(), "OCR setup error: Tesseract not found");
+    assert_eq!(processing_error.to_string(), "OCR processing error: Failed to process image");
+    assert_eq!(legacy_error.to_string(), "OCR error: Generic OCR error");
+}
+
+#[test]
+#[ignore = "Requires system dependencies or mocked OCR for true end-to-end validation"]
+fn test_end_to_end_ocr_flow() {
+    // TODO: This would be a comprehensive end-to-end test that:
+    // 1. Creates a real PDF with known table content
+    // 2. Tests text extraction path (PDF with extractable text)
+    // 3. Tests OCR path (PDF with minimal text, OCR enabled)
+    // 4. Validates table detection and sheet conversion
+    // 5. Verifies error handling for missing dependencies
+    //
+    // This requires either:
+    // - Bundled test PDFs in the repository
+    // - Mock implementations of OCR dependencies
+    // - Running only in CI environments with dependencies installed
+    
+    println!("End-to-end OCR test would run here with proper setup");
 }

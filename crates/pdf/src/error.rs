@@ -14,6 +14,12 @@ pub enum PdfError {
     #[error("OCR error: {0}")]
     OcrError(String),
 
+    #[error("OCR setup error: {0}")]
+    OcrSetupError(String),
+
+    #[error("OCR processing error: {0}")]
+    OcrProcessingError(String),
+
     #[error("Invalid page range: {0}")]
     InvalidPageRange(String),
 

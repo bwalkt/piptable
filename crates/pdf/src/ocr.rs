@@ -37,11 +37,11 @@ impl OcrEngine {
 
         // Check if Tesseract is available
         let mut tesseract = Tesseract::new(None, Some(&self.language))
-            .map_err(|e| PdfError::OcrError(format!("Failed to initialize Tesseract: {}", e)))?;
+            .map_err(|e| PdfError::OcrSetupError(format!("Failed to initialize Tesseract: {}", e)))?;
 
         // Load and preprocess the image
         let image = image::open(image_path)
-            .map_err(|e| PdfError::OcrError(format!("Failed to load image: {}", e)))?;
+            .map_err(|e| PdfError::OcrProcessingError(format!("Failed to load image: {}", e)))?;
 
         let processed = self.preprocess_image(image)?;
 
@@ -49,15 +49,15 @@ impl OcrEngine {
         let mut buffer = Vec::new();
         processed
             .write_to(&mut std::io::Cursor::new(&mut buffer), ImageFormat::Png)
-            .map_err(|e| PdfError::OcrError(format!("Failed to encode image: {}", e)))?;
+            .map_err(|e| PdfError::OcrProcessingError(format!("Failed to encode image: {}", e)))?;
 
         // Perform OCR
         let text = tesseract
             .set_image_from_mem(&buffer)
-            .map_err(|e| PdfError::OcrError(format!("Failed to set image: {}", e)))?
+            .map_err(|e| PdfError::OcrProcessingError(format!("Failed to set image: {}", e)))?
             .set_source_resolution(self.dpi as i32)
             .get_text()
-            .map_err(|e| PdfError::OcrError(format!("OCR extraction failed: {}", e)))?;
+            .map_err(|e| PdfError::OcrProcessingError(format!("OCR extraction failed: {}", e)))?;
 
         debug!("OCR extracted {} characters", text.len());
         Ok(text)
@@ -69,11 +69,11 @@ impl OcrEngine {
 
         // Initialize Tesseract
         let mut tesseract = Tesseract::new(None, Some(&self.language))
-            .map_err(|e| PdfError::OcrError(format!("Failed to initialize Tesseract: {}", e)))?;
+            .map_err(|e| PdfError::OcrSetupError(format!("Failed to initialize Tesseract: {}", e)))?;
 
         // Load image from bytes
         let image = image::load_from_memory(image_data)
-            .map_err(|e| PdfError::OcrError(format!("Failed to decode image: {}", e)))?;
+            .map_err(|e| PdfError::OcrProcessingError(format!("Failed to decode image: {}", e)))?;
 
         let processed = self.preprocess_image(image)?;
 
@@ -81,15 +81,15 @@ impl OcrEngine {
         let mut buffer = Vec::new();
         processed
             .write_to(&mut std::io::Cursor::new(&mut buffer), ImageFormat::Png)
-            .map_err(|e| PdfError::OcrError(format!("Failed to encode image: {}", e)))?;
+            .map_err(|e| PdfError::OcrProcessingError(format!("Failed to encode image: {}", e)))?;
 
         // Perform OCR
         let text = tesseract
             .set_image_from_mem(&buffer)
-            .map_err(|e| PdfError::OcrError(format!("Failed to set image: {}", e)))?
+            .map_err(|e| PdfError::OcrProcessingError(format!("Failed to set image: {}", e)))?
             .set_source_resolution(self.dpi as i32)
             .get_text()
-            .map_err(|e| PdfError::OcrError(format!("OCR extraction failed: {}", e)))?;
+            .map_err(|e| PdfError::OcrProcessingError(format!("OCR extraction failed: {}", e)))?;
 
         debug!("OCR extracted {} characters", text.len());
         Ok(text)
@@ -105,19 +105,19 @@ impl OcrEngine {
         let mut buffer = Vec::new();
         processed
             .write_to(&mut std::io::Cursor::new(&mut buffer), ImageFormat::Png)
-            .map_err(|e| PdfError::OcrError(format!("Failed to encode image: {}", e)))?;
+            .map_err(|e| PdfError::OcrProcessingError(format!("Failed to encode image: {}", e)))?;
 
         // Initialize Tesseract
         let mut tesseract = Tesseract::new(None, Some(&self.language))
-            .map_err(|e| PdfError::OcrError(format!("Failed to initialize Tesseract: {}", e)))?;
+            .map_err(|e| PdfError::OcrSetupError(format!("Failed to initialize Tesseract: {}", e)))?;
 
         // Perform OCR
         let text = tesseract
             .set_image_from_mem(&buffer)
-            .map_err(|e| PdfError::OcrError(format!("Failed to set image: {}", e)))?
+            .map_err(|e| PdfError::OcrProcessingError(format!("Failed to set image: {}", e)))?
             .set_source_resolution(self.dpi as i32)
             .get_text()
-            .map_err(|e| PdfError::OcrError(format!("OCR extraction failed: {}", e)))?;
+            .map_err(|e| PdfError::OcrProcessingError(format!("OCR extraction failed: {}", e)))?;
 
         debug!("OCR extracted {} characters from PDF page", text.len());
         Ok(text)
