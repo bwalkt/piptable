@@ -74,10 +74,19 @@ impl PdfExtractor {
                     tracing::warn!("OCR completed but found no tables");
                 }
                 Err(e) => {
-                    // When OCR is explicitly enabled, return the OCR error instead of falling back
-                    // This helps users diagnose PDFium/Tesseract setup issues
-                    tracing::error!("OCR extraction failed: {}", e);
-                    return Err(e);
+                    // Distinguish between setup failures vs processing failures
+                    let is_setup_failure = e.to_string().contains("Failed to initialize") ||
+                                          e.to_string().contains("PDFium") ||
+                                          e.to_string().contains("Tesseract");
+                    
+                    if is_setup_failure {
+                        // Setup/dependency failures should error immediately when OCR is enabled
+                        tracing::error!("OCR setup failed: {}", e);
+                        return Err(e);
+                    } else {
+                        // Processing failures should fall back to text extraction
+                        tracing::warn!("OCR processing failed, falling back to text extraction: {}", e);
+                    }
                 }
             }
         }
