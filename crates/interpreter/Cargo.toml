@@ -17,6 +17,7 @@ piptable-parser = { workspace = true }
 piptable-sql = { workspace = true }
 piptable-http = { workspace = true }
 piptable-sheet = { workspace = true }
+piptable-pdf = { workspace = true }
 indexmap = { workspace = true }
 tokio = { workspace = true }
 async-trait = { workspace = true }
@@ -27,6 +28,7 @@ serde_json = { workspace = true }
 arrow = { workspace = true }
 async-recursion = "1"
 pyo3 = { workspace = true, optional = true }
+anyhow = { workspace = true }
 
 [dev-dependencies]
 tempfile = { workspace = true }
