@@ -22,6 +22,9 @@ pub enum PdfError {
     
     #[error("PDF extraction error: {0}")]
     ExtractionError(String),
+    
+    #[error("Sheet conversion error: {0}")]
+    SheetError(#[from] piptable_sheet::SheetError),
 }
 
 pub type Result<T> = std::result::Result<T, PdfError>;

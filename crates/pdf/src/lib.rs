@@ -25,7 +25,7 @@ pub fn extract_tables_with_options<P: AsRef<Path>>(
     let sheets: Vec<Sheet> = table_regions
         .into_iter()
         .map(convert_table_to_sheet)
-        .collect();
+        .collect::<Result<Vec<_>>>()?;
     
     if sheets.is_empty() {
         Err(error::PdfError::NoTablesFound)
@@ -35,7 +35,7 @@ pub fn extract_tables_with_options<P: AsRef<Path>>(
 }
 
 /// Convert a detected table region to a Sheet
-fn convert_table_to_sheet(table: TableRegion) -> Sheet {
+fn convert_table_to_sheet(table: TableRegion) -> Result<Sheet> {
     let mut sheet = Sheet::new();
     
     // Convert each row and append to sheet
@@ -46,14 +46,13 @@ fn convert_table_to_sheet(table: TableRegion) -> Sheet {
             .collect();
         
         // Use row_append which properly handles sheet expansion
-        // Ignore error for empty rows (shouldn't happen with valid tables)
-        let _ = sheet.row_append(row_values);
+        sheet.row_append(row_values)?;
     }
     
     // TODO: Add column header detection support in future phase
     // Would need to detect headers, remove first row, and set as column names
     
-    sheet
+    Ok(sheet)
 }
 
 /// Parse a cell value from string, attempting to detect the appropriate type
