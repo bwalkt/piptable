@@ -35,53 +35,45 @@ impl OcrEngine {
     pub fn extract_text_from_image(&self, image_path: &Path) -> Result<String> {
         debug!("Starting OCR extraction from image: {:?}", image_path);
 
-        // Check if Tesseract is available
-        let tesseract = Tesseract::new(None, Some(&self.language))
-            .map_err(|e| PdfError::OcrSetupError(format!("Failed to initialize Tesseract: {}", e)))?;
-
         // Load and preprocess the image
         let image = image::open(image_path)
             .map_err(|e| PdfError::OcrProcessingError(format!("Failed to load image: {}", e)))?;
 
-        let processed = self.preprocess_image(image)?;
-
-        // Convert to bytes for Tesseract
-        let mut buffer = Vec::new();
-        processed
-            .write_to(&mut std::io::Cursor::new(&mut buffer), ImageFormat::Png)
-            .map_err(|e| PdfError::OcrProcessingError(format!("Failed to encode image: {}", e)))?;
-
-        // Perform OCR
-        let text = tesseract
-            .set_image_from_mem(&buffer)
-            .map_err(|e| PdfError::OcrProcessingError(format!("Failed to set image: {}", e)))?
-            .set_source_resolution(self.dpi as i32)
-            .get_text()
-            .map_err(|e| PdfError::OcrProcessingError(format!("OCR extraction failed: {}", e)))?;
-
-        debug!("OCR extracted {} characters", text.len());
-        Ok(text)
+        self.extract_text_from_processed_image(image)
     }
 
     /// Extract text from image bytes using OCR
     pub fn extract_text_from_bytes(&self, image_data: &[u8]) -> Result<String> {
         debug!("Starting OCR extraction from {} bytes", image_data.len());
 
-        // Initialize Tesseract
-        let tesseract = Tesseract::new(None, Some(&self.language))
-            .map_err(|e| PdfError::OcrSetupError(format!("Failed to initialize Tesseract: {}", e)))?;
-
         // Load image from bytes
         let image = image::load_from_memory(image_data)
             .map_err(|e| PdfError::OcrProcessingError(format!("Failed to decode image: {}", e)))?;
 
+        self.extract_text_from_processed_image(image)
+    }
+
+    /// Extract text from a PDF page that's been rendered to an image
+    pub fn extract_text_from_pdf_page(&self, page_image: DynamicImage) -> Result<String> {
+        debug!("Starting OCR extraction from PDF page image");
+        self.extract_text_from_processed_image(page_image)
+    }
+
+    /// Shared OCR pipeline: preprocess image → encode → tesseract → extract text
+    fn extract_text_from_processed_image(&self, image: DynamicImage) -> Result<String> {
+        // Preprocess the image for better OCR results
         let processed = self.preprocess_image(image)?;
 
-        // Convert back to bytes for Tesseract
+        // Convert to bytes for Tesseract
         let mut buffer = Vec::new();
         processed
             .write_to(&mut std::io::Cursor::new(&mut buffer), ImageFormat::Png)
             .map_err(|e| PdfError::OcrProcessingError(format!("Failed to encode image: {}", e)))?;
+
+        // Initialize Tesseract
+        let tesseract = Tesseract::new(None, Some(&self.language)).map_err(|e| {
+            PdfError::OcrSetupError(format!("Failed to initialize Tesseract: {}", e))
+        })?;
 
         // Perform OCR
         let text = tesseract
@@ -92,34 +84,6 @@ impl OcrEngine {
             .map_err(|e| PdfError::OcrProcessingError(format!("OCR extraction failed: {}", e)))?;
 
         debug!("OCR extracted {} characters", text.len());
-        Ok(text)
-    }
-
-    /// Extract text from a PDF page that's been rendered to an image
-    pub fn extract_text_from_pdf_page(&self, page_image: DynamicImage) -> Result<String> {
-        debug!("Starting OCR extraction from PDF page image");
-
-        let processed = self.preprocess_image(page_image)?;
-
-        // Convert to bytes for Tesseract
-        let mut buffer = Vec::new();
-        processed
-            .write_to(&mut std::io::Cursor::new(&mut buffer), ImageFormat::Png)
-            .map_err(|e| PdfError::OcrProcessingError(format!("Failed to encode image: {}", e)))?;
-
-        // Initialize Tesseract
-        let tesseract = Tesseract::new(None, Some(&self.language))
-            .map_err(|e| PdfError::OcrSetupError(format!("Failed to initialize Tesseract: {}", e)))?;
-
-        // Perform OCR
-        let text = tesseract
-            .set_image_from_mem(&buffer)
-            .map_err(|e| PdfError::OcrProcessingError(format!("Failed to set image: {}", e)))?
-            .set_source_resolution(self.dpi as i32)
-            .get_text()
-            .map_err(|e| PdfError::OcrProcessingError(format!("OCR extraction failed: {}", e)))?;
-
-        debug!("OCR extracted {} characters from PDF page", text.len());
         Ok(text)
     }
 
@@ -137,8 +101,9 @@ impl OcrEngine {
         let (width, height) = (processed.width(), processed.height());
         let min_dimension = 2000; // Minimum pixel dimension for good OCR
 
-        if width < min_dimension && height < min_dimension {
-            let scale = min_dimension as f32 / width.min(height) as f32;
+        if width < min_dimension || height < min_dimension {
+            // Cap scaling to prevent memory issues with extreme aspect ratios
+            let scale = (min_dimension as f32 / width.min(height) as f32).min(4.0);
             let new_width = (width as f32 * scale) as u32;
             let new_height = (height as f32 * scale) as u32;
 
@@ -154,15 +119,15 @@ impl OcrEngine {
     }
 
     /// Check if a PDF page likely needs OCR (is it scanned/image-based?)
-    /// 
+    ///
     /// **Design Intent**: Primary trigger is minimal text extraction (< 50 chars),
     /// indicating likely scanned/image-based PDF that needs OCR processing.
-    /// 
+    ///
     /// **Logic**:
     /// 1. If text extraction yielded sufficient content (≥50 chars) → no OCR needed
     /// 2. If text is minimal AND we have a page image → check image variance to reduce false positives
     /// 3. If text is minimal AND no image provided → assume OCR needed
-    /// 
+    ///
     /// This ensures OCR triggers reliably for scanned PDFs called from the extractor
     /// with `needs_ocr(&text, None)` while still supporting image-based refinement
     /// when page images are available.
@@ -199,7 +164,7 @@ impl OcrEngine {
                     return has_content;
                 }
             }
-            
+
             // No image available or empty image - rely solely on minimal text detection
             warn!(
                 "Page needs OCR: minimal text extraction ({} chars)",
