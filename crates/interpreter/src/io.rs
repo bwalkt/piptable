@@ -414,14 +414,11 @@ fn normalize_column_names(existing: &mut Sheet, new_data: &Sheet) -> Result<(), 
     let existing_cols = existing.column_names().cloned();
     let new_cols = new_data.column_names().cloned();
 
-    match (existing_cols, new_cols) {
-        (None, Some(_)) => {
-            // Existing has no column names but new data does
-            // Only name columns if the existing data looks like headers (detect_csv_headers would help)
-            // For now, don't auto-assign column names to avoid data/header confusion
-            // The append functions will handle this case appropriately
-        }
-        _ => {} // Other cases are handled by regular validation
+    if let (None, Some(_)) = (existing_cols, new_cols) {
+        // Existing has no column names but new data does
+        // Only name columns if the existing data looks like headers (detect_csv_headers would help)
+        // For now, don't auto-assign column names to avoid data/header confusion
+        // The append functions will handle this case appropriately
     }
 
     Ok(())
