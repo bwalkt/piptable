@@ -102,7 +102,8 @@ impl OcrEngine {
         let min_dimension = 2000; // Minimum pixel dimension for good OCR
 
         if width < min_dimension || height < min_dimension {
-            let scale = min_dimension as f32 / width.min(height) as f32;
+            // Cap scaling to prevent memory issues with extreme aspect ratios
+            let scale = (min_dimension as f32 / width.min(height) as f32).min(4.0);
             let new_width = (width as f32 * scale) as u32;
             let new_height = (height as f32 * scale) as u32;
 
