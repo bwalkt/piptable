@@ -64,22 +64,42 @@ fn detect_csv_headers(path: &str, delimiter: u8) -> Result<bool, String> {
     let second_row = second_line.as_ref().map(|l| parse_csv_line(l, delimiter));
 
     // Check if first row is likely headers:
-    // 1. All values in first row are non-numeric strings
-    // 2. Second row (if exists) has numeric values
+    // 1. All values in first row are non-numeric strings  
+    // 2. Second row (if exists) has numeric values OR significantly different patterns
     let all_strings = first_row.iter().all(|v| {
         // Check if it's a non-empty string that doesn't parse as a number
         !v.is_empty() && v.parse::<f64>().is_err() && v != "true" && v != "false"
     });
 
-    let has_numbers = second_row
+    let has_numbers_or_different_pattern = second_row
         .as_ref()
         .map(|row| {
-            row.iter()
-                .any(|v| v.parse::<f64>().is_ok() || v == "true" || v == "false")
+            // Check for numeric/bool values  
+            let has_numbers = row.iter()
+                .any(|v| v.parse::<f64>().is_ok() || v == "true" || v == "false");
+            
+            // For string-only data, only consider it headers if there are STRONG indicators:
+            // - Headers contain underscores/descriptive terms vs normal names
+            // - Headers are significantly longer/shorter than data
+            // - Headers contain common header words
+            let different_patterns = !has_numbers && {
+                let header_indicators = first_row.iter().any(|h| 
+                    h.contains('_') || h.to_lowercase().contains("id") || h.to_lowercase().contains("name") 
+                    || h.to_lowercase().contains("type") || h.to_lowercase().contains("value")
+                );
+                
+                let size_difference = row.iter().zip(first_row.iter()).any(|(data, header)| {
+                    data.len() > 30 && header.len() < 15 // Significantly longer data vs short headers
+                });
+                
+                header_indicators || size_difference
+            };
+            
+            has_numbers || different_patterns
         })
         .unwrap_or(false);
 
-    Ok(all_strings && (second_row.is_none() || has_numbers))
+    Ok(all_strings && (second_row.is_none() || has_numbers_or_different_pattern))
 }
 
 /// Simple CSV line parser for header detection
@@ -349,9 +369,24 @@ fn append_sheet_data(existing: &mut Sheet, new_data: &Sheet) -> Result<(), Strin
                 }
             }
         }
-        _ => {
+        (None, Some(_)) => {
+            // Existing has no column names, new data has column names
+            // This is allowed for regular append - we skip the new data's header row
+            let existing_cols = existing.data().first().map(|r| r.len());
+            let new_cols = new_data.data().get(1).map(|r| r.len()); // Skip header row
+            match (existing_cols, new_cols) {
+                (Some(e), Some(n)) if e != n => {
+                    return Err(format!(
+                        "Column count mismatch: existing has {} columns, new data has {} columns",
+                        e, n
+                    ));
+                }
+                _ => {}
+            }
+        }
+        (Some(_), None) => {
             return Err(
-                "Cannot append: one sheet has column names while the other doesn't".to_string(),
+                "Cannot append: existing file has column names but new data doesn't".to_string(),
             );
         }
     }
@@ -370,13 +405,34 @@ fn append_sheet_data(existing: &mut Sheet, new_data: &Sheet) -> Result<(), Strin
     Ok(())
 }
 
+/// Helper function to normalize column name state between two sheets
+fn normalize_column_names(existing: &mut Sheet, new_data: &Sheet) -> Result<(), String> {
+    let existing_cols = existing.column_names().cloned();
+    let new_cols = new_data.column_names().cloned();
+
+    match (existing_cols, new_cols) {
+        (None, Some(_)) => {
+            // Existing has no column names but new data does
+            // Only name columns if the existing data looks like headers (detect_csv_headers would help)
+            // For now, don't auto-assign column names to avoid data/header confusion
+            // The append functions will handle this case appropriately
+        }
+        _ => {} // Other cases are handled by regular validation
+    }
+    
+    Ok(())
+}
+
 /// Helper function to append only distinct rows from one sheet to another.
 fn append_sheet_distinct(
     existing: &mut Sheet,
     new_data: &Sheet,
     key_column: Option<usize>,
 ) -> Result<(), String> {
-    // First do the same column validation as regular append
+    // Normalize column names first
+    normalize_column_names(existing, new_data)?;
+    
+    // Then do the same column validation as regular append
     let existing_cols = existing.column_names();
     let new_cols = new_data.column_names();
 
@@ -412,9 +468,21 @@ fn append_sheet_distinct(
     // Determine key column index to use for uniqueness check
     let key_col = key_column.unwrap_or(0); // Default to first column as key
 
-    // Build a set of existing keys for fast lookup
+    // Validate key column is in bounds
+    let max_cols = existing.col_count().max(new_data.col_count());
+    if max_cols > 0 && key_col >= max_cols {
+        return Err(format!(
+            "Key column index {} is out of bounds ({} columns)",
+            key_col, max_cols
+        ));
+    }
+
+    // Build a set of existing keys for fast lookup (skip header row if present)
     let mut existing_keys = std::collections::HashSet::new();
-    for row in existing.data() {
+    let skip_existing_header = has_header_row(existing);
+    let start_existing = if skip_existing_header { 1 } else { 0 };
+    
+    for row in existing.data().iter().skip(start_existing) {
         if let Some(key) = row.get(key_col) {
             existing_keys.insert(key.as_str().to_string());
         }
@@ -446,7 +514,10 @@ fn append_sheet_or_update(
     new_data: &Sheet,
     key_column: Option<usize>,
 ) -> Result<(), String> {
-    // First do column validation
+    // Normalize column names first
+    normalize_column_names(existing, new_data)?;
+    
+    // Then do column validation
     let existing_cols = existing.column_names();
     let new_cols = new_data.column_names();
 
@@ -472,9 +543,24 @@ fn append_sheet_or_update(
                 _ => {}
             }
         }
-        _ => {
+        (None, Some(_)) => {
+            // Existing has no column names, new data has column names
+            // This is allowed - we'll compare data against data (skipping new data's header row)
+            let existing_cols = existing.data().first().map(|r| r.len());
+            let new_cols = new_data.data().get(1).map(|r| r.len()); // Skip header row
+            match (existing_cols, new_cols) {
+                (Some(e), Some(n)) if e != n => {
+                    return Err(format!(
+                        "Column count mismatch: existing has {} columns, new data has {} columns",
+                        e, n
+                    ));
+                }
+                _ => {}
+            }
+        }
+        (Some(_), None) => {
             return Err(
-                "Cannot append: one sheet has column names while the other doesn't".to_string(),
+                "Cannot append: existing file has column names but new data doesn't".to_string(),
             );
         }
     }
@@ -482,10 +568,19 @@ fn append_sheet_or_update(
     // Determine key column index
     let key_col = key_column.unwrap_or(0);
 
+    // Validate key column is in bounds
+    let max_cols = existing.col_count().max(new_data.col_count());
+    if max_cols > 0 && key_col >= max_cols {
+        return Err(format!(
+            "Key column index {} is out of bounds ({} columns)",
+            key_col, max_cols
+        ));
+    }
+
     // Build a map of existing rows by key for update
     let mut key_to_row_index = std::collections::HashMap::new();
-    let has_existing_headers = existing.column_names().is_some();
-    let start_existing = if has_existing_headers { 1 } else { 0 };
+    let skip_existing_header = has_header_row(existing);
+    let start_existing = if skip_existing_header { 1 } else { 0 };
 
     for (idx, row) in existing.data().iter().enumerate().skip(start_existing) {
         if let Some(key) = row.get(key_col) {
