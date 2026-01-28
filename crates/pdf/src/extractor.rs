@@ -3,6 +3,7 @@ use crate::error::{PdfError, Result};
 use crate::ocr::OcrEngine;
 use lopdf::Document;
 use pdf_extract::extract_text;
+use pdfium_render::prelude::*;
 use std::path::Path;
 
 #[derive(Debug, Clone)]
@@ -52,19 +53,45 @@ impl PdfExtractor {
         // First try to extract text directly
         let text = self.extract_text_from_pdf(path)?;
 
-        if text.trim().is_empty() && self.ocr_engine.is_some() {
-            // If no text found and OCR is enabled, try OCR
-            tracing::info!("No text found in PDF, attempting OCR extraction");
-            self.extract_tables_with_ocr(path)
-        } else {
-            // Detect tables from extracted text
-            let tables = self.detector.detect_tables(&text);
+        // Check if we need OCR based on the amount of text extracted
+        let needs_ocr = self.ocr_engine.is_some() && OcrEngine::needs_ocr(&text, None);
 
-            if tables.is_empty() {
-                Err(PdfError::NoTablesFound)
-            } else {
-                Ok(tables)
+        if needs_ocr {
+            // If minimal text found and OCR is enabled, try OCR extraction
+            tracing::info!(
+                "Minimal text found ({} chars), attempting OCR extraction",
+                text.trim().len()
+            );
+
+            // Try OCR extraction first
+            match self.extract_tables_with_ocr(path) {
+                Ok(ocr_tables) if !ocr_tables.is_empty() => {
+                    tracing::info!("Found {} tables via OCR", ocr_tables.len());
+                    return Ok(ocr_tables);
+                }
+                Ok(_) => {
+                    tracing::warn!("OCR completed but found no tables");
+                }
+                Err(e) => {
+                    tracing::warn!("OCR extraction failed: {}", e);
+                    // Fall back to using whatever text we got
+                }
             }
+        }
+
+        // Detect tables from extracted text (either original or after failed OCR)
+        let tables = self.detector.detect_tables(&text);
+
+        if tables.is_empty() {
+            if needs_ocr && self.ocr_engine.is_none() {
+                Err(PdfError::OcrError(
+                    "No tables found. This appears to be a scanned PDF - enable OCR for better results".to_string()
+                ))
+            } else {
+                Err(PdfError::NoTablesFound)
+            }
+        } else {
+            Ok(tables)
         }
     }
 
@@ -151,11 +178,95 @@ impl PdfExtractor {
         Ok(all_text)
     }
 
-    fn extract_tables_with_ocr(&self, _path: &Path) -> Result<Vec<TableRegion>> {
-        // OCR implementation would go here
-        // For Phase 1, we're focusing on text-based extraction
-        Err(PdfError::OcrError(
-            "OCR extraction not fully implemented in Phase 1".to_string(),
-        ))
+    fn extract_tables_with_ocr(&self, path: &Path) -> Result<Vec<TableRegion>> {
+        let ocr_engine = self
+            .ocr_engine
+            .as_ref()
+            .ok_or_else(|| PdfError::OcrError("OCR engine not initialized".to_string()))?;
+
+        tracing::info!("Attempting OCR extraction from PDF: {:?}", path);
+
+        // Initialize PDFium library
+        let pdfium = Pdfium::new(
+            Pdfium::bind_to_library(Pdfium::pdfium_platform_library_name_at_path("./"))
+                .or_else(|_| Pdfium::bind_to_system_library())
+                .map_err(|e| PdfError::OcrError(format!("Failed to initialize PDFium: {}", e)))?,
+        );
+
+        // Load the PDF document
+        let document = pdfium
+            .load_pdf_from_file(path, None)
+            .map_err(|e| PdfError::OcrError(format!("Failed to load PDF for OCR: {}", e)))?;
+
+        let mut all_ocr_text = String::new();
+        let total_pages = document.pages().len();
+
+        let (start, end) = if let Some((s, e)) = self.options.page_range {
+            // Convert to 0-based indexing for pdfium
+            let start_idx = s.saturating_sub(1);
+            let end_idx = e.min(total_pages).saturating_sub(1);
+            (start_idx, end_idx)
+        } else {
+            (0, total_pages.saturating_sub(1))
+        };
+
+        tracing::info!("Processing pages {}-{} for OCR", start + 1, end + 1);
+
+        for page_index in start..=end {
+            tracing::debug!("Processing page {} for OCR", page_index + 1);
+
+            // Get the page
+            let page = document.pages().get(page_index).map_err(|e| {
+                PdfError::OcrError(format!("Failed to get page {}: {}", page_index + 1, e))
+            })?;
+
+            // Render page to image at high DPI for better OCR quality
+            let render_config = PdfRenderConfig::new()
+                .set_target_width(2000) // High resolution for OCR
+                .set_maximum_height(3000)
+                .rotate_if_landscape(PdfPageRenderRotation::Degrees90, true);
+
+            let image_buffer = page
+                .render_with_config(&render_config)
+                .map_err(|e| {
+                    PdfError::OcrError(format!("Failed to render page {}: {}", page_index + 1, e))
+                })?
+                .as_image();
+
+            // Convert to DynamicImage for OCR processing
+            let dynamic_image = image::DynamicImage::ImageRgba8(image_buffer);
+
+            // Extract text using OCR
+            match ocr_engine.extract_text_from_pdf_page(dynamic_image) {
+                Ok(page_text) => {
+                    tracing::debug!(
+                        "OCR extracted {} characters from page {}",
+                        page_text.len(),
+                        page_index + 1
+                    );
+                    all_ocr_text.push_str(&page_text);
+                    all_ocr_text.push('\n'); // Add page separator
+                }
+                Err(e) => {
+                    tracing::warn!("OCR failed on page {}: {}", page_index + 1, e);
+                    // Continue with other pages
+                }
+            }
+        }
+
+        tracing::info!(
+            "OCR extraction completed, total text: {} characters",
+            all_ocr_text.len()
+        );
+
+        // Detect tables from OCR text
+        if !all_ocr_text.trim().is_empty() {
+            let tables = self.detector.detect_tables(&all_ocr_text);
+            tracing::info!("Detected {} tables from OCR text", tables.len());
+            Ok(tables)
+        } else {
+            tracing::warn!("No text extracted via OCR");
+            Ok(Vec::new())
+        }
     }
 }

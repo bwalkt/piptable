@@ -18,12 +18,21 @@ This document outlines the phased approach for implementing comprehensive PDF su
 - ✅ Error handling and validation
 - ✅ Basic test coverage
 
-### Phase 1B: Add OCR Support 🚧 IN PROGRESS
-**Next Steps** (additions, not replacements):
-- [ ] ADD tesseract-rs for OCR capabilities alongside existing text extraction
-- [ ] Implement automatic detection of scanned vs text PDFs
-- [ ] Add OCR fallback when text extraction yields no results
-- [ ] Keep existing pdf-extract/lopdf as primary method, add OCR as supplementary
+### Phase 1B: Add OCR Support ✅ IMPLEMENTED
+**Completed**:
+- ✅ Added tesseract-rs and pdfium-render for OCR capabilities alongside existing text extraction
+- ✅ Implemented automatic detection of scanned vs text PDFs
+- ✅ Added OCR fallback when text extraction yields no results
+- ✅ Kept existing pdf-extract/lopdf as primary method, added OCR as supplementary
+- ✅ Full PDF page rendering to images for OCR processing
+- ✅ Image preprocessing for better OCR accuracy
+
+**System Dependencies Required**:
+- Tesseract OCR library and language data
+- Leptonica image processing library
+- On macOS: `brew install tesseract leptonica`
+- On Ubuntu/Debian: `apt-get install tesseract-ocr tesseract-ocr-eng libleptonica-dev`
+- On other systems: Install Tesseract and Leptonica according to platform documentation
 
 ### Technical Implementation Plan:
 - **Primary extraction**: Keep pdf-extract and lopdf (already working well)
