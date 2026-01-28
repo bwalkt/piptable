@@ -74,8 +74,10 @@ impl PdfExtractor {
                     tracing::warn!("OCR completed but found no tables");
                 }
                 Err(e) => {
-                    tracing::warn!("OCR extraction failed: {}", e);
-                    // Fall back to using whatever text we got
+                    // When OCR is explicitly enabled, return the OCR error instead of falling back
+                    // This helps users diagnose PDFium/Tesseract setup issues
+                    tracing::error!("OCR extraction failed: {}", e);
+                    return Err(e);
                 }
             }
         }

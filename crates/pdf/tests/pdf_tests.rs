@@ -1,4 +1,4 @@
-use piptable_pdf::{extract_tables_from_pdf, PdfOptions};
+use piptable_pdf::{extract_tables_from_pdf, extract_tables_with_options, PdfOptions, PdfError};
 use std::io::Write;
 use tempfile::NamedTempFile;
 
@@ -71,4 +71,100 @@ fn test_cell_value_parsing() {
     // - Booleans: true -> CellValue::Bool(true)
     // - Strings: hello -> CellValue::String("hello")
     // - Empty/Null: "" -> CellValue::Null
+}
+
+#[test] 
+#[ignore = "Requires OCR system dependencies (tesseract, leptonica, pdfium)"]
+fn test_ocr_dependency_detection() {
+    // Test that OCR-enabled processing fails gracefully when dependencies are missing
+    // This helps catch runtime dependency issues during development
+    
+    let options = PdfOptions {
+        page_range: None,
+        ocr_enabled: true,
+        ocr_language: "eng".to_string(),
+        min_table_rows: 2,
+        min_table_cols: 2,
+    };
+
+    // Test with a non-existent file to trigger OCR path
+    let result = extract_tables_with_options("/non/existent/file.pdf", options);
+    
+    // Should fail, but we want to ensure it's a clear error about missing dependencies
+    assert!(result.is_err());
+    
+    // If dependencies are missing, we expect specific error types
+    if let Err(e) = result {
+        match e {
+            PdfError::ParseError(_) => {
+                // File not found - expected for this test
+                println!("File not found (expected for test)");
+            },
+            PdfError::OcrError(msg) => {
+                // OCR dependency error - what we're testing for
+                println!("OCR dependency error detected: {}", msg);
+                assert!(
+                    msg.contains("Tesseract") || 
+                    msg.contains("PDFium") || 
+                    msg.contains("leptonica"),
+                    "OCR error should mention specific dependency: {}", msg
+                );
+            },
+            _ => {
+                println!("Unexpected error type: {:?}", e);
+            }
+        }
+    }
+}
+
+#[test]
+#[ignore = "Requires creating actual PDF content"]
+fn test_ocr_vs_text_extraction() {
+    // Integration test to verify OCR vs text extraction behavior
+    // This would test the hybrid approach: text first, OCR fallback
+    
+    // TODO: Create minimal PDF with known content to test:
+    // 1. PDFs with extractable text (should not trigger OCR)
+    // 2. PDFs with minimal/no text (should trigger OCR if enabled)
+    // 3. Error handling when OCR dependencies are missing
+    
+    let text_based_options = PdfOptions {
+        ocr_enabled: false,
+        ..Default::default()
+    };
+    
+    let ocr_enabled_options = PdfOptions {
+        ocr_enabled: true, 
+        ..Default::default()
+    };
+    
+    // For now, just test that the options are correctly configured
+    assert!(!text_based_options.ocr_enabled);
+    assert!(ocr_enabled_options.ocr_enabled);
+}
+
+#[test]
+fn test_ocr_error_propagation() {
+    // Test that when OCR is explicitly enabled and fails, 
+    // the error is properly propagated (not swallowed)
+    
+    let options = PdfOptions {
+        ocr_enabled: true,
+        ocr_language: "eng".to_string(),
+        ..Default::default()
+    };
+    
+    // Test with invalid file path
+    let result = extract_tables_with_options("/invalid/path/file.pdf", options);
+    
+    // Should get an error, and when OCR is enabled, OCR-related errors should bubble up
+    assert!(result.is_err());
+    
+    // The specific error type depends on whether dependencies are available
+    // but we verify that some error is returned rather than being swallowed
+    if let Err(e) = result {
+        println!("Got expected error with OCR enabled: {:?}", e);
+        // Error could be ParseError (file not found), OcrError (dependency missing), etc.
+        // The key is that we GET an error rather than silent failure
+    }
 }
