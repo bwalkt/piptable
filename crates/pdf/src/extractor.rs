@@ -54,9 +54,10 @@ impl PdfExtractor {
         let text = self.extract_text_from_pdf(path)?;
 
         // Check if we need OCR based on the amount of text extracted
-        let needs_ocr = self.ocr_engine.is_some() && OcrEngine::needs_ocr(&text, None);
+        let content_needs_ocr = OcrEngine::needs_ocr(&text, None);
+        let ocr_available = self.ocr_engine.is_some();
 
-        if needs_ocr {
+        if content_needs_ocr && ocr_available {
             // If minimal text found and OCR is enabled, try OCR extraction
             tracing::info!(
                 "Minimal text found ({} chars), attempting OCR extraction",
@@ -83,7 +84,7 @@ impl PdfExtractor {
         let tables = self.detector.detect_tables(&text);
 
         if tables.is_empty() {
-            if needs_ocr && self.ocr_engine.is_none() {
+            if content_needs_ocr && !ocr_available {
                 Err(PdfError::OcrError(
                     "No tables found. This appears to be a scanned PDF - enable OCR for better results".to_string()
                 ))

@@ -36,7 +36,7 @@ impl OcrEngine {
         debug!("Starting OCR extraction from image: {:?}", image_path);
 
         // Check if Tesseract is available
-        let tesseract = Tesseract::new(None, Some(&self.language))
+        let mut tesseract = Tesseract::new(None, Some(&self.language))
             .map_err(|e| PdfError::OcrError(format!("Failed to initialize Tesseract: {}", e)))?;
 
         // Load and preprocess the image
@@ -159,7 +159,8 @@ impl OcrEngine {
         let text_is_minimal = text.trim().len() < 50;
 
         // If we have an image, check if it looks like it contains text
-        let has_text_like_image = page_image.map_or(false, |img| {
+        // If no image provided, assume minimal text indicates need for OCR
+        let has_text_like_image = page_image.map(|img| {
             // Simple heuristic: check variance in the image
             // Scanned documents typically have high contrast text
             let gray = img.to_luma8();
@@ -181,7 +182,7 @@ impl OcrEngine {
 
             // High variance suggests text content
             variance > 1000.0
-        });
+        }).unwrap_or(true); // Default to true when no image provided
 
         if text_is_minimal && has_text_like_image {
             warn!(

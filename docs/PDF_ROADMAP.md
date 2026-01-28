@@ -40,11 +40,11 @@ This document outlines the phased approach for implementing comprehensive PDF su
 - **Hybrid approach**: Try text extraction first, fall back to OCR if needed
 - **Table detection**: Keep regex patterns, enhance with OCR output processing
 
-### Limitations:
+### Current Limitations:
 - No DSL integration (not available via IMPORT command)
-- Text-based only (no image/scanned PDF support)
 - Simple table detection (may miss complex layouts)
 - No support for merged cells or nested tables
+- Limited to regex-based pattern matching
 
 ## Phase 2: Enhanced Detection & DSL Integration 🚧 PLANNED
 
@@ -76,37 +76,7 @@ This document outlines the phased approach for implementing comprehensive PDF su
 - May require additional ML libraries for table detection
 - Consider using existing solutions like Camelot or Tabula algorithms
 
-## Phase 3: OCR Support for Scanned PDFs 📷 FUTURE
-
-### Goals:
-- **OCR Integration**: Extract tables from scanned/image-based PDFs
-- **Language Support**: Multi-language OCR capabilities
-- **Quality Detection**: Automatically determine if OCR is needed
-
-### Technical Approach:
-- Integrate Tesseract OCR engine
-- Implement image preprocessing:
-  - Deskewing
-  - Noise reduction
-  - Contrast enhancement
-- Hybrid approach: Combine OCR with text extraction
-
-### Configuration:
-```piptable
-IMPORT "scanned.pdf" WITH {
-  "ocr": true,
-  "ocr_language": "eng+fra",  ' English + French
-  "preprocess": true,
-  "dpi": 300
-} INTO sheet
-```
-
-### Dependencies:
-- Tesseract OCR library
-- Image processing libraries (image-rs)
-- Language data files
-
-## Phase 4: Advanced Features & Optimization 🚀 FUTURE
+## Phase 3: Advanced Features & Optimization 🚀 FUTURE
 
 ### Goals:
 - **Form Data Extraction**: Extract data from PDF forms
