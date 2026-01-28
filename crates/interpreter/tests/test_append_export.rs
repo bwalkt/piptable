@@ -323,15 +323,17 @@ async fn test_headerless_csv_append() {
     // Append more headerless data
     {
         let mut interp = Interpreter::new();
-        
+
         // Create headerless sheet to append
         let append_sheet = Sheet::from_data(vec![
             vec![CellValue::Int(3), CellValue::String("Charlie".to_string())],
             vec![CellValue::Int(4), CellValue::String("Diana".to_string())],
         ]);
-        
-        interp.set_var("new_data", piptable_core::Value::Sheet(append_sheet)).await;
-        
+
+        interp
+            .set_var("new_data", piptable_core::Value::Sheet(append_sheet))
+            .await;
+
         let script = format!(
             r#"
             export new_data to "{}" append
@@ -349,7 +351,7 @@ async fn test_headerless_csv_append() {
     assert!(final_content.contains("2,Bob"));
     assert!(final_content.contains("3,Charlie"));
     assert!(final_content.contains("4,Diana"));
-    
+
     let final_line_count = final_content.lines().count();
     assert_eq!(final_line_count, 4); // All data rows, no headers
 }
@@ -380,14 +382,17 @@ async fn test_mixed_header_append_error() {
     // Try to append headerless data - should work as it detects headers exist
     {
         let mut interp = Interpreter::new();
-        
+
         // Create headerless sheet (but with matching structure)
-        let headerless_sheet = Sheet::from_data(vec![
-            vec![CellValue::Int(3), CellValue::String("Charlie".to_string())],
-        ]);
-        
-        interp.set_var("new_data", piptable_core::Value::Sheet(headerless_sheet)).await;
-        
+        let headerless_sheet = Sheet::from_data(vec![vec![
+            CellValue::Int(3),
+            CellValue::String("Charlie".to_string()),
+        ]]);
+
+        interp
+            .set_var("new_data", piptable_core::Value::Sheet(headerless_sheet))
+            .await;
+
         let script = format!(
             r#"
             export new_data to "{}" append
@@ -397,13 +402,13 @@ async fn test_mixed_header_append_error() {
 
         let program = PipParser::parse_str(&script).unwrap();
         let result = interp.eval(program).await;
-        
+
         // This should fail due to column name mismatch
         assert!(result.is_err());
     }
 }
 
-#[tokio::test]  
+#[tokio::test]
 async fn test_headerless_tsv_append() {
     let dir = tempdir().unwrap();
     let tsv_path = dir.path().join("headerless.tsv");
@@ -411,22 +416,33 @@ async fn test_headerless_tsv_append() {
     // Create initial headerless TSV
     {
         let sheet = Sheet::from_data(vec![
-            vec![CellValue::String("Widget".to_string()), CellValue::Float(10.50)],
-            vec![CellValue::String("Gadget".to_string()), CellValue::Float(25.00)],
+            vec![
+                CellValue::String("Widget".to_string()),
+                CellValue::Float(10.50),
+            ],
+            vec![
+                CellValue::String("Gadget".to_string()),
+                CellValue::Float(25.00),
+            ],
         ]);
-        sheet.save_as_csv_with_options(&tsv_path, CsvOptions::tsv()).unwrap();
+        sheet
+            .save_as_csv_with_options(&tsv_path, CsvOptions::tsv())
+            .unwrap();
     }
 
     // Append more headerless data
     {
         let mut interp = Interpreter::new();
-        
-        let append_sheet = Sheet::from_data(vec![
-            vec![CellValue::String("Doohickey".to_string()), CellValue::Float(15.75)],
-        ]);
-        
-        interp.set_var("new_data", piptable_core::Value::Sheet(append_sheet)).await;
-        
+
+        let append_sheet = Sheet::from_data(vec![vec![
+            CellValue::String("Doohickey".to_string()),
+            CellValue::Float(15.75),
+        ]]);
+
+        interp
+            .set_var("new_data", piptable_core::Value::Sheet(append_sheet))
+            .await;
+
         let script = format!(
             r#"
             export new_data to "{}" append
@@ -444,7 +460,7 @@ async fn test_headerless_tsv_append() {
     assert!(content.contains("Widget"));
     assert!(content.contains("Gadget"));
     assert!(content.contains("Doohickey"));
-    
+
     let lines: Vec<_> = content.lines().collect();
     assert_eq!(lines.len(), 3); // 3 data rows, no headers
 }

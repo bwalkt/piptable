@@ -18,25 +18,28 @@ pub fn export_sheet_with_mode(sheet: &Sheet, path: &str, append: bool) -> Result
                 Sheet::from_csv_with_options(path, CsvOptions::tsv())
                     .map_err(|e| format!("Failed to load existing TSV: {}", e))?
             } else {
-                Sheet::from_csv(path)
-                    .map_err(|e| format!("Failed to load existing CSV: {}", e))?
+                Sheet::from_csv(path).map_err(|e| format!("Failed to load existing CSV: {}", e))?
             };
-            
+
             // Detect if the file has headers by checking if the new sheet has column names
             // and if they match the first row of the existing file
             let has_headers = if let Some(_new_cols) = sheet.column_names() {
                 // Check if first row of existing file matches the column names we're appending
-                raw_sheet.data().first()
+                raw_sheet
+                    .data()
+                    .first()
                     .map(|first_row| {
                         // If all values in first row are strings and match column names pattern
-                        first_row.iter().all(|cell| matches!(cell, CellValue::String(_)))
+                        first_row
+                            .iter()
+                            .all(|cell| matches!(cell, CellValue::String(_)))
                     })
                     .unwrap_or(false)
             } else {
                 // If new data has no column names, existing file shouldn't have headers either
                 false
             };
-            
+
             // Now reload with proper header handling
             let mut existing_sheet = if has_headers {
                 import_sheet(path, None, true)
