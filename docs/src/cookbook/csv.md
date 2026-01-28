@@ -226,13 +226,22 @@ print "users.csv now contains all 4 records"
 ```piptable
 ' @title Append to Daily Logs
 ' @description Continuously add log entries to a daily file
+' NOTE: This example uses a hardcoded date. The now() and format_date() 
+' functions are planned features not yet implemented.
 
-dim log_file = "logs_" + format_date(now(), "YYYY-MM-DD") + ".csv"
+dim log_file = "logs_2024_01_15.csv"
+
+' Simulate processing events (in production, these would come from your data source)
+dim events = [
+  {"type": "login", "user_id": 101, "details": "successful"},
+  {"type": "action", "user_id": 102, "details": "created_document"},
+  {"type": "logout", "user_id": 101, "details": "normal"}
+]
 
 ' Process and append log entries throughout the day
-for each event in incoming_events
+for each event in events
   dim log_entry = {
-    "timestamp": now(),
+    "timestamp": "2024-01-15T10:30:00",  ' Hardcoded timestamp for now
     "event_type": event.type,
     "user_id": event.user_id,
     "details": event.details
@@ -281,11 +290,12 @@ for batch_num = 1 to 10
   import batch_file into batch
   
   ' Transform the batch
+  ' NOTE: calculate_score() is a placeholder for your business logic
   dim processed: table = query(
     SELECT 
       id,
       upper(name) as name,
-      calculate_score(value) as score
+      value * 1.5 as score  -- Simple calculation instead of calculate_score()
     FROM batch
   )
   
