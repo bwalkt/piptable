@@ -1,0 +1,46 @@
+#!/bin/sh
+# Pre-push hook to run linting checks before pushing to remote
+# This runs the same checks as CI to catch issues early
+
+set -e
+
+echo "🔍 Running pre-push checks..."
+
+# Check if we have uncommitted changes
+if ! git diff --quiet || ! git diff --cached --quiet; then
+    echo "⚠️  Warning: You have uncommitted changes. These won't be checked."
+fi
+
+# 1. Format check
+echo "📝 Checking code formatting..."
+if ! cargo fmt --all -- --check > /dev/null 2>&1; then
+    echo "❌ Formatting issues found! Run 'cargo fmt --all' to fix."
+    echo ""
+    echo "Showing formatting diff:"
+    cargo fmt --all -- --check 2>&1 | head -20
+    exit 1
+fi
+echo "✅ Formatting check passed"
+
+# 2. Clippy check (excluding piptable-python as CI does)
+echo "🔧 Running clippy..."
+if ! cargo clippy --workspace --exclude piptable-python -- -D warnings > /dev/null 2>&1; then
+    echo "❌ Clippy warnings found! Fix them before pushing."
+    echo ""
+    echo "Showing clippy output:"
+    cargo clippy --workspace --exclude piptable-python -- -D warnings 2>&1 | grep -E "error|warning" | head -20
+    exit 1
+fi
+echo "✅ Clippy check passed"
+
+# 3. Quick test compilation (not full tests, just check it builds)
+echo "🔨 Checking compilation..."
+if ! cargo check --workspace --exclude piptable-python > /dev/null 2>&1; then
+    echo "❌ Compilation failed!"
+    cargo check --workspace --exclude piptable-python 2>&1 | grep -E "error" | head -20
+    exit 1
+fi
+echo "✅ Compilation check passed"
+
+echo "✨ All pre-push checks passed! Proceeding with push..."
+echo ""

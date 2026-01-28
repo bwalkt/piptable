@@ -1,0 +1,23 @@
+# Sample PIP file demonstrating PDF table extraction
+# Phase 1: Basic PDF table extraction using text-based methods
+
+# For testing, you would use a real PDF file like:
+# import my_data from "sample_table.pdf"
+
+# Example of how to work with PDF data once extracted:
+# import sales_data from "sales_report.pdf"
+# 
+# # Basic operations on extracted PDF table
+# sales_data
+#   | filter(Revenue > 1000)
+#   | sort_by(Date)
+#   | take(10)
+
+# Expected PDF table format for Phase 1:
+# ┌─────────────┬─────────────┬─────────────┐
+# │    Date     │   Product   │   Revenue   │
+# ├─────────────┼─────────────┼─────────────┤
+# │ 2024-01-01  │   Widget A  │    1250.50  │
+# │ 2024-01-02  │   Widget B  │     890.25  │
+# │ 2024-01-03  │   Widget A  │    2100.00  │
+# └─────────────┴─────────────┴─────────────┘

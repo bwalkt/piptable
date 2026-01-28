@@ -255,6 +255,15 @@ pub fn import_sheet(
         Sheet::from_parquet(path).map_err(|e| format!("Failed to import Parquet: {}", e))
     } else if path_lower.ends_with(".toon") {
         Sheet::from_toon(path).map_err(|e| format!("Failed to import TOON: {}", e))
+    } else if path_lower.ends_with(".pdf") {
+        let tables = piptable_pdf::extract_tables_from_pdf(path)
+            .map_err(|e| format!("Failed to import PDF: {}", e))?;
+        let first = tables
+            .into_iter()
+            .next()
+            .ok_or_else(|| format!("No tables found in PDF '{}'", path))?;
+        // For Phase 1, return the first table found
+        Ok(first)
     } else {
         Err(format!("Unsupported import format for '{}'", path))
     }

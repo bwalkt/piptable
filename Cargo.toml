@@ -12,6 +12,7 @@ members = [
     "crates/sheet",
     "crates/python",
     "crates/piptable-wasm",
+    "crates/pdf",
 ]
 
 [workspace.package]
@@ -88,6 +89,7 @@ piptable-interpreter = { path = "crates/interpreter" }
 piptable-viz = { path = "crates/viz" }
 piptable-sheet = { path = "crates/sheet" }
 piptable-python = { path = "crates/python" }
+piptable-pdf = { path = "crates/pdf" }
 
 [workspace.lints.rust]
 unsafe_code = "forbid"

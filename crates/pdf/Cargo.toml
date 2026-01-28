@@ -1,0 +1,30 @@
+[package]
+name = "piptable-pdf"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+
+[dependencies]
+# Core dependencies
+piptable-sheet = { path = "../sheet" }
+thiserror = { workspace = true }
+anyhow = { workspace = true }
+
+# PDF processing
+pdf-extract = "0.10"
+lopdf = "0.39"
+
+# OCR support (disabled for Phase 1)
+# tesseract = "0.15"
+
+# Text processing
+regex = "1.11"
+lazy_static = "1.5"
+
+# Utilities
+tracing = { workspace = true }
+
+[dev-dependencies]
+tempfile = { workspace = true }
