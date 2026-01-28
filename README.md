@@ -10,13 +10,22 @@ Before building or running PipTable with OCR support, install the required syste
 
 #### macOS (using Homebrew)
 ```bash
+# OCR dependencies
 brew install tesseract leptonica
+
+# PDF rendering for OCR (required for scanned PDFs)
+# PDFium will be dynamically loaded - ensure it's available via system package manager
+# or the pdfium-render crate will attempt to download/bundle it automatically
 ```
 
 #### Ubuntu/Debian
 ```bash
 sudo apt-get update
 sudo apt-get install tesseract-ocr tesseract-ocr-eng libleptonica-dev pkg-config
+
+# Note: PDFium library is dynamically loaded by pdfium-render crate
+# If OCR fails at runtime, you may need to install libpdfium or 
+# allow the crate to download/bundle PDFium automatically
 ```
 
 #### Fedora/CentOS/RHEL
@@ -43,6 +52,20 @@ brew install tesseract-lang
 ```bash
 sudo apt-get install tesseract-ocr-fra tesseract-ocr-spa
 ```
+
+### Runtime Dependencies
+
+**PDFium for PDF Rendering:**
+- The `pdfium-render` crate dynamically loads PDFium library for PDF-to-image conversion
+- If OCR fails with errors about PDFium initialization, ensure PDFium is available:
+  - The crate attempts to auto-download/bundle PDFium on first use
+  - Alternative: Install system PDFium package if available
+  - Error messages will indicate PDFium loading failures
+
+**Troubleshooting OCR Issues:**
+- "Failed to initialize PDFium" → PDFium library not found or loadable
+- "Failed to initialize Tesseract" → Tesseract not installed or not in PATH
+- "OCR extraction failed" → PDF rendering or OCR processing error
 
 ### Usage
 

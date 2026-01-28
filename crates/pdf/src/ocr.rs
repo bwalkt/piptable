@@ -154,40 +154,56 @@ impl OcrEngine {
     }
 
     /// Check if a PDF page likely needs OCR (is it scanned/image-based?)
+    /// 
+    /// **Design Intent**: Primary trigger is minimal text extraction (< 50 chars),
+    /// indicating likely scanned/image-based PDF that needs OCR processing.
+    /// 
+    /// **Logic**:
+    /// 1. If text extraction yielded sufficient content (≥50 chars) → no OCR needed
+    /// 2. If text is minimal AND we have a page image → check image variance to reduce false positives
+    /// 3. If text is minimal AND no image provided → assume OCR needed
+    /// 
+    /// This ensures OCR triggers reliably for scanned PDFs called from the extractor
+    /// with `needs_ocr(&text, None)` while still supporting image-based refinement
+    /// when page images are available.
     pub fn needs_ocr(text: &str, page_image: Option<&DynamicImage>) -> bool {
         // If we got very little or no text from regular extraction
         let text_is_minimal = text.trim().len() < 50;
 
-        // If we have an image, check if it looks like it contains text
-        // If no image provided, assume minimal text indicates need for OCR
-        let has_text_like_image = page_image.map(|img| {
-            // Simple heuristic: check variance in the image
-            // Scanned documents typically have high contrast text
-            let gray = img.to_luma8();
-            let pixels: Vec<u8> = gray.as_raw().clone();
+        // Primary trigger: minimal text extraction indicates likely scanned PDF
+        if text_is_minimal {
+            // If we have an image, do additional variance check to reduce false positives
+            if let Some(img) = page_image {
+                let gray = img.to_luma8();
+                let pixels: Vec<u8> = gray.as_raw().clone();
 
-            if pixels.is_empty() {
-                return false;
+                if !pixels.is_empty() {
+                    let mean = pixels.iter().map(|&p| p as f32).sum::<f32>() / pixels.len() as f32;
+                    let variance = pixels
+                        .iter()
+                        .map(|&p| {
+                            let diff = p as f32 - mean;
+                            diff * diff
+                        })
+                        .sum::<f32>()
+                        / pixels.len() as f32;
+
+                    // High variance suggests text content, low variance suggests blank page
+                    let has_content = variance > 1000.0;
+                    if has_content {
+                        warn!(
+                            "Page needs OCR: minimal text ({} chars) with high-variance image (variance: {:.1})",
+                            text.trim().len(), variance
+                        );
+                    }
+                    return has_content;
+                }
             }
-
-            let mean = pixels.iter().map(|&p| p as f32).sum::<f32>() / pixels.len() as f32;
-            let variance = pixels
-                .iter()
-                .map(|&p| {
-                    let diff = p as f32 - mean;
-                    diff * diff
-                })
-                .sum::<f32>()
-                / pixels.len() as f32;
-
-            // High variance suggests text content
-            variance > 1000.0
-        }).unwrap_or(true); // Default to true when no image provided
-
-        if text_is_minimal && has_text_like_image {
+            
+            // No image available or empty image - rely solely on minimal text detection
             warn!(
-                "Page appears to need OCR: minimal text ({} chars) with high-variance image",
-                text.len()
+                "Page needs OCR: minimal text extraction ({} chars)",
+                text.trim().len()
             );
             true
         } else {
