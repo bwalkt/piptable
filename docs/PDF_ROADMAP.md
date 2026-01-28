@@ -18,12 +18,21 @@ This document outlines the phased approach for implementing comprehensive PDF su
 - ✅ Error handling and validation
 - ✅ Basic test coverage
 
-### Phase 1B: Add OCR Support 🚧 IN PROGRESS
-**Next Steps** (additions, not replacements):
-- [ ] ADD tesseract-rs for OCR capabilities alongside existing text extraction
-- [ ] Implement automatic detection of scanned vs text PDFs
-- [ ] Add OCR fallback when text extraction yields no results
-- [ ] Keep existing pdf-extract/lopdf as primary method, add OCR as supplementary
+### Phase 1B: Add OCR Support ✅ IMPLEMENTED
+**Completed**:
+- ✅ Added tesseract-rs and pdfium-render for OCR capabilities alongside existing text extraction
+- ✅ Implemented automatic detection of scanned vs text PDFs
+- ✅ Added OCR fallback when text extraction yields no results
+- ✅ Kept existing pdf-extract/lopdf as primary method, added OCR as supplementary
+- ✅ Full PDF page rendering to images for OCR processing
+- ✅ Image preprocessing for better OCR accuracy
+
+**System Dependencies Required**:
+- Tesseract OCR library and language data
+- Leptonica image processing library
+- On macOS: `brew install tesseract leptonica`
+- On Ubuntu/Debian: `apt-get install tesseract-ocr tesseract-ocr-eng libleptonica-dev`
+- On other systems: Install Tesseract and Leptonica according to platform documentation
 
 ### Technical Implementation Plan:
 - **Primary extraction**: Keep pdf-extract and lopdf (already working well)
@@ -31,11 +40,11 @@ This document outlines the phased approach for implementing comprehensive PDF su
 - **Hybrid approach**: Try text extraction first, fall back to OCR if needed
 - **Table detection**: Keep regex patterns, enhance with OCR output processing
 
-### Limitations:
+### Current Limitations:
 - No DSL integration (not available via IMPORT command)
-- Text-based only (no image/scanned PDF support)
 - Simple table detection (may miss complex layouts)
 - No support for merged cells or nested tables
+- Limited to regex-based pattern matching
 
 ## Phase 2: Enhanced Detection & DSL Integration 🚧 PLANNED
 
@@ -67,37 +76,7 @@ This document outlines the phased approach for implementing comprehensive PDF su
 - May require additional ML libraries for table detection
 - Consider using existing solutions like Camelot or Tabula algorithms
 
-## Phase 3: OCR Support for Scanned PDFs 📷 FUTURE
-
-### Goals:
-- **OCR Integration**: Extract tables from scanned/image-based PDFs
-- **Language Support**: Multi-language OCR capabilities
-- **Quality Detection**: Automatically determine if OCR is needed
-
-### Technical Approach:
-- Integrate Tesseract OCR engine
-- Implement image preprocessing:
-  - Deskewing
-  - Noise reduction
-  - Contrast enhancement
-- Hybrid approach: Combine OCR with text extraction
-
-### Configuration:
-```piptable
-IMPORT "scanned.pdf" WITH {
-  "ocr": true,
-  "ocr_language": "eng+fra",  ' English + French
-  "preprocess": true,
-  "dpi": 300
-} INTO sheet
-```
-
-### Dependencies:
-- Tesseract OCR library
-- Image processing libraries (image-rs)
-- Language data files
-
-## Phase 4: Advanced Features & Optimization 🚀 FUTURE
+## Phase 3: Advanced Features & Optimization 🚀 FUTURE
 
 ### Goals:
 - **Form Data Extraction**: Extract data from PDF forms
