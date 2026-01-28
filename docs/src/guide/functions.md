@@ -35,14 +35,18 @@ Lambda expressions are particularly useful for data transformation operations on
 
 ### Map Operation
 
-Transform every cell in a sheet:
+Transform every row in a sheet:
 
 ```pip
-# Convert all string values to uppercase
-dim uppercase_sheet = data.map(|cell| upper(cell))
+# Transform each row object (for sheets with named columns)
+dim processed = data.map(|row| {
+    ...row,
+    name: upper(row.name),
+    age: row.age + 1
+})
 
-# Add 10 to all numeric values
-dim adjusted_numbers = numbers.map(|x| x + 10)
+# Transform each row array (for sheets without named columns)
+dim adjusted = numbers.map(|row| [row[0], row[1] + 10, row[2] * 2])
 ```
 
 ### Filter Operation

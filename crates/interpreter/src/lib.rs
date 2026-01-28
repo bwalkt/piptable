@@ -2367,8 +2367,9 @@ impl Interpreter {
                         let mut new_sheet = sheet.clone();
                         let column_names = sheet.column_names().cloned();
 
-                        // Apply lambda to each row
-                        for row_idx in 0..new_sheet.row_count() {
+                        // Apply lambda to each data row (skip header if present)
+                        let start_row = if column_names.is_some() { 1 } else { 0 };
+                        for row_idx in start_row..new_sheet.row_count() {
                             let row_value = if let Some(col_names) = &column_names {
                                 let mut row_obj = std::collections::HashMap::new();
                                 for (col_idx, col_name) in col_names.iter().enumerate() {
@@ -2456,8 +2457,15 @@ impl Interpreter {
                         let mut new_sheet = sheet.clone();
                         let mut rows_to_keep = Vec::new();
 
-                        // Determine which rows to keep
-                        for row_idx in 0..sheet.row_count() {
+                        // Determine which rows to keep (skip header if present)
+                        let start_row = if sheet.column_names().is_some() { 1 } else { 0 };
+
+                        // Always keep the header row if it exists
+                        if start_row > 0 {
+                            rows_to_keep.push(0);
+                        }
+
+                        for row_idx in start_row..sheet.row_count() {
                             let row_value = if let Some(col_names) = sheet.column_names() {
                                 let mut row_obj = std::collections::HashMap::new();
                                 for (col_idx, col_name) in col_names.iter().enumerate() {

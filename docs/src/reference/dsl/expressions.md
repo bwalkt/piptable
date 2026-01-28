@@ -372,14 +372,21 @@ dim multiply = |a, b| a * b
 Lambda expressions are commonly used with sheet transformation methods:
 
 ```vba
-' Transform each cell
-dim doubled = data.map(|x| x * 2)
+' Transform each row with named columns
+dim processed = people.map(|row| {
+    ...row,
+    age: row.age + 1,
+    name: upper(row.name)
+})
+
+' Transform each row with unnamed columns
+dim doubled = data.map(|row| [row[0] * 2, row[1] * 2, row[2] * 2])
 
 ' Filter rows
 dim adults = people.filter(|row| row.age >= 18)
 
 ' Complex transformations
-dim processed = sales.map(|row| {
+dim processed_sales = sales.map(|row| {
     ...row,
     tax: row.amount * 0.08,
     total: row.amount * 1.08
@@ -390,13 +397,16 @@ dim processed = sales.map(|row| {
 
 Lambdas receive different types of parameters based on the operation:
 
-- **map()**: Receives individual cell values
-- **filter()**: Receives entire row objects (when sheet has named columns)
+- **map()**: Receives entire row objects (for named columns) or arrays (for unnamed columns)
+- **filter()**: Receives entire row objects (for named columns) or arrays (for unnamed columns)
 - Custom functions: Receive whatever arguments you pass
 
 ```vba
-' Cell-level transformation
-numbers.map(|cell| round(cell, 2))
+' Row-level transformation with named columns
+users.map(|row| {...row, full_name: row.first_name + " " + row.last_name})
+
+' Row-level transformation with unnamed columns  
+data.map(|row| [row[0], round(row[1], 2), row[2] * 1.1])
 
 ' Row-level filtering  
 data.filter(|row| row.status = "active" and row.score > 50)

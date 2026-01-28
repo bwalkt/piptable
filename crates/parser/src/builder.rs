@@ -1576,6 +1576,8 @@ fn build_fetch_expr(pair: Pair<Rule>) -> BuildResult<Expr> {
 }
 
 fn build_lambda_expr(pair: Pair<Rule>) -> BuildResult<Expr> {
+    let span = pair.as_span();
+    let (line, col) = span.start_pos().line_col();
     let mut inner = pair.into_inner();
 
     let mut params = Vec::new();
@@ -1597,7 +1599,7 @@ fn build_lambda_expr(pair: Pair<Rule>) -> BuildResult<Expr> {
     // Get the body expression
     let body_pair = inner
         .next()
-        .ok_or_else(|| BuildError::new(0, 0, "Lambda expression missing body"))?;
+        .ok_or_else(|| BuildError::new(line, col, "Lambda expression missing body"))?;
     let body = build_expr(body_pair)?;
 
     Ok(Expr::Lambda {
