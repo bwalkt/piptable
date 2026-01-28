@@ -2,7 +2,6 @@ use crate::detector::{TableDetector, TableRegion};
 use crate::error::{PdfError, Result};
 use crate::ocr::OcrEngine;
 use lopdf::Document;
-use pdf_extract::extract_text;
 use pdfium_render::prelude::*;
 use std::path::Path;
 
@@ -150,20 +149,8 @@ impl PdfExtractor {
     }
 
     fn extract_text_from_pdf(&self, path: &Path) -> Result<String> {
-        // Use lopdf when a page range is requested, so the range is honored
-        if self.options.page_range.is_some() {
-            return self.extract_text_with_lopdf(path);
-        }
-
-        // Use pdf-extract for full-document extraction
-        match extract_text(path) {
-            Ok(text) => Ok(text),
-            Err(e) => {
-                // Try alternative method with lopdf
-                tracing::warn!("pdf-extract failed, trying lopdf: {}", e);
-                self.extract_text_with_lopdf(path)
-            }
-        }
+        // Always use lopdf for consistent text extraction
+        self.extract_text_with_lopdf(path)
     }
 
     fn extract_text_with_lopdf(&self, path: &Path) -> Result<String> {
