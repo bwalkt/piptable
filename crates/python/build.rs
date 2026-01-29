@@ -182,11 +182,21 @@ fn configure_linking_with_config(python_config: &PathBuf) -> bool {
                     println!("cargo:rustc-link-lib=framework={}", framework);
                     skip_next = true;
                 }
+            } else if *flag == "-F" && i + 1 < flags.len() {
+                // -F <path> (space-separated)
+                let path = flags[i + 1];
+                println!("cargo:rustc-link-search=framework={}", path);
+                skip_next = true;
             } else if flag.starts_with("-F") {
                 let path = &flag[2..];
                 println!("cargo:rustc-link-search=framework={}", path);
             } else if flag.starts_with("-Wl,") {
                 // Pass through linker flags like -Wl,-rpath,path
+                println!("cargo:rustc-link-arg={}", flag);
+            } else if *flag == "-pthread" {
+                println!("cargo:rustc-link-arg=-pthread");
+            } else if flag.starts_with('-') {
+                // Preserve any other linker flags we don't explicitly parse
                 println!("cargo:rustc-link-arg={}", flag);
             }
         }
