@@ -16,7 +16,10 @@ async fn test_vlookup_basic() {
     "#,
     )
     .await;
-    assert!(matches!(interp.get_var("result").await, Some(Value::Int(20))));
+    assert!(matches!(
+        interp.get_var("result").await,
+        Some(Value::Int(20))
+    ));
 }
 
 #[tokio::test]
@@ -28,7 +31,10 @@ async fn test_index_basic() {
     "#,
     )
     .await;
-    assert!(matches!(interp.get_var("result").await, Some(Value::Int(4))));
+    assert!(matches!(
+        interp.get_var("result").await,
+        Some(Value::Int(4))
+    ));
 }
 
 #[tokio::test]
@@ -40,5 +46,8 @@ async fn test_match_basic() {
     "#,
     )
     .await;
-    assert!(matches!(interp.get_var("result").await, Some(Value::Int(2))));
+    assert!(matches!(
+        interp.get_var("result").await,
+        Some(Value::Int(2))
+    ));
 }

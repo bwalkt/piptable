@@ -31,19 +31,32 @@ fn vlookup(args: Vec<Value>, line: usize) -> PipResult<Value> {
     }
 
     let lookup_value = &args[0];
-    let table_array = match &args[1] {
-        Value::Array(arr) => arr,
-        _ => {
-            return Err(PipError::runtime(
-                line,
-                "VLOOKUP: table_array must be an array",
-            ))
-        }
+    let Value::Array(table_array) = &args[1] else {
+        return Err(PipError::runtime(
+            line,
+            "VLOOKUP: table_array must be an array",
+        ));
     };
 
     let col_index = match &args[2] {
-        Value::Int(n) => *n as usize,
-        Value::Float(f) => *f as usize,
+        Value::Int(n) => {
+            if *n < 1 {
+                return Err(PipError::runtime(
+                    line,
+                    "VLOOKUP: col_index_num must be at least 1",
+                ));
+            }
+            *n as usize
+        }
+        Value::Float(f) => {
+            if f.is_nan() || f.is_infinite() || *f < 1.0 {
+                return Err(PipError::runtime(
+                    line,
+                    "VLOOKUP: col_index_num must be a positive number",
+                ));
+            }
+            *f as usize
+        }
         _ => {
             return Err(PipError::runtime(
                 line,
@@ -52,16 +65,9 @@ fn vlookup(args: Vec<Value>, line: usize) -> PipResult<Value> {
         }
     };
 
-    if col_index == 0 {
-        return Err(PipError::runtime(
-            line,
-            "VLOOKUP: col_index_num must be at least 1",
-        ));
-    }
-
     let exact_match = if args.len() == 4 {
         match &args[3] {
-            Value::Bool(b) => !b, // FALSE means exact match in Excel
+            Value::Bool(b) => !b,  // FALSE means exact match in Excel
             Value::Int(0) => true, // 0 means exact match
             _ => false,            // Any other value means approximate match
         }
@@ -80,7 +86,11 @@ fn vlookup(args: Vec<Value>, line: usize) -> PipResult<Value> {
                         if col_index > row_arr.len() {
                             return Err(PipError::runtime(
                                 line,
-                                format!("VLOOKUP: col_index_num {} exceeds row width {}", col_index, row_arr.len()),
+                                format!(
+                                    "VLOOKUP: col_index_num {} exceeds row width {}",
+                                    col_index,
+                                    row_arr.len()
+                                ),
                             ));
                         }
                         return Ok(row_arr[col_index - 1].clone());
@@ -93,7 +103,7 @@ fn vlookup(args: Vec<Value>, line: usize) -> PipResult<Value> {
         // Approximate match: find the largest value that is less than or equal to lookup_value
         // This requires the first column to be sorted in ascending order
         let mut best_match: Option<&Vec<Value>> = None;
-        
+
         for row in table_array {
             match row {
                 Value::Array(row_arr) if !row_arr.is_empty() => {
@@ -112,12 +122,16 @@ fn vlookup(args: Vec<Value>, line: usize) -> PipResult<Value> {
                 _ => continue,
             }
         }
-        
+
         if let Some(row_arr) = best_match {
             if col_index > row_arr.len() {
                 return Err(PipError::runtime(
                     line,
-                    format!("VLOOKUP: col_index_num {} exceeds row width {}", col_index, row_arr.len()),
+                    format!(
+                        "VLOOKUP: col_index_num {} exceeds row width {}",
+                        col_index,
+                        row_arr.len()
+                    ),
                 ));
             }
             return Ok(row_arr[col_index - 1].clone());
@@ -139,14 +153,11 @@ fn hlookup(args: Vec<Value>, line: usize) -> PipResult<Value> {
     }
 
     let lookup_value = &args[0];
-    let table_array = match &args[1] {
-        Value::Array(arr) => arr,
-        _ => {
-            return Err(PipError::runtime(
-                line,
-                "HLOOKUP: table_array must be an array",
-            ))
-        }
+    let Value::Array(table_array) = &args[1] else {
+        return Err(PipError::runtime(
+            line,
+            "HLOOKUP: table_array must be an array",
+        ));
     };
 
     if table_array.is_empty() {
@@ -154,8 +165,24 @@ fn hlookup(args: Vec<Value>, line: usize) -> PipResult<Value> {
     }
 
     let row_index = match &args[2] {
-        Value::Int(n) => *n as usize,
-        Value::Float(f) => *f as usize,
+        Value::Int(n) => {
+            if *n < 1 {
+                return Err(PipError::runtime(
+                    line,
+                    "HLOOKUP: row_index_num must be at least 1",
+                ));
+            }
+            *n as usize
+        }
+        Value::Float(f) => {
+            if f.is_nan() || f.is_infinite() || *f < 1.0 {
+                return Err(PipError::runtime(
+                    line,
+                    "HLOOKUP: row_index_num must be a positive number",
+                ));
+            }
+            *f as usize
+        }
         _ => {
             return Err(PipError::runtime(
                 line,
@@ -164,23 +191,20 @@ fn hlookup(args: Vec<Value>, line: usize) -> PipResult<Value> {
         }
     };
 
-    if row_index == 0 {
-        return Err(PipError::runtime(
-            line,
-            "HLOOKUP: row_index_num must be at least 1",
-        ));
-    }
-
     if row_index > table_array.len() {
         return Err(PipError::runtime(
             line,
-            format!("HLOOKUP: row_index_num {} exceeds table height {}", row_index, table_array.len()),
+            format!(
+                "HLOOKUP: row_index_num {} exceeds table height {}",
+                row_index,
+                table_array.len()
+            ),
         ));
     }
 
     let exact_match = if args.len() == 4 {
         match &args[3] {
-            Value::Bool(b) => !b, // FALSE means exact match in Excel
+            Value::Bool(b) => !b,  // FALSE means exact match in Excel
             Value::Int(0) => true, // 0 means exact match
             _ => false,            // Any other value means approximate match
         }
@@ -189,44 +213,61 @@ fn hlookup(args: Vec<Value>, line: usize) -> PipResult<Value> {
     };
 
     // Get the first row for searching
-    let first_row = match &table_array[0] {
-        Value::Array(arr) => arr,
-        _ => {
-            return Err(PipError::runtime(
-                line,
-                "HLOOKUP: First row must be an array",
-            ))
-        }
+    let Value::Array(first_row) = &table_array[0] else {
+        return Err(PipError::runtime(
+            line,
+            "HLOOKUP: First row must be an array",
+        ));
     };
 
-    // Search for the value in the first row
-    for (col_index, cell) in first_row.iter().enumerate() {
-        if exact_match {
+    if exact_match {
+        // Search for exact match
+        for (col_index, cell) in first_row.iter().enumerate() {
             if values_equal(cell, lookup_value) {
                 // Found exact match, return value from specified row
-                let target_row = match &table_array[row_index - 1] {
-                    Value::Array(arr) => arr,
-                    _ => {
-                        return Err(PipError::runtime(
-                            line,
-                            "HLOOKUP: Target row must be an array",
-                        ))
-                    }
+                let Value::Array(target_row) = &table_array[row_index - 1] else {
+                    return Err(PipError::runtime(
+                        line,
+                        "HLOOKUP: Target row must be an array",
+                    ));
                 };
-                
+
                 if col_index < target_row.len() {
                     return Ok(target_row[col_index].clone());
-                } else {
-                    return Ok(Value::Null);
+                }
+                return Ok(Value::Null);
+            }
+        }
+    } else {
+        // Approximate match: find the largest value that is less than or equal to lookup_value
+        // This requires the first row to be sorted in ascending order
+        let mut best_match_index: Option<usize> = None;
+
+        for (col_index, cell) in first_row.iter().enumerate() {
+            match compare_values(cell, lookup_value, line)? {
+                cmp if cmp <= 0 => {
+                    // This value is less than or equal to lookup_value
+                    best_match_index = Some(col_index);
+                }
+                _ => {
+                    // We've gone past the lookup value, stop searching
+                    break;
                 }
             }
-        } else {
-            // Approximate match logic
-            if compare_values(cell, lookup_value, line)? <= 0 {
-                continue;
-            } else {
-                break;
+        }
+
+        if let Some(col_idx) = best_match_index {
+            let Value::Array(target_row) = &table_array[row_index - 1] else {
+                return Err(PipError::runtime(
+                    line,
+                    "HLOOKUP: Target row must be an array",
+                ));
+            };
+
+            if col_idx < target_row.len() {
+                return Ok(target_row[col_idx].clone());
             }
+            return Ok(Value::Null);
         }
     }
 
@@ -244,31 +285,24 @@ fn index(args: Vec<Value>, line: usize) -> PipResult<Value> {
         ));
     }
 
-    let array = match &args[0] {
-        Value::Array(arr) => arr,
-        _ => {
-            return Err(PipError::runtime(
-                line,
-                "INDEX: array must be an array",
-            ))
-        }
+    let Value::Array(array) = &args[0] else {
+        return Err(PipError::runtime(line, "INDEX: array must be an array"));
     };
 
     let row_num = match &args[1] {
         Value::Int(n) => *n as usize,
         Value::Float(f) => *f as usize,
-        _ => {
-            return Err(PipError::runtime(
-                line,
-                "INDEX: row_num must be a number",
-            ))
-        }
+        _ => return Err(PipError::runtime(line, "INDEX: row_num must be a number")),
     };
 
     if row_num == 0 || row_num > array.len() {
         return Err(PipError::runtime(
             line,
-            format!("INDEX: row_num {} is out of bounds (array has {} rows)", row_num, array.len()),
+            format!(
+                "INDEX: row_num {} is out of bounds (array has {} rows)",
+                row_num,
+                array.len()
+            ),
         ));
     }
 
@@ -304,7 +338,11 @@ fn index(args: Vec<Value>, line: usize) -> PipResult<Value> {
             if col_num > row_arr.len() {
                 return Err(PipError::runtime(
                     line,
-                    format!("INDEX: column_num {} is out of bounds (row has {} columns)", col_num, row_arr.len()),
+                    format!(
+                        "INDEX: column_num {} is out of bounds (row has {} columns)",
+                        col_num,
+                        row_arr.len()
+                    ),
                 ));
             }
             Ok(row_arr[col_num - 1].clone())
@@ -333,14 +371,11 @@ fn match_fn(args: Vec<Value>, line: usize) -> PipResult<Value> {
     }
 
     let lookup_value = &args[0];
-    let lookup_array = match &args[1] {
-        Value::Array(arr) => arr,
-        _ => {
-            return Err(PipError::runtime(
-                line,
-                "MATCH: lookup_array must be an array",
-            ))
-        }
+    let Value::Array(lookup_array) = &args[1] else {
+        return Err(PipError::runtime(
+            line,
+            "MATCH: lookup_array must be an array",
+        ));
     };
 
     let match_type = if args.len() == 3 {
@@ -413,25 +448,19 @@ fn xlookup(args: Vec<Value>, line: usize) -> PipResult<Value> {
     }
 
     let lookup_value = &args[0];
-    
-    let lookup_array = match &args[1] {
-        Value::Array(arr) => arr,
-        _ => {
-            return Err(PipError::runtime(
-                line,
-                "XLOOKUP: lookup_array must be an array",
-            ))
-        }
+
+    let Value::Array(lookup_array) = &args[1] else {
+        return Err(PipError::runtime(
+            line,
+            "XLOOKUP: lookup_array must be an array",
+        ));
     };
 
-    let return_array = match &args[2] {
-        Value::Array(arr) => arr,
-        _ => {
-            return Err(PipError::runtime(
-                line,
-                "XLOOKUP: return_array must be an array",
-            ))
-        }
+    let Value::Array(return_array) = &args[2] else {
+        return Err(PipError::runtime(
+            line,
+            "XLOOKUP: return_array must be an array",
+        ));
     };
 
     // Flatten arrays if they're 2D
@@ -454,15 +483,18 @@ fn xlookup(args: Vec<Value>, line: usize) -> PipResult<Value> {
     if flat_lookup.len() != flat_return.len() {
         return Err(PipError::runtime(
             line,
-            format!("XLOOKUP: lookup_array and return_array must have the same length ({} vs {})", 
-                    flat_lookup.len(), flat_return.len()),
+            format!(
+                "XLOOKUP: lookup_array and return_array must have the same length ({} vs {})",
+                flat_lookup.len(),
+                flat_return.len()
+            ),
         ));
     }
 
     let if_not_found = if args.len() > 3 {
-        &args[3]
+        args[3].clone()
     } else {
-        &Value::String("#N/A".to_string())
+        Value::String("#N/A".to_string())
     };
 
     let match_mode = if args.len() > 4 {
@@ -521,10 +553,8 @@ fn xlookup(args: Vec<Value>, line: usize) -> PipResult<Value> {
             for (i, val) in flat_lookup.iter().enumerate().map(|(i, v)| (i, *v)) {
                 if values_equal(val, lookup_value) {
                     return Ok(flat_return[i].clone());
-                } else if compare_values(val, lookup_value, line)? > 0 {
-                    if best_match.is_none() {
-                        best_match = Some((i, val));
-                    }
+                } else if compare_values(val, lookup_value, line)? > 0 && best_match.is_none() {
+                    best_match = Some((i, val));
                 }
             }
             if let Some((i, _)) = best_match {
@@ -547,7 +577,7 @@ fn xlookup(args: Vec<Value>, line: usize) -> PipResult<Value> {
         }
     }
 
-    Ok(if_not_found.clone())
+    Ok(if_not_found)
 }
 
 /// Helper function to check if two values are equal
@@ -603,7 +633,11 @@ fn compare_values(left: &Value, right: &Value, line: usize) -> PipResult<i32> {
         (Value::String(a), Value::String(b)) => Ok(a.cmp(b) as i32),
         _ => Err(PipError::runtime(
             line,
-            format!("Cannot compare {} with {}", left.type_name(), right.type_name()),
+            format!(
+                "Cannot compare {} with {}",
+                left.type_name(),
+                right.type_name()
+            ),
         )),
     }
 }
