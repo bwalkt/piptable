@@ -154,6 +154,26 @@ async fn test_match_less_than_or_equal() {
 }
 
 #[tokio::test]
+async fn test_match_greater_than_or_equal() {
+    let (interp, _) = run_script(
+        r#"
+        descending = [50, 40, 30, 20, 10]
+        pos1 = match(35, descending, -1)
+        pos2 = match(50, descending, -1)
+        pos3 = match(60, descending, -1)
+    "#,
+    )
+    .await;
+
+    assert!(matches!(interp.get_var("pos1").await, Some(Value::Int(2))));
+    assert!(matches!(interp.get_var("pos2").await, Some(Value::Int(1))));
+    assert!(matches!(
+        interp.get_var("pos3").await,
+        Some(Value::String(s)) if s == "#N/A"
+    ));
+}
+
+#[tokio::test]
 async fn test_xlookup_basic() {
     let (interp, _) = run_script(
         r#"

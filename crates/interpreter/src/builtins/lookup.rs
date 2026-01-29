@@ -290,12 +290,25 @@ fn index(args: Vec<Value>, line: usize) -> PipResult<Value> {
     };
 
     let row_num = match &args[1] {
-        Value::Int(n) => *n as usize,
-        Value::Float(f) => *f as usize,
+        Value::Int(n) => {
+            if *n < 1 {
+                return Err(PipError::runtime(line, "INDEX: row_num must be at least 1"));
+            }
+            *n as usize
+        }
+        Value::Float(f) => {
+            if f.is_nan() || f.is_infinite() || *f < 1.0 {
+                return Err(PipError::runtime(
+                    line,
+                    "INDEX: row_num must be a positive number",
+                ));
+            }
+            *f as usize
+        }
         _ => return Err(PipError::runtime(line, "INDEX: row_num must be a number")),
     };
 
-    if row_num == 0 || row_num > array.len() {
+    if row_num > array.len() {
         return Err(PipError::runtime(
             line,
             format!(
@@ -315,8 +328,24 @@ fn index(args: Vec<Value>, line: usize) -> PipResult<Value> {
 
     // Column number is specified
     let col_num = match &args[2] {
-        Value::Int(n) => *n as usize,
-        Value::Float(f) => *f as usize,
+        Value::Int(n) => {
+            if *n < 1 {
+                return Err(PipError::runtime(
+                    line,
+                    "INDEX: column_num must be at least 1",
+                ));
+            }
+            *n as usize
+        }
+        Value::Float(f) => {
+            if f.is_nan() || f.is_infinite() || *f < 1.0 {
+                return Err(PipError::runtime(
+                    line,
+                    "INDEX: column_num must be a positive number",
+                ));
+            }
+            *f as usize
+        }
         _ => {
             return Err(PipError::runtime(
                 line,
@@ -324,13 +353,6 @@ fn index(args: Vec<Value>, line: usize) -> PipResult<Value> {
             ))
         }
     };
-
-    if col_num == 0 {
-        return Err(PipError::runtime(
-            line,
-            "INDEX: column_num must be at least 1",
-        ));
-    }
 
     // Handle 2D array indexing
     match row_data {
@@ -422,13 +444,19 @@ fn match_fn(args: Vec<Value>, line: usize) -> PipResult<Value> {
             }
         }
         -1 => {
-            // Greater than or equal (array must be in descending order)
+            // Smallest value >= lookup_value (array must be in descending order)
+            let mut last_valid_index = None;
             for (i, val) in flat_array.iter().enumerate() {
                 if compare_values(val, lookup_value, line)? >= 0 {
-                    return Ok(Value::Int((i + 1) as i64));
+                    last_valid_index = Some(i + 1);
+                } else {
+                    break;
                 }
             }
-            Ok(Value::String("#N/A".to_string()))
+            match last_valid_index {
+                Some(idx) => Ok(Value::Int(idx as i64)),
+                None => Ok(Value::String("#N/A".to_string())),
+            }
         }
         _ => Err(PipError::runtime(
             line,
