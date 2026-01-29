@@ -214,9 +214,16 @@ impl Interpreter {
                 let mut loop_result: PipResult<()> = Ok(());
                 for item in items {
                     self.declare_var(&variable, item).await;
-                    if let Err(e) = self.eval_block(&body).await {
-                        loop_result = Err(e);
-                        break;
+                    match self.eval_block(&body).await {
+                        Ok(_) => {}
+                        Err(PipError::ExitFor) => {
+                            // Exit For - break out of the loop normally
+                            break;
+                        }
+                        Err(e) => {
+                            loop_result = Err(e);
+                            break;
+                        }
                     }
                 }
                 self.pop_scope().await;
@@ -262,9 +269,16 @@ impl Interpreter {
                 let mut i = start_int;
                 while (step_int > 0 && i <= end_int) || (step_int < 0 && i >= end_int) {
                     self.declare_var(&variable, Value::Int(i)).await;
-                    if let Err(e) = self.eval_block(&body).await {
-                        loop_result = Err(e);
-                        break;
+                    match self.eval_block(&body).await {
+                        Ok(_) => {}
+                        Err(PipError::ExitFor) => {
+                            // Exit For - break out of the loop normally
+                            break;
+                        }
+                        Err(e) => {
+                            loop_result = Err(e);
+                            break;
+                        }
                     }
                     match i.checked_add(step_int) {
                         Some(next) => i = next,
@@ -296,8 +310,16 @@ impl Interpreter {
                                 break;
                             }
                             if let Err(e) = self.eval_block(&body).await {
-                                loop_result = Err(e.with_line(line));
-                                break;
+                                match e {
+                                    PipError::ExitWhile => {
+                                        // Exit While - break from loop normally
+                                        break;
+                                    }
+                                    _ => {
+                                        loop_result = Err(e.with_line(line));
+                                        break;
+                                    }
+                                }
                             }
                         }
                         Err(e) => {
@@ -354,6 +376,26 @@ impl Interpreter {
                 };
                 // Return is handled by propagating up the call stack
                 Err(PipError::Return(Box::new(val)))
+            }
+
+            Statement::ExitFunction { .. } => {
+                // Exit Function is handled by propagating up the call stack
+                Err(PipError::ExitFunction)
+            }
+
+            Statement::ExitSub { .. } => {
+                // Exit Sub is handled by propagating up the call stack
+                Err(PipError::ExitSub)
+            }
+
+            Statement::ExitFor { .. } => {
+                // Exit For is handled by loop constructs
+                Err(PipError::ExitFor)
+            }
+
+            Statement::ExitWhile { .. } => {
+                // Exit While is handled by loop constructs
+                Err(PipError::ExitWhile)
             }
 
             Statement::Call {
@@ -1675,6 +1717,16 @@ impl Interpreter {
                             Err(PipError::Return(val)) => {
                                 self.pop_scope().await;
                                 return Ok(*val);
+                            }
+                            Err(PipError::ExitFunction) => {
+                                // Exit Function - return current result (usually Null)
+                                self.pop_scope().await;
+                                return Ok(result);
+                            }
+                            Err(PipError::ExitSub) => {
+                                // Exit Sub - return current result (usually Null)
+                                self.pop_scope().await;
+                                return Ok(result);
                             }
                             Err(e) => {
                                 self.pop_scope().await;

@@ -81,6 +81,18 @@ pub enum Statement {
     /// Return statement
     Return { value: Option<Expr>, line: usize },
 
+    /// Exit Function statement
+    ExitFunction { line: usize },
+
+    /// Exit Sub statement  
+    ExitSub { line: usize },
+
+    /// Exit For statement
+    ExitFor { line: usize },
+
+    /// Exit While statement
+    ExitWhile { line: usize },
+
     /// Call statement: `call proc(args)` or just `proc(args)`
     Call {
         function: String,
