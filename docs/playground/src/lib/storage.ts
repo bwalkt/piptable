@@ -40,6 +40,14 @@ export function loadStorageState(): StorageState {
 
     const parsed = JSON.parse(stored) as StorageState;
     
+    // Validate structure
+    if (!parsed.scripts || typeof parsed.scripts !== 'object') {
+      parsed.scripts = {};
+    }
+    if (!Array.isArray(parsed.recentScripts)) {
+      parsed.recentScripts = [];
+    }
+    
     // Convert timestamp strings back to Date objects
     Object.values(parsed.scripts).forEach(script => {
       if (typeof script.timestamp === 'string') {

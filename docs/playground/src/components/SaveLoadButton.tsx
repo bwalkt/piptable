@@ -108,6 +108,9 @@ export function SaveLoadButton({ code, onLoadCode, className }: SaveLoadButtonPr
   };
 
   const formatDate = (date: Date) => {
+    if (!(date instanceof Date) || isNaN(date.getTime())) {
+      return 'Unknown date';
+    }
     return new Intl.DateTimeFormat('en-US', {
       month: 'short',
       day: 'numeric',
@@ -391,7 +394,7 @@ function ScriptItem({ script, onLoad, onDelete, formatDate, getCodePreview }: Sc
         
         <button
           onClick={(e) => onDelete(script.id, e)}
-          className="opacity-0 group-hover:opacity-100 ml-2 p-1 rounded hover:bg-red-500/10 hover:text-red-500 transition-all"
+          className="opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 focus:opacity-100 ml-2 p-1 rounded hover:bg-red-500/10 hover:text-red-500 focus:bg-red-500/10 focus:text-red-500 transition-all"
           aria-label="Delete script"
         >
           <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
