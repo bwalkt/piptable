@@ -73,6 +73,44 @@ async fn test_hlookup_exact_match() {
 }
 
 #[tokio::test]
+async fn test_hlookup_approximate_match() {
+    let (interp, _) = run_script(
+        r#"
+        salary_table = [
+            [0, 30000, 40000, 50000, 60000, 70000],
+            [10000, 35000, 45000, 55000, 65000, 75000],
+            [1000, 2000, 3000, 4000, 5000, 6000]
+        ]
+        salary1 = hlookup(35000, salary_table, 2, true)
+        salary2 = hlookup(45000, salary_table, 2, true)
+        bonus1 = hlookup(55000, salary_table, 3, true)
+        bonus2 = hlookup(65000, salary_table, 3, true)
+    "#,
+    )
+    .await;
+
+    assert!(matches!(
+        interp.get_var("salary1").await,
+        Some(Value::Int(35000))
+    ));
+
+    assert!(matches!(
+        interp.get_var("salary2").await,
+        Some(Value::Int(45000))
+    ));
+
+    assert!(matches!(
+        interp.get_var("bonus1").await,
+        Some(Value::Int(4000))
+    ));
+
+    assert!(matches!(
+        interp.get_var("bonus2").await,
+        Some(Value::Int(5000))
+    ));
+}
+
+#[tokio::test]
 async fn test_index_function() {
     let (interp, _) = run_script(
         r#"

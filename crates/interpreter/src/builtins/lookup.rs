@@ -546,6 +546,7 @@ fn xlookup(args: Vec<Value>, line: usize) -> PipResult<Value> {
     };
 
     // Determine search order
+    // TODO: search_mode 2/-2 should use binary search for O(log n) performance on sorted data
     let search_iter: Box<dyn Iterator<Item = (usize, &Value)>> = match search_mode {
         -1 | -2 => Box::new(flat_lookup.iter().enumerate().rev().map(|(i, v)| (i, *v))),
         _ => Box::new(flat_lookup.iter().enumerate().map(|(i, v)| (i, *v))),
@@ -618,6 +619,8 @@ fn values_equal(left: &Value, right: &Value) -> bool {
         (Value::Int(a), Value::Float(b)) | (Value::Float(b), Value::Int(a)) => {
             (*a as f64 - b).abs() < f64::EPSILON
         }
+        // TODO: Consider case-insensitive string comparison for Excel compatibility
+        // Excel typically performs case-insensitive comparisons in lookup functions
         (Value::String(a), Value::String(b)) => a == b,
         _ => false,
     }
