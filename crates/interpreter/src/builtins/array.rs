@@ -80,6 +80,14 @@ async fn filter(_interpreter: &Interpreter, args: Vec<Value>, line: usize) -> Pi
         ));
     }
 
+    // Excel compatibility: reject 2D include arrays
+    if include.iter().any(|v| matches!(v, Value::Array(_))) {
+        return Err(PipError::runtime(
+            line,
+            "FILTER: include must be 1D (scalar or flat array)",
+        ));
+    }
+
     // Filter the array
     let mut result = Vec::new();
     for (i, item) in array.iter().enumerate() {
@@ -293,5 +301,23 @@ mod tests {
             Value::String(s) => assert_eq!(s, "#CALC!"),
             _ => panic!("Expected #CALC!"),
         }
+    }
+
+    #[tokio::test]
+    async fn test_filter_2d_include_array_error() {
+        let interp = create_interpreter().await;
+        let array = Value::Array(vec![Value::Int(1), Value::Int(2), Value::Int(3)]);
+        let include_2d = Value::Array(vec![
+            Value::Array(vec![Value::Bool(true)]),
+            Value::Array(vec![Value::Bool(false)]),
+            Value::Array(vec![Value::Bool(true)]),
+        ]);
+
+        let result = filter(&interp, vec![array, include_2d], 0).await;
+        assert!(result.is_err());
+        assert!(result
+            .unwrap_err()
+            .to_string()
+            .contains("include must be 1D"));
     }
 }
