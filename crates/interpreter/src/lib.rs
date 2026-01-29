@@ -2390,12 +2390,14 @@ impl Interpreter {
                             let row_value = if let Some(col_names) = &column_names {
                                 let mut row_obj = std::collections::HashMap::new();
                                 for (col_idx, col_name) in col_names.iter().enumerate() {
-                                    if let Ok(cell) = sheet.get(row_idx, col_idx) {
-                                        row_obj.insert(
-                                            col_name.clone(),
-                                            sheet_conversions::cell_to_value(cell.clone()),
-                                        );
-                                    }
+                                    let cell = sheet
+                                        .get(row_idx, col_idx)
+                                        .cloned()
+                                        .unwrap_or(piptable_sheet::CellValue::Null);
+                                    row_obj.insert(
+                                        col_name.clone(),
+                                        sheet_conversions::cell_to_value(cell),
+                                    );
                                 }
                                 Value::Object(row_obj)
                             } else {
@@ -2503,12 +2505,14 @@ impl Interpreter {
                             let row_value = if let Some(col_names) = sheet.column_names() {
                                 let mut row_obj = std::collections::HashMap::new();
                                 for (col_idx, col_name) in col_names.iter().enumerate() {
-                                    if let Ok(cell) = sheet.get(row_idx, col_idx) {
-                                        row_obj.insert(
-                                            col_name.clone(),
-                                            sheet_conversions::cell_to_value(cell.clone()),
-                                        );
-                                    }
+                                    let cell = sheet
+                                        .get(row_idx, col_idx)
+                                        .cloned()
+                                        .unwrap_or(piptable_sheet::CellValue::Null);
+                                    row_obj.insert(
+                                        col_name.clone(),
+                                        sheet_conversions::cell_to_value(cell),
+                                    );
                                 }
                                 Value::Object(row_obj)
                             } else {

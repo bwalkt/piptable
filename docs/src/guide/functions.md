@@ -116,11 +116,12 @@ dim results = data.map(|row| {
     total: "$" + string(round(row.subtotal * 1.08, 2))
 })
 
-# Or define reusable calculation logic inline
+# Or define tax rate and apply in lambda
+dim tax_rate = 0.08
 dim with_tax = data.map(|row| {
-    dim tax_rate = 0.08
-    dim tax_amount = row.subtotal * tax_rate
-    return {...row, tax: tax_amount, total: row.subtotal + tax_amount}
+    ...row,
+    tax: row.subtotal * tax_rate,
+    total: row.subtotal * (1 + tax_rate)
 })
 ```
 
@@ -143,11 +144,9 @@ dim processed = data
     .map(|row| {...row, price: row.price * 1.1})
     .filter(|row| row.price > 100)
 
-# Or combine transformations in a single map
-dim result = data.map(|row| {
-    dim new_price = row.price * 1.1
-    return row.status = "active" and new_price > 100 
-        ? {...row, price: new_price, eligible: true}
-        : {...row, eligible: false}
-})
+# Or use separate filters and maps for conditional logic
+dim active_high_price = data
+    .filter(|row| row.status = "active")
+    .filter(|row| row.price * 1.1 > 100)
+    .map(|row| {...row, price: row.price * 1.1, eligible: true})
 ```
