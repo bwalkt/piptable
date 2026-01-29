@@ -1,35 +1,53 @@
+use std::env;
+use std::path::PathBuf;
 use std::process::Command;
 
 fn main() {
-    // Get Python library path and name for linking
-    if let Ok(output) = Command::new("python3-config").arg("--ldflags").output() {
-        let ldflags = String::from_utf8_lossy(&output.stdout);
+    // Respect PyO3's Python executable selection
+    let python_exe = find_python_executable();
 
-        // Parse -L and -l flags from python3-config output
-        for flag in ldflags.split_whitespace() {
-            if flag.starts_with("-L") {
-                let path = &flag[2..];
-                println!("cargo:rustc-link-search=native={}", path);
-            } else if flag.starts_with("-l")
-                && !flag.starts_with("-lintl")
-                && !flag.starts_with("-ldl")
-            {
-                let lib = &flag[2..];
-                println!("cargo:rustc-link-lib={}", lib);
-            }
-        }
+    // Get the corresponding python-config executable
+    if let Some(python_config) = find_python_config(&python_exe) {
+        configure_linking_with_config(&python_config);
+    } else {
+        // Fallback: use sysconfig directly
+        configure_linking_with_sysconfig(&python_exe);
+    }
+}
+
+/// Find the Python executable that PyO3 will use
+fn find_python_executable() -> PathBuf {
+    // Check PyO3 environment variables in order of precedence
+    if let Ok(python_path) = env::var("PYO3_PYTHON") {
+        return PathBuf::from(python_path);
     }
 
-    // Additional approach: try to find and link Python library directly
-    if let Ok(output) = Command::new("python3")
-        .arg("-c")
-        .arg("import sys; print(sys.executable)")
-        .output()
-    {
-        let python_path = String::from_utf8_lossy(&output.stdout).trim().to_string();
+    if let Ok(python_path) = env::var("PYTHON_SYS_EXECUTABLE") {
+        return PathBuf::from(python_path);
+    }
 
-        // Extract version
-        if let Ok(version_output) = Command::new("python3")
+    // Fallback to python3 on PATH
+    PathBuf::from("python3")
+}
+
+/// Find the python-config executable corresponding to the Python interpreter
+fn find_python_config(python_exe: &PathBuf) -> Option<PathBuf> {
+    // Try to derive python-config from python executable path
+    if let Some(parent) = python_exe.parent() {
+        // Try python3-config first
+        let config_path = parent.join("python3-config");
+        if config_path.exists() {
+            return Some(config_path);
+        }
+
+        // Try python-config
+        let config_path = parent.join("python-config");
+        if config_path.exists() {
+            return Some(config_path);
+        }
+
+        // Try versioned python-config (e.g., python3.12-config)
+        if let Ok(version_output) = Command::new(python_exe)
             .arg("-c")
             .arg("import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')")
             .output()
@@ -37,12 +55,128 @@ fn main() {
             let version = String::from_utf8_lossy(&version_output.stdout)
                 .trim()
                 .to_string();
+            let versioned_config = parent.join(format!("python{}-config", version));
+            if versioned_config.exists() {
+                return Some(versioned_config);
+            }
+        }
+    }
 
-            // For pyenv installations, link the specific library
-            if python_path.contains(".pyenv") {
-                let lib_path = python_path.replace("/bin/python3", "/lib");
-                println!("cargo:rustc-link-search=native={}", lib_path);
-                println!("cargo:rustc-link-lib=python{}", version);
+    None
+}
+
+/// Configure linking using python-config
+fn configure_linking_with_config(python_config: &PathBuf) {
+    if let Ok(output) = Command::new(python_config).arg("--ldflags").output() {
+        let ldflags = String::from_utf8_lossy(&output.stdout);
+
+        // Parse all linker flags, not just -L and -l
+        let mut skip_next = false;
+        let flags: Vec<&str> = ldflags.split_whitespace().collect();
+
+        for (i, flag) in flags.iter().enumerate() {
+            if skip_next {
+                skip_next = false;
+                continue;
+            }
+
+            if flag.starts_with("-L") {
+                let path = &flag[2..];
+                println!("cargo:rustc-link-search=native={}", path);
+            } else if flag.starts_with("-l") {
+                let lib = &flag[2..];
+                // Only skip system libraries that cargo handles automatically
+                if !["intl", "dl", "util", "rt"].contains(&lib) {
+                    println!("cargo:rustc-link-lib={}", lib);
+                }
+            } else if flag.starts_with("-framework") {
+                if flag.len() > 10 {
+                    // -frameworkName
+                    let framework = &flag[10..];
+                    println!("cargo:rustc-link-lib=framework={}", framework);
+                } else if i + 1 < flags.len() {
+                    // -framework Name
+                    let framework = flags[i + 1];
+                    println!("cargo:rustc-link-lib=framework={}", framework);
+                    skip_next = true;
+                }
+            } else if flag.starts_with("-F") {
+                let path = &flag[2..];
+                println!("cargo:rustc-link-search=framework={}", path);
+            } else if flag.starts_with("-Wl,") {
+                // Pass through linker flags like -Wl,-rpath,path
+                println!("cargo:rustc-link-arg={}", flag);
+            }
+        }
+    }
+}
+
+/// Configure linking using Python's sysconfig module
+fn configure_linking_with_sysconfig(python_exe: &PathBuf) {
+    let script = r#"
+import sysconfig
+import sys
+import os
+
+# Get library directory
+lib_dir = sysconfig.get_config_var('LIBDIR')
+if lib_dir:
+    print(f'LIBDIR:{lib_dir}')
+
+# Get library name
+lib_name = sysconfig.get_config_var('LDLIBRARY')
+if not lib_name:
+    # Fallback to LIBRARY
+    lib_name = sysconfig.get_config_var('LIBRARY')
+if lib_name:
+    # Remove lib prefix and .a/.so suffix
+    if lib_name.startswith('lib'):
+        lib_name = lib_name[3:]
+    if lib_name.endswith('.a'):
+        lib_name = lib_name[:-2]
+    elif lib_name.endswith('.so'):
+        lib_name = lib_name[:-3]
+    elif lib_name.endswith('.dylib'):
+        lib_name = lib_name[:-6]
+    print(f'LIBRARY:{lib_name}')
+
+# Get additional linker flags
+ldflags = sysconfig.get_config_var('LDFLAGS')
+if ldflags:
+    print(f'LDFLAGS:{ldflags}')
+
+# Get framework directory on macOS
+if sys.platform == 'darwin':
+    framework_dir = sysconfig.get_config_var('PYTHONFRAMEWORKDIR')
+    if framework_dir:
+        print(f'FRAMEWORKDIR:{framework_dir}')
+"#;
+
+    if let Ok(output) = Command::new(python_exe).arg("-c").arg(script).output() {
+        let output_str = String::from_utf8_lossy(&output.stdout);
+
+        for line in output_str.lines() {
+            if let Some(lib_dir) = line.strip_prefix("LIBDIR:") {
+                println!("cargo:rustc-link-search=native={}", lib_dir);
+            } else if let Some(lib_name) = line.strip_prefix("LIBRARY:") {
+                println!("cargo:rustc-link-lib={}", lib_name);
+            } else if let Some(ldflags) = line.strip_prefix("LDFLAGS:") {
+                // Parse additional LDFLAGS
+                for flag in ldflags.split_whitespace() {
+                    if flag.starts_with("-L") {
+                        let path = &flag[2..];
+                        println!("cargo:rustc-link-search=native={}", path);
+                    } else if flag.starts_with("-l") {
+                        let lib = &flag[2..];
+                        if !["intl", "dl", "util", "rt"].contains(&lib) {
+                            println!("cargo:rustc-link-lib={}", lib);
+                        }
+                    } else if flag.starts_with("-Wl,") {
+                        println!("cargo:rustc-link-arg={}", flag);
+                    }
+                }
+            } else if let Some(framework_dir) = line.strip_prefix("FRAMEWORKDIR:") {
+                println!("cargo:rustc-link-search=framework={}", framework_dir);
             }
         }
     }
