@@ -24,7 +24,7 @@ async fn test_lambda_single_param_arrow_syntax() {
         }
         other => panic!("Expected lambda, got: {:?}", other),
     }
-    
+
     // Now test calling it
     let (interp2, _) = run_script(
         r#"
@@ -53,6 +53,21 @@ async fn test_lambda_multiple_params_arrow_syntax() {
     assert!(matches!(
         interp.get_var("result").await,
         Some(Value::Int(7))
+    ));
+}
+
+#[tokio::test]
+async fn test_lambda_immediate_call() {
+    let (interp, _) = run_script(
+        r#"
+        dim result = ((x, y) => x + y)(5, 3)
+    "#,
+    )
+    .await;
+
+    assert!(matches!(
+        interp.get_var("result").await,
+        Some(Value::Int(8))
     ));
 }
 
@@ -99,7 +114,7 @@ async fn test_lambda_with_sheet_map() {
             // Check that ages were incremented by 10
             let data = sheet.data();
             assert_eq!(data.len(), 4); // Header + 3 data rows
-            
+
             // Check transformed ages (column 1)
             use piptable_sheet::CellValue;
             if let Some(row) = data.get(1) {
@@ -119,7 +134,8 @@ async fn test_lambda_with_sheet_map() {
 #[tokio::test]
 async fn test_lambda_with_sheet_filter() {
     // Create temp file
-    let temp_file = create_temp_csv("Name,Age,Score\nAlice,25,85\nBob,30,92\nCharlie,28,78\nDavid,35,88");
+    let temp_file =
+        create_temp_csv("Name,Age,Score\nAlice,25,85\nBob,30,92\nCharlie,28,78\nDavid,35,88");
     let script = format!(
         r#"
         import "{}" into data
@@ -129,7 +145,7 @@ async fn test_lambda_with_sheet_filter() {
     "#,
         temp_file.path().display()
     );
-    
+
     let (interp, _) = run_script(&script).await;
 
     match interp.get_var("filtered").await {
@@ -137,7 +153,7 @@ async fn test_lambda_with_sheet_filter() {
             let data = sheet.data();
             // Should have header + 2 rows (Bob and David)
             assert_eq!(data.len(), 3);
-            
+
             // Check that we have Bob and David
             use piptable_sheet::CellValue;
             if let Some(row) = data.get(1) {
@@ -258,7 +274,7 @@ async fn test_lambda_with_conditional() {
         interp.get_var("result1").await,
         Some(Value::Int(5))
     ));
-    
+
     assert!(matches!(
         interp.get_var("result2").await,
         Some(Value::Int(3))
@@ -280,7 +296,7 @@ async fn test_lambda_with_simple_conditional() {
         interp.get_var("result1").await,
         Some(Value::Bool(true))
     ));
-    
+
     assert!(matches!(
         interp.get_var("result2").await,
         Some(Value::Bool(false))

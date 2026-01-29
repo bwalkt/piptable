@@ -106,46 +106,46 @@ mod tests {
         assert!(result.is_ok());
         assert!(result.unwrap().statements.is_empty());
     }
-    
+
     // ========================================================================
     // Lambda parsing tests (Issue #160)
     // ========================================================================
-    
+
     #[test]
     fn test_parse_lambda_single_param() {
         let result = PipParser::parse_str("dim double = x => x * 2");
         assert!(result.is_ok());
         let program = result.unwrap();
         assert_eq!(program.statements.len(), 1);
-        
+
         if let Statement::Dim { value, .. } = &program.statements[0] {
             assert!(matches!(value, Expr::Lambda { params, .. } if params.len() == 1));
         } else {
             panic!("Expected Dim statement with lambda");
         }
     }
-    
+
     #[test]
     fn test_parse_lambda_multiple_params() {
         let result = PipParser::parse_str("dim add = (x, y) => x + y");
         assert!(result.is_ok());
         let program = result.unwrap();
         assert_eq!(program.statements.len(), 1);
-        
+
         if let Statement::Dim { value, .. } = &program.statements[0] {
             assert!(matches!(value, Expr::Lambda { params, .. } if params.len() == 2));
         } else {
             panic!("Expected Dim statement with lambda");
         }
     }
-    
+
     #[test]
     fn test_parse_lambda_no_params() {
         let result = PipParser::parse_str("dim constant = () => 42");
         assert!(result.is_ok());
         let program = result.unwrap();
         assert_eq!(program.statements.len(), 1);
-        
+
         if let Statement::Dim { value, .. } = &program.statements[0] {
             assert!(matches!(value, Expr::Lambda { params, .. } if params.is_empty()));
         } else {
@@ -968,11 +968,19 @@ mod tests {
         let code = "dim result = ((x, y) => x + y)(5, 3)";
         let result = PipParser::parse_str(code);
 
-        // This should parse as a function call where the function is a lambda
-        // Note: This may not be supported yet, so we allow it to fail
-        if result.is_ok() {
-            let program = result.unwrap();
-            assert_eq!(program.statements.len(), 1);
+        assert!(result.is_ok(), "Parse error: {:?}", result.err());
+        let program = result.unwrap();
+        assert_eq!(program.statements.len(), 1);
+
+        if let Statement::Dim {
+            value: Expr::CallExpr { callee, args },
+            ..
+        } = &program.statements[0]
+        {
+            assert!(matches!(**callee, Expr::Lambda { .. }));
+            assert_eq!(args.len(), 2);
+        } else {
+            panic!("Expected immediate lambda call");
         }
     }
 }

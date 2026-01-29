@@ -1071,20 +1071,11 @@ fn build_postfix_expr(pair: Pair<Rule>) -> BuildResult<Expr> {
                         function: name,
                         args,
                     };
-                } else if let Expr::FieldAccess { .. } = expr {
-                    // This shouldn't happen if we correctly handle method calls above
-                    return Err(BuildError::new(
-                        0,
-                        0,
-                        "Unexpected field access before function call",
-                    ));
                 } else {
-                    // Chained calls like getFunc()() require AST support for callee expressions
-                    return Err(BuildError::new(
-                        0,
-                        0,
-                        "Function calls on non-identifier expressions are not yet supported",
-                    ));
+                    expr = Expr::CallExpr {
+                        callee: Box::new(expr),
+                        args,
+                    };
                 }
                 i += 1;
             }
@@ -1582,13 +1573,13 @@ fn build_fetch_expr(pair: Pair<Rule>) -> BuildResult<Expr> {
 fn build_lambda_expr(pair: Pair<Rule>) -> BuildResult<Expr> {
     let span = pair.as_span();
     let (line, col) = span.start_pos().line_col();
-    let mut inner = pair.into_inner();
+    let inner = pair.into_inner();
 
     let mut params = Vec::new();
-    
+
     // Parse lambda parameters and body
     // Grammar: (ident ~ "=>" ~ expr) | ("(" ~ lambda_params? ~ ")" ~ "=>" ~ expr)
-    while let Some(part) = inner.next() {
+    for part in inner {
         match part.as_rule() {
             Rule::ident => {
                 // Single parameter without parentheses: x => expr
@@ -1611,7 +1602,7 @@ fn build_lambda_expr(pair: Pair<Rule>) -> BuildResult<Expr> {
                 });
             }
             _ => {
-                // Skip other tokens like "=>" 
+                // Skip other tokens like "=>"
             }
         }
     }

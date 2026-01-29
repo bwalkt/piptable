@@ -891,6 +891,20 @@ impl Interpreter {
                 self.call_function(function, arg_vals, 0).await
             }
 
+            Expr::CallExpr { callee, args } => {
+                let callee_val = self.eval_expr(callee).await?;
+                let arg_vals = self.eval_args(args, 0).await?;
+                match callee_val {
+                    Value::Lambda { params, body } => {
+                        self.apply_lambda(&params, &body, &arg_vals).await
+                    }
+                    _ => Err(PipError::runtime(
+                        0,
+                        format!("Cannot call {}", callee_val.type_name()),
+                    )),
+                }
+            }
+
             Expr::MethodCall {
                 object,
                 method,
@@ -1781,31 +1795,29 @@ impl Interpreter {
                     Ok(result)
                 } else {
                     // Check if it's a variable containing a lambda
-                    if let Some(var_value) = self.get_var(name).await {
-                        if let Value::Lambda { params, body } = var_value {
-                            // Call the lambda
-                            if params.len() != args.len() {
-                                return Err(PipError::runtime(
-                                    line,
-                                    format!(
-                                        "Lambda '{}' expects {} arguments, got {}",
-                                        name,
-                                        params.len(),
-                                        args.len()
-                                    ),
-                                ));
-                            }
-                            
-                            self.push_scope().await;
-                            for (param, arg) in params.iter().zip(args.iter()) {
-                                self.declare_var(param, arg.clone()).await;
-                            }
-                            let result = self.eval_expr(&body).await;
-                            self.pop_scope().await;
-                            return result;
+                    if let Some(Value::Lambda { params, body }) = self.get_var(name).await {
+                        // Call the lambda
+                        if params.len() != args.len() {
+                            return Err(PipError::runtime(
+                                line,
+                                format!(
+                                    "Lambda '{}' expects {} arguments, got {}",
+                                    name,
+                                    params.len(),
+                                    args.len()
+                                ),
+                            ));
                         }
+
+                        self.push_scope().await;
+                        for (param, arg) in params.iter().zip(args.iter()) {
+                            self.declare_var(param, arg.clone()).await;
+                        }
+                        let result = self.eval_expr(&body).await;
+                        self.pop_scope().await;
+                        return result;
                     }
-                    
+
                     // Check Python functions if feature is enabled
                     #[cfg(feature = "python")]
                     if let Some(runtime) = &self.python_runtime {
