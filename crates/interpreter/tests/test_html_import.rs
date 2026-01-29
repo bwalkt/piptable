@@ -197,14 +197,8 @@ async fn test_import_html_no_table() {
     );
 
     let mut interp = Interpreter::new();
-    let program = PipParser::parse_str(&script);
-
-    if program.is_err() {
-        // Parse error is acceptable for missing table
-        return;
-    }
-
-    let result = interp.eval(program.unwrap()).await;
+    let program = PipParser::parse_str(&script).expect("Script should parse successfully");
+    let result = interp.eval(program).await;
 
     // Should fail gracefully when no table is found
     assert!(

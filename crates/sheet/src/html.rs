@@ -46,27 +46,23 @@ impl Sheet {
 
         // Parse rows
         let row_selector = Selector::parse("tr").unwrap();
-        let cell_selector_th = Selector::parse("th").unwrap();
-        let cell_selector_td = Selector::parse("td").unwrap();
 
         for row in table.select(&row_selector) {
             let mut row_data = Vec::new();
 
-            // First check for header cells (th)
-            let th_cells: Vec<scraper::element_ref::ElementRef> =
-                row.select(&cell_selector_th).collect();
-            if th_cells.is_empty() {
-                // Check for regular cells (td)
-                for cell in row.select(&cell_selector_td) {
-                    let text: String = cell.text().collect::<String>().trim().to_string();
-                    row_data.push(parse_cell_value(&text));
-                }
-            } else {
-                // Process header cells (th)
-                for cell in th_cells {
-                    let text: String = cell.text().collect::<String>().trim().to_string();
-                    row_data.push(CellValue::String(text));
-                }
+            // Process all cells (th and td) in DOM order
+            let cell_selector = Selector::parse("th, td").unwrap();
+            for cell in row.select(&cell_selector) {
+                let text: String = cell.text().collect::<String>().trim().to_string();
+
+                // If it's a th element, treat as string (header)
+                // If it's a td element, try to parse the type
+                let cell_value = if cell.value().name() == "th" {
+                    CellValue::String(text)
+                } else {
+                    parse_cell_value(&text)
+                };
+                row_data.push(cell_value);
             }
 
             if !row_data.is_empty() {
@@ -115,27 +111,23 @@ impl Sheet {
 
         // Parse rows
         let row_selector = Selector::parse("tr").unwrap();
-        let cell_selector_th = Selector::parse("th").unwrap();
-        let cell_selector_td = Selector::parse("td").unwrap();
 
         for row in table.select(&row_selector) {
             let mut row_data = Vec::new();
 
-            // First check for header cells (th)
-            let th_cells: Vec<scraper::element_ref::ElementRef> =
-                row.select(&cell_selector_th).collect();
-            if th_cells.is_empty() {
-                // Check for regular cells (td)
-                for cell in row.select(&cell_selector_td) {
-                    let text: String = cell.text().collect::<String>().trim().to_string();
-                    row_data.push(parse_cell_value(&text));
-                }
-            } else {
-                // Process header cells (th)
-                for cell in th_cells {
-                    let text: String = cell.text().collect::<String>().trim().to_string();
-                    row_data.push(CellValue::String(text));
-                }
+            // Process all cells (th and td) in DOM order
+            let cell_selector = Selector::parse("th, td").unwrap();
+            for cell in row.select(&cell_selector) {
+                let text: String = cell.text().collect::<String>().trim().to_string();
+
+                // If it's a th element, treat as string (header)
+                // If it's a td element, try to parse the type
+                let cell_value = if cell.value().name() == "th" {
+                    CellValue::String(text)
+                } else {
+                    parse_cell_value(&text)
+                };
+                row_data.push(cell_value);
             }
 
             if !row_data.is_empty() {
@@ -286,26 +278,26 @@ mod tests {
 
         // Check header row
         assert_eq!(
-            sheet.cell(0, 0).unwrap(),
+            sheet.get(0, 0).unwrap(),
             &CellValue::String("Name".to_string())
         );
         assert_eq!(
-            sheet.cell(0, 1).unwrap(),
+            sheet.get(0, 1).unwrap(),
             &CellValue::String("Age".to_string())
         );
         assert_eq!(
-            sheet.cell(0, 2).unwrap(),
+            sheet.get(0, 2).unwrap(),
             &CellValue::String("City".to_string())
         );
 
         // Check data rows
         assert_eq!(
-            sheet.cell(1, 0).unwrap(),
+            sheet.get(1, 0).unwrap(),
             &CellValue::String("Alice".to_string())
         );
-        assert_eq!(sheet.cell(1, 1).unwrap(), &CellValue::Int(30));
+        assert_eq!(sheet.get(1, 1).unwrap(), &CellValue::Int(30));
         assert_eq!(
-            sheet.cell(1, 2).unwrap(),
+            sheet.get(1, 2).unwrap(),
             &CellValue::String("New York".to_string())
         );
     }
@@ -331,17 +323,17 @@ mod tests {
 
         // Check first table
         assert_eq!(
-            sheets[0].cell(0, 0).unwrap(),
+            sheets[0].get(0, 0).unwrap(),
             &CellValue::String("A".to_string())
         );
-        assert_eq!(sheets[0].cell(1, 0).unwrap(), &CellValue::Int(1));
+        assert_eq!(sheets[0].get(1, 0).unwrap(), &CellValue::Int(1));
 
         // Check second table
         assert_eq!(
-            sheets[1].cell(0, 0).unwrap(),
+            sheets[1].get(0, 0).unwrap(),
             &CellValue::String("X".to_string())
         );
-        assert_eq!(sheets[1].cell(1, 0).unwrap(), &CellValue::Int(3));
+        assert_eq!(sheets[1].get(1, 0).unwrap(), &CellValue::Int(3));
     }
 
     #[test]
@@ -360,12 +352,12 @@ mod tests {
 
         // Check data types
         assert_eq!(
-            sheet.cell(0, 0).unwrap(),
+            sheet.get(0, 0).unwrap(),
             &CellValue::String("Alice".to_string())
         );
-        assert_eq!(sheet.cell(0, 1).unwrap(), &CellValue::Int(30));
-        assert_eq!(sheet.cell(0, 2).unwrap(), &CellValue::Bool(true));
-        assert_eq!(sheet.cell(0, 3).unwrap(), &CellValue::Float(3.14));
+        assert_eq!(sheet.get(0, 1).unwrap(), &CellValue::Int(30));
+        assert_eq!(sheet.get(0, 2).unwrap(), &CellValue::Bool(true));
+        assert_eq!(sheet.get(0, 3).unwrap(), &CellValue::Float(3.14));
     }
 
     #[test]
@@ -374,5 +366,47 @@ mod tests {
 
         let result = Sheet::from_html_string(html);
         assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_mixed_th_td_rows() {
+        // Test that rows with both th and td cells work correctly
+        let html = r#"
+            <table>
+                <tr>
+                    <th>Row Header</th>
+                    <td>Value 1</td>
+                    <td>100</td>
+                </tr>
+                <tr>
+                    <th>Another Header</th>
+                    <td>Value 2</td>
+                    <td>200</td>
+                </tr>
+            </table>
+        "#;
+
+        let sheet = Sheet::from_html_string(html).unwrap();
+
+        assert_eq!(sheet.row_count(), 2);
+        assert_eq!(sheet.col_count(), 3);
+
+        // First cell of each row should be a string (th)
+        assert_eq!(
+            sheet.get(0, 0).unwrap(),
+            &CellValue::String("Row Header".to_string())
+        );
+        assert_eq!(
+            sheet.get(1, 0).unwrap(),
+            &CellValue::String("Another Header".to_string())
+        );
+
+        // Other cells should be parsed by type
+        assert_eq!(
+            sheet.get(0, 1).unwrap(),
+            &CellValue::String("Value 1".to_string())
+        );
+        assert_eq!(sheet.get(0, 2).unwrap(), &CellValue::Int(100));
+        assert_eq!(sheet.get(1, 2).unwrap(), &CellValue::Int(200));
     }
 }
