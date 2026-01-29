@@ -169,27 +169,23 @@ impl Sheet {
 
             // Parse rows
             let row_selector = Selector::parse("tr").unwrap();
-            let cell_selector_th = Selector::parse("th").unwrap();
-            let cell_selector_td = Selector::parse("td").unwrap();
 
             for row in table.select(&row_selector) {
                 let mut row_data = Vec::new();
 
-                // First check for header cells (th)
-                let th_cells: Vec<scraper::element_ref::ElementRef> =
-                    row.select(&cell_selector_th).collect();
-                if th_cells.is_empty() {
-                    // Check for regular cells (td)
-                    for cell in row.select(&cell_selector_td) {
-                        let text: String = cell.text().collect::<String>().trim().to_string();
-                        row_data.push(parse_cell_value(&text));
-                    }
-                } else {
-                    // Process header cells (th)
-                    for cell in th_cells {
-                        let text: String = cell.text().collect::<String>().trim().to_string();
-                        row_data.push(CellValue::String(text));
-                    }
+                // Process all cells (th and td) in DOM order
+                let cell_selector = Selector::parse("th, td").unwrap();
+                for cell in row.select(&cell_selector) {
+                    let text: String = cell.text().collect::<String>().trim().to_string();
+
+                    // If it's a th element, treat as string (header)
+                    // If it's a td element, try to parse the type
+                    let cell_value = if cell.value().name() == "th" {
+                        CellValue::String(text)
+                    } else {
+                        parse_cell_value(&text)
+                    };
+                    row_data.push(cell_value);
                 }
 
                 if !row_data.is_empty() {

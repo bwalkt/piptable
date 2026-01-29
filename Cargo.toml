@@ -75,7 +75,6 @@ parquet = "53"
 
 # HTML parsing
 scraper = "0.22"
-ego-tree = "0.7"
 
 # Testing
 wiremock = "0.6"

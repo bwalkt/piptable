@@ -1702,12 +1702,6 @@ dependencies = [
 
 [[package]]
 name = "ego-tree"
-version = "0.7.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "870d6b5641b5e3e9baf0f79d6d5ccb5b171ec31038dd74fc4c93662756a3d2b1"
-
-[[package]]
-name = "ego-tree"
 version = "0.10.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b2972feb8dffe7bc8c5463b1dacda1b0dfbed3710e50f977d965429692d74cd8"
@@ -3647,7 +3641,6 @@ dependencies = [
  "arrow",
  "calamine",
  "csv",
- "ego-tree 0.7.0",
  "indexmap",
  "parquet",
  "rust_xlsxwriter",
@@ -4340,7 +4333,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cc3d051b884f40e309de6c149734eab57aa8cc1347992710dc80bcc1c2194c15"
 dependencies = [
  "cssparser",
- "ego-tree 0.10.0",
+ "ego-tree",
  "getopts",
  "html5ever",
  "precomputed-hash",

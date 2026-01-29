@@ -2,22 +2,14 @@ use piptable_core::Value;
 use piptable_interpreter::Interpreter;
 use piptable_parser::PipParser;
 use std::fs;
-use std::path::PathBuf;
 use tempfile::tempdir;
-
-fn get_test_html_path() -> String {
-    let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    path.push("../../examples/test_data.html");
-    path.to_string_lossy().to_string()
-}
 
 #[tokio::test]
 async fn test_import_html_file() {
-    let html_path = get_test_html_path();
+    let temp_dir = tempdir().unwrap();
+    let html_path = temp_dir.path().join("test.html");
 
-    // Check if the file exists, if not create it
-    if !std::path::Path::new(&html_path).exists() {
-        let html_content = r#"<!DOCTYPE html>
+    let html_content = r#"<!DOCTYPE html>
 <html>
 <body>
     <table>
@@ -39,15 +31,14 @@ async fn test_import_html_file() {
     </table>
 </body>
 </html>"#;
-        fs::write(&html_path, html_content).unwrap();
-    }
+    fs::write(&html_path, html_content).unwrap();
 
     let script = format!(
         r#"
         import data from "{}"
         data
     "#,
-        html_path
+        html_path.display()
     );
 
     let mut interp = Interpreter::new();
@@ -66,11 +57,10 @@ async fn test_import_html_file() {
 
 #[tokio::test]
 async fn test_import_html_with_headers() {
-    let html_path = get_test_html_path();
+    let temp_dir = tempdir().unwrap();
+    let html_path = temp_dir.path().join("test_headers.html");
 
-    // Ensure test file exists
-    if !std::path::Path::new(&html_path).exists() {
-        let html_content = r#"<!DOCTYPE html>
+    let html_content = r#"<!DOCTYPE html>
 <html>
 <body>
     <table>
@@ -92,15 +82,14 @@ async fn test_import_html_with_headers() {
     </table>
 </body>
 </html>"#;
-        fs::write(&html_path, html_content).unwrap();
-    }
+    fs::write(&html_path, html_content).unwrap();
 
     let script = format!(
         r#"
         import products from "{}" with headers
         products.columns
     "#,
-        html_path
+        html_path.display()
     );
 
     let mut interp = Interpreter::new();
@@ -114,10 +103,8 @@ async fn test_import_html_with_headers() {
             // Check that we have column names
             if let Some((first_col, _)) = cols.iter().next() {
                 assert!(
-                    first_col.contains("Product")
-                        || first_col.contains("Name")
-                        || first_col.contains("Q1"),
-                    "Expected first column to contain Product, Name, or Q1, got: {}",
+                    first_col == "Product",
+                    "Expected first column to be 'Product', got: {}",
                     first_col
                 );
             }
