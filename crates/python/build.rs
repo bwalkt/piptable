@@ -232,11 +232,20 @@ ldflags = sysconfig.get_config_var('LDFLAGS')
 if ldflags:
     print(f'LDFLAGS:{ldflags}')
 
+# Get additional libs used by python-config
+for key in ('LIBS', 'SYSLIBS', 'LINKFORSHARED'):
+    val = sysconfig.get_config_var(key)
+    if val:
+        print(f'{key}:{val}')
+
 # Get framework directory on macOS
 if sys.platform == 'darwin':
     framework_dir = sysconfig.get_config_var('PYTHONFRAMEWORKDIR')
     if framework_dir:
         print(f'FRAMEWORKDIR:{framework_dir}')
+    framework = sysconfig.get_config_var('PYTHONFRAMEWORK')
+    if framework:
+        print(f'FRAMEWORK:{framework}')
 "#;
 
     if let Ok(output) = Command::new(python_exe).arg("-c").arg(script).output() {
@@ -284,8 +293,27 @@ if sys.platform == 'darwin':
                         println!("cargo:rustc-link-arg={}", flag);
                     }
                 }
+            } else if let Some(extra) = line
+                .strip_prefix("LIBS:")
+                .or_else(|| line.strip_prefix("SYSLIBS:"))
+                .or_else(|| line.strip_prefix("LINKFORSHARED:"))
+            {
+                for flag in extra.split_whitespace() {
+                    if flag.starts_with("-L") {
+                        println!("cargo:rustc-link-search=native={}", &flag[2..]);
+                    } else if flag.starts_with("-l") {
+                        let lib = &flag[2..];
+                        if !["intl", "dl", "util", "rt"].contains(&lib) {
+                            println!("cargo:rustc-link-lib={}", lib);
+                        }
+                    } else if flag.starts_with("-Wl,") || flag == "-pthread" {
+                        println!("cargo:rustc-link-arg={}", flag);
+                    }
+                }
             } else if let Some(framework_dir) = line.strip_prefix("FRAMEWORKDIR:") {
                 println!("cargo:rustc-link-search=framework={}", framework_dir);
+            } else if let Some(framework) = line.strip_prefix("FRAMEWORK:") {
+                println!("cargo:rustc-link-lib=framework={}", framework);
             }
         }
     }
