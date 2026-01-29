@@ -23,6 +23,10 @@ statement = {
   | function_def
   | sub_def
   | return_stmt
+  | exit_function_stmt
+  | exit_sub_stmt
+  | exit_for_stmt
+  | exit_while_stmt
   | call_stmt
   | chart_stmt
   | export_stmt
@@ -83,6 +87,11 @@ sub_def = {
 param_list = { ident ~ ("," ~ ident)* }
 
 return_stmt = { "return" ~ expr? }
+
+exit_function_stmt = { "exit" ~ "function" }
+exit_sub_stmt = { "exit" ~ "sub" }
+exit_for_stmt = { "exit" ~ "for" }
+exit_while_stmt = { "exit" ~ "while" }
 
 call_stmt = { "call"? ~ ident ~ "(" ~ arg_list? ~ ")" }
 
