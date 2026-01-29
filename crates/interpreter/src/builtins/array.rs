@@ -30,7 +30,7 @@ pub async fn call_array_builtin(
 /// - Everything else (including NaN, functions, non-empty collections) = truthy
 ///
 /// # Examples
-/// ```
+/// ```ignore
 /// data = [[1, "A"], [2, "B"], [3, "C"], [4, "D"]]
 /// criteria = [true, false, true, false]
 /// result = filter(data, criteria)  // Returns [[1, "A"], [3, "C"]]

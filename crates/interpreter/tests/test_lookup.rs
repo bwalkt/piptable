@@ -396,3 +396,224 @@ async fn test_vlookup_approximate_match() {
         Some(Value::Float(f)) if (f - 0.24).abs() < 0.001
     ));
 }
+
+// TODO: Enable these tests when type coercion is fully implemented
+#[tokio::test]
+#[ignore = "type coercion not fully implemented yet"]
+async fn test_vlookup_type_coercion() {
+    let (interp, _) = run_script(
+        r#"
+        ' Test numeric string to number coercion
+        data = [
+            ["1", "One"],
+            [2, "Two"],
+            ["3.0", "Three"],
+            [4.0, "Four"]
+        ]
+
+        ' Looking up with different numeric types
+        result1 = vlookup(1, data, 2, false)      ' Int looking for string "1"
+        result2 = vlookup("2", data, 2, false)    ' String looking for int 2
+        result3 = vlookup(3, data, 2, false)      ' Int looking for string "3.0"
+        result4 = vlookup("4", data, 2, false)    ' String looking for float 4.0
+    "#,
+    )
+    .await;
+
+    assert!(matches!(
+        interp.get_var("result1").await,
+        Some(Value::String(s)) if s == "One"
+    ));
+
+    assert!(matches!(
+        interp.get_var("result2").await,
+        Some(Value::String(s)) if s == "Two"
+    ));
+
+    assert!(matches!(
+        interp.get_var("result3").await,
+        Some(Value::String(s)) if s == "Three"
+    ));
+
+    assert!(matches!(
+        interp.get_var("result4").await,
+        Some(Value::String(s)) if s == "Four"
+    ));
+}
+
+#[tokio::test]
+#[ignore = "type coercion not fully implemented yet"]
+async fn test_match_type_coercion() {
+    let (interp, _) = run_script(
+        r#"
+        ' Test MATCH with mixed types
+        mixed_array = ["1", 2, "3.0", 4.0, 5]
+
+        pos1 = match(1, mixed_array, 0)     ' Int matches string "1"
+        pos2 = match("2", mixed_array, 0)   ' String matches int 2
+        pos3 = match(3.0, mixed_array, 0)   ' Float matches string "3.0"
+        pos4 = match("4", mixed_array, 0)   ' String matches float 4.0
+        pos5 = match("5", mixed_array, 0)   ' String matches int 5
+    "#,
+    )
+    .await;
+
+    assert!(matches!(interp.get_var("pos1").await, Some(Value::Int(1))));
+    assert!(matches!(interp.get_var("pos2").await, Some(Value::Int(2))));
+    assert!(matches!(interp.get_var("pos3").await, Some(Value::Int(3))));
+    assert!(matches!(interp.get_var("pos4").await, Some(Value::Int(4))));
+    assert!(matches!(interp.get_var("pos5").await, Some(Value::Int(5))));
+}
+
+#[tokio::test]
+#[ignore = "xlookup search direction not fully implemented yet"]
+async fn test_xlookup_duplicates_with_search_direction() {
+    let (interp, _) = run_script(
+        r#"
+        ' Test XLOOKUP with duplicates and different search modes
+        names = ["Apple", "Banana", "Apple", "Cherry", "Banana"]
+        prices = [1.50, 0.75, 1.75, 2.00, 0.80]
+
+        ' Search mode 1: first to last (default)
+        first_apple = xlookup("Apple", names, prices, "N/A", 0, 1)
+        first_banana = xlookup("Banana", names, prices, "N/A", 0, 1)
+
+        ' Search mode -1: last to first
+        last_apple = xlookup("Apple", names, prices, "N/A", 0, -1)
+        last_banana = xlookup("Banana", names, prices, "N/A", 0, -1)
+    "#,
+    )
+    .await;
+
+    // First occurrence matches
+    assert!(matches!(
+        interp.get_var("first_apple").await,
+        Some(Value::Float(f)) if (f - 1.50).abs() < 0.001
+    ));
+
+    assert!(matches!(
+        interp.get_var("first_banana").await,
+        Some(Value::Float(f)) if (f - 0.75).abs() < 0.001
+    ));
+
+    // Last occurrence
+    assert!(matches!(
+        interp.get_var("last_apple").await,
+        Some(Value::Float(f)) if (f - 1.75).abs() < 0.001
+    ));
+
+    assert!(matches!(
+        interp.get_var("last_banana").await,
+        Some(Value::Float(f)) if (f - 0.80).abs() < 0.001
+    ));
+}
+
+#[tokio::test]
+#[ignore = "index error handling not fully implemented yet"]
+async fn test_index_invalid_inputs() {
+    let (interp, _) = run_script(
+        r#"
+        data = [
+            [1, 2, 3],
+            [4, 5, 6],
+            [7, 8, 9]
+        ]
+
+        ' Invalid indices
+        result1 = index(data, 0, 1)     ' Row index 0 (invalid)
+        result2 = index(data, 4, 1)     ' Row index out of bounds
+        result3 = index(data, 1, 0)     ' Column index 0 (invalid)
+        result4 = index(data, 1, 4)     ' Column index out of bounds
+        result5 = index(data, -1, 1)    ' Negative row index
+        result6 = index(data, 1, -1)    ' Negative column index
+    "#,
+    )
+    .await;
+
+    // All invalid indices should return error
+    assert!(matches!(
+        interp.get_var("result1").await,
+        Some(Value::String(s)) if s.starts_with("#")
+    ));
+
+    assert!(matches!(
+        interp.get_var("result2").await,
+        Some(Value::String(s)) if s.starts_with("#")
+    ));
+
+    assert!(matches!(
+        interp.get_var("result3").await,
+        Some(Value::String(s)) if s.starts_with("#")
+    ));
+
+    assert!(matches!(
+        interp.get_var("result4").await,
+        Some(Value::String(s)) if s.starts_with("#")
+    ));
+
+    assert!(matches!(
+        interp.get_var("result5").await,
+        Some(Value::String(s)) if s.starts_with("#")
+    ));
+
+    assert!(matches!(
+        interp.get_var("result6").await,
+        Some(Value::String(s)) if s.starts_with("#")
+    ));
+}
+
+#[tokio::test]
+#[ignore = "edge case handling not fully implemented yet"]
+async fn test_vlookup_additional_edge_cases() {
+    let (interp, _) = run_script(
+        r#"
+        ' Edge cases for VLOOKUP
+        empty_table = []
+        single_row = [["Apple", 1.50, 100]]
+        single_col = [["Apple"], ["Banana"], ["Cherry"]]
+
+        ' Empty table
+        result1 = vlookup("Apple", empty_table, 1, false)
+
+        ' Single row table
+        result2 = vlookup("Apple", single_row, 2, false)
+        result3 = vlookup("Banana", single_row, 2, false)
+
+        ' Single column table (col_index out of bounds)
+        result4 = vlookup("Apple", single_col, 2, false)
+
+        ' Null lookup value
+        null_data = [
+            [null, "Null row"],
+            ["Apple", "Apple row"]
+        ]
+        result5 = vlookup(null, null_data, 2, false)
+    "#,
+    )
+    .await;
+
+    assert!(matches!(
+        interp.get_var("result1").await,
+        Some(Value::String(s)) if s == "#N/A"
+    ));
+
+    assert!(matches!(
+        interp.get_var("result2").await,
+        Some(Value::Float(f)) if (f - 1.50).abs() < 0.001
+    ));
+
+    assert!(matches!(
+        interp.get_var("result3").await,
+        Some(Value::String(s)) if s == "#N/A"
+    ));
+
+    assert!(matches!(
+        interp.get_var("result4").await,
+        Some(Value::String(s)) if s.starts_with("#")
+    ));
+
+    assert!(matches!(
+        interp.get_var("result5").await,
+        Some(Value::String(s)) if s == "Null row"
+    ));
+}
