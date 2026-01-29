@@ -59,3 +59,35 @@ pub async fn call_builtin(
 
     None
 }
+
+pub fn is_builtin(name: &str) -> bool {
+    matches!(
+        name.to_lowercase().as_str(),
+        // core
+        "print" | "len" | "length" | "type" | "keys" | "values"
+            // math
+            | "abs" | "sum" | "min" | "max" | "avg" | "average"
+            // string
+            | "str" | "int" | "float"
+            // sheet
+            | "sheet_name_columns_by_row"
+            | "sheet_transpose"
+            | "sheet_select_columns"
+            | "sheet_remove_columns"
+            | "sheet_remove_empty_rows"
+            | "sheet_row_count"
+            | "sheet_col_count"
+            | "sheet_get_a1"
+            | "sheet_set_a1"
+            | "sheet_get_range"
+            | "sheet_column_by_name"
+            | "sheet_get_by_name"
+            | "sheet_set_by_name"
+            | "sheet_map"
+            | "sheet_filter_rows"
+            // lookup
+            | "vlookup" | "hlookup" | "index" | "match" | "xlookup"
+            // array
+            | "filter"
+    )
+}

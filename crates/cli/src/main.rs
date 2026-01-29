@@ -77,7 +77,7 @@ async fn main() -> Result<()> {
         let (key, value) = var.split_once('=').with_context(|| {
             format!("Invalid variable format: '{var}'. Expected KEY=VALUE format")
         })?;
-        interpreter.set_var(key, parse_cli_value(value)).await;
+        interpreter.set_var(key, parse_cli_value(value)).await?;
     }
 
     // Determine execution mode
@@ -729,7 +729,7 @@ mod tests {
     #[tokio::test]
     async fn test_variable_injection() {
         let interpreter = Interpreter::new();
-        interpreter.set_var("x", Value::Int(42)).await;
+        interpreter.set_var("x", Value::Int(42)).await.unwrap();
         let value = interpreter.get_var("x").await;
         assert!(matches!(value, Some(Value::Int(42))));
     }
