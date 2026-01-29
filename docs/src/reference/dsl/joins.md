@@ -188,11 +188,8 @@ dim result = recentOrders join customers on "customer_id"
 ```vba
 ' Check if column exists before joining
 dim employees = import "employees.csv" into sheet
-if hasColumn(employees, "department_id") then
-    dim result = employees join departments on "department_id"
-else
-    print "Error: employees sheet missing department_id column"
-end if
+dim _ = sheet_column_by_name(employees, "department_id") ' Errors if column missing
+dim result = employees join departments on "department_id"
 ```
 
 ## Best Practices
@@ -210,12 +207,8 @@ dim result = employees left join departments on "dept_id"
 ### 2. Validate Data Before Joining
 
 ```vba
-' Check for required columns
-if not hasColumn(orders, "customer_id") then
-    print "Error: orders missing customer_id column"
-    exit sub
-end if
-
+' Check for required columns (errors if missing)
+dim _ = sheet_column_by_name(orders, "customer_id")
 dim orderDetails = orders join customers on "customer_id"
 ```
 

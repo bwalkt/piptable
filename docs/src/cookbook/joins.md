@@ -257,29 +257,22 @@ dim sqlResult = query("
 ' Validate data before joining
 function safeJoin(leftSheet, rightSheet, leftKey, rightKey)
     ' Check if sheets exist
-    if leftSheet is nothing or rightSheet is nothing then
+    if leftSheet is null or rightSheet is null then
         print "Error: One or both sheets are null"
-        return nothing
+        return null
     end if
     
-    ' Check if columns exist
-    if not hasColumn(leftSheet, leftKey) then
-        print "Error: Left sheet missing column: " + leftKey
-        return nothing
-    end if
-    
-    if not hasColumn(rightSheet, rightKey) then
-        print "Error: Right sheet missing column: " + rightKey  
-        return nothing
-    end if
+    ' Check if columns exist (errors if missing)
+    dim _ = sheet_column_by_name(leftSheet, leftKey)
+    dim _ = sheet_column_by_name(rightSheet, rightKey)
     
     ' Check for empty datasets
-    if getRowCount(leftSheet) = 0 then
+    if sheet_row_count(leftSheet) = 0 then
         print "Warning: Left sheet is empty"
         return rightSheet ' or return empty sheet
     end if
     
-    if getRowCount(rightSheet) = 0 then
+    if sheet_row_count(rightSheet) = 0 then
         print "Warning: Right sheet is empty"  
         return leftSheet ' or return empty sheet
     end if
@@ -317,7 +310,7 @@ dim orphanSales = query("
     WHERE customer_name IS NULL
 ")
 
-print "Found " + str(getRowCount(orphanSales)) + " sales without customer data"
+print "Found " + str(sheet_row_count(orphanSales)) + " sales without customer data"
 export orphanSales to "orphan_sales.csv"
 ```
 

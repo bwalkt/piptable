@@ -306,7 +306,7 @@ Sheet operations return `Result<T>` types that can contain:
 
 ## Performance Considerations
 
-- Sheets use row-major storage (Vec<Vec<CellValue>>)
+- Sheets use row-major storage (`Vec<Vec<CellValue>>`)
 - Column operations may be slower than row operations
 - Joins create new sheets rather than modifying in-place
 - Use `append_distinct` and `upsert` for deduplication
