@@ -107,6 +107,52 @@ mod tests {
         assert!(result.unwrap().statements.is_empty());
     }
 
+    // ========================================================================
+    // Lambda parsing tests (Issue #160)
+    // ========================================================================
+
+    #[test]
+    fn test_parse_lambda_single_param() {
+        let result = PipParser::parse_str("dim double = x => x * 2");
+        assert!(result.is_ok());
+        let program = result.unwrap();
+        assert_eq!(program.statements.len(), 1);
+
+        if let Statement::Dim { value, .. } = &program.statements[0] {
+            assert!(matches!(value, Expr::Lambda { params, .. } if params.len() == 1));
+        } else {
+            panic!("Expected Dim statement with lambda");
+        }
+    }
+
+    #[test]
+    fn test_parse_lambda_multiple_params() {
+        let result = PipParser::parse_str("dim add = (x, y) => x + y");
+        assert!(result.is_ok());
+        let program = result.unwrap();
+        assert_eq!(program.statements.len(), 1);
+
+        if let Statement::Dim { value, .. } = &program.statements[0] {
+            assert!(matches!(value, Expr::Lambda { params, .. } if params.len() == 2));
+        } else {
+            panic!("Expected Dim statement with lambda");
+        }
+    }
+
+    #[test]
+    fn test_parse_lambda_no_params() {
+        let result = PipParser::parse_str("dim constant = () => 42");
+        assert!(result.is_ok());
+        let program = result.unwrap();
+        assert_eq!(program.statements.len(), 1);
+
+        if let Statement::Dim { value, .. } = &program.statements[0] {
+            assert!(matches!(value, Expr::Lambda { params, .. } if params.is_empty()));
+        } else {
+            panic!("Expected Dim statement with lambda");
+        }
+    }
+
     #[test]
     fn test_parse_invalid_syntax() {
         let result = PipParser::parse_str("!@#$%^ invalid");
@@ -772,7 +818,7 @@ mod tests {
 
     #[test]
     fn parse_lambda_no_params() {
-        let code = "dim f = || 42";
+        let code = "dim f = () => 42";
         let result = PipParser::parse_str(code);
         assert!(result.is_ok(), "Parse error: {:?}", result.err());
         let program = result.unwrap();
@@ -785,7 +831,7 @@ mod tests {
 
     #[test]
     fn parse_lambda_one_param() {
-        let code = "dim add_one = |x| x + 1";
+        let code = "dim add_one = x => x + 1";
         let result = PipParser::parse_str(code);
         assert!(result.is_ok(), "Parse error: {:?}", result.err());
         let program = result.unwrap();
@@ -798,7 +844,7 @@ mod tests {
 
     #[test]
     fn parse_lambda_multiple_params() {
-        let code = "dim multiply = |a, b| a * b";
+        let code = "dim multiply = (a, b) => a * b";
         let result = PipParser::parse_str(code);
         assert!(result.is_ok(), "Parse error: {:?}", result.err());
         let program = result.unwrap();
@@ -812,7 +858,7 @@ mod tests {
 
     #[test]
     fn parse_lambda_complex_body() {
-        let code = "dim complex = |x| x > 5 and x < 10";
+        let code = "dim complex = x => x > 5 and x < 10";
         let result = PipParser::parse_str(code);
         assert!(result.is_ok(), "Parse error: {:?}", result.err());
         let program = result.unwrap();
@@ -825,7 +871,7 @@ mod tests {
 
     #[test]
     fn parse_method_call_with_lambda() {
-        let code = "result = data.map(|x| x * 2)";
+        let code = "result = data.map(x => x * 2)";
         let result = PipParser::parse_str(code);
         assert!(result.is_ok(), "Parse error: {:?}", result.err());
         let program = result.unwrap();
@@ -840,7 +886,7 @@ mod tests {
     #[test]
     fn parse_lambda_nested() {
         // Test nested lambdas (currying)
-        let code = "dim curry = |x| |y| x + y";
+        let code = "dim curry = x => (y => x + y)";
         let result = PipParser::parse_str(code);
         assert!(result.is_ok(), "Parse error: {:?}", result.err());
 
@@ -858,7 +904,7 @@ mod tests {
     #[test]
     fn parse_lambda_in_array() {
         // Test lambdas as array elements
-        let code = "dim funcs = [|x| x + 1, |x| x * 2]";
+        let code = "dim funcs = [x => x + 1, x => x * 2]";
         let result = PipParser::parse_str(code);
         assert!(result.is_ok(), "Parse error: {:?}", result.err());
 
@@ -877,7 +923,7 @@ mod tests {
     #[test]
     fn parse_lambda_in_object() {
         // Test lambdas as object values
-        let code = r#"dim ops = {"add": |x, y| x + y, "mul": |x, y| x * y}"#;
+        let code = r#"dim ops = {"add": (x, y) => x + y, "mul": (x, y) => x * y}"#;
         let result = PipParser::parse_str(code);
         assert!(result.is_ok(), "Parse error: {:?}", result.err());
 
@@ -901,7 +947,7 @@ mod tests {
     #[test]
     fn parse_lambda_with_comparison() {
         // Test lambda with comparison expression
-        let code = "dim is_positive = |x| x > 0";
+        let code = "dim is_positive = x => x > 0";
         let result = PipParser::parse_str(code);
         assert!(result.is_ok(), "Parse error: {:?}", result.err());
 
@@ -919,14 +965,22 @@ mod tests {
     #[test]
     fn parse_lambda_immediate_call() {
         // Test lambda immediate invocation
-        let code = "dim result = (|x, y| x + y)(5, 3)";
+        let code = "dim result = ((x, y) => x + y)(5, 3)";
         let result = PipParser::parse_str(code);
 
-        // This should parse as a function call where the function is a lambda
-        // Note: This may not be supported yet, so we allow it to fail
-        if result.is_ok() {
-            let program = result.unwrap();
-            assert_eq!(program.statements.len(), 1);
+        assert!(result.is_ok(), "Parse error: {:?}", result.err());
+        let program = result.unwrap();
+        assert_eq!(program.statements.len(), 1);
+
+        if let Statement::Dim {
+            value: Expr::CallExpr { callee, args },
+            ..
+        } = &program.statements[0]
+        {
+            assert!(matches!(**callee, Expr::Lambda { .. }));
+            assert_eq!(args.len(), 2);
+        } else {
+            panic!("Expected immediate lambda call");
         }
     }
 }

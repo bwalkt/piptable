@@ -1071,20 +1071,11 @@ fn build_postfix_expr(pair: Pair<Rule>) -> BuildResult<Expr> {
                         function: name,
                         args,
                     };
-                } else if let Expr::FieldAccess { .. } = expr {
-                    // This shouldn't happen if we correctly handle method calls above
-                    return Err(BuildError::new(
-                        0,
-                        0,
-                        "Unexpected field access before function call",
-                    ));
                 } else {
-                    // Chained calls like getFunc()() require AST support for callee expressions
-                    return Err(BuildError::new(
-                        0,
-                        0,
-                        "Function calls on non-identifier expressions are not yet supported",
-                    ));
+                    expr = Expr::CallExpr {
+                        callee: Box::new(expr),
+                        args,
+                    };
                 }
                 i += 1;
             }
@@ -1582,34 +1573,41 @@ fn build_fetch_expr(pair: Pair<Rule>) -> BuildResult<Expr> {
 fn build_lambda_expr(pair: Pair<Rule>) -> BuildResult<Expr> {
     let span = pair.as_span();
     let (line, col) = span.start_pos().line_col();
-    let mut inner = pair.into_inner();
+    let inner = pair.into_inner();
 
     let mut params = Vec::new();
-    if let Some(params_pair) = inner.next() {
-        if params_pair.as_rule() == Rule::lambda_params {
-            for param in params_pair.into_inner() {
-                params.push(param.as_str().to_string());
+
+    // Parse lambda parameters and body
+    // Grammar: (ident ~ "=>" ~ expr) | ("(" ~ lambda_params? ~ ")" ~ "=>" ~ expr)
+    for part in inner {
+        match part.as_rule() {
+            Rule::ident => {
+                // Single parameter without parentheses: x => expr
+                params.push(part.as_str().to_string());
             }
-        } else {
-            // This is the body expression if no parameters
-            let body = build_expr(params_pair)?;
-            return Ok(Expr::Lambda {
-                params: Vec::new(),
-                body: Box::new(body),
-            });
+            Rule::lambda_params => {
+                // Multiple parameters in parentheses: (x, y) => expr
+                for param in part.into_inner() {
+                    if param.as_rule() == Rule::ident {
+                        params.push(param.as_str().to_string());
+                    }
+                }
+            }
+            Rule::expr => {
+                // This is the body expression
+                let body = build_expr(part)?;
+                return Ok(Expr::Lambda {
+                    params,
+                    body: Box::new(body),
+                });
+            }
+            _ => {
+                // Skip other tokens like "=>"
+            }
         }
     }
 
-    // Get the body expression
-    let body_pair = inner
-        .next()
-        .ok_or_else(|| BuildError::new(line, col, "Lambda expression missing body"))?;
-    let body = build_expr(body_pair)?;
-
-    Ok(Expr::Lambda {
-        params,
-        body: Box::new(body),
-    })
+    Err(BuildError::new(line, col, "Invalid lambda expression"))
 }
 
 fn build_array_literal(pair: Pair<Rule>) -> BuildResult<Expr> {
