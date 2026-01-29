@@ -56,7 +56,7 @@ jobs:
         if: github.event_name == 'pull_request'
         run: |
           cargo test --package piptable-core --package piptable-parser
-          cargo test --package piptable-interpreter --test functions
+          cargo test --package piptable-interpreter --lib --test functions
 
       - name: Run core tests
         if: github.event_name == 'push'
