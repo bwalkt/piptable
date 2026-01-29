@@ -1,9 +1,17 @@
 //! HTML table import functionality
 //!
+//! ## Features
+//!
+//! - **Colspan and Rowspan**: Both `colspan` and `rowspan` attributes are properly handled,
+//!   duplicating cell values across the spanned columns and rows while maintaining proper
+//!   table structure alignment.
+//! - **Mixed cell types**: Supports tables with mixed `<th>` and `<td>` elements, treating
+//!   `<th>` elements as string headers regardless of content.
+//! - **Type inference**: Automatically detects and converts cell values to appropriate types
+//!   (integers, floats, booleans, strings) while preserving leading zeros in strings.
+//!
 //! ## Limitations
 //!
-//! - **Rowspan**: Tables with `rowspan` attributes are not currently supported and may result in
-//!   misaligned data. Only `colspan` is handled.
 //! - **Text extraction**: Nested HTML elements in cells are concatenated without whitespace
 //!   normalization (e.g., `foo<b>bar</b>` becomes `"foobar"`, not `"foo bar"`).
 
@@ -24,23 +32,41 @@ fn parse_table_element_with_options(
     let mut sheet = Sheet::new();
     let row_selector = Selector::parse("tr").unwrap();
     let cell_selector = Selector::parse("th, td").unwrap();
-    let mut max_columns = 0;
 
-    // First pass: collect all rows and track maximum column count
+    // Track occupied cells due to rowspan from previous rows
+    // Key: (row_index, col_index), Value: cell_value
+    let mut occupied_cells: std::collections::HashMap<(usize, usize), CellValue> = std::collections::HashMap::new();
+
+    // First pass: process all rows and handle colspan/rowspan
     let mut all_rows = Vec::new();
+    let mut max_columns = 0;
 
     for (row_index, row) in table.select(&row_selector).enumerate() {
         let mut row_data = Vec::new();
+        let mut col_index = 0;
         let is_first_row = row_index == 0;
 
         // Process all cells (th and td) in DOM order
         for cell in row.select(&cell_selector) {
+            // Skip columns occupied by previous rows' rowspan
+            while occupied_cells.contains_key(&(row_index, col_index)) {
+                row_data.push(occupied_cells[&(row_index, col_index)].clone());
+                col_index += 1;
+            }
+
             let text: String = cell.text().collect::<String>().trim().to_string();
 
-            // Handle colspan attribute - repeat the cell value
+            // Handle colspan attribute - repeat the cell value horizontally
             let colspan = cell
                 .value()
                 .attr("colspan")
+                .and_then(|s| s.parse::<usize>().ok())
+                .unwrap_or(1);
+
+            // Handle rowspan attribute - repeat the cell value vertically
+            let rowspan = cell
+                .value()
+                .attr("rowspan")
                 .and_then(|s| s.parse::<usize>().ok())
                 .unwrap_or(1);
 
@@ -56,24 +82,44 @@ fn parse_table_element_with_options(
                 parse_cell_value(&text)
             };
 
-            // Add the cell value 'colspan' times
-            // For the first occurrence, use the original value
-            // For subsequent ones, append a suffix to avoid duplicate column names
-            for i in 0..colspan {
-                if i == 0 {
-                    row_data.push(cell_value.clone());
-                } else if force_first_row_as_strings && is_first_row {
-                    // For header row cells, append a suffix to make them unique
-                    let suffix_value = match &cell_value {
-                        CellValue::String(s) => CellValue::String(format!("{}_{}", s, i + 1)),
-                        _ => CellValue::String(format!("{}_{}", &text, i + 1)),
+            // Handle both colspan and rowspan
+            for row_offset in 0..rowspan {
+                for col_offset in 0..colspan {
+                    let target_row = row_index + row_offset;
+                    let target_col = col_index + col_offset;
+
+                    let value_to_insert = if row_offset == 0 && col_offset == 0 {
+                        // First cell gets the original value
+                        cell_value.clone()
+                    } else if row_offset == 0 && col_offset > 0 && 
+                              ((force_first_row_as_strings && is_first_row) || (cell.value().name() == "th" && is_first_row)) {
+                        // For header row cells or th elements in first row with colspan, append a suffix to make them unique
+                        match &cell_value {
+                            CellValue::String(s) => CellValue::String(format!("{}_{}", s, col_offset + 1)),
+                            _ => CellValue::String(format!("{}_{}", &text, col_offset + 1)),
+                        }
+                    } else {
+                        // For other cells (rowspan duplicates, data cell colspan duplicates), just duplicate the value
+                        cell_value.clone()
                     };
-                    row_data.push(suffix_value);
-                } else {
-                    // For data cells, just duplicate the value
-                    row_data.push(cell_value.clone());
+
+                    if row_offset == 0 {
+                        // Current row - add to row_data
+                        row_data.push(value_to_insert);
+                    } else {
+                        // Future row - mark as occupied
+                        occupied_cells.insert((target_row, target_col), value_to_insert);
+                    }
                 }
             }
+
+            col_index += colspan;
+        }
+
+        // Add any remaining occupied cells for this row (at the end)
+        while let Some(value) = occupied_cells.remove(&(row_index, col_index)) {
+            row_data.push(value);
+            col_index += 1;
         }
 
         if !row_data.is_empty() {
@@ -471,5 +517,223 @@ mod tests {
         );
         assert_eq!(sheet.get(0, 2).unwrap(), &CellValue::Int(100));
         assert_eq!(sheet.get(1, 2).unwrap(), &CellValue::Int(200));
+    }
+
+    #[test]
+    fn test_simple_rowspan() {
+        // Test basic rowspan functionality
+        let html = r#"
+            <table>
+                <tr>
+                    <th>Name</th>
+                    <th>Details</th>
+                </tr>
+                <tr>
+                    <td rowspan="2">Alice</td>
+                    <td>Engineer</td>
+                </tr>
+                <tr>
+                    <td>Senior</td>
+                </tr>
+            </table>
+        "#;
+
+        let sheet = Sheet::from_html_string(html).unwrap();
+
+        assert_eq!(sheet.row_count(), 3);
+        assert_eq!(sheet.col_count(), 2);
+
+        // Check header row
+        assert_eq!(
+            sheet.get(0, 0).unwrap(),
+            &CellValue::String("Name".to_string())
+        );
+        assert_eq!(
+            sheet.get(0, 1).unwrap(),
+            &CellValue::String("Details".to_string())
+        );
+
+        // Check first data row
+        assert_eq!(
+            sheet.get(1, 0).unwrap(),
+            &CellValue::String("Alice".to_string())
+        );
+        assert_eq!(
+            sheet.get(1, 1).unwrap(),
+            &CellValue::String("Engineer".to_string())
+        );
+
+        // Check second data row - Alice should be duplicated, Senior should be in second column
+        assert_eq!(
+            sheet.get(2, 0).unwrap(),
+            &CellValue::String("Alice".to_string())
+        );
+        assert_eq!(
+            sheet.get(2, 1).unwrap(),
+            &CellValue::String("Senior".to_string())
+        );
+    }
+
+    #[test]
+    fn test_combined_colspan_rowspan() {
+        // Test table with both colspan and rowspan
+        let html = r#"
+            <table>
+                <tr>
+                    <th colspan="2">Personal Info</th>
+                    <th>Status</th>
+                </tr>
+                <tr>
+                    <td rowspan="2">Alice</td>
+                    <td>Age: 30</td>
+                    <td>Active</td>
+                </tr>
+                <tr>
+                    <td>City: NYC</td>
+                    <td>Inactive</td>
+                </tr>
+            </table>
+        "#;
+
+        let sheet = Sheet::from_html_string(html).unwrap();
+
+        assert_eq!(sheet.row_count(), 3);
+        assert_eq!(sheet.col_count(), 3);
+
+        // Check header row with colspan
+        assert_eq!(
+            sheet.get(0, 0).unwrap(),
+            &CellValue::String("Personal Info".to_string())
+        );
+        assert_eq!(
+            sheet.get(0, 1).unwrap(),
+            &CellValue::String("Personal Info_2".to_string())
+        );
+        assert_eq!(
+            sheet.get(0, 2).unwrap(),
+            &CellValue::String("Status".to_string())
+        );
+
+        // Check first data row
+        assert_eq!(
+            sheet.get(1, 0).unwrap(),
+            &CellValue::String("Alice".to_string())
+        );
+        assert_eq!(
+            sheet.get(1, 1).unwrap(),
+            &CellValue::String("Age: 30".to_string())
+        );
+        assert_eq!(
+            sheet.get(1, 2).unwrap(),
+            &CellValue::String("Active".to_string())
+        );
+
+        // Check second data row - Alice duplicated due to rowspan
+        assert_eq!(
+            sheet.get(2, 0).unwrap(),
+            &CellValue::String("Alice".to_string())
+        );
+        assert_eq!(
+            sheet.get(2, 1).unwrap(),
+            &CellValue::String("City: NYC".to_string())
+        );
+        assert_eq!(
+            sheet.get(2, 2).unwrap(),
+            &CellValue::String("Inactive".to_string())
+        );
+    }
+
+    #[test]
+    fn test_complex_rowspan_layout() {
+        // Test more complex rowspan with multiple spanning cells
+        let html = r#"
+            <table>
+                <tr>
+                    <th>Category</th>
+                    <th>Item</th>
+                    <th>Value</th>
+                </tr>
+                <tr>
+                    <td rowspan="3">Food</td>
+                    <td>Apple</td>
+                    <td>5</td>
+                </tr>
+                <tr>
+                    <td>Banana</td>
+                    <td>3</td>
+                </tr>
+                <tr>
+                    <td>Orange</td>
+                    <td>7</td>
+                </tr>
+                <tr>
+                    <td rowspan="2">Drinks</td>
+                    <td>Water</td>
+                    <td>10</td>
+                </tr>
+                <tr>
+                    <td>Juice</td>
+                    <td>2</td>
+                </tr>
+            </table>
+        "#;
+
+        let sheet = Sheet::from_html_string(html).unwrap();
+
+        assert_eq!(sheet.row_count(), 6);
+        assert_eq!(sheet.col_count(), 3);
+
+        // Check Food category spanning 3 rows
+        assert_eq!(
+            sheet.get(1, 0).unwrap(),
+            &CellValue::String("Food".to_string())
+        );
+        assert_eq!(
+            sheet.get(2, 0).unwrap(),
+            &CellValue::String("Food".to_string())
+        );
+        assert_eq!(
+            sheet.get(3, 0).unwrap(),
+            &CellValue::String("Food".to_string())
+        );
+
+        // Check items under Food
+        assert_eq!(
+            sheet.get(1, 1).unwrap(),
+            &CellValue::String("Apple".to_string())
+        );
+        assert_eq!(
+            sheet.get(2, 1).unwrap(),
+            &CellValue::String("Banana".to_string())
+        );
+        assert_eq!(
+            sheet.get(3, 1).unwrap(),
+            &CellValue::String("Orange".to_string())
+        );
+
+        // Check Drinks category spanning 2 rows
+        assert_eq!(
+            sheet.get(4, 0).unwrap(),
+            &CellValue::String("Drinks".to_string())
+        );
+        assert_eq!(
+            sheet.get(5, 0).unwrap(),
+            &CellValue::String("Drinks".to_string())
+        );
+
+        // Check items under Drinks
+        assert_eq!(
+            sheet.get(4, 1).unwrap(),
+            &CellValue::String("Water".to_string())
+        );
+        assert_eq!(
+            sheet.get(5, 1).unwrap(),
+            &CellValue::String("Juice".to_string())
+        );
+
+        // Check values
+        assert_eq!(sheet.get(1, 2).unwrap(), &CellValue::Int(5));
+        assert_eq!(sheet.get(4, 2).unwrap(), &CellValue::Int(10));
+        assert_eq!(sheet.get(5, 2).unwrap(), &CellValue::Int(2));
     }
 }

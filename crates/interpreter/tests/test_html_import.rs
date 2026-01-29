@@ -1,6 +1,7 @@
 use piptable_core::Value;
 use piptable_interpreter::Interpreter;
 use piptable_parser::PipParser;
+use piptable_sheet::CellValue;
 use std::fs;
 use tempfile::tempdir;
 
@@ -501,8 +502,8 @@ async fn test_import_html_uneven_header_row() {
 }
 
 #[tokio::test]
-async fn test_import_html_rowspan_limitation() {
-    // This test documents the current limitation with rowspan handling
+async fn test_import_html_rowspan_support() {
+    // This test verifies that rowspan handling now works correctly
     let temp_dir = tempdir().unwrap();
     let html_path = temp_dir.path().join("test_rowspan.html");
 
@@ -538,16 +539,41 @@ async fn test_import_html_rowspan_limitation() {
     let program = PipParser::parse_str(&script).unwrap();
     let result = interp.eval(program).await.unwrap();
 
-    // Note: This test documents current behavior, not ideal behavior
-    // Rowspan is not handled, so the table structure may be misaligned
     match result {
         Value::Sheet(sheet) => {
-            // We can import the table, but rowspan isn't properly handled
-            assert!(
-                sheet.row_count() >= 2,
-                "Should have at least header + data rows"
+            // Verify table structure with rowspan support
+            assert_eq!(sheet.row_count(), 3, "Should have header + 2 data rows");
+            assert_eq!(sheet.col_count(), 2, "Should have 2 columns");
+
+            // Check header row
+            assert_eq!(
+                sheet.get(0, 0).unwrap(),
+                &CellValue::String("Name".to_string())
             );
-            // The actual structure depends on how the HTML is parsed without rowspan support
+            assert_eq!(
+                sheet.get(0, 1).unwrap(),
+                &CellValue::String("Details".to_string())
+            );
+
+            // Check first data row
+            assert_eq!(
+                sheet.get(1, 0).unwrap(),
+                &CellValue::String("Alice".to_string())
+            );
+            assert_eq!(
+                sheet.get(1, 1).unwrap(),
+                &CellValue::String("Engineer".to_string())
+            );
+
+            // Check second data row - Alice should be duplicated due to rowspan
+            assert_eq!(
+                sheet.get(2, 0).unwrap(),
+                &CellValue::String("Alice".to_string())
+            );
+            assert_eq!(
+                sheet.get(2, 1).unwrap(),
+                &CellValue::String("Senior".to_string())
+            );
         }
         _ => panic!("Expected a Sheet value"),
     }
