@@ -50,8 +50,8 @@ fn parse_table_element_with_options(
         // Process all cells (th and td) in DOM order
         for cell in row.select(&cell_selector) {
             // Skip columns occupied by previous rows' rowspan
-            while occupied_cells.contains_key(&(row_index, col_index)) {
-                row_data.push(occupied_cells[&(row_index, col_index)].clone());
+            while let Some(occupied_value) = occupied_cells.remove(&(row_index, col_index)) {
+                row_data.push(occupied_value);
                 col_index += 1;
             }
 
@@ -128,6 +128,29 @@ fn parse_table_element_with_options(
             col_index += 1;
         }
 
+        // Even if row had no explicit cells, we need to include it if it has occupied cells from rowspan
+        // This handles cases where rowspan cells occupy columns but the row itself is empty or has no cells
+        if row_data.is_empty() {
+            // Check if this row has any occupied cells at all (scanning all possible columns)
+            let mut temp_col = 0;
+            while let Some(value) = occupied_cells.remove(&(row_index, temp_col)) {
+                row_data.push(value);
+                temp_col += 1;
+            }
+            
+            // Continue scanning in case there are gaps
+            while occupied_cells.keys().any(|(r, _)| *r == row_index) {
+                if let Some(value) = occupied_cells.remove(&(row_index, temp_col)) {
+                    row_data.push(value);
+                } else {
+                    // Fill gap with Null
+                    row_data.push(CellValue::Null);
+                }
+                temp_col += 1;
+            }
+        }
+
+        // Include row if it has any data (explicit cells or occupied cells from rowspan)
         if !row_data.is_empty() {
             max_columns = max_columns.max(row_data.len());
             all_rows.push(row_data);
@@ -741,5 +764,111 @@ mod tests {
         assert_eq!(sheet.get(1, 2).unwrap(), &CellValue::Int(5));
         assert_eq!(sheet.get(4, 2).unwrap(), &CellValue::Int(10));
         assert_eq!(sheet.get(5, 2).unwrap(), &CellValue::Int(2));
+    }
+
+    #[test]
+    fn test_rowspan_only_rows() {
+        // Test for CodeRabbit finding: rows with only occupied cells from rowspan shouldn't be dropped
+        let html = r#"
+            <table>
+                <tr>
+                    <th>Name</th>
+                    <th>Info</th>
+                </tr>
+                <tr>
+                    <td rowspan="3">Alice</td>
+                    <td>Engineer</td>
+                </tr>
+                <tr>
+                    <!-- This row has no explicit cells, only occupied from rowspan -->
+                </tr>
+                <tr>
+                    <td>Senior Level</td>
+                </tr>
+            </table>
+        "#;
+
+        let sheet = Sheet::from_html_string(html).unwrap();
+
+        // Should have 4 rows: header + 3 data rows (including the empty one)
+        assert_eq!(sheet.row_count(), 4);
+        assert_eq!(sheet.col_count(), 2);
+
+        // Check that Alice appears in all three data rows
+        assert_eq!(
+            sheet.get(1, 0).unwrap(),
+            &CellValue::String("Alice".to_string())
+        );
+        assert_eq!(
+            sheet.get(2, 0).unwrap(), // The "empty" row should still have Alice
+            &CellValue::String("Alice".to_string())
+        );
+        assert_eq!(
+            sheet.get(3, 0).unwrap(),
+            &CellValue::String("Alice".to_string())
+        );
+
+        // Check the explicit cells
+        assert_eq!(
+            sheet.get(1, 1).unwrap(),
+            &CellValue::String("Engineer".to_string())
+        );
+        assert_eq!(
+            sheet.get(2, 1).unwrap(), // Should be Null since no explicit cell
+            &CellValue::Null
+        );
+        assert_eq!(
+            sheet.get(3, 1).unwrap(),
+            &CellValue::String("Senior Level".to_string())
+        );
+    }
+
+    #[test]
+    fn test_empty_tr_with_rowspan_offset() {
+        // Test for CodeRabbit finding: empty rows where rowspan occupies column > 0
+        let html = r#"
+            <table>
+                <tr>
+                    <th>A</th>
+                    <th>B</th>
+                    <th>C</th>
+                </tr>
+                <tr>
+                    <td>X</td>
+                    <td rowspan="2">Data</td>
+                    <td>Z</td>
+                </tr>
+                <tr>
+                    <td>X2</td>
+                    <!-- Column 1 occupied by rowspan, column 2 would be empty -->
+                    <td>Z2</td>
+                </tr>
+            </table>
+        "#;
+
+        let sheet = Sheet::from_html_string(html).unwrap();
+
+        assert_eq!(sheet.row_count(), 3);
+        assert_eq!(sheet.col_count(), 3);
+
+        // Check that Data appears in both rows where it spans
+        assert_eq!(
+            sheet.get(1, 1).unwrap(),
+            &CellValue::String("Data".to_string())
+        );
+        assert_eq!(
+            sheet.get(2, 1).unwrap(),
+            &CellValue::String("Data".to_string())
+        );
+
+        // Check other cells
+        assert_eq!(
+            sheet.get(2, 0).unwrap(),
+            &CellValue::String("X2".to_string())
+        );
+        assert_eq!(
+            sheet.get(2, 2).unwrap(),
+            &CellValue::String("Z2".to_string())
+        );
     }
 }
