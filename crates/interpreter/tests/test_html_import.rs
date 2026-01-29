@@ -35,7 +35,7 @@ async fn test_import_html_file() {
 
     let script = format!(
         r#"
-        import data from "{}"
+        import "{}" into data
         data
     "#,
         html_path.display()
@@ -86,8 +86,8 @@ async fn test_import_html_with_headers() {
 
     let script = format!(
         r#"
-        import products from "{}" with headers
-        products.columns
+        import "{}" into products
+        products
     "#,
         html_path.display()
     );
@@ -96,20 +96,28 @@ async fn test_import_html_with_headers() {
     let program = PipParser::parse_str(&script).unwrap();
     let result = interp.eval(program).await.unwrap();
 
-    // Check that columns were named from the header row
+    // Check that we got a sheet with the expected data
     match result {
-        Value::Object(cols) => {
-            assert!(!cols.is_empty(), "Expected named columns");
-            // Check that we have column names
-            if let Some((first_col, _)) = cols.iter().next() {
-                assert!(
-                    first_col == "Product",
-                    "Expected first column to be 'Product', got: {}",
-                    first_col
-                );
+        Value::Sheet(sheet) => {
+            assert_eq!(
+                sheet.row_count(),
+                3,
+                "Expected 3 rows (header + 2 data rows)"
+            );
+            assert_eq!(sheet.col_count(), 3, "Expected 3 columns");
+            // Check that first row contains header-like strings
+            if let Ok(first_cell) = sheet.get(0, 0) {
+                match first_cell {
+                    piptable_sheet::CellValue::String(s) => {
+                        assert_eq!(s, "Product", "Expected first header to be 'Product'");
+                    }
+                    _ => panic!("Expected header cell to be a string"),
+                }
+            } else {
+                panic!("Could not get first cell");
             }
         }
-        _ => panic!("Expected an Object with column names"),
+        _ => panic!("Expected a Sheet value"),
     }
 }
 
@@ -142,8 +150,8 @@ async fn test_import_html_mixed_data_types() {
 
     let script = format!(
         r#"
-        import data from "{}"
-        data[0][1]
+        import "{}" into data
+        data
     "#,
         html_path.display()
     );
@@ -152,12 +160,50 @@ async fn test_import_html_mixed_data_types() {
     let program = PipParser::parse_str(&script).unwrap();
     let result = interp.eval(program).await.unwrap();
 
-    // Check that numeric value was properly parsed
+    // Check that numeric values were properly parsed
     match result {
-        Value::Int(i) => {
-            assert_eq!(i, 30, "Expected integer value 30");
+        Value::Sheet(sheet) => {
+            assert_eq!(sheet.row_count(), 2);
+            assert_eq!(sheet.col_count(), 4);
+
+            // Check that types were correctly parsed
+            // Row 0: Alice, 30, true, 3.14
+            assert!(matches!(
+                sheet.get(0, 0).unwrap(),
+                piptable_sheet::CellValue::String(_)
+            ));
+            assert!(matches!(
+                sheet.get(0, 1).unwrap(),
+                piptable_sheet::CellValue::Int(30)
+            ));
+            assert!(matches!(
+                sheet.get(0, 2).unwrap(),
+                piptable_sheet::CellValue::Bool(true)
+            ));
+            assert!(matches!(
+                sheet.get(0, 3).unwrap(),
+                piptable_sheet::CellValue::Float(_)
+            ));
+
+            // Row 1: Bob, 25, false, 2.71
+            assert!(matches!(
+                sheet.get(1, 0).unwrap(),
+                piptable_sheet::CellValue::String(_)
+            ));
+            assert!(matches!(
+                sheet.get(1, 1).unwrap(),
+                piptable_sheet::CellValue::Int(25)
+            ));
+            assert!(matches!(
+                sheet.get(1, 2).unwrap(),
+                piptable_sheet::CellValue::Bool(false)
+            ));
+            assert!(matches!(
+                sheet.get(1, 3).unwrap(),
+                piptable_sheet::CellValue::Float(_)
+            ));
         }
-        _ => panic!("Expected an Int value"),
+        _ => panic!("Expected a Sheet value"),
     }
 }
 
@@ -177,7 +223,7 @@ async fn test_import_html_no_table() {
 
     let script = format!(
         r#"
-        import data from "{}"
+        import "{}" into data
         data
     "#,
         html_path.display()

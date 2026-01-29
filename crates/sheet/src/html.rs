@@ -4,6 +4,37 @@ use crate::{CellValue, Result, Sheet, SheetError};
 use scraper::{Html, Selector};
 use std::fs;
 
+/// Parse a single HTML table element into a Sheet
+fn parse_table_element(table: scraper::ElementRef<'_>) -> Result<Sheet> {
+    let mut sheet = Sheet::new();
+    let row_selector = Selector::parse("tr").unwrap();
+
+    for row in table.select(&row_selector) {
+        let mut row_data = Vec::new();
+
+        // Process all cells (th and td) in DOM order
+        let cell_selector = Selector::parse("th, td").unwrap();
+        for cell in row.select(&cell_selector) {
+            let text: String = cell.text().collect::<String>().trim().to_string();
+
+            // If it's a th element, treat as string (header)
+            // If it's a td element, try to parse the type
+            let cell_value = if cell.value().name() == "th" {
+                CellValue::String(text)
+            } else {
+                parse_cell_value(&text)
+            };
+            row_data.push(cell_value);
+        }
+
+        if !row_data.is_empty() {
+            sheet.row_append(row_data)?;
+        }
+    }
+
+    Ok(sheet)
+}
+
 impl Sheet {
     /// Load a sheet from an HTML file containing tables.
     ///
@@ -42,35 +73,7 @@ impl Sheet {
             .next()
             .ok_or_else(|| SheetError::Parse("No table found in HTML".to_string()))?;
 
-        let mut sheet = Sheet::new();
-
-        // Parse rows
-        let row_selector = Selector::parse("tr").unwrap();
-
-        for row in table.select(&row_selector) {
-            let mut row_data = Vec::new();
-
-            // Process all cells (th and td) in DOM order
-            let cell_selector = Selector::parse("th, td").unwrap();
-            for cell in row.select(&cell_selector) {
-                let text: String = cell.text().collect::<String>().trim().to_string();
-
-                // If it's a th element, treat as string (header)
-                // If it's a td element, try to parse the type
-                let cell_value = if cell.value().name() == "th" {
-                    CellValue::String(text)
-                } else {
-                    parse_cell_value(&text)
-                };
-                row_data.push(cell_value);
-            }
-
-            if !row_data.is_empty() {
-                sheet.row_append(row_data)?;
-            }
-        }
-
-        Ok(sheet)
+        parse_table_element(table)
     }
 
     /// Load a specific table from an HTML file by index.
@@ -107,35 +110,7 @@ impl Sheet {
                 SheetError::Parse(format!("Table index {} not found in HTML", table_index))
             })?;
 
-        let mut sheet = Sheet::new();
-
-        // Parse rows
-        let row_selector = Selector::parse("tr").unwrap();
-
-        for row in table.select(&row_selector) {
-            let mut row_data = Vec::new();
-
-            // Process all cells (th and td) in DOM order
-            let cell_selector = Selector::parse("th, td").unwrap();
-            for cell in row.select(&cell_selector) {
-                let text: String = cell.text().collect::<String>().trim().to_string();
-
-                // If it's a th element, treat as string (header)
-                // If it's a td element, try to parse the type
-                let cell_value = if cell.value().name() == "th" {
-                    CellValue::String(text)
-                } else {
-                    parse_cell_value(&text)
-                };
-                row_data.push(cell_value);
-            }
-
-            if !row_data.is_empty() {
-                sheet.row_append(row_data)?;
-            }
-        }
-
-        Ok(sheet)
+        parse_table_element(table)
     }
 
     /// Load all tables from an HTML file.
@@ -165,34 +140,7 @@ impl Sheet {
         let mut sheets = Vec::new();
 
         for table in document.select(&table_selector) {
-            let mut sheet = Sheet::new();
-
-            // Parse rows
-            let row_selector = Selector::parse("tr").unwrap();
-
-            for row in table.select(&row_selector) {
-                let mut row_data = Vec::new();
-
-                // Process all cells (th and td) in DOM order
-                let cell_selector = Selector::parse("th, td").unwrap();
-                for cell in row.select(&cell_selector) {
-                    let text: String = cell.text().collect::<String>().trim().to_string();
-
-                    // If it's a th element, treat as string (header)
-                    // If it's a td element, try to parse the type
-                    let cell_value = if cell.value().name() == "th" {
-                        CellValue::String(text)
-                    } else {
-                        parse_cell_value(&text)
-                    };
-                    row_data.push(cell_value);
-                }
-
-                if !row_data.is_empty() {
-                    sheet.row_append(row_data)?;
-                }
-            }
-
+            let sheet = parse_table_element(table)?;
             if sheet.row_count() > 0 {
                 sheets.push(sheet);
             }
