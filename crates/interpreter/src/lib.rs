@@ -3554,7 +3554,8 @@ combined = consolidate(stores, "_store")
                         .collect(),
                 ),
             )
-            .await.unwrap();
+            .await
+            .unwrap();
 
         let script = r"result = consolidate(book, 123)"; // 123 is not a string
         let program = PipParser::parse_str(script).unwrap();
@@ -3674,7 +3675,10 @@ combined = consolidate(stores, "_store")
         sheet.name_columns_by_row(0).unwrap();
         sheet.row_delete(0).unwrap();
 
-        interp.set_var("products", Value::Sheet(sheet)).await.unwrap();
+        interp
+            .set_var("products", Value::Sheet(sheet))
+            .await
+            .unwrap();
 
         let script = r#"
             dim result = query(SELECT * FROM products WHERE price > 150)
@@ -3778,7 +3782,8 @@ combined = consolidate(stores, "_store")
 
         interp
             .set_var("single_row", Value::Sheet(single_row_sheet))
-            .await.unwrap();
+            .await
+            .unwrap();
 
         // This should work and not treat the single row as header-only
         let script = r#"
@@ -3818,7 +3823,8 @@ combined = consolidate(stores, "_store")
             Sheet::from_csv_str_with_options(csv_with_header, csv_options).unwrap();
         interp
             .set_var("data", Value::Sheet(sheet_with_header))
-            .await.unwrap();
+            .await
+            .unwrap();
 
         // Sheet without column names - use from_data
         let sheet_no_header = Sheet::from_data(vec![
@@ -3833,7 +3839,8 @@ combined = consolidate(stores, "_store")
         ]);
         interp
             .set_var("raw_data", Value::Sheet(sheet_no_header))
-            .await.unwrap();
+            .await
+            .unwrap();
 
         let script = r#"
             dim data_len = len(data)
@@ -3917,10 +3924,12 @@ combined = consolidate(stores, "_store")
         // Set the sheets as variables (convert to Value)
         interp
             .set_var("users", sheet_conversions::sheet_to_value(&users))
-            .await.unwrap();
+            .await
+            .unwrap();
         interp
             .set_var("orders", sheet_conversions::sheet_to_value(&orders))
-            .await.unwrap();
+            .await
+            .unwrap();
 
         // Test inner join with different columns
         let code = r#"result = users join orders on "id" = "user_id""#;
@@ -3980,10 +3989,12 @@ combined = consolidate(stores, "_store")
         // Set the sheets as variables
         interp
             .set_var("users", sheet_conversions::sheet_to_value(&users))
-            .await.unwrap();
+            .await
+            .unwrap();
         interp
             .set_var("orders", sheet_conversions::sheet_to_value(&orders))
-            .await.unwrap();
+            .await
+            .unwrap();
 
         // Test left join
         let code = r#"result = users left join orders on "id" = "user_id""#;
@@ -4051,10 +4062,12 @@ combined = consolidate(stores, "_store")
         // Set the sheets as variables
         interp
             .set_var("sheet1", sheet_conversions::sheet_to_value(&sheet1))
-            .await.unwrap();
+            .await
+            .unwrap();
         interp
             .set_var("sheet2", sheet_conversions::sheet_to_value(&sheet2))
-            .await.unwrap();
+            .await
+            .unwrap();
 
         // Test join with same key column name
         let code = r#"result = sheet1 join sheet2 on "id""#;
@@ -4112,10 +4125,12 @@ combined = consolidate(stores, "_store")
 
         interp
             .set_var("sheet1", sheet_conversions::sheet_to_value(&sheet1))
-            .await.unwrap();
+            .await
+            .unwrap();
         interp
             .set_var("sheet2", sheet_conversions::sheet_to_value(&sheet2))
-            .await.unwrap();
+            .await
+            .unwrap();
 
         // Test right join
         let code = r#"result = sheet1 right join sheet2 on "id" = "user_id""#;
@@ -4211,10 +4226,12 @@ combined = consolidate(stores, "_store")
 
         interp
             .set_var("sheet1", sheet_conversions::sheet_to_value(&sheet1))
-            .await.unwrap();
+            .await
+            .unwrap();
         interp
             .set_var("sheet2", sheet_conversions::sheet_to_value(&sheet2))
-            .await.unwrap();
+            .await
+            .unwrap();
 
         // Test full join
         let code = r#"result = sheet1 full join sheet2 on "id" = "user_id""#;
@@ -4301,10 +4318,12 @@ combined = consolidate(stores, "_store")
 
         interp
             .set_var("sheet1", sheet_conversions::sheet_to_value(&sheet1))
-            .await.unwrap();
+            .await
+            .unwrap();
         interp
             .set_var("sheet2", sheet_conversions::sheet_to_value(&sheet2))
-            .await.unwrap();
+            .await
+            .unwrap();
 
         // Test behavior with empty sheet - should either work or give predictable error
         let code = r#"result = sheet1 join sheet2 on "id" = "user_id""#;
@@ -4393,7 +4412,8 @@ combined = consolidate(stores, "_store")
         let sheet1 = Sheet::from_records(vec![user1, user2]).unwrap();
         interp
             .set_var("users", sheet_conversions::sheet_to_value(&sheet1))
-            .await.unwrap();
+            .await
+            .unwrap();
 
         // Create new users to append
         let mut user3 = IndexMap::new();
@@ -4403,7 +4423,8 @@ combined = consolidate(stores, "_store")
         let sheet2 = Sheet::from_records(vec![user3]).unwrap();
         interp
             .set_var("new_users", sheet_conversions::sheet_to_value(&sheet2))
-            .await.unwrap();
+            .await
+            .unwrap();
 
         // Test basic append
         let code = r"users append new_users";
@@ -4460,7 +4481,8 @@ combined = consolidate(stores, "_store")
         let sheet1 = Sheet::from_records(vec![user1, user2]).unwrap();
         interp
             .set_var("users", sheet_conversions::sheet_to_value(&sheet1))
-            .await.unwrap();
+            .await
+            .unwrap();
 
         // Create new users with duplicate ID
         let mut user2_dup = IndexMap::new();
@@ -4477,7 +4499,8 @@ combined = consolidate(stores, "_store")
         let sheet2 = Sheet::from_records(vec![user2_dup, user3]).unwrap();
         interp
             .set_var("new_users", sheet_conversions::sheet_to_value(&sheet2))
-            .await.unwrap();
+            .await
+            .unwrap();
 
         // Test append distinct on "id"
         let code = r#"users append distinct new_users on "id""#;
@@ -4531,7 +4554,8 @@ combined = consolidate(stores, "_store")
         let sheet1 = Sheet::from_records(vec![user1, user2]).unwrap();
         interp
             .set_var("users", sheet_conversions::sheet_to_value(&sheet1))
-            .await.unwrap();
+            .await
+            .unwrap();
 
         // Create updates with existing and new users
         let mut user1_update = IndexMap::new();
@@ -4550,7 +4574,8 @@ combined = consolidate(stores, "_store")
         let sheet2 = Sheet::from_records(vec![user1_update, user3]).unwrap();
         interp
             .set_var("updates", sheet_conversions::sheet_to_value(&sheet2))
-            .await.unwrap();
+            .await
+            .unwrap();
 
         // Test upsert
         let code = r#"users upsert updates on "id""#;
@@ -4692,7 +4717,10 @@ combined = consolidate(stores, "_store")
         record2.insert("Amount".to_string(), CellValue::Int(200));
 
         let sheet = Sheet::from_records(vec![record1, record2]).unwrap();
-        interp.set_var("sales_sheet", Value::Sheet(sheet)).await.unwrap();
+        interp
+            .set_var("sales_sheet", Value::Sheet(sheet))
+            .await
+            .unwrap();
 
         // Use the sheet in a SQL query (just select to test the conversion works)
         let program = PipParser::parse_str(
@@ -4811,7 +4839,10 @@ combined = consolidate(stores, "_store")
         ]);
         sheet1.name_columns_by_row(0).unwrap();
 
-        interp.set_var("sheet1", Value::Sheet(sheet1)).await.unwrap();
+        interp
+            .set_var("sheet1", Value::Sheet(sheet1))
+            .await
+            .unwrap();
 
         // Query should return 1 data row (not 2)
         let program1 =
@@ -4845,7 +4876,10 @@ combined = consolidate(stores, "_store")
         // Name columns from row 0 (which has PersonName, PersonAge)
         sheet2.name_columns_by_row(0).unwrap();
 
-        interp.set_var("sheet2", Value::Sheet(sheet2)).await.unwrap();
+        interp
+            .set_var("sheet2", Value::Sheet(sheet2))
+            .await
+            .unwrap();
 
         // Query should return 2 data rows (both Bob and Charlie)
         let program2 =
@@ -4876,7 +4910,10 @@ combined = consolidate(stores, "_store")
         record1.insert("Score".to_string(), CellValue::Int(90));
 
         let sheet1 = Sheet::from_records(vec![record1]).unwrap();
-        interp.set_var("scores", Value::Sheet(sheet1)).await.unwrap();
+        interp
+            .set_var("scores", Value::Sheet(sheet1))
+            .await
+            .unwrap();
 
         // First query
         let program1 = PipParser::parse_str(r"dim result1 = query(SELECT * FROM scores)").unwrap();
@@ -4888,7 +4925,10 @@ combined = consolidate(stores, "_store")
         record2.insert("Score".to_string(), CellValue::Int(85));
 
         let sheet2 = Sheet::from_records(vec![record2]).unwrap();
-        interp.set_var("scores", Value::Sheet(sheet2)).await.unwrap();
+        interp
+            .set_var("scores", Value::Sheet(sheet2))
+            .await
+            .unwrap();
 
         // Second query should work with the new data
         let program2 = PipParser::parse_str(r"dim result2 = query(SELECT * FROM scores)").unwrap();
@@ -5386,7 +5426,10 @@ combined = consolidate(stores, "_store")
         record2.insert("Age".to_string(), CellValue::Int(25));
 
         let sheet1 = Sheet::from_records(vec![record1, record2]).unwrap();
-        interp.set_var("sheet1", Value::Sheet(sheet1)).await.unwrap();
+        interp
+            .set_var("sheet1", Value::Sheet(sheet1))
+            .await
+            .unwrap();
 
         // Test positive indexing
         let program = PipParser::parse_str(
@@ -5462,7 +5505,10 @@ combined = consolidate(stores, "_store")
             CellValue::Int(40),
         ]);
         sheet2.name_columns_by_row(0).unwrap();
-        interp.set_var("sheet2", Value::Sheet(sheet2)).await.unwrap();
+        interp
+            .set_var("sheet2", Value::Sheet(sheet2))
+            .await
+            .unwrap();
 
         // Sheet2 has column_names AND first row matches those names, so it should skip header
         let program = PipParser::parse_str(r#"dim sheet2_row0 = sheet2[0]"#).unwrap();
@@ -5493,7 +5539,10 @@ combined = consolidate(stores, "_store")
         let sheet = Sheet::from_records(vec![record]).unwrap();
         // This sheet has column_names but no physical header row
 
-        interp.set_var("single_row", Value::Sheet(sheet)).await.unwrap();
+        interp
+            .set_var("single_row", Value::Sheet(sheet))
+            .await
+            .unwrap();
 
         // Try to query it with SQL
         let program =
@@ -5534,7 +5583,10 @@ combined = consolidate(stores, "_store")
         record2.insert("Age".to_string(), CellValue::Int(25));
 
         let sheet1 = Sheet::from_records(vec![record1, record2]).unwrap();
-        interp.set_var("sheet1", Value::Sheet(sheet1)).await.unwrap();
+        interp
+            .set_var("sheet1", Value::Sheet(sheet1))
+            .await
+            .unwrap();
 
         // Test case 2: Sheet with actual header row
         let mut sheet2 = Sheet::new();
@@ -5551,7 +5603,10 @@ combined = consolidate(stores, "_store")
             CellValue::Int(35),
         ]);
         sheet2.name_columns_by_row(0).unwrap();
-        interp.set_var("sheet2", Value::Sheet(sheet2)).await.unwrap();
+        interp
+            .set_var("sheet2", Value::Sheet(sheet2))
+            .await
+            .unwrap();
 
         // Test case 3: Sheet with no column names
         let mut sheet3 = Sheet::new();
@@ -5563,7 +5618,10 @@ combined = consolidate(stores, "_store")
             CellValue::String("Frank".to_string()),
             CellValue::Int(32),
         ]);
-        interp.set_var("sheet3", Value::Sheet(sheet3)).await.unwrap();
+        interp
+            .set_var("sheet3", Value::Sheet(sheet3))
+            .await
+            .unwrap();
 
         // Test len() for each sheet
         let program = PipParser::parse_str(
