@@ -17,18 +17,32 @@ pub async fn call_array_builtin(
 }
 
 /// FILTER(array, include, [if_empty])
-/// Filters an array based on boolean criteria.
+/// Filters an array based on truthy/falsy criteria.
 ///
 /// # Arguments
 /// - array: The array or range to filter
-/// - include: An array of boolean values or a condition that evaluates to boolean array
-/// - if_empty: Optional value to return if all values are filtered out
+/// - include: An array of values (evaluated for truthiness) or a single scalar value (broadcast to all elements)
+/// - if_empty: Optional value to return if all values are filtered out (defaults to "#CALC!")
 ///
-/// # Example
+/// # Truthiness
+/// Uses the standard Value::is_truthy() semantics:
+/// - false, 0, 0.0, null, empty string/array/object = falsy
+/// - Everything else (including NaN, functions, non-empty collections) = truthy
+///
+/// # Examples
 /// ```
 /// data = [[1, "A"], [2, "B"], [3, "C"], [4, "D"]]
 /// criteria = [true, false, true, false]
 /// result = filter(data, criteria)  // Returns [[1, "A"], [3, "C"]]
+/// 
+/// // Scalar broadcast
+/// result = filter(data, true)      // Returns all elements
+/// result = filter(data, 0)         // Returns "#CALC!" (all filtered)
+/// 
+/// // Non-boolean criteria
+/// scores = [85, 0, 92, -5]
+/// names = ["Alice", "Bob", "Charlie", "David"]
+/// result = filter(names, scores)   // Returns ["Alice", "Charlie", "David"] (0 is falsy)
 /// ```
 async fn filter(
     _interpreter: &Interpreter,
@@ -55,17 +69,9 @@ async fn filter(
     // Handle the include criteria
     let include = match &args[1] {
         Value::Array(arr) => arr.clone(),
-        Value::Bool(b) => {
-            // Single boolean applies to all elements
-            vec![Value::Bool(*b); array.len()]
-        }
-        _ => {
-            // Try to evaluate as a condition for each element
-            // For now, we'll require an array of booleans
-            return Err(PipError::runtime(
-                line,
-                "FILTER: include must be an array of boolean values",
-            ));
+        scalar => {
+            // Single scalar value applies to all elements using its truthiness
+            vec![scalar.clone(); array.len()]
         }
     };
 
@@ -84,21 +90,8 @@ async fn filter(
     // Filter the array
     let mut result = Vec::new();
     for (i, item) in array.iter().enumerate() {
-        let include_item = match &include[i] {
-            Value::Bool(b) => *b,
-            Value::Int(n) => *n != 0,  // Non-zero integers are truthy
-            Value::Float(f) => *f != 0.0 && !f.is_nan(),  // Non-zero, non-NaN floats are truthy
-            Value::Null => false,
-            Value::String(s) => !s.is_empty(),  // Non-empty strings are truthy
-            _ => {
-                return Err(PipError::runtime(
-                    line,
-                    format!("FILTER: include array element {} must be convertible to boolean", i + 1),
-                ))
-            }
-        };
-
-        if include_item {
+        // Use the standard is_truthy() method for consistency
+        if include[i].is_truthy() {
             result.push(item.clone());
         }
     }
@@ -222,18 +215,20 @@ mod tests {
             Value::String("B".to_string()),
             Value::String("C".to_string()),
             Value::String("D".to_string()),
+            Value::String("E".to_string()),
         ]);
         let include = Value::Array(vec![
-            Value::Int(1),      // truthy
-            Value::Int(0),      // falsy
-            Value::Float(2.5),  // truthy
-            Value::Null,        // falsy
+            Value::Int(1),                    // truthy
+            Value::Int(0),                    // falsy
+            Value::Float(2.5),                // truthy
+            Value::Null,                      // falsy
+            Value::String("yes".to_string()), // truthy
         ]);
 
         let result = filter(&interp, vec![array, include], 0).await.unwrap();
         match result {
             Value::Array(arr) => {
-                assert_eq!(arr.len(), 2);
+                assert_eq!(arr.len(), 3);
                 match &arr[0] {
                     Value::String(s) => assert_eq!(s, "A"),
                     _ => panic!("Expected string A"),
@@ -241,6 +236,10 @@ mod tests {
                 match &arr[1] {
                     Value::String(s) => assert_eq!(s, "C"),
                     _ => panic!("Expected string C"),
+                }
+                match &arr[2] {
+                    Value::String(s) => assert_eq!(s, "E"),
+                    _ => panic!("Expected string E"),
                 }
             }
             _ => panic!("Expected array result"),
@@ -259,5 +258,51 @@ mod tests {
             .unwrap_err()
             .to_string()
             .contains("must match data array length"));
+    }
+
+    #[tokio::test]
+    async fn test_filter_scalar_broadcast() {
+        let interp = create_interpreter().await;
+        let array = Value::Array(vec![
+            Value::Int(1),
+            Value::Int(2),
+            Value::Int(3),
+        ]);
+
+        // Test with scalar true (keeps all)
+        let result = filter(&interp, vec![array.clone(), Value::Bool(true)], 0)
+            .await
+            .unwrap();
+        match result {
+            Value::Array(arr) => assert_eq!(arr.len(), 3),
+            _ => panic!("Expected array"),
+        }
+
+        // Test with scalar false (filters all)
+        let result = filter(&interp, vec![array.clone(), Value::Bool(false)], 0)
+            .await
+            .unwrap();
+        match result {
+            Value::String(s) => assert_eq!(s, "#CALC!"),
+            _ => panic!("Expected #CALC!"),
+        }
+
+        // Test with scalar number (non-zero keeps all)
+        let result = filter(&interp, vec![array.clone(), Value::Int(1)], 0)
+            .await
+            .unwrap();
+        match result {
+            Value::Array(arr) => assert_eq!(arr.len(), 3),
+            _ => panic!("Expected array"),
+        }
+
+        // Test with scalar zero (filters all)
+        let result = filter(&interp, vec![array, Value::Int(0)], 0)
+            .await
+            .unwrap();
+        match result {
+            Value::String(s) => assert_eq!(s, "#CALC!"),
+            _ => panic!("Expected #CALC!"),
+        }
     }
 }

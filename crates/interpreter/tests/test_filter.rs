@@ -148,3 +148,44 @@ async fn test_filter_chained_operations() {
         _ => panic!("Expected array result"),
     }
 }
+
+#[tokio::test]
+async fn test_filter_scalar_broadcast_dsl() {
+    let (interp, _) = run_script(
+        r#"
+        dim data = [10, 20, 30, 40, 50]
+        
+        ' Filter with scalar true (keeps all)
+        dim all_data = filter(data, true)
+        
+        ' Filter with scalar false (removes all)
+        dim no_data = filter(data, false, "Nothing")
+        
+        ' Filter with scalar number
+        dim with_number = filter(data, 1)  ' Non-zero keeps all
+    "#,
+    )
+    .await;
+
+    // Check all_data
+    match interp.get_var("all_data").await {
+        Some(Value::Array(arr)) => {
+            assert_eq!(arr.len(), 5);
+        }
+        _ => panic!("Expected array for all_data"),
+    }
+
+    // Check no_data
+    match interp.get_var("no_data").await {
+        Some(Value::String(s)) => assert_eq!(s, "Nothing"),
+        _ => panic!("Expected string for no_data"),
+    }
+
+    // Check with_number
+    match interp.get_var("with_number").await {
+        Some(Value::Array(arr)) => {
+            assert_eq!(arr.len(), 5);
+        }
+        _ => panic!("Expected array for with_number"),
+    }
+}
