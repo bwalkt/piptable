@@ -74,7 +74,7 @@ csv = "1.3"
 parquet = "53"
 
 # HTML parsing
-scraper = "0.22"
+scraper = "0.22" # TODO: Update to 0.25 - currently blocked by Python linking issues
 
 # Testing
 wiremock = "0.6"
