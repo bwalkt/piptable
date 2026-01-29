@@ -33,6 +33,10 @@ export function App() {
 
   const handleLoadCode = (newCode: string, scriptName: string) => {
     code.value = newCode;
+    // Clear stale UI state when loading a new script
+    output.value = '';
+    error.value = null;
+    selectedExample.value = ''; // Reset to indicate custom/loaded script
   };
 
   // Initialize WASM on mount

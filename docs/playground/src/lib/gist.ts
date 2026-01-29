@@ -20,6 +20,7 @@ export interface GistResponse {
     filename: string;
     content: string;
     raw_url: string;
+    truncated?: boolean;
   }>;
 }
 
@@ -246,8 +247,22 @@ export async function loadPlaygroundGist(
     throw new Error('No code files found in the gist.');
   }
 
+  // Handle truncated files by fetching the raw content
+  let content = codeFile.content;
+  if (codeFile.truncated) {
+    try {
+      const response = await fetch(codeFile.raw_url);
+      if (!response.ok) {
+        throw new Error(`Failed to fetch raw content: ${response.status}`);
+      }
+      content = await response.text();
+    } catch (error) {
+      throw new Error(`Failed to load complete file content: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
   return {
-    code: codeFile.content,
+    code: content,
     title: gist.description || 'Imported from Gist',
     description: `Imported from GitHub Gist: ${gist.html_url}`,
   };
