@@ -302,7 +302,10 @@ async fn test_exit_sub() {
     )
     .await;
     // Should be true since exit sub was called after setting it to true
-    assert!(matches!(interp.get_var("executed").await, Some(Value::Bool(true))));
+    assert!(matches!(
+        interp.get_var("executed").await,
+        Some(Value::Bool(true))
+    ));
 }
 
 #[tokio::test]
@@ -399,12 +402,18 @@ async fn test_exit_for_nested() {
     )
     .await;
     // outerSum should be 1 + 2 + 3 = 6
-    assert!(matches!(interp.get_var("outerSum").await, Some(Value::Int(6))));
+    assert!(matches!(
+        interp.get_var("outerSum").await,
+        Some(Value::Int(6))
+    ));
     // innerSum should be (1 + 2) * 3 = 9 (inner loop runs 3 times, exits at j=2 each time)
-    assert!(matches!(interp.get_var("innerSum").await, Some(Value::Int(9))));
+    assert!(matches!(
+        interp.get_var("innerSum").await,
+        Some(Value::Int(9))
+    ));
 }
 
-#[tokio::test] 
+#[tokio::test]
 async fn test_exit_function_with_return_value() {
     let (interp, _) = run_script(
         r#"
@@ -424,9 +433,15 @@ async fn test_exit_function_with_return_value() {
     "#,
     )
     .await;
-    assert!(matches!(interp.get_var("result1").await, Some(Value::Int(-1))));
+    assert!(matches!(
+        interp.get_var("result1").await,
+        Some(Value::Int(-1))
+    ));
     assert!(matches!(interp.get_var("result2").await, Some(Value::Null)));
-    assert!(matches!(interp.get_var("result3").await, Some(Value::Int(6))));
+    assert!(matches!(
+        interp.get_var("result3").await,
+        Some(Value::Int(6))
+    ));
 }
 
 #[tokio::test]
@@ -474,7 +489,10 @@ async fn test_exit_sub_doesnt_leak_previous_value() {
     // result should be null, not 555
     assert!(matches!(interp.get_var("result").await, Some(Value::Null)));
     // But global_result should be 555 to confirm the sub executed
-    assert!(matches!(interp.get_var("global_result").await, Some(Value::Int(555))));
+    assert!(matches!(
+        interp.get_var("global_result").await,
+        Some(Value::Int(555))
+    ));
 }
 
 #[tokio::test]
@@ -541,7 +559,7 @@ async fn test_exit_sub_in_function_error() {
     assert!(error_msg.contains("Exit Sub cannot be used in a function"));
 }
 
-#[tokio::test] 
+#[tokio::test]
 async fn test_correct_exit_usage() {
     let (interp, _) = run_script(
         r#"

@@ -121,8 +121,13 @@ impl PipError {
     pub fn with_line(self, line: usize) -> Self {
         match self {
             // These errors already have line info or are control flow
-            Self::Parse { .. } | Self::Runtime { .. } | Self::Return(_) | 
-            Self::ExitFunction(_) | Self::ExitSub(_) | Self::ExitFor(_) | Self::ExitWhile(_) => self,
+            Self::Parse { .. }
+            | Self::Runtime { .. }
+            | Self::Return(_)
+            | Self::ExitFunction(_)
+            | Self::ExitSub(_)
+            | Self::ExitFor(_)
+            | Self::ExitWhile(_) => self,
             // Add line info to other errors
             Self::Type { expected, got } => Self::Runtime {
                 line,

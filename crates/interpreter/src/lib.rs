@@ -93,16 +93,28 @@ impl Interpreter {
             match self.eval_statement(statement).await {
                 Ok(val) => result = val,
                 Err(PipError::ExitFunction(line)) => {
-                    return Err(PipError::runtime(line, "Exit Function cannot be used outside of a function"));
+                    return Err(PipError::runtime(
+                        line,
+                        "Exit Function cannot be used outside of a function",
+                    ));
                 }
                 Err(PipError::ExitSub(line)) => {
-                    return Err(PipError::runtime(line, "Exit Sub cannot be used outside of a subroutine"));
+                    return Err(PipError::runtime(
+                        line,
+                        "Exit Sub cannot be used outside of a subroutine",
+                    ));
                 }
                 Err(PipError::ExitFor(line)) => {
-                    return Err(PipError::runtime(line, "Exit For cannot be used outside of a for loop"));
+                    return Err(PipError::runtime(
+                        line,
+                        "Exit For cannot be used outside of a for loop",
+                    ));
                 }
                 Err(PipError::ExitWhile(line)) => {
-                    return Err(PipError::runtime(line, "Exit While cannot be used outside of a while loop"));
+                    return Err(PipError::runtime(
+                        line,
+                        "Exit While cannot be used outside of a while loop",
+                    ));
                 }
                 Err(e) => return Err(e),
             }
@@ -1737,7 +1749,10 @@ impl Interpreter {
                                 // Validate that this is actually a function
                                 if func.is_sub {
                                     self.pop_scope().await;
-                                    return Err(PipError::runtime(exit_line, "Exit Function cannot be used in a subroutine"));
+                                    return Err(PipError::runtime(
+                                        exit_line,
+                                        "Exit Function cannot be used in a subroutine",
+                                    ));
                                 }
                                 // Exit Function - return Null explicitly
                                 self.pop_scope().await;
@@ -1747,9 +1762,12 @@ impl Interpreter {
                                 // Validate that this is actually a sub
                                 if !func.is_sub {
                                     self.pop_scope().await;
-                                    return Err(PipError::runtime(exit_line, "Exit Sub cannot be used in a function"));
+                                    return Err(PipError::runtime(
+                                        exit_line,
+                                        "Exit Sub cannot be used in a function",
+                                    ));
                                 }
-                                // Exit Sub - return Null explicitly  
+                                // Exit Sub - return Null explicitly
                                 self.pop_scope().await;
                                 return Ok(Value::Null);
                             }
