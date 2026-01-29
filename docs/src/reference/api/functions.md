@@ -75,6 +75,106 @@ These functions are available in the current version of PipTable:
 - Preserves the header row
 - Returns a new sheet with only matching rows
 
+### Lookup Functions
+
+| Function | Description | Example | Status |
+|----------|-------------|---------|--------|
+| `vlookup(lookup_value, table, col_index, [exact])` | Vertical lookup | `vlookup("Apple", data, 2, false)` | ✅ Implemented |
+| `hlookup(lookup_value, table, row_index, [exact])` | Horizontal lookup | `hlookup("Q1", data, 2, false)` | ✅ Implemented |
+| `index(array, row_num, [col_num])` | Return value at position | `index(data, 2, 3)` | ✅ Implemented |
+| `match(lookup_value, array, [match_type])` | Find position of value | `match("Apple", fruits, 0)` | ✅ Implemented |
+| `xlookup(lookup, array, return_array, [if_not_found], [match_mode], [search_mode])` | Extended lookup | `xlookup("Apple", names, prices)` | ✅ Implemented |
+
+#### Excel/PipTable Parity Matrix
+
+| Feature | Excel | PipTable | Notes |
+|---------|-------|----------|-------|
+| **VLOOKUP** | | | |
+| Exact match (FALSE/0) | ✅ | ✅ | Identical behavior |
+| Approximate match (TRUE/1) | ✅ | ✅ | Requires sorted data |
+| Default range_lookup | TRUE | TRUE | Approximate match by default |
+| #N/A on not found | ✅ | ✅ | Returns "#N/A" string |
+| Type coercion | Partial | ✅ | PipTable coerces numeric strings |
+| **HLOOKUP** | | | |
+| Exact match | ✅ | ✅ | Identical to VLOOKUP logic |
+| Approximate match | ✅ | ✅ | Requires sorted data |
+| **INDEX** | | | |
+| 1D array indexing | ✅ | ✅ | Single index parameter |
+| 2D array indexing | ✅ | ✅ | Row and column indices |
+| Negative indices | ❌ | ❌ | Returns error |
+| **MATCH** | | | |
+| Exact match (0) | ✅ | ✅ | Case-sensitive |
+| Less than (-1) | ✅ | ✅ | Finds largest ≤ value |
+| Greater than (1) | ✅ | ✅ | Finds smallest ≥ value |
+| Wildcard support | ✅ | ❌ | Not yet implemented |
+| **XLOOKUP** | | | |
+| Basic lookup | ✅ | ✅ | Core functionality identical |
+| if_not_found parameter | ✅ | ✅ | Custom default value |
+| Match modes (0-2) | ✅ | ✅ | Exact, next smaller, next larger |
+| Wildcard match mode | ✅ | ❌ | Not yet implemented |
+| Search modes | ✅ | Partial | First-to-last, last-to-first |
+| Binary search modes | ✅ | ❌ | Not yet implemented |
+
+#### Type Coercion Rules
+
+PipTable follows these rules for type comparisons in lookups:
+
+1. **Numeric equality**: `1` (int) equals `1.0` (float)
+2. **String to number**: `"123"` matches `123` when appropriate
+3. **Case sensitivity**: String matches are case-sensitive
+4. **Null handling**: Null values never match anything except explicit null checks
+
+#### Common Examples
+
+```piptable
+# VLOOKUP Examples
+dim products = [
+    ["Apple", 1.50, 100],
+    ["Banana", 0.75, 200],
+    ["Cherry", 2.00, 150]
+]
+
+# Exact match lookup
+dim price = vlookup("Banana", products, 2, false)  # Returns 0.75
+
+# Approximate match (requires sorted first column)
+dim sorted_data = [
+    [10, "Low"],
+    [50, "Medium"],
+    [100, "High"]
+]
+dim category = vlookup(75, sorted_data, 2, true)  # Returns "Medium"
+
+# HLOOKUP Example
+dim quarterly = [
+    ["Product", "Q1", "Q2", "Q3", "Q4"],
+    ["Sales", 100, 150, 120, 180],
+    ["Costs", 80, 100, 90, 120]
+]
+dim q2_sales = hlookup("Q2", quarterly, 2, false)  # Returns 150
+
+# INDEX/MATCH Combination (like VLOOKUP but more flexible)
+dim fruits = ["Apple", "Banana", "Cherry"]
+dim prices = [1.50, 0.75, 2.00]
+dim position = match("Banana", fruits, 0)  # Returns 2
+dim price = index(prices, position)  # Returns 0.75
+
+# XLOOKUP (modern replacement for VLOOKUP)
+dim result = xlookup("Cherry", fruits, prices, "Not found", 0, 1)  # Returns 2.00
+```
+
+#### Error Handling
+
+All lookup functions return `"#N/A"` when a lookup value is not found (matching Excel behavior). For custom error handling, use XLOOKUP with the `if_not_found` parameter:
+
+```piptable
+# Standard VLOOKUP returns #N/A
+dim result1 = vlookup("Grape", products, 2, false)  # Returns "#N/A"
+
+# XLOOKUP with custom not-found value
+dim result2 = xlookup("Grape", fruits, prices, 0.00)  # Returns 0.00
+```
+
 ### Array Functions (Planned) 📋
 
 | Function | Description | Example | Status |
