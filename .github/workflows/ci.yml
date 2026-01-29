@@ -52,16 +52,26 @@ jobs:
 
       # piptable-python excluded: requires Python/PyO3 setup
       # Run tests in smaller batches to avoid linker bus error from memory exhaustion
+      - name: Run fast tests (PR)
+        if: github.event_name == 'pull_request'
+        run: |
+          cargo test --package piptable-core --package piptable-parser
+          cargo test --package piptable-interpreter --test functions
+
       - name: Run core tests
+        if: github.event_name == 'push'
         run: cargo test --package piptable-core --package piptable-parser
       
       - name: Run sheet tests
+        if: github.event_name == 'push'
         run: cargo test --package piptable-sheet --package piptable-sql
         
       - name: Run interpreter tests
+        if: github.event_name == 'push'
         run: cargo test --package piptable-interpreter
         
       - name: Run remaining tests
+        if: github.event_name == 'push'
         run: cargo test --workspace --exclude piptable-python --exclude piptable-core --exclude piptable-parser --exclude piptable-sheet --exclude piptable-sql --exclude piptable-interpreter
 
   coverage:
