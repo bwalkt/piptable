@@ -1780,6 +1780,32 @@ impl Interpreter {
                     self.pop_scope().await;
                     Ok(result)
                 } else {
+                    // Check if it's a variable containing a lambda
+                    if let Some(var_value) = self.get_var(name).await {
+                        if let Value::Lambda { params, body } = var_value {
+                            // Call the lambda
+                            if params.len() != args.len() {
+                                return Err(PipError::runtime(
+                                    line,
+                                    format!(
+                                        "Lambda '{}' expects {} arguments, got {}",
+                                        name,
+                                        params.len(),
+                                        args.len()
+                                    ),
+                                ));
+                            }
+                            
+                            self.push_scope().await;
+                            for (param, arg) in params.iter().zip(args.iter()) {
+                                self.declare_var(param, arg.clone()).await;
+                            }
+                            let result = self.eval_expr(&body).await;
+                            self.pop_scope().await;
+                            return result;
+                        }
+                    }
+                    
                     // Check Python functions if feature is enabled
                     #[cfg(feature = "python")]
                     if let Some(runtime) = &self.python_runtime {

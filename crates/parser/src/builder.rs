@@ -1585,31 +1585,38 @@ fn build_lambda_expr(pair: Pair<Rule>) -> BuildResult<Expr> {
     let mut inner = pair.into_inner();
 
     let mut params = Vec::new();
-    if let Some(params_pair) = inner.next() {
-        if params_pair.as_rule() == Rule::lambda_params {
-            for param in params_pair.into_inner() {
-                params.push(param.as_str().to_string());
+    
+    // Parse lambda parameters and body
+    // Grammar: (ident ~ "=>" ~ expr) | ("(" ~ lambda_params? ~ ")" ~ "=>" ~ expr)
+    while let Some(part) = inner.next() {
+        match part.as_rule() {
+            Rule::ident => {
+                // Single parameter without parentheses: x => expr
+                params.push(part.as_str().to_string());
             }
-        } else {
-            // This is the body expression if no parameters
-            let body = build_expr(params_pair)?;
-            return Ok(Expr::Lambda {
-                params: Vec::new(),
-                body: Box::new(body),
-            });
+            Rule::lambda_params => {
+                // Multiple parameters in parentheses: (x, y) => expr
+                for param in part.into_inner() {
+                    if param.as_rule() == Rule::ident {
+                        params.push(param.as_str().to_string());
+                    }
+                }
+            }
+            Rule::expr => {
+                // This is the body expression
+                let body = build_expr(part)?;
+                return Ok(Expr::Lambda {
+                    params,
+                    body: Box::new(body),
+                });
+            }
+            _ => {
+                // Skip other tokens like "=>" 
+            }
         }
     }
 
-    // Get the body expression
-    let body_pair = inner
-        .next()
-        .ok_or_else(|| BuildError::new(line, col, "Lambda expression missing body"))?;
-    let body = build_expr(body_pair)?;
-
-    Ok(Expr::Lambda {
-        params,
-        body: Box::new(body),
-    })
+    Err(BuildError::new(line, col, "Invalid lambda expression"))
 }
 
 fn build_array_literal(pair: Pair<Rule>) -> BuildResult<Expr> {

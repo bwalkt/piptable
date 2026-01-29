@@ -252,7 +252,7 @@ pub enum Expr {
         args: Vec<Expr>,
     },
 
-    /// Lambda expression: `|x| x + 1` or `|a, b| a > b`
+    /// Lambda expression: `x => x + 1` or `(a, b) => a > b`
     Lambda {
         params: Vec<String>,
         body: Box<Expr>,
