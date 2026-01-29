@@ -50,6 +50,84 @@ async fn test_function_multiple_params() {
     assert!(matches!(interp.get_var("x").await, Some(Value::Int(42))));
 }
 
+#[tokio::test]
+async fn test_byval_keyword_behaves_as_value_copy() {
+    let (interp, _) = run_script(
+        r#"
+        function add_one(ByVal x)
+            x = x + 1
+            return x
+        end function
+        dim original = 5
+        dim result = add_one(original)
+    "#,
+    )
+    .await;
+    assert!(matches!(interp.get_var("result").await, Some(Value::Int(6))));
+    assert!(matches!(interp.get_var("original").await, Some(Value::Int(5))));
+}
+
+#[tokio::test]
+async fn test_byref_updates_caller() {
+    let (interp, _) = run_script(
+        r#"
+        sub increment(ByRef x)
+            x = x + 1
+        end sub
+        dim n = 5
+        call increment(n)
+    "#,
+    )
+    .await;
+    assert!(matches!(interp.get_var("n").await, Some(Value::Int(6))));
+}
+
+#[tokio::test]
+async fn test_byref_requires_variable_argument() {
+    let error_msg = run_script_err(
+        r#"
+        sub increment(ByRef x)
+            x = x + 1
+        end sub
+        call increment(5)
+    "#,
+    )
+    .await;
+    assert!(error_msg.contains("ByRef parameter"));
+}
+
+#[tokio::test]
+async fn test_byref_array_element() {
+    let (interp, _) = run_script(
+        r#"
+        sub bump(ByRef x)
+            x = x + 1
+        end sub
+        dim arr = [1, 2, 3]
+        call bump(arr[1])
+        dim result = arr[1]
+    "#,
+    )
+    .await;
+    assert!(matches!(interp.get_var("result").await, Some(Value::Int(3))));
+}
+
+#[tokio::test]
+async fn test_byref_object_field() {
+    let (interp, _) = run_script(
+        r#"
+        sub bump(ByRef x)
+            x = x + 1
+        end sub
+        dim obj = { a: 1, b: 2 }
+        call bump(obj->a)
+        dim result = obj->a
+    "#,
+    )
+    .await;
+    assert!(matches!(interp.get_var("result").await, Some(Value::Int(2))));
+}
+
 /// Verifies that a parameterless function returns its declared value when invoked.
 ///
 /// # Examples

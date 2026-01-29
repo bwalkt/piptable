@@ -41,7 +41,7 @@ pub enum Value {
     /// Function reference.
     Function {
         name: String,
-        params: Vec<String>,
+        params: Vec<crate::ast::Param>,
         is_async: bool,
     },
 

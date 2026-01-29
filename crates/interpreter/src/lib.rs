@@ -21,7 +21,8 @@ mod python;
 use crate::sheet_conversions::{build_sheet_arrow_array, cell_to_value, infer_sheet_column_type};
 use async_recursion::async_recursion;
 use piptable_core::{
-    BinaryOp, Expr, LValue, Literal, PipError, PipResult, Program, Statement, UnaryOp, Value,
+    BinaryOp, Expr, LValue, Literal, Param, ParamMode, PipError, PipResult, Program, Statement,
+    UnaryOp, Value,
 };
 use piptable_http::HttpClient;
 use piptable_sheet::{CellValue, Sheet};
@@ -33,7 +34,7 @@ use tokio::sync::RwLock;
 /// Interpreter for piptable scripts.
 pub struct Interpreter {
     /// Variable scopes (stack for nested scopes)
-    scopes: Arc<RwLock<Vec<HashMap<String, Value>>>>,
+    scopes: Arc<RwLock<Vec<HashMap<String, VarBinding>>>>,
     /// SQL engine
     sql: SqlEngine,
     /// HTTP client
@@ -53,10 +54,246 @@ pub struct Interpreter {
 #[derive(Clone)]
 pub struct FunctionDef {
     pub name: String,
-    pub params: Vec<String>,
+    pub params: Vec<Param>,
     pub body: Vec<Statement>,
     pub is_async: bool,
     pub is_sub: bool, // true for sub, false for function
+}
+
+#[derive(Debug, Clone)]
+struct RefTarget {
+    name: String,
+    scope_index: usize,
+}
+
+#[derive(Debug, Clone)]
+enum VarBinding {
+    Value(Value),
+    Ref(RefTarget),
+    RefLValue(RefLValue),
+}
+
+fn find_binding(
+    scopes: &[HashMap<String, VarBinding>],
+    name: &str,
+) -> Option<(usize, VarBinding)> {
+    for (idx, scope) in scopes.iter().enumerate().rev() {
+        if let Some(binding) = scope.get(name) {
+            return Some((idx, binding.clone()));
+        }
+    }
+    None
+}
+
+fn resolve_ref_value(
+    scopes: &[HashMap<String, VarBinding>],
+    target: RefTarget,
+) -> Option<Value> {
+    let mut current = target;
+    let mut guard = 0usize;
+    while guard < scopes.len() {
+        let scope = scopes.get(current.scope_index)?;
+        match scope.get(&current.name)? {
+            VarBinding::Value(val) => return Some(val.clone()),
+            VarBinding::Ref(next) => {
+                current = next.clone();
+                guard += 1;
+            }
+            VarBinding::RefLValue(ref_lvalue) => {
+                return resolve_ref_lvalue_value(scopes, ref_lvalue.clone());
+            }
+        }
+    }
+    None
+}
+
+fn resolve_binding_value(
+    scopes: &[HashMap<String, VarBinding>],
+    binding: VarBinding,
+) -> Option<Value> {
+    match binding {
+        VarBinding::Value(val) => Some(val),
+        VarBinding::Ref(target) => resolve_ref_value(scopes, target),
+        VarBinding::RefLValue(ref_lvalue) => resolve_ref_lvalue_value(scopes, ref_lvalue),
+    }
+}
+
+fn resolve_ref_target_info(
+    scopes: &[HashMap<String, VarBinding>],
+    target: RefTarget,
+) -> Option<RefTarget> {
+    let mut current = target;
+    let mut guard = 0usize;
+    while guard < scopes.len() {
+        let scope = scopes.get(current.scope_index)?;
+        match scope.get(&current.name) {
+            Some(VarBinding::Ref(next)) => {
+                current = next.clone();
+                guard += 1;
+            }
+            Some(VarBinding::Value(_)) => return Some(current),
+            Some(VarBinding::RefLValue(ref_lvalue)) => return Some(ref_lvalue.base.clone()),
+            None => return None,
+        }
+    }
+    None
+}
+
+fn flatten_lvalue(
+    lvalue: LValue,
+    access: &mut Vec<RefAccess>,
+    line: usize,
+) -> PipResult<String> {
+    match lvalue {
+        LValue::Variable(name) => Ok(name),
+        LValue::Field { object, field } => {
+            let base = flatten_lvalue(*object, access, line)?;
+            access.push(RefAccess::Field(field));
+            Ok(base)
+        }
+        LValue::Index { array, index } => {
+            let base = flatten_lvalue(*array, access, line)?;
+            match *index {
+                Expr::Literal(Literal::Int(value)) => {
+                    access.push(RefAccess::Index(value));
+                    Ok(base)
+                }
+                _ => Err(PipError::runtime(line, "Array index must be integer")),
+            }
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+struct RefLValue {
+    base: RefTarget,
+    access: Vec<RefAccess>,
+}
+
+#[derive(Debug, Clone)]
+enum RefAccess {
+    Field(String),
+    Index(i64),
+}
+
+fn resolve_ref_lvalue_value(
+    scopes: &[HashMap<String, VarBinding>],
+    ref_lvalue: RefLValue,
+) -> Option<Value> {
+    let base_binding = scopes
+        .get(ref_lvalue.base.scope_index)?
+        .get(&ref_lvalue.base.name)?
+        .clone();
+    let mut current = resolve_binding_value(scopes, base_binding)?;
+
+    for access in ref_lvalue.access {
+        match access {
+            RefAccess::Field(field) => {
+                if let Value::Object(map) = current {
+                    current = map.get(&field)?.clone();
+                } else {
+                    return None;
+                }
+            }
+            RefAccess::Index(index) => {
+                if let Value::Array(items) = current {
+                    let idx = if index < 0 {
+                        let adjusted = items.len() as i64 + index;
+                        if adjusted < 0 {
+                            return None;
+                        }
+                        adjusted as usize
+                    } else {
+                        index as usize
+                    };
+                    if idx >= items.len() {
+                        return None;
+                    }
+                    current = items[idx].clone();
+                } else {
+                    return None;
+                }
+            }
+        }
+    }
+
+    Some(current)
+}
+
+fn assign_ref_lvalue(
+    scopes: &mut [HashMap<String, VarBinding>],
+    ref_lvalue: RefLValue,
+    value: Value,
+    line: usize,
+) -> PipResult<()> {
+    let base_scope = scopes
+        .get(ref_lvalue.base.scope_index)
+        .ok_or_else(|| PipError::runtime(line, "ByRef target scope not found"))?;
+    let base_binding = base_scope
+        .get(&ref_lvalue.base.name)
+        .ok_or_else(|| PipError::runtime(line, "ByRef target not found"))?
+        .clone();
+    let base_value = resolve_binding_value(scopes, base_binding)
+        .ok_or_else(|| PipError::runtime(line, "ByRef target not found"))?;
+
+    let updated = apply_ref_access(base_value, &ref_lvalue.access, value, line)?;
+
+    if let Some(scope) = scopes.get_mut(ref_lvalue.base.scope_index) {
+        scope.insert(
+            ref_lvalue.base.name.clone(),
+            VarBinding::Value(updated),
+        );
+    }
+
+    Ok(())
+}
+
+fn apply_ref_access(
+    value: Value,
+    access: &[RefAccess],
+    new_value: Value,
+    line: usize,
+) -> PipResult<Value> {
+    if access.is_empty() {
+        return Ok(new_value);
+    }
+
+    match (&access[0], value) {
+        (RefAccess::Field(field), Value::Object(mut map)) => {
+            let next_value = map
+                .remove(field)
+                .ok_or_else(|| PipError::runtime(line, format!("Field not found: {field}")))?;
+            let updated = apply_ref_access(next_value, &access[1..], new_value, line)?;
+            map.insert(field.clone(), updated);
+            Ok(Value::Object(map))
+        }
+        (RefAccess::Index(index), Value::Array(mut items)) => {
+            let idx = if *index < 0 {
+                let adjusted = items.len() as i64 + *index;
+                if adjusted < 0 {
+                    return Err(PipError::runtime(line, "Array index out of bounds"));
+                }
+                adjusted as usize
+            } else {
+                *index as usize
+            };
+            if idx >= items.len() {
+                return Err(PipError::runtime(line, "Array index out of bounds"));
+            }
+            let next_value = items[idx].clone();
+            let updated = apply_ref_access(next_value, &access[1..], new_value, line)?;
+            items[idx] = updated;
+            Ok(Value::Array(items))
+        }
+        (RefAccess::Field(_), other) => Err(PipError::runtime(
+            line,
+            format!("Cannot assign field on {}", other.type_name()),
+        )),
+        (RefAccess::Index(_), other) => Err(PipError::runtime(
+            line,
+            format!("Cannot index {}", other.type_name()),
+        )),
+    }
 }
 
 impl Interpreter {
@@ -430,8 +667,7 @@ impl Interpreter {
                 args,
                 line,
             } => {
-                let arg_vals = self.eval_args(&args, line).await?;
-                self.call_function(&function, arg_vals, line).await
+                self.call_function(&function, &args, line).await
             }
 
             Statement::Append {
@@ -887,8 +1123,7 @@ impl Interpreter {
             }
 
             Expr::Call { function, args } => {
-                let arg_vals = self.eval_args(args, 0).await?;
-                self.call_function(function, arg_vals, 0).await
+                self.call_function(function, args, 0).await
             }
 
             Expr::CallExpr { callee, args } => {
@@ -1329,15 +1564,105 @@ impl Interpreter {
         Ok(values)
     }
 
+    async fn build_ref_binding(&mut self, arg_expr: &Expr, line: usize) -> PipResult<VarBinding> {
+        match arg_expr {
+            Expr::Variable(name) => {
+                let scopes = self.scopes.read().await;
+                match find_binding(&scopes, name) {
+                    Some((scope_index, VarBinding::Value(_))) => Ok(VarBinding::Ref(RefTarget {
+                        name: name.clone(),
+                        scope_index,
+                    })),
+                    Some((_, VarBinding::Ref(target))) => {
+                        let final_target =
+                            resolve_ref_target_info(&scopes, target.clone()).unwrap_or(target);
+                        Ok(VarBinding::Ref(final_target))
+                    }
+                    Some((_, VarBinding::RefLValue(ref_lvalue))) => {
+                        Ok(VarBinding::RefLValue(ref_lvalue))
+                    }
+                    None => Err(PipError::runtime(
+                        line,
+                        "ByRef parameter requires an existing variable",
+                    )),
+                }
+            }
+            _ => {
+                let lvalue = self.lvalue_from_expr(arg_expr, line).await?;
+                let ref_lvalue = self.lvalue_to_ref_lvalue(lvalue, line).await?;
+                Ok(VarBinding::RefLValue(ref_lvalue))
+            }
+        }
+    }
+
+    #[async_recursion]
+    async fn lvalue_from_expr(&mut self, expr: &Expr, line: usize) -> PipResult<LValue> {
+        match expr {
+            Expr::Variable(name) => Ok(LValue::Variable(name.clone())),
+            Expr::FieldAccess { object, field } => Ok(LValue::Field {
+                object: Box::new(self.lvalue_from_expr(object, line).await?),
+                field: field.clone(),
+            }),
+            Expr::ArrayIndex { array, index } => {
+                let array_lvalue = self.lvalue_from_expr(array, line).await?;
+                let idx_val = self.eval_expr(index).await.map_err(|e| e.with_line(line))?;
+                let idx_int = idx_val
+                    .as_int()
+                    .ok_or_else(|| PipError::runtime(line, "Array index must be integer"))?;
+                Ok(LValue::Index {
+                    array: Box::new(array_lvalue),
+                    index: Box::new(Expr::Literal(Literal::Int(idx_int))),
+                })
+            }
+            _ => Err(PipError::runtime(
+                line,
+                "ByRef parameter requires a variable, field, or array element",
+            )),
+        }
+    }
+
+    async fn lvalue_to_ref_lvalue(&self, lvalue: LValue, line: usize) -> PipResult<RefLValue> {
+        let mut access = Vec::new();
+        let base_name = flatten_lvalue(lvalue, &mut access, line)?;
+
+        let scopes = self.scopes.read().await;
+        match find_binding(&scopes, &base_name) {
+            Some((scope_index, VarBinding::Value(_))) => Ok(RefLValue {
+                base: RefTarget {
+                    name: base_name,
+                    scope_index,
+                },
+                access,
+            }),
+            Some((_, VarBinding::Ref(target))) => {
+                let final_target =
+                    resolve_ref_target_info(&scopes, target.clone()).unwrap_or(target);
+                Ok(RefLValue {
+                    base: final_target,
+                    access,
+                })
+            }
+            Some((_, VarBinding::RefLValue(mut ref_lvalue))) => {
+                ref_lvalue.access.extend(access);
+                Ok(ref_lvalue)
+            }
+            None => Err(PipError::runtime(
+                line,
+                "ByRef parameter requires an existing variable",
+            )),
+        }
+    }
+
     /// Call a function (built-in or user-defined).
     async fn call_function(
         &mut self,
         name: &str,
-        args: Vec<Value>,
+        args: &[Expr],
         line: usize,
     ) -> PipResult<Value> {
         // Check built-in functions first
-        if let Some(result) = builtins::call_builtin(self, name, args.clone(), line).await {
+        let arg_vals = self.eval_args(args, line).await?;
+        if let Some(result) = builtins::call_builtin(self, name, arg_vals.clone(), line).await {
             return result;
         }
 
@@ -1345,17 +1670,17 @@ impl Interpreter {
         match name.to_lowercase().as_str() {
             "consolidate" => {
                 // consolidate(book) or consolidate(book, source = "_source")
-                if args.is_empty() || args.len() > 2 {
+                if arg_vals.is_empty() || arg_vals.len() > 2 {
                     return Err(PipError::runtime(
                         line,
                         "consolidate() takes 1 or 2 arguments: consolidate(book) or consolidate(book, source_column_name)",
                     ));
                 }
-                match &args[0] {
+                match &arg_vals[0] {
                     Value::Object(book_obj) => {
                         // Convert object (book) to consolidated array
-                        let source_col = if args.len() == 2 {
-                            match args[1].as_str() {
+                        let source_col = if arg_vals.len() == 2 {
+                            match arg_vals[1].as_str() {
                                 Some(s) => Some(s.to_string()),
                                 None => {
                                     return Err(PipError::runtime(
@@ -1385,13 +1710,13 @@ impl Interpreter {
                     .as_ref()
                     .ok_or_else(|| PipError::runtime(line, "Python runtime not available"))?;
 
-                match args.len() {
+                match arg_vals.len() {
                     2 => {
                         // Inline lambda/def
-                        let name = args[0].as_str().ok_or_else(|| {
+                        let name = arg_vals[0].as_str().ok_or_else(|| {
                             PipError::runtime(line, "register_python: first argument must be string (name)")
                         })?;
-                        let code = args[1].as_str().ok_or_else(|| {
+                        let code = arg_vals[1].as_str().ok_or_else(|| {
                             PipError::runtime(line, "register_python: second argument must be string (code)")
                         })?;
                         runtime.register_inline(name, code).await?;
@@ -1399,13 +1724,13 @@ impl Interpreter {
                     }
                     3 => {
                         // From file
-                        let name = args[0].as_str().ok_or_else(|| {
+                        let name = arg_vals[0].as_str().ok_or_else(|| {
                             PipError::runtime(line, "register_python: first argument must be string (name)")
                         })?;
-                        let file_path = args[1].as_str().ok_or_else(|| {
+                        let file_path = arg_vals[1].as_str().ok_or_else(|| {
                             PipError::runtime(line, "register_python: second argument must be string (file path)")
                         })?;
-                        let func_name = args[2].as_str().ok_or_else(|| {
+                        let func_name = arg_vals[2].as_str().ok_or_else(|| {
                             PipError::runtime(line, "register_python: third argument must be string (function name)")
                         })?;
                         runtime.register_from_file(name, file_path, func_name).await?;
@@ -1418,13 +1743,13 @@ impl Interpreter {
                 }
             }
             "sheet_transpose" => {
-                if args.len() != 1 {
+                if arg_vals.len() != 1 {
                     return Err(PipError::runtime(
                         line,
                         "sheet_transpose() takes exactly 1 argument",
                     ));
                 }
-                match &args[0] {
+                match &arg_vals[0] {
                     Value::Sheet(sheet) => {
                         let mut new_sheet = sheet.clone();
                         new_sheet.transpose();
@@ -1434,13 +1759,13 @@ impl Interpreter {
                 }
             }
             "sheet_select_columns" => {
-                if args.len() != 2 {
+                if arg_vals.len() != 2 {
                     return Err(PipError::runtime(
                         line,
                         "sheet_select_columns() takes exactly 2 arguments",
                     ));
                 }
-                match (&args[0], &args[1]) {
+                match (&arg_vals[0], &arg_vals[1]) {
                     (Value::Sheet(sheet), Value::Array(columns)) => {
                         let mut new_sheet = sheet.clone();
                         let column_names: Result<Vec<&str>, _> = columns
@@ -1464,13 +1789,13 @@ impl Interpreter {
                 }
             }
             "sheet_remove_columns" => {
-                if args.len() != 2 {
+                if arg_vals.len() != 2 {
                     return Err(PipError::runtime(
                         line,
                         "sheet_remove_columns() takes exactly 2 arguments",
                     ));
                 }
-                match (&args[0], &args[1]) {
+                match (&arg_vals[0], &arg_vals[1]) {
                     (Value::Sheet(sheet), Value::Array(columns)) => {
                         let mut new_sheet = sheet.clone();
                         let column_names: Result<Vec<&str>, _> = columns
@@ -1494,13 +1819,13 @@ impl Interpreter {
                 }
             }
             "sheet_remove_empty_rows" => {
-                if args.len() != 1 {
+                if arg_vals.len() != 1 {
                     return Err(PipError::runtime(
                         line,
                         "sheet_remove_empty_rows() takes exactly 1 argument",
                     ));
                 }
-                match &args[0] {
+                match &arg_vals[0] {
                     Value::Sheet(sheet) => {
                         let mut new_sheet = sheet.clone();
                         new_sheet.remove_empty_rows();
@@ -1510,37 +1835,37 @@ impl Interpreter {
                 }
             }
             "sheet_row_count" => {
-                if args.len() != 1 {
+                if arg_vals.len() != 1 {
                     return Err(PipError::runtime(
                         line,
                         "sheet_row_count() takes exactly 1 argument",
                     ));
                 }
-                match &args[0] {
+                match &arg_vals[0] {
                     Value::Sheet(sheet) => Ok(Value::Int(sheet.row_count() as i64)),
                     _ => Err(PipError::runtime(line, "Argument must be a sheet")),
                 }
             }
             "sheet_col_count" => {
-                if args.len() != 1 {
+                if arg_vals.len() != 1 {
                     return Err(PipError::runtime(
                         line,
                         "sheet_col_count() takes exactly 1 argument",
                     ));
                 }
-                match &args[0] {
+                match &arg_vals[0] {
                     Value::Sheet(sheet) => Ok(Value::Int(sheet.col_count() as i64)),
                     _ => Err(PipError::runtime(line, "Argument must be a sheet")),
                 }
             }
             "sheet_get_a1" => {
-                if args.len() != 2 {
+                if arg_vals.len() != 2 {
                     return Err(PipError::runtime(
                         line,
                         "sheet_get_a1() takes exactly 2 arguments (sheet, notation)",
                     ));
                 }
-                match (&args[0], &args[1]) {
+                match (&arg_vals[0], &arg_vals[1]) {
                     (Value::Sheet(sheet), Value::String(notation)) => {
                         let cell = sheet.get_a1(notation).map_err(|e| {
                             PipError::runtime(
@@ -1555,13 +1880,13 @@ impl Interpreter {
                 }
             }
             "sheet_set_a1" => {
-                if args.len() != 3 {
+                if arg_vals.len() != 3 {
                     return Err(PipError::runtime(
                         line,
                         "sheet_set_a1() takes exactly 3 arguments (sheet, notation, value)",
                     ));
                 }
-                match (&args[0], &args[1], &args[2]) {
+                match (&arg_vals[0], &arg_vals[1], &arg_vals[2]) {
                     (Value::Sheet(sheet), Value::String(notation), value) => {
                         let mut sheet_clone = sheet.clone();
 
@@ -1595,13 +1920,13 @@ impl Interpreter {
                 }
             }
             "sheet_get_range" => {
-                if args.len() != 2 {
+                if arg_vals.len() != 2 {
                     return Err(PipError::runtime(
                         line,
                         "sheet_get_range() takes exactly 2 arguments (sheet, range_notation)",
                     ));
                 }
-                match (&args[0], &args[1]) {
+                match (&arg_vals[0], &arg_vals[1]) {
                     (Value::Sheet(sheet), Value::String(notation)) => {
                         let sub_sheet = sheet.get_range(notation).map_err(|e| {
                             PipError::runtime(line, format!("Invalid range '{}': {}", notation, e))
@@ -1612,13 +1937,13 @@ impl Interpreter {
                 }
             }
             "sheet_column_by_name" => {
-                if args.len() != 2 {
+                if arg_vals.len() != 2 {
                     return Err(PipError::runtime(
                         line,
                         "sheet_column_by_name() takes exactly 2 arguments (sheet, column_name)",
                     ));
                 }
-                match (&args[0], &args[1]) {
+                match (&arg_vals[0], &arg_vals[1]) {
                     (Value::Sheet(sheet), Value::String(col_name)) => {
                         use piptable_sheet::CellValue;
                         let column = sheet.column_by_name(col_name).map_err(|e| {
@@ -1645,10 +1970,10 @@ impl Interpreter {
                 }
             }
             "sheet_get_by_name" => {
-                if args.len() != 3 {
+                if arg_vals.len() != 3 {
                     return Err(PipError::runtime(line, "sheet_get_by_name() takes exactly 3 arguments (sheet, row_index, column_name)"));
                 }
-                match (&args[0], &args[1], &args[2]) {
+                match (&arg_vals[0], &arg_vals[1], &arg_vals[2]) {
                     (Value::Sheet(sheet), Value::Int(row), Value::String(col_name)) => {
                         use piptable_sheet::CellValue;
                         if *row < 0 {
@@ -1679,10 +2004,10 @@ impl Interpreter {
                 }
             }
             "sheet_set_by_name" => {
-                if args.len() != 4 {
+                if arg_vals.len() != 4 {
                     return Err(PipError::runtime(line, "sheet_set_by_name() takes exactly 4 arguments (sheet, row_index, column_name, value)"));
                 }
-                match (&args[0], &args[1], &args[2], &args[3]) {
+                match (&arg_vals[0], &arg_vals[1], &arg_vals[2], &arg_vals[3]) {
                     (Value::Sheet(sheet), Value::Int(row), Value::String(col_name), value) => {
                         use piptable_sheet::CellValue;
                         if *row < 0 {
@@ -1732,23 +2057,35 @@ impl Interpreter {
                 };
 
                 if let Some(func) = func {
-                    if func.params.len() != args.len() {
-                        return Err(PipError::runtime(
-                            line,
-                            format!(
-                                "Function '{}' expects {} arguments, got {}",
-                                name,
-                                func.params.len(),
-                                args.len()
-                            ),
-                        ));
-                    }
+                if func.params.len() != args.len() {
+                    return Err(PipError::runtime(
+                        line,
+                        format!(
+                            "Function '{}' expects {} arguments, got {}",
+                            name,
+                            func.params.len(),
+                            args.len()
+                        ),
+                    ));
+                }
 
-                    // Create new scope with parameters
-                    self.push_scope().await;
-                    for (param, arg) in func.params.iter().zip(args) {
-                        self.declare_var(param, arg).await;
+                // Create new scope with parameters
+                self.push_scope().await;
+                for (idx, param) in func.params.iter().enumerate() {
+                    let arg_expr = &args[idx];
+                    match param.mode {
+                        ParamMode::ByVal => {
+                            self.declare_var(&param.name, arg_vals[idx].clone()).await;
+                        }
+                        ParamMode::ByRef => {
+                            let binding = self.build_ref_binding(arg_expr, line).await?;
+                            let mut scopes = self.scopes.write().await;
+                            if let Some(scope) = scopes.last_mut() {
+                                scope.insert(param.name.clone(), binding);
+                            }
+                        }
                     }
+                }
 
                     // Execute function body
                     let mut result = Value::Null;
@@ -1797,20 +2134,20 @@ impl Interpreter {
                     // Check if it's a variable containing a lambda
                     if let Some(Value::Lambda { params, body }) = self.get_var(name).await {
                         // Call the lambda
-                        if params.len() != args.len() {
+                        if params.len() != arg_vals.len() {
                             return Err(PipError::runtime(
                                 line,
                                 format!(
                                     "Lambda '{}' expects {} arguments, got {}",
                                     name,
                                     params.len(),
-                                    args.len()
+                                    arg_vals.len()
                                 ),
                             ));
                         }
 
                         self.push_scope().await;
-                        for (param, arg) in params.iter().zip(args.iter()) {
+                        for (param, arg) in params.iter().zip(arg_vals.iter()) {
                             self.declare_var(param, arg.clone()).await;
                         }
                         let result = self.eval_expr(&body).await;
@@ -1822,7 +2159,7 @@ impl Interpreter {
                     #[cfg(feature = "python")]
                     if let Some(runtime) = &self.python_runtime {
                         if runtime.has_function(name).await {
-                            return runtime.call(name, args).await;
+                            return runtime.call(name, arg_vals).await;
                         }
                     }
 
@@ -2125,6 +2462,14 @@ impl Interpreter {
     async fn assign_lvalue(&mut self, lvalue: &LValue, value: Value, line: usize) -> PipResult<()> {
         match lvalue {
             LValue::Variable(name) => {
+                let binding = {
+                    let scopes = self.scopes.read().await;
+                    find_binding(&scopes, name).map(|(_, binding)| binding)
+                };
+                if let Some(VarBinding::RefLValue(ref_lvalue)) = binding {
+                    let mut scopes = self.scopes.write().await;
+                    return assign_ref_lvalue(&mut scopes, ref_lvalue, value, line);
+                }
                 self.set_var(name, value).await;
                 Ok(())
             }
@@ -2223,28 +2568,75 @@ impl Interpreter {
     /// Set a variable, searching scopes for existing bindings first.
     /// Use this for assignment statements where we want to update existing variables.
     pub async fn set_var(&self, name: &str, value: Value) {
-        // Clear any cached table for this variable, regardless of new type.
-        // This prevents stale table registrations when a Sheet variable is reassigned.
+        enum ResolvedBinding {
+            Value { name: String, scope_index: usize },
+            RefTarget(RefTarget),
+            RefLValue(RefLValue),
+        }
+
+        let resolved = {
+            let scopes = self.scopes.read().await;
+            match find_binding(&scopes, name) {
+                Some((scope_index, VarBinding::Value(_))) => Some(ResolvedBinding::Value {
+                    name: name.to_string(),
+                    scope_index,
+                }),
+                Some((_, VarBinding::Ref(target))) => {
+                    let final_target =
+                        resolve_ref_target_info(&scopes, target.clone()).unwrap_or(target);
+                    Some(ResolvedBinding::RefTarget(final_target))
+                }
+                Some((_, VarBinding::RefLValue(mut ref_lvalue))) => {
+                    if let Some(final_target) =
+                        resolve_ref_target_info(&scopes, ref_lvalue.base.clone())
+                    {
+                        ref_lvalue.base = final_target;
+                    }
+                    Some(ResolvedBinding::RefLValue(ref_lvalue))
+                }
+                None => None,
+            }
+        };
+
+        // Clear any cached table for the variable being assigned.
         let table_to_drop = {
             let mut sheet_tables = self.sheet_tables.write().await;
-            sheet_tables.remove(name)
+            match &resolved {
+                Some(ResolvedBinding::Value { name, .. }) => sheet_tables.remove(name),
+                Some(ResolvedBinding::RefTarget(target)) => sheet_tables.remove(&target.name),
+                Some(ResolvedBinding::RefLValue(ref_lvalue)) => {
+                    sheet_tables.remove(&ref_lvalue.base.name)
+                }
+                None => sheet_tables.remove(name),
+            }
         };
         if let Some(table_name) = table_to_drop {
-            // Deregister from SQL context (drop lock before await)
             let _ = self.sql.deregister_table(&table_name).await;
         }
 
         let mut scopes = self.scopes.write().await;
-        // Check if variable exists in any scope (for reassignment)
-        for scope in scopes.iter_mut().rev() {
-            if scope.contains_key(name) {
-                scope.insert(name.to_string(), value);
-                return;
+
+        if let Some(resolved) = resolved {
+            match resolved {
+                ResolvedBinding::Value { name: binding_name, scope_index } => {
+                    if let Some(scope) = scopes.get_mut(scope_index) {
+                        scope.insert(binding_name, VarBinding::Value(value));
+                    }
+                }
+                ResolvedBinding::RefTarget(target) => {
+                    if let Some(scope) = scopes.get_mut(target.scope_index) {
+                        scope.insert(target.name, VarBinding::Value(value));
+                    }
+                }
+                ResolvedBinding::RefLValue(ref_lvalue) => {
+                    let _ = assign_ref_lvalue(&mut scopes, ref_lvalue, value, 0);
+                }
             }
+            return;
         }
-        // Otherwise, insert in current (top) scope
+
         if let Some(scope) = scopes.last_mut() {
-            scope.insert(name.to_string(), value);
+            scope.insert(name.to_string(), VarBinding::Value(value));
         }
     }
 
@@ -2253,19 +2645,15 @@ impl Interpreter {
     async fn declare_var(&self, name: &str, value: Value) {
         let mut scopes = self.scopes.write().await;
         if let Some(scope) = scopes.last_mut() {
-            scope.insert(name.to_string(), value);
+            scope.insert(name.to_string(), VarBinding::Value(value));
         }
     }
 
     /// Get a variable, searching from innermost to outermost scope.
     pub async fn get_var(&self, name: &str) -> Option<Value> {
         let scopes = self.scopes.read().await;
-        for scope in scopes.iter().rev() {
-            if let Some(val) = scope.get(name) {
-                return Some(val.clone());
-            }
-        }
-        None
+        let (_scope_index, binding) = find_binding(&scopes, name)?;
+        resolve_binding_value(&scopes, binding)
     }
 
     /// Get output buffer contents and clear it.
