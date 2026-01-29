@@ -58,6 +58,7 @@ mod book;
 mod cell;
 mod csv;
 mod error;
+mod html;
 mod json;
 mod parquet;
 mod sheet;

@@ -17,6 +17,7 @@ serde_json = { workspace = true }
 indexmap = { workspace = true }
 arrow = { workspace = true }
 parquet = { workspace = true }
+scraper = { workspace = true }
 
 [dev-dependencies]
 tempfile = { workspace = true }

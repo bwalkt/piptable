@@ -615,12 +615,20 @@ fn append_sheet_or_update(
     Ok(())
 }
 
-/// Import a sheet from a file based on extension.
+// URL import support - to be implemented in a future PR
+// Requires implementing from_csv_string, from_json_string, from_html_string methods
+
+/// Import a sheet from a file or URL based on extension.
 pub fn import_sheet(
     path: &str,
     sheet_name: Option<&str>,
     has_headers: bool,
 ) -> Result<Sheet, String> {
+    // URL support would go here in the future
+    // if path.starts_with("http://") || path.starts_with("https://") {
+    //     return import_sheet_from_url(path, sheet_name, has_headers);
+    // }
+
     let path_lower = path.to_lowercase();
     if path_lower.ends_with(".csv") || path_lower.ends_with(".tsv") {
         let mut sheet = if path_lower.ends_with(".tsv") {
@@ -669,6 +677,10 @@ pub fn import_sheet(
             .ok_or_else(|| format!("No tables found in PDF '{}'", path))?;
         // For Phase 1, return the first table found
         Ok(first)
+    } else if path_lower.ends_with(".html") || path_lower.ends_with(".htm") {
+        let sheet = Sheet::from_html_with_headers(path, has_headers)
+            .map_err(|e| format!("Failed to import HTML: {}", e))?;
+        Ok(sheet)
     } else {
         Err(format!("Unsupported import format for '{}'", path))
     }
