@@ -314,6 +314,11 @@ impl Interpreter {
                 }
                 Ok(format!("{}({})", function, arg_strs.join(", ")))
             }
+            Expr::CallExpr { .. } => {
+                // Fallback to evaluation for non-identifier callees (e.g., lambdas)
+                let val = self.eval_expr(expr).await?;
+                Ok(self.value_to_sql(&val))
+            }
             _ => {
                 // For complex expressions, evaluate and inline the result
                 let val = self.eval_expr(expr).await?;

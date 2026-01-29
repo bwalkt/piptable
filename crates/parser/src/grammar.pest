@@ -219,7 +219,10 @@ ask_expr = { "ask" ~ string ~ "from" ~ expr ~ (^"using" ~ (^"model")? ~ string)?
 async_for_expr = { "async" ~ "for" ~ "each" ~ ident ~ "in" ~ expr ~ statement* ~ "end" ~ "async" }
 parallel_expr = { "parallel" ~ expr ~ ("," ~ expr)* ~ "end" ~ "parallel" }
 await_expr = { "await" ~ expr }
-lambda_expr = { "|" ~ lambda_params? ~ "|" ~ expr }
+lambda_expr = { 
+    (ident ~ "=>" ~ expr) |
+    ("(" ~ lambda_params? ~ ")" ~ "=>" ~ expr)
+}
 lambda_params = { ident ~ ("," ~ ident)* }
 
 // =============================================================================

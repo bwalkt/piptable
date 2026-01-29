@@ -202,6 +202,9 @@ pub enum Expr {
     /// Function call: `func(args)`
     Call { function: String, args: Vec<Expr> },
 
+    /// Call expression: `expr(args)` (e.g., immediate lambda invocation)
+    CallExpr { callee: Box<Expr>, args: Vec<Expr> },
+
     /// SQL query: `query(SELECT ...)`
     Query(Box<SqlQuery>),
 
@@ -252,7 +255,7 @@ pub enum Expr {
         args: Vec<Expr>,
     },
 
-    /// Lambda expression: `|x| x + 1` or `|a, b| a > b`
+    /// Lambda expression: `x => x + 1` or `(a, b) => a > b`
     Lambda {
         params: Vec<String>,
         body: Box<Expr>,
