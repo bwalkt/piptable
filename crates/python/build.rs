@@ -6,10 +6,13 @@ fn main() {
     // Respect PyO3's Python executable selection
     let python_exe = find_python_executable();
 
-    // Get the corresponding python-config executable
+    // Try python-config first, then fall back to sysconfig
+    let mut config_succeeded = false;
     if let Some(python_config) = find_python_config(&python_exe) {
-        configure_linking_with_config(&python_config);
-    } else {
+        config_succeeded = configure_linking_with_config(&python_config);
+    }
+
+    if !config_succeeded {
         // Fallback: use sysconfig directly
         configure_linking_with_sysconfig(&python_exe);
     }
@@ -52,12 +55,14 @@ fn find_python_config(python_exe: &PathBuf) -> Option<PathBuf> {
             .arg("import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')")
             .output()
         {
-            let version = String::from_utf8_lossy(&version_output.stdout)
-                .trim()
-                .to_string();
-            let versioned_config = parent.join(format!("python{}-config", version));
-            if versioned_config.exists() {
-                return Some(versioned_config);
+            if version_output.status.success() {
+                let version = String::from_utf8_lossy(&version_output.stdout)
+                    .trim()
+                    .to_string();
+                let versioned_config = parent.join(format!("python{}-config", version));
+                if versioned_config.exists() {
+                    return Some(versioned_config);
+                }
             }
         }
     }
@@ -66,8 +71,18 @@ fn find_python_config(python_exe: &PathBuf) -> Option<PathBuf> {
 }
 
 /// Configure linking using python-config
-fn configure_linking_with_config(python_config: &PathBuf) {
+/// Returns true if successful, false if caller should use fallback
+fn configure_linking_with_config(python_config: &PathBuf) -> bool {
     if let Ok(output) = Command::new(python_config).arg("--ldflags").output() {
+        if !output.status.success() {
+            println!(
+                "cargo:warning=python-config --ldflags failed with exit code {:?}, falling back to sysconfig",
+                output.status.code()
+            );
+            // Don't parse potentially incomplete output, let caller handle fallback
+            return false;
+        }
+
         let ldflags = String::from_utf8_lossy(&output.stdout);
 
         // Parse all linker flags, not just -L and -l
@@ -108,7 +123,12 @@ fn configure_linking_with_config(python_config: &PathBuf) {
                 println!("cargo:rustc-link-arg={}", flag);
             }
         }
+
+        return true;
     }
+
+    // Failed to execute python-config
+    false
 }
 
 /// Configure linking using Python's sysconfig module
