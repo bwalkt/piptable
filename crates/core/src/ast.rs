@@ -63,7 +63,7 @@ pub enum Statement {
     /// Function definition
     Function {
         name: String,
-        params: Vec<String>,
+        params: Vec<Param>,
         body: Vec<Statement>,
         is_async: bool,
         line: usize,
@@ -72,7 +72,7 @@ pub enum Statement {
     /// Sub (procedure) definition
     Sub {
         name: String,
-        params: Vec<String>,
+        params: Vec<Param>,
         body: Vec<Statement>,
         is_async: bool,
         line: usize,
@@ -145,6 +145,20 @@ pub enum Statement {
 
     /// Expression statement (for side effects)
     Expr { expr: Expr, line: usize },
+}
+
+/// Parameter passing mode for function/sub parameters.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum ParamMode {
+    ByVal,
+    ByRef,
+}
+
+/// Function/sub parameter definition.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Param {
+    pub name: String,
+    pub mode: ParamMode,
 }
 
 /// Elseif clause in an if statement.

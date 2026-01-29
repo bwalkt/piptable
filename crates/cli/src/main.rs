@@ -77,7 +77,7 @@ async fn main() -> Result<()> {
         let (key, value) = var.split_once('=').with_context(|| {
             format!("Invalid variable format: '{var}'. Expected KEY=VALUE format")
         })?;
-        interpreter.set_var(key, parse_cli_value(value)).await;
+        interpreter.set_var(key, parse_cli_value(value)).await?;
     }
 
     // Determine execution mode
@@ -349,7 +349,12 @@ fn format_value(value: &Value) -> String {
             format!("<Table: {} rows>", total_rows)
         }
         Value::Function { name, params, .. } => {
-            format!("<Function: {}({})>", name, params.join(", "))
+            let param_list = params
+                .iter()
+                .map(|param| param.name.as_str())
+                .collect::<Vec<_>>()
+                .join(", ");
+            format!("<Function: {}({})>", name, param_list)
         }
         Value::Sheet(sheet) => {
             format!("<Sheet: {}x{}>", sheet.row_count(), sheet.col_count())
@@ -602,7 +607,16 @@ mod tests {
     fn test_format_value_function() {
         let func = Value::Function {
             name: "add".to_string(),
-            params: vec!["a".to_string(), "b".to_string()],
+            params: vec![
+                piptable_core::Param {
+                    name: "a".to_string(),
+                    mode: piptable_core::ParamMode::ByVal,
+                },
+                piptable_core::Param {
+                    name: "b".to_string(),
+                    mode: piptable_core::ParamMode::ByVal,
+                },
+            ],
             is_async: false,
         };
         assert_eq!(format_value(&func), "<Function: add(a, b)>");
@@ -715,7 +729,7 @@ mod tests {
     #[tokio::test]
     async fn test_variable_injection() {
         let interpreter = Interpreter::new();
-        interpreter.set_var("x", Value::Int(42)).await;
+        interpreter.set_var("x", Value::Int(42)).await.unwrap();
         let value = interpreter.get_var("x").await;
         assert!(matches!(value, Some(Value::Int(42))));
     }

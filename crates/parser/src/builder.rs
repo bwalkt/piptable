@@ -3,7 +3,8 @@
 use pest::iterators::{Pair, Pairs};
 use piptable_core::{
     BinaryOp, Expr, FromClause, ImportOptions, JoinCondition, JoinType, Literal, OrderByItem,
-    Program, SelectClause, SelectItem, SortDirection, SqlQuery, Statement, TableRef, UnaryOp,
+    Param, ParamMode, Program, SelectClause, SelectItem, SortDirection, SqlQuery, Statement,
+    TableRef, UnaryOp,
 };
 
 use crate::Rule;
@@ -272,7 +273,7 @@ fn build_function_def(pair: Pair<Rule>, line: usize) -> BuildResult<Statement> {
         match item.as_rule() {
             Rule::param_list => {
                 for param in item.into_inner() {
-                    params.push(param.as_str().to_string());
+                    params.push(build_param(param)?);
                 }
             }
             Rule::statement => {
@@ -309,7 +310,7 @@ fn build_sub_def(pair: Pair<Rule>, line: usize) -> BuildResult<Statement> {
         match item.as_rule() {
             Rule::param_list => {
                 for param in item.into_inner() {
-                    params.push(param.as_str().to_string());
+                    params.push(build_param(param)?);
                 }
             }
             Rule::statement => {
@@ -326,6 +327,32 @@ fn build_sub_def(pair: Pair<Rule>, line: usize) -> BuildResult<Statement> {
         is_async,
         line,
     })
+}
+
+fn build_param(pair: Pair<Rule>) -> BuildResult<Param> {
+    let mut mode = ParamMode::ByVal;
+    let mut name: Option<String> = None;
+
+    for item in pair.clone().into_inner() {
+        match item.as_rule() {
+            Rule::param_modifier => {
+                mode = match item.as_str().to_lowercase().as_str() {
+                    "byref" => ParamMode::ByRef,
+                    _ => ParamMode::ByVal,
+                };
+            }
+            Rule::ident => {
+                name = Some(item.as_str().to_string());
+            }
+            _ => {}
+        }
+    }
+
+    let Some(name) = name else {
+        return Err(BuildError::from_pair(&pair, "Expected parameter name"));
+    };
+
+    Ok(Param { name, mode })
 }
 
 fn build_return_stmt(pair: Pair<Rule>, line: usize) -> BuildResult<Statement> {

@@ -21,19 +21,20 @@ mod python;
 use crate::sheet_conversions::{build_sheet_arrow_array, cell_to_value, infer_sheet_column_type};
 use async_recursion::async_recursion;
 use piptable_core::{
-    BinaryOp, Expr, LValue, Literal, PipError, PipResult, Program, Statement, UnaryOp, Value,
+    BinaryOp, Expr, LValue, Literal, Param, ParamMode, PipError, PipResult, Program, Statement,
+    UnaryOp, Value,
 };
 use piptable_http::HttpClient;
 use piptable_sheet::{CellValue, Sheet};
 use piptable_sql::SqlEngine;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 use tokio::sync::RwLock;
 
 /// Interpreter for piptable scripts.
 pub struct Interpreter {
     /// Variable scopes (stack for nested scopes)
-    scopes: Arc<RwLock<Vec<HashMap<String, Value>>>>,
+    scopes: Arc<RwLock<Vec<HashMap<String, VarBinding>>>>,
     /// SQL engine
     sql: SqlEngine,
     /// HTTP client
@@ -53,10 +54,235 @@ pub struct Interpreter {
 #[derive(Clone)]
 pub struct FunctionDef {
     pub name: String,
-    pub params: Vec<String>,
+    pub params: Vec<Param>,
     pub body: Vec<Statement>,
     pub is_async: bool,
     pub is_sub: bool, // true for sub, false for function
+}
+
+#[derive(Debug, Clone)]
+struct RefTarget {
+    name: String,
+    scope_index: usize,
+}
+
+#[derive(Debug, Clone)]
+enum VarBinding {
+    Value(Value),
+    Ref(RefTarget),
+    RefLValue(RefLValue),
+}
+
+fn find_binding(scopes: &[HashMap<String, VarBinding>], name: &str) -> Option<(usize, VarBinding)> {
+    for (idx, scope) in scopes.iter().enumerate().rev() {
+        if let Some(binding) = scope.get(name) {
+            return Some((idx, binding.clone()));
+        }
+    }
+    None
+}
+
+fn resolve_ref_value(scopes: &[HashMap<String, VarBinding>], target: RefTarget) -> Option<Value> {
+    let mut current = target;
+    let mut seen: HashSet<(usize, String)> = HashSet::new();
+    loop {
+        if !seen.insert((current.scope_index, current.name.clone())) {
+            return None;
+        }
+        let scope = scopes.get(current.scope_index)?;
+        match scope.get(&current.name)? {
+            VarBinding::Value(val) => return Some(val.clone()),
+            VarBinding::Ref(next) => {
+                current = next.clone();
+            }
+            VarBinding::RefLValue(ref_lvalue) => {
+                return resolve_ref_lvalue_value(scopes, ref_lvalue.clone());
+            }
+        }
+    }
+}
+
+fn resolve_binding_value(
+    scopes: &[HashMap<String, VarBinding>],
+    binding: VarBinding,
+) -> Option<Value> {
+    match binding {
+        VarBinding::Value(val) => Some(val),
+        VarBinding::Ref(target) => resolve_ref_value(scopes, target),
+        VarBinding::RefLValue(ref_lvalue) => resolve_ref_lvalue_value(scopes, ref_lvalue),
+    }
+}
+
+fn resolve_ref_target_info(
+    scopes: &[HashMap<String, VarBinding>],
+    target: RefTarget,
+) -> Option<RefTarget> {
+    let mut current = target;
+    let mut seen: HashSet<(usize, String)> = HashSet::new();
+    loop {
+        if !seen.insert((current.scope_index, current.name.clone())) {
+            return None;
+        }
+        let scope = scopes.get(current.scope_index)?;
+        match scope.get(&current.name) {
+            Some(VarBinding::Ref(next)) => {
+                current = next.clone();
+            }
+            Some(VarBinding::Value(_)) => return Some(current),
+            Some(VarBinding::RefLValue(ref_lvalue)) => return Some(ref_lvalue.base.clone()),
+            None => return None,
+        }
+    }
+}
+
+fn flatten_lvalue(lvalue: LValue, access: &mut Vec<RefAccess>, line: usize) -> PipResult<String> {
+    match lvalue {
+        LValue::Variable(name) => Ok(name),
+        LValue::Field { object, field } => {
+            let base = flatten_lvalue(*object, access, line)?;
+            access.push(RefAccess::Field(field));
+            Ok(base)
+        }
+        LValue::Index { array, index } => {
+            let base = flatten_lvalue(*array, access, line)?;
+            match *index {
+                Expr::Literal(Literal::Int(value)) => {
+                    access.push(RefAccess::Index(value));
+                    Ok(base)
+                }
+                _ => Err(PipError::runtime(line, "Array index must be integer")),
+            }
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+struct RefLValue {
+    base: RefTarget,
+    access: Vec<RefAccess>,
+}
+
+#[derive(Debug, Clone)]
+enum RefAccess {
+    Field(String),
+    Index(i64),
+}
+
+fn resolve_ref_lvalue_value(
+    scopes: &[HashMap<String, VarBinding>],
+    ref_lvalue: RefLValue,
+) -> Option<Value> {
+    let base_binding = scopes
+        .get(ref_lvalue.base.scope_index)?
+        .get(&ref_lvalue.base.name)?
+        .clone();
+    let mut current = resolve_binding_value(scopes, base_binding)?;
+
+    for access in ref_lvalue.access {
+        match access {
+            RefAccess::Field(field) => {
+                if let Value::Object(map) = current {
+                    current = map.get(&field)?.clone();
+                } else {
+                    return None;
+                }
+            }
+            RefAccess::Index(index) => {
+                if let Value::Array(items) = current {
+                    let idx = if index < 0 {
+                        let adjusted = items.len() as i64 + index;
+                        if adjusted < 0 {
+                            return None;
+                        }
+                        adjusted as usize
+                    } else {
+                        index as usize
+                    };
+                    if idx >= items.len() {
+                        return None;
+                    }
+                    current = items[idx].clone();
+                } else {
+                    return None;
+                }
+            }
+        }
+    }
+
+    Some(current)
+}
+
+fn assign_ref_lvalue(
+    scopes: &mut [HashMap<String, VarBinding>],
+    ref_lvalue: RefLValue,
+    value: Value,
+    line: usize,
+) -> PipResult<()> {
+    let base_scope = scopes
+        .get(ref_lvalue.base.scope_index)
+        .ok_or_else(|| PipError::runtime(line, "ByRef target scope not found"))?;
+    let base_binding = base_scope
+        .get(&ref_lvalue.base.name)
+        .ok_or_else(|| PipError::runtime(line, "ByRef target not found"))?
+        .clone();
+    let base_value = resolve_binding_value(scopes, base_binding)
+        .ok_or_else(|| PipError::runtime(line, "ByRef target not found"))?;
+
+    let updated = apply_ref_access(base_value, &ref_lvalue.access, value, line)?;
+
+    if let Some(scope) = scopes.get_mut(ref_lvalue.base.scope_index) {
+        scope.insert(ref_lvalue.base.name.clone(), VarBinding::Value(updated));
+    }
+
+    Ok(())
+}
+
+fn apply_ref_access(
+    value: Value,
+    access: &[RefAccess],
+    new_value: Value,
+    line: usize,
+) -> PipResult<Value> {
+    if access.is_empty() {
+        return Ok(new_value);
+    }
+
+    match (&access[0], value) {
+        (RefAccess::Field(field), Value::Object(mut map)) => {
+            let next_value = map
+                .remove(field)
+                .ok_or_else(|| PipError::runtime(line, format!("Field not found: {field}")))?;
+            let updated = apply_ref_access(next_value, &access[1..], new_value, line)?;
+            map.insert(field.clone(), updated);
+            Ok(Value::Object(map))
+        }
+        (RefAccess::Index(index), Value::Array(mut items)) => {
+            let idx = if *index < 0 {
+                let adjusted = items.len() as i64 + *index;
+                if adjusted < 0 {
+                    return Err(PipError::runtime(line, "Array index out of bounds"));
+                }
+                adjusted as usize
+            } else {
+                *index as usize
+            };
+            if idx >= items.len() {
+                return Err(PipError::runtime(line, "Array index out of bounds"));
+            }
+            let next_value = items[idx].clone();
+            let updated = apply_ref_access(next_value, &access[1..], new_value, line)?;
+            items[idx] = updated;
+            Ok(Value::Array(items))
+        }
+        (RefAccess::Field(_), other) => Err(PipError::runtime(
+            line,
+            format!("Cannot assign field on {}", other.type_name()),
+        )),
+        (RefAccess::Index(_), other) => Err(PipError::runtime(
+            line,
+            format!("Cannot index {}", other.type_name()),
+        )),
+    }
 }
 
 impl Interpreter {
@@ -138,7 +364,7 @@ impl Interpreter {
                     .eval_expr(&value)
                     .await
                     .map_err(|e| e.with_line(line))?;
-                self.set_var(&name, val).await;
+                self.set_var(&name, val).await?;
                 Ok(Value::Null)
             }
 
@@ -429,10 +655,7 @@ impl Interpreter {
                 function,
                 args,
                 line,
-            } => {
-                let arg_vals = self.eval_args(&args, line).await?;
-                self.call_function(&function, arg_vals, line).await
-            }
+            } => self.call_function(&function, &args, line).await,
 
             Statement::Append {
                 target,
@@ -483,7 +706,7 @@ impl Interpreter {
 
                 // Update the variable with modified sheet
                 self.set_var(&target, sheet_conversions::sheet_to_value(&target_sheet))
-                    .await;
+                    .await?;
                 Ok(Value::Null)
             }
 
@@ -520,7 +743,7 @@ impl Interpreter {
 
                 // Update the variable with modified sheet
                 self.set_var(&target, sheet_conversions::sheet_to_value(&target_sheet))
-                    .await;
+                    .await?;
                 Ok(Value::Null)
             }
 
@@ -667,7 +890,7 @@ impl Interpreter {
                 };
 
                 // Store in target variable
-                self.set_var(&target, value).await;
+                self.set_var(&target, value).await?;
 
                 Ok(Value::Null)
             }
@@ -886,10 +1109,7 @@ impl Interpreter {
                 }
             }
 
-            Expr::Call { function, args } => {
-                let arg_vals = self.eval_args(args, 0).await?;
-                self.call_function(function, arg_vals, 0).await
-            }
+            Expr::Call { function, args } => self.call_function(function, args, 0).await,
 
             Expr::CallExpr { callee, args } => {
                 let callee_val = self.eval_expr(callee).await?;
@@ -1329,33 +1549,121 @@ impl Interpreter {
         Ok(values)
     }
 
+    async fn build_ref_binding(&mut self, arg_expr: &Expr, line: usize) -> PipResult<VarBinding> {
+        match arg_expr {
+            Expr::Variable(name) => {
+                let scopes = self.scopes.read().await;
+                match find_binding(&scopes, name) {
+                    Some((scope_index, VarBinding::Value(_))) => Ok(VarBinding::Ref(RefTarget {
+                        name: name.clone(),
+                        scope_index,
+                    })),
+                    Some((_, VarBinding::Ref(target))) => {
+                        let final_target =
+                            resolve_ref_target_info(&scopes, target.clone()).unwrap_or(target);
+                        Ok(VarBinding::Ref(final_target))
+                    }
+                    Some((_, VarBinding::RefLValue(ref_lvalue))) => {
+                        Ok(VarBinding::RefLValue(ref_lvalue))
+                    }
+                    None => Err(PipError::runtime(
+                        line,
+                        "ByRef parameter requires an existing variable",
+                    )),
+                }
+            }
+            _ => {
+                let lvalue = self.lvalue_from_expr(arg_expr, line).await?;
+                let ref_lvalue = self.lvalue_to_ref_lvalue(lvalue, line).await?;
+                Ok(VarBinding::RefLValue(ref_lvalue))
+            }
+        }
+    }
+
+    #[async_recursion]
+    async fn lvalue_from_expr(&mut self, expr: &Expr, line: usize) -> PipResult<LValue> {
+        match expr {
+            Expr::Variable(name) => Ok(LValue::Variable(name.clone())),
+            Expr::FieldAccess { object, field } => Ok(LValue::Field {
+                object: Box::new(self.lvalue_from_expr(object, line).await?),
+                field: field.clone(),
+            }),
+            Expr::ArrayIndex { array, index } => {
+                let array_lvalue = self.lvalue_from_expr(array, line).await?;
+                let idx_val = self.eval_expr(index).await.map_err(|e| e.with_line(line))?;
+                let idx_int = idx_val
+                    .as_int()
+                    .ok_or_else(|| PipError::runtime(line, "Array index must be integer"))?;
+                Ok(LValue::Index {
+                    array: Box::new(array_lvalue),
+                    index: Box::new(Expr::Literal(Literal::Int(idx_int))),
+                })
+            }
+            _ => Err(PipError::runtime(
+                line,
+                "ByRef parameter requires a variable, field, or array element",
+            )),
+        }
+    }
+
+    async fn lvalue_to_ref_lvalue(&self, lvalue: LValue, line: usize) -> PipResult<RefLValue> {
+        let mut access = Vec::new();
+        let base_name = flatten_lvalue(lvalue, &mut access, line)?;
+
+        let scopes = self.scopes.read().await;
+        match find_binding(&scopes, &base_name) {
+            Some((scope_index, VarBinding::Value(_))) => Ok(RefLValue {
+                base: RefTarget {
+                    name: base_name,
+                    scope_index,
+                },
+                access,
+            }),
+            Some((_, VarBinding::Ref(target))) => {
+                let final_target =
+                    resolve_ref_target_info(&scopes, target.clone()).unwrap_or(target);
+                Ok(RefLValue {
+                    base: final_target,
+                    access,
+                })
+            }
+            Some((_, VarBinding::RefLValue(mut ref_lvalue))) => {
+                ref_lvalue.access.extend(access);
+                Ok(ref_lvalue)
+            }
+            None => Err(PipError::runtime(
+                line,
+                "ByRef parameter requires an existing variable",
+            )),
+        }
+    }
+
     /// Call a function (built-in or user-defined).
-    async fn call_function(
-        &mut self,
-        name: &str,
-        args: Vec<Value>,
-        line: usize,
-    ) -> PipResult<Value> {
-        // Check built-in functions first
-        if let Some(result) = builtins::call_builtin(self, name, args.clone(), line).await {
-            return result;
+    async fn call_function(&mut self, name: &str, args: &[Expr], line: usize) -> PipResult<Value> {
+        // Check built-in functions first (evaluate args only if needed)
+        if builtins::is_builtin(name) {
+            let arg_vals = self.eval_args(args, line).await?;
+            if let Some(result) = builtins::call_builtin(self, name, arg_vals, line).await {
+                return result;
+            }
         }
 
         // Functions that still need to be migrated to modules
         match name.to_lowercase().as_str() {
             "consolidate" => {
+                let arg_vals = self.eval_args(args, line).await?;
                 // consolidate(book) or consolidate(book, source = "_source")
-                if args.is_empty() || args.len() > 2 {
+                if arg_vals.is_empty() || arg_vals.len() > 2 {
                     return Err(PipError::runtime(
                         line,
                         "consolidate() takes 1 or 2 arguments: consolidate(book) or consolidate(book, source_column_name)",
                     ));
                 }
-                match &args[0] {
+                match &arg_vals[0] {
                     Value::Object(book_obj) => {
                         // Convert object (book) to consolidated array
-                        let source_col = if args.len() == 2 {
-                            match args[1].as_str() {
+                        let source_col = if arg_vals.len() == 2 {
+                            match arg_vals[1].as_str() {
                                 Some(s) => Some(s.to_string()),
                                 None => {
                                     return Err(PipError::runtime(
@@ -1378,6 +1686,7 @@ impl Interpreter {
             }
             #[cfg(feature = "python")]
             "register_python" => {
+                let arg_vals = self.eval_args(args, line).await?;
                 // register_python("name", "lambda x: x * 2")
                 // register_python("name", "file.py", "function_name")
                 let runtime = self
@@ -1385,13 +1694,13 @@ impl Interpreter {
                     .as_ref()
                     .ok_or_else(|| PipError::runtime(line, "Python runtime not available"))?;
 
-                match args.len() {
+                match arg_vals.len() {
                     2 => {
                         // Inline lambda/def
-                        let name = args[0].as_str().ok_or_else(|| {
+                        let name = arg_vals[0].as_str().ok_or_else(|| {
                             PipError::runtime(line, "register_python: first argument must be string (name)")
                         })?;
-                        let code = args[1].as_str().ok_or_else(|| {
+                        let code = arg_vals[1].as_str().ok_or_else(|| {
                             PipError::runtime(line, "register_python: second argument must be string (code)")
                         })?;
                         runtime.register_inline(name, code).await?;
@@ -1399,13 +1708,13 @@ impl Interpreter {
                     }
                     3 => {
                         // From file
-                        let name = args[0].as_str().ok_or_else(|| {
+                        let name = arg_vals[0].as_str().ok_or_else(|| {
                             PipError::runtime(line, "register_python: first argument must be string (name)")
                         })?;
-                        let file_path = args[1].as_str().ok_or_else(|| {
+                        let file_path = arg_vals[1].as_str().ok_or_else(|| {
                             PipError::runtime(line, "register_python: second argument must be string (file path)")
                         })?;
-                        let func_name = args[2].as_str().ok_or_else(|| {
+                        let func_name = arg_vals[2].as_str().ok_or_else(|| {
                             PipError::runtime(line, "register_python: third argument must be string (function name)")
                         })?;
                         runtime.register_from_file(name, file_path, func_name).await?;
@@ -1418,13 +1727,14 @@ impl Interpreter {
                 }
             }
             "sheet_transpose" => {
-                if args.len() != 1 {
+                let arg_vals = self.eval_args(args, line).await?;
+                if arg_vals.len() != 1 {
                     return Err(PipError::runtime(
                         line,
                         "sheet_transpose() takes exactly 1 argument",
                     ));
                 }
-                match &args[0] {
+                match &arg_vals[0] {
                     Value::Sheet(sheet) => {
                         let mut new_sheet = sheet.clone();
                         new_sheet.transpose();
@@ -1434,13 +1744,14 @@ impl Interpreter {
                 }
             }
             "sheet_select_columns" => {
-                if args.len() != 2 {
+                let arg_vals = self.eval_args(args, line).await?;
+                if arg_vals.len() != 2 {
                     return Err(PipError::runtime(
                         line,
                         "sheet_select_columns() takes exactly 2 arguments",
                     ));
                 }
-                match (&args[0], &args[1]) {
+                match (&arg_vals[0], &arg_vals[1]) {
                     (Value::Sheet(sheet), Value::Array(columns)) => {
                         let mut new_sheet = sheet.clone();
                         let column_names: Result<Vec<&str>, _> = columns
@@ -1464,13 +1775,14 @@ impl Interpreter {
                 }
             }
             "sheet_remove_columns" => {
-                if args.len() != 2 {
+                let arg_vals = self.eval_args(args, line).await?;
+                if arg_vals.len() != 2 {
                     return Err(PipError::runtime(
                         line,
                         "sheet_remove_columns() takes exactly 2 arguments",
                     ));
                 }
-                match (&args[0], &args[1]) {
+                match (&arg_vals[0], &arg_vals[1]) {
                     (Value::Sheet(sheet), Value::Array(columns)) => {
                         let mut new_sheet = sheet.clone();
                         let column_names: Result<Vec<&str>, _> = columns
@@ -1494,13 +1806,14 @@ impl Interpreter {
                 }
             }
             "sheet_remove_empty_rows" => {
-                if args.len() != 1 {
+                let arg_vals = self.eval_args(args, line).await?;
+                if arg_vals.len() != 1 {
                     return Err(PipError::runtime(
                         line,
                         "sheet_remove_empty_rows() takes exactly 1 argument",
                     ));
                 }
-                match &args[0] {
+                match &arg_vals[0] {
                     Value::Sheet(sheet) => {
                         let mut new_sheet = sheet.clone();
                         new_sheet.remove_empty_rows();
@@ -1510,37 +1823,40 @@ impl Interpreter {
                 }
             }
             "sheet_row_count" => {
-                if args.len() != 1 {
+                let arg_vals = self.eval_args(args, line).await?;
+                if arg_vals.len() != 1 {
                     return Err(PipError::runtime(
                         line,
                         "sheet_row_count() takes exactly 1 argument",
                     ));
                 }
-                match &args[0] {
+                match &arg_vals[0] {
                     Value::Sheet(sheet) => Ok(Value::Int(sheet.row_count() as i64)),
                     _ => Err(PipError::runtime(line, "Argument must be a sheet")),
                 }
             }
             "sheet_col_count" => {
-                if args.len() != 1 {
+                let arg_vals = self.eval_args(args, line).await?;
+                if arg_vals.len() != 1 {
                     return Err(PipError::runtime(
                         line,
                         "sheet_col_count() takes exactly 1 argument",
                     ));
                 }
-                match &args[0] {
+                match &arg_vals[0] {
                     Value::Sheet(sheet) => Ok(Value::Int(sheet.col_count() as i64)),
                     _ => Err(PipError::runtime(line, "Argument must be a sheet")),
                 }
             }
             "sheet_get_a1" => {
-                if args.len() != 2 {
+                let arg_vals = self.eval_args(args, line).await?;
+                if arg_vals.len() != 2 {
                     return Err(PipError::runtime(
                         line,
                         "sheet_get_a1() takes exactly 2 arguments (sheet, notation)",
                     ));
                 }
-                match (&args[0], &args[1]) {
+                match (&arg_vals[0], &arg_vals[1]) {
                     (Value::Sheet(sheet), Value::String(notation)) => {
                         let cell = sheet.get_a1(notation).map_err(|e| {
                             PipError::runtime(
@@ -1555,13 +1871,14 @@ impl Interpreter {
                 }
             }
             "sheet_set_a1" => {
-                if args.len() != 3 {
+                let arg_vals = self.eval_args(args, line).await?;
+                if arg_vals.len() != 3 {
                     return Err(PipError::runtime(
                         line,
                         "sheet_set_a1() takes exactly 3 arguments (sheet, notation, value)",
                     ));
                 }
-                match (&args[0], &args[1], &args[2]) {
+                match (&arg_vals[0], &arg_vals[1], &arg_vals[2]) {
                     (Value::Sheet(sheet), Value::String(notation), value) => {
                         let mut sheet_clone = sheet.clone();
 
@@ -1595,13 +1912,14 @@ impl Interpreter {
                 }
             }
             "sheet_get_range" => {
-                if args.len() != 2 {
+                let arg_vals = self.eval_args(args, line).await?;
+                if arg_vals.len() != 2 {
                     return Err(PipError::runtime(
                         line,
                         "sheet_get_range() takes exactly 2 arguments (sheet, range_notation)",
                     ));
                 }
-                match (&args[0], &args[1]) {
+                match (&arg_vals[0], &arg_vals[1]) {
                     (Value::Sheet(sheet), Value::String(notation)) => {
                         let sub_sheet = sheet.get_range(notation).map_err(|e| {
                             PipError::runtime(line, format!("Invalid range '{}': {}", notation, e))
@@ -1612,13 +1930,14 @@ impl Interpreter {
                 }
             }
             "sheet_column_by_name" => {
-                if args.len() != 2 {
+                let arg_vals = self.eval_args(args, line).await?;
+                if arg_vals.len() != 2 {
                     return Err(PipError::runtime(
                         line,
                         "sheet_column_by_name() takes exactly 2 arguments (sheet, column_name)",
                     ));
                 }
-                match (&args[0], &args[1]) {
+                match (&arg_vals[0], &arg_vals[1]) {
                     (Value::Sheet(sheet), Value::String(col_name)) => {
                         use piptable_sheet::CellValue;
                         let column = sheet.column_by_name(col_name).map_err(|e| {
@@ -1645,10 +1964,11 @@ impl Interpreter {
                 }
             }
             "sheet_get_by_name" => {
-                if args.len() != 3 {
+                let arg_vals = self.eval_args(args, line).await?;
+                if arg_vals.len() != 3 {
                     return Err(PipError::runtime(line, "sheet_get_by_name() takes exactly 3 arguments (sheet, row_index, column_name)"));
                 }
-                match (&args[0], &args[1], &args[2]) {
+                match (&arg_vals[0], &arg_vals[1], &arg_vals[2]) {
                     (Value::Sheet(sheet), Value::Int(row), Value::String(col_name)) => {
                         use piptable_sheet::CellValue;
                         if *row < 0 {
@@ -1679,10 +1999,11 @@ impl Interpreter {
                 }
             }
             "sheet_set_by_name" => {
-                if args.len() != 4 {
+                let arg_vals = self.eval_args(args, line).await?;
+                if arg_vals.len() != 4 {
                     return Err(PipError::runtime(line, "sheet_set_by_name() takes exactly 4 arguments (sheet, row_index, column_name, value)"));
                 }
-                match (&args[0], &args[1], &args[2], &args[3]) {
+                match (&arg_vals[0], &arg_vals[1], &arg_vals[2], &arg_vals[3]) {
                     (Value::Sheet(sheet), Value::Int(row), Value::String(col_name), value) => {
                         use piptable_sheet::CellValue;
                         if *row < 0 {
@@ -1746,8 +2067,24 @@ impl Interpreter {
 
                     // Create new scope with parameters
                     self.push_scope().await;
-                    for (param, arg) in func.params.iter().zip(args) {
-                        self.declare_var(param, arg).await;
+                    for (idx, param) in func.params.iter().enumerate() {
+                        let arg_expr = &args[idx];
+                        match param.mode {
+                            ParamMode::ByVal => {
+                                let value = self
+                                    .eval_expr(arg_expr)
+                                    .await
+                                    .map_err(|e| e.with_line(line))?;
+                                self.declare_var(&param.name, value).await;
+                            }
+                            ParamMode::ByRef => {
+                                let binding = self.build_ref_binding(arg_expr, line).await?;
+                                let mut scopes = self.scopes.write().await;
+                                if let Some(scope) = scopes.last_mut() {
+                                    scope.insert(param.name.clone(), binding);
+                                }
+                            }
+                        }
                     }
 
                     // Execute function body
@@ -1796,21 +2133,22 @@ impl Interpreter {
                 } else {
                     // Check if it's a variable containing a lambda
                     if let Some(Value::Lambda { params, body }) = self.get_var(name).await {
+                        let arg_vals = self.eval_args(args, line).await?;
                         // Call the lambda
-                        if params.len() != args.len() {
+                        if params.len() != arg_vals.len() {
                             return Err(PipError::runtime(
                                 line,
                                 format!(
                                     "Lambda '{}' expects {} arguments, got {}",
                                     name,
                                     params.len(),
-                                    args.len()
+                                    arg_vals.len()
                                 ),
                             ));
                         }
 
                         self.push_scope().await;
-                        for (param, arg) in params.iter().zip(args.iter()) {
+                        for (param, arg) in params.iter().zip(arg_vals.iter()) {
                             self.declare_var(param, arg.clone()).await;
                         }
                         let result = self.eval_expr(&body).await;
@@ -1822,7 +2160,8 @@ impl Interpreter {
                     #[cfg(feature = "python")]
                     if let Some(runtime) = &self.python_runtime {
                         if runtime.has_function(name).await {
-                            return runtime.call(name, args).await;
+                            let arg_vals = self.eval_args(args, line).await?;
+                            return runtime.call(name, arg_vals).await;
                         }
                     }
 
@@ -2125,7 +2464,15 @@ impl Interpreter {
     async fn assign_lvalue(&mut self, lvalue: &LValue, value: Value, line: usize) -> PipResult<()> {
         match lvalue {
             LValue::Variable(name) => {
-                self.set_var(name, value).await;
+                let binding = {
+                    let scopes = self.scopes.read().await;
+                    find_binding(&scopes, name).map(|(_, binding)| binding)
+                };
+                if let Some(VarBinding::RefLValue(ref_lvalue)) = binding {
+                    let mut scopes = self.scopes.write().await;
+                    return assign_ref_lvalue(&mut scopes, ref_lvalue, value, line);
+                }
+                self.set_var(name, value).await?;
                 Ok(())
             }
             LValue::Field { object, field } => {
@@ -2222,30 +2569,81 @@ impl Interpreter {
 
     /// Set a variable, searching scopes for existing bindings first.
     /// Use this for assignment statements where we want to update existing variables.
-    pub async fn set_var(&self, name: &str, value: Value) {
-        // Clear any cached table for this variable, regardless of new type.
-        // This prevents stale table registrations when a Sheet variable is reassigned.
+    pub async fn set_var(&self, name: &str, value: Value) -> PipResult<()> {
+        enum ResolvedBinding {
+            Value { name: String, scope_index: usize },
+            RefTarget(RefTarget),
+            RefLValue(RefLValue),
+        }
+
+        let resolved = {
+            let scopes = self.scopes.read().await;
+            match find_binding(&scopes, name) {
+                Some((scope_index, VarBinding::Value(_))) => Some(ResolvedBinding::Value {
+                    name: name.to_string(),
+                    scope_index,
+                }),
+                Some((_, VarBinding::Ref(target))) => {
+                    let final_target =
+                        resolve_ref_target_info(&scopes, target.clone()).unwrap_or(target);
+                    Some(ResolvedBinding::RefTarget(final_target))
+                }
+                Some((_, VarBinding::RefLValue(mut ref_lvalue))) => {
+                    if let Some(final_target) =
+                        resolve_ref_target_info(&scopes, ref_lvalue.base.clone())
+                    {
+                        ref_lvalue.base = final_target;
+                    }
+                    Some(ResolvedBinding::RefLValue(ref_lvalue))
+                }
+                None => None,
+            }
+        };
+
+        // Clear any cached table for the variable being assigned.
         let table_to_drop = {
             let mut sheet_tables = self.sheet_tables.write().await;
-            sheet_tables.remove(name)
+            match &resolved {
+                Some(ResolvedBinding::Value { name, .. }) => sheet_tables.remove(name),
+                Some(ResolvedBinding::RefTarget(target)) => sheet_tables.remove(&target.name),
+                Some(ResolvedBinding::RefLValue(ref_lvalue)) => {
+                    sheet_tables.remove(&ref_lvalue.base.name)
+                }
+                None => sheet_tables.remove(name),
+            }
         };
         if let Some(table_name) = table_to_drop {
-            // Deregister from SQL context (drop lock before await)
             let _ = self.sql.deregister_table(&table_name).await;
         }
 
         let mut scopes = self.scopes.write().await;
-        // Check if variable exists in any scope (for reassignment)
-        for scope in scopes.iter_mut().rev() {
-            if scope.contains_key(name) {
-                scope.insert(name.to_string(), value);
-                return;
+
+        if let Some(resolved) = resolved {
+            match resolved {
+                ResolvedBinding::Value {
+                    name: binding_name,
+                    scope_index,
+                } => {
+                    if let Some(scope) = scopes.get_mut(scope_index) {
+                        scope.insert(binding_name, VarBinding::Value(value));
+                    }
+                }
+                ResolvedBinding::RefTarget(target) => {
+                    if let Some(scope) = scopes.get_mut(target.scope_index) {
+                        scope.insert(target.name, VarBinding::Value(value));
+                    }
+                }
+                ResolvedBinding::RefLValue(ref_lvalue) => {
+                    assign_ref_lvalue(&mut scopes, ref_lvalue, value, 0)?;
+                }
             }
+            return Ok(());
         }
-        // Otherwise, insert in current (top) scope
+
         if let Some(scope) = scopes.last_mut() {
-            scope.insert(name.to_string(), value);
+            scope.insert(name.to_string(), VarBinding::Value(value));
         }
+        Ok(())
     }
 
     /// Declare a variable in the current scope only (shadows outer bindings).
@@ -2253,19 +2651,15 @@ impl Interpreter {
     async fn declare_var(&self, name: &str, value: Value) {
         let mut scopes = self.scopes.write().await;
         if let Some(scope) = scopes.last_mut() {
-            scope.insert(name.to_string(), value);
+            scope.insert(name.to_string(), VarBinding::Value(value));
         }
     }
 
     /// Get a variable, searching from innermost to outermost scope.
     pub async fn get_var(&self, name: &str) -> Option<Value> {
         let scopes = self.scopes.read().await;
-        for scope in scopes.iter().rev() {
-            if let Some(val) = scope.get(name) {
-                return Some(val.clone());
-            }
-        }
-        None
+        let (_scope_index, binding) = find_binding(&scopes, name)?;
+        resolve_binding_value(&scopes, binding)
     }
 
     /// Get output buffer contents and clear it.
@@ -2717,7 +3111,7 @@ mod tests {
     #[tokio::test]
     async fn test_set_get_var() {
         let interp = Interpreter::new();
-        interp.set_var("x", Value::Int(42)).await;
+        interp.set_var("x", Value::Int(42)).await.unwrap();
         let value = interp.get_var("x").await;
         assert!(matches!(value, Some(Value::Int(42))));
     }
@@ -3160,7 +3554,8 @@ combined = consolidate(stores, "_store")
                         .collect(),
                 ),
             )
-            .await;
+            .await
+            .unwrap();
 
         let script = r"result = consolidate(book, 123)"; // 123 is not a string
         let program = PipParser::parse_str(script).unwrap();
@@ -3225,7 +3620,7 @@ combined = consolidate(stores, "_store")
         // This creates a situation where column_names exist but no physical header
         sheet.row_delete(0).unwrap();
 
-        interp.set_var("data", Value::Sheet(sheet)).await;
+        interp.set_var("data", Value::Sheet(sheet)).await.unwrap();
 
         let script = r#"
             dim count = 0
@@ -3280,7 +3675,10 @@ combined = consolidate(stores, "_store")
         sheet.name_columns_by_row(0).unwrap();
         sheet.row_delete(0).unwrap();
 
-        interp.set_var("products", Value::Sheet(sheet)).await;
+        interp
+            .set_var("products", Value::Sheet(sheet))
+            .await
+            .unwrap();
 
         let script = r#"
             dim result = query(SELECT * FROM products WHERE price > 150)
@@ -3317,7 +3715,7 @@ combined = consolidate(stores, "_store")
             "Column names should be detected"
         );
 
-        interp.set_var("data", Value::Sheet(sheet)).await;
+        interp.set_var("data", Value::Sheet(sheet)).await.unwrap();
 
         // Test positive indexing
         let script = r#"
@@ -3384,7 +3782,8 @@ combined = consolidate(stores, "_store")
 
         interp
             .set_var("single_row", Value::Sheet(single_row_sheet))
-            .await;
+            .await
+            .unwrap();
 
         // This should work and not treat the single row as header-only
         let script = r#"
@@ -3424,7 +3823,8 @@ combined = consolidate(stores, "_store")
             Sheet::from_csv_str_with_options(csv_with_header, csv_options).unwrap();
         interp
             .set_var("data", Value::Sheet(sheet_with_header))
-            .await;
+            .await
+            .unwrap();
 
         // Sheet without column names - use from_data
         let sheet_no_header = Sheet::from_data(vec![
@@ -3439,7 +3839,8 @@ combined = consolidate(stores, "_store")
         ]);
         interp
             .set_var("raw_data", Value::Sheet(sheet_no_header))
-            .await;
+            .await
+            .unwrap();
 
         let script = r#"
             dim data_len = len(data)
@@ -3523,10 +3924,12 @@ combined = consolidate(stores, "_store")
         // Set the sheets as variables (convert to Value)
         interp
             .set_var("users", sheet_conversions::sheet_to_value(&users))
-            .await;
+            .await
+            .unwrap();
         interp
             .set_var("orders", sheet_conversions::sheet_to_value(&orders))
-            .await;
+            .await
+            .unwrap();
 
         // Test inner join with different columns
         let code = r#"result = users join orders on "id" = "user_id""#;
@@ -3586,10 +3989,12 @@ combined = consolidate(stores, "_store")
         // Set the sheets as variables
         interp
             .set_var("users", sheet_conversions::sheet_to_value(&users))
-            .await;
+            .await
+            .unwrap();
         interp
             .set_var("orders", sheet_conversions::sheet_to_value(&orders))
-            .await;
+            .await
+            .unwrap();
 
         // Test left join
         let code = r#"result = users left join orders on "id" = "user_id""#;
@@ -3657,10 +4062,12 @@ combined = consolidate(stores, "_store")
         // Set the sheets as variables
         interp
             .set_var("sheet1", sheet_conversions::sheet_to_value(&sheet1))
-            .await;
+            .await
+            .unwrap();
         interp
             .set_var("sheet2", sheet_conversions::sheet_to_value(&sheet2))
-            .await;
+            .await
+            .unwrap();
 
         // Test join with same key column name
         let code = r#"result = sheet1 join sheet2 on "id""#;
@@ -3718,10 +4125,12 @@ combined = consolidate(stores, "_store")
 
         interp
             .set_var("sheet1", sheet_conversions::sheet_to_value(&sheet1))
-            .await;
+            .await
+            .unwrap();
         interp
             .set_var("sheet2", sheet_conversions::sheet_to_value(&sheet2))
-            .await;
+            .await
+            .unwrap();
 
         // Test right join
         let code = r#"result = sheet1 right join sheet2 on "id" = "user_id""#;
@@ -3817,10 +4226,12 @@ combined = consolidate(stores, "_store")
 
         interp
             .set_var("sheet1", sheet_conversions::sheet_to_value(&sheet1))
-            .await;
+            .await
+            .unwrap();
         interp
             .set_var("sheet2", sheet_conversions::sheet_to_value(&sheet2))
-            .await;
+            .await
+            .unwrap();
 
         // Test full join
         let code = r#"result = sheet1 full join sheet2 on "id" = "user_id""#;
@@ -3907,10 +4318,12 @@ combined = consolidate(stores, "_store")
 
         interp
             .set_var("sheet1", sheet_conversions::sheet_to_value(&sheet1))
-            .await;
+            .await
+            .unwrap();
         interp
             .set_var("sheet2", sheet_conversions::sheet_to_value(&sheet2))
-            .await;
+            .await
+            .unwrap();
 
         // Test behavior with empty sheet - should either work or give predictable error
         let code = r#"result = sheet1 join sheet2 on "id" = "user_id""#;
@@ -3999,7 +4412,8 @@ combined = consolidate(stores, "_store")
         let sheet1 = Sheet::from_records(vec![user1, user2]).unwrap();
         interp
             .set_var("users", sheet_conversions::sheet_to_value(&sheet1))
-            .await;
+            .await
+            .unwrap();
 
         // Create new users to append
         let mut user3 = IndexMap::new();
@@ -4009,7 +4423,8 @@ combined = consolidate(stores, "_store")
         let sheet2 = Sheet::from_records(vec![user3]).unwrap();
         interp
             .set_var("new_users", sheet_conversions::sheet_to_value(&sheet2))
-            .await;
+            .await
+            .unwrap();
 
         // Test basic append
         let code = r"users append new_users";
@@ -4066,7 +4481,8 @@ combined = consolidate(stores, "_store")
         let sheet1 = Sheet::from_records(vec![user1, user2]).unwrap();
         interp
             .set_var("users", sheet_conversions::sheet_to_value(&sheet1))
-            .await;
+            .await
+            .unwrap();
 
         // Create new users with duplicate ID
         let mut user2_dup = IndexMap::new();
@@ -4083,7 +4499,8 @@ combined = consolidate(stores, "_store")
         let sheet2 = Sheet::from_records(vec![user2_dup, user3]).unwrap();
         interp
             .set_var("new_users", sheet_conversions::sheet_to_value(&sheet2))
-            .await;
+            .await
+            .unwrap();
 
         // Test append distinct on "id"
         let code = r#"users append distinct new_users on "id""#;
@@ -4137,7 +4554,8 @@ combined = consolidate(stores, "_store")
         let sheet1 = Sheet::from_records(vec![user1, user2]).unwrap();
         interp
             .set_var("users", sheet_conversions::sheet_to_value(&sheet1))
-            .await;
+            .await
+            .unwrap();
 
         // Create updates with existing and new users
         let mut user1_update = IndexMap::new();
@@ -4156,7 +4574,8 @@ combined = consolidate(stores, "_store")
         let sheet2 = Sheet::from_records(vec![user1_update, user3]).unwrap();
         interp
             .set_var("updates", sheet_conversions::sheet_to_value(&sheet2))
-            .await;
+            .await
+            .unwrap();
 
         // Test upsert
         let code = r#"users upsert updates on "id""#;
@@ -4228,7 +4647,7 @@ combined = consolidate(stores, "_store")
         record2.insert("Age".to_string(), CellValue::Int(25));
 
         let sheet = Sheet::from_records(vec![record1, record2]).unwrap();
-        interp.set_var("sheet", Value::Sheet(sheet)).await;
+        interp.set_var("sheet", Value::Sheet(sheet)).await.unwrap();
 
         // Test A1 notation access
         let program = PipParser::parse_str(r#"dim result = sheet["A1"]"#).unwrap();
@@ -4255,7 +4674,7 @@ combined = consolidate(stores, "_store")
         record2.insert("Age".to_string(), CellValue::Int(25));
 
         let sheet = Sheet::from_records(vec![record1, record2]).unwrap();
-        interp.set_var("sheet", Value::Sheet(sheet)).await;
+        interp.set_var("sheet", Value::Sheet(sheet)).await.unwrap();
 
         // Test basic Sheet functions
         let program = PipParser::parse_str(
@@ -4298,7 +4717,10 @@ combined = consolidate(stores, "_store")
         record2.insert("Amount".to_string(), CellValue::Int(200));
 
         let sheet = Sheet::from_records(vec![record1, record2]).unwrap();
-        interp.set_var("sales_sheet", Value::Sheet(sheet)).await;
+        interp
+            .set_var("sales_sheet", Value::Sheet(sheet))
+            .await
+            .unwrap();
 
         // Use the sheet in a SQL query (just select to test the conversion works)
         let program = PipParser::parse_str(
@@ -4328,7 +4750,7 @@ combined = consolidate(stores, "_store")
         record1.insert("Age".to_string(), CellValue::Int(30));
 
         let sheet = Sheet::from_records(vec![record1]).unwrap();
-        interp.set_var("sheet", Value::Sheet(sheet)).await;
+        interp.set_var("sheet", Value::Sheet(sheet)).await.unwrap();
 
         let program = PipParser::parse_str(
             r#"
@@ -4374,7 +4796,7 @@ combined = consolidate(stores, "_store")
         record2.insert("Amount".to_string(), CellValue::Int(200));
 
         let sheet = Sheet::from_records(vec![record1, record2]).unwrap();
-        interp.set_var("sales", Value::Sheet(sheet)).await;
+        interp.set_var("sales", Value::Sheet(sheet)).await.unwrap();
 
         // First query
         let program1 = PipParser::parse_str(r"dim result1 = query(SELECT * FROM sales)").unwrap();
@@ -4417,7 +4839,10 @@ combined = consolidate(stores, "_store")
         ]);
         sheet1.name_columns_by_row(0).unwrap();
 
-        interp.set_var("sheet1", Value::Sheet(sheet1)).await;
+        interp
+            .set_var("sheet1", Value::Sheet(sheet1))
+            .await
+            .unwrap();
 
         // Query should return 1 data row (not 2)
         let program1 =
@@ -4451,7 +4876,10 @@ combined = consolidate(stores, "_store")
         // Name columns from row 0 (which has PersonName, PersonAge)
         sheet2.name_columns_by_row(0).unwrap();
 
-        interp.set_var("sheet2", Value::Sheet(sheet2)).await;
+        interp
+            .set_var("sheet2", Value::Sheet(sheet2))
+            .await
+            .unwrap();
 
         // Query should return 2 data rows (both Bob and Charlie)
         let program2 =
@@ -4482,7 +4910,10 @@ combined = consolidate(stores, "_store")
         record1.insert("Score".to_string(), CellValue::Int(90));
 
         let sheet1 = Sheet::from_records(vec![record1]).unwrap();
-        interp.set_var("scores", Value::Sheet(sheet1)).await;
+        interp
+            .set_var("scores", Value::Sheet(sheet1))
+            .await
+            .unwrap();
 
         // First query
         let program1 = PipParser::parse_str(r"dim result1 = query(SELECT * FROM scores)").unwrap();
@@ -4494,7 +4925,10 @@ combined = consolidate(stores, "_store")
         record2.insert("Score".to_string(), CellValue::Int(85));
 
         let sheet2 = Sheet::from_records(vec![record2]).unwrap();
-        interp.set_var("scores", Value::Sheet(sheet2)).await;
+        interp
+            .set_var("scores", Value::Sheet(sheet2))
+            .await
+            .unwrap();
 
         // Second query should work with the new data
         let program2 = PipParser::parse_str(r"dim result2 = query(SELECT * FROM scores)").unwrap();
@@ -4609,7 +5043,7 @@ combined = consolidate(stores, "_store")
         ]);
 
         // Set the sheet as a variable
-        interp.set_var("data", Value::Sheet(sheet)).await;
+        interp.set_var("data", Value::Sheet(sheet)).await.unwrap();
 
         // Parse and evaluate a method call
         let program = PipParser::parse_str("dim count = data.row_count()").unwrap();
@@ -4641,7 +5075,7 @@ combined = consolidate(stores, "_store")
         let sheet = Sheet::from_data(vec![vec!["Name", "Age"], vec!["Alice", "30"]]);
 
         // Set the sheet as a variable
-        interp.set_var("data", Value::Sheet(sheet)).await;
+        interp.set_var("data", Value::Sheet(sheet)).await.unwrap();
 
         // Try to use negative index - should fail
         let program = PipParser::parse_str("dim result = data.name_columns_by_row(-1)").unwrap();
@@ -4664,7 +5098,7 @@ combined = consolidate(stores, "_store")
         ]);
         sheet.name_columns_by_row(0).unwrap();
 
-        interp.set_var("data", Value::Sheet(sheet)).await;
+        interp.set_var("data", Value::Sheet(sheet)).await.unwrap();
 
         // Test column_names() method
         let program = PipParser::parse_str("dim names = data.column_names()").unwrap();
@@ -4717,7 +5151,7 @@ combined = consolidate(stores, "_store")
             vec!["Bob", "25"],
         ]);
 
-        interp.set_var("data", Value::Sheet(sheet)).await;
+        interp.set_var("data", Value::Sheet(sheet)).await.unwrap();
 
         // Test single cell access
         let program = PipParser::parse_str("dim val = data[\"A1\"]").unwrap();
@@ -4812,7 +5246,7 @@ combined = consolidate(stores, "_store")
         sheet.name_columns_by_row(0).unwrap();
 
         // Set the sheet as a variable
-        interp.set_var("sheet", Value::Sheet(sheet)).await;
+        interp.set_var("sheet", Value::Sheet(sheet)).await.unwrap();
 
         // Test upper operation
         let upper_result = interp
@@ -4940,7 +5374,7 @@ combined = consolidate(stores, "_store")
         ]);
         sheet.name_columns_by_row(0).unwrap();
 
-        interp.set_var("sheet", Value::Sheet(sheet)).await;
+        interp.set_var("sheet", Value::Sheet(sheet)).await.unwrap();
 
         // Test filtering for Active status
         let filter_result = interp
@@ -4992,7 +5426,10 @@ combined = consolidate(stores, "_store")
         record2.insert("Age".to_string(), CellValue::Int(25));
 
         let sheet1 = Sheet::from_records(vec![record1, record2]).unwrap();
-        interp.set_var("sheet1", Value::Sheet(sheet1)).await;
+        interp
+            .set_var("sheet1", Value::Sheet(sheet1))
+            .await
+            .unwrap();
 
         // Test positive indexing
         let program = PipParser::parse_str(
@@ -5068,7 +5505,10 @@ combined = consolidate(stores, "_store")
             CellValue::Int(40),
         ]);
         sheet2.name_columns_by_row(0).unwrap();
-        interp.set_var("sheet2", Value::Sheet(sheet2)).await;
+        interp
+            .set_var("sheet2", Value::Sheet(sheet2))
+            .await
+            .unwrap();
 
         // Sheet2 has column_names AND first row matches those names, so it should skip header
         let program = PipParser::parse_str(r#"dim sheet2_row0 = sheet2[0]"#).unwrap();
@@ -5099,7 +5539,10 @@ combined = consolidate(stores, "_store")
         let sheet = Sheet::from_records(vec![record]).unwrap();
         // This sheet has column_names but no physical header row
 
-        interp.set_var("single_row", Value::Sheet(sheet)).await;
+        interp
+            .set_var("single_row", Value::Sheet(sheet))
+            .await
+            .unwrap();
 
         // Try to query it with SQL
         let program =
@@ -5140,7 +5583,10 @@ combined = consolidate(stores, "_store")
         record2.insert("Age".to_string(), CellValue::Int(25));
 
         let sheet1 = Sheet::from_records(vec![record1, record2]).unwrap();
-        interp.set_var("sheet1", Value::Sheet(sheet1)).await;
+        interp
+            .set_var("sheet1", Value::Sheet(sheet1))
+            .await
+            .unwrap();
 
         // Test case 2: Sheet with actual header row
         let mut sheet2 = Sheet::new();
@@ -5157,7 +5603,10 @@ combined = consolidate(stores, "_store")
             CellValue::Int(35),
         ]);
         sheet2.name_columns_by_row(0).unwrap();
-        interp.set_var("sheet2", Value::Sheet(sheet2)).await;
+        interp
+            .set_var("sheet2", Value::Sheet(sheet2))
+            .await
+            .unwrap();
 
         // Test case 3: Sheet with no column names
         let mut sheet3 = Sheet::new();
@@ -5169,7 +5618,10 @@ combined = consolidate(stores, "_store")
             CellValue::String("Frank".to_string()),
             CellValue::Int(32),
         ]);
-        interp.set_var("sheet3", Value::Sheet(sheet3)).await;
+        interp
+            .set_var("sheet3", Value::Sheet(sheet3))
+            .await
+            .unwrap();
 
         // Test len() for each sheet
         let program = PipParser::parse_str(

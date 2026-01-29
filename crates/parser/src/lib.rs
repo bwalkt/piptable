@@ -93,7 +93,8 @@ impl LineColExt for pest::error::LineColLocation {
 mod tests {
     use super::*;
     use piptable_core::{
-        BinaryOp, Expr, JoinCondition, JoinType, Literal, SortDirection, Statement, TableRef,
+        BinaryOp, Expr, JoinCondition, JoinType, Literal, ParamMode, SortDirection, Statement,
+        TableRef,
     };
 
     // ========================================================================
@@ -416,6 +417,25 @@ mod tests {
             &program.statements[0],
             Statement::Function { name, params, .. } if name == "add" && params.len() == 2
         ));
+    }
+
+    #[test]
+    fn parse_function_byval_byref_params() {
+        let code = "function add(byval a, byref b) return a + b end function";
+        let result = PipParser::parse_str(code);
+        assert!(result.is_ok());
+        let program = result.unwrap();
+        match &program.statements[0] {
+            Statement::Function { name, params, .. } => {
+                assert_eq!(name, "add");
+                assert_eq!(params.len(), 2);
+                assert_eq!(params[0].name, "a");
+                assert_eq!(params[0].mode, ParamMode::ByVal);
+                assert_eq!(params[1].name, "b");
+                assert_eq!(params[1].mode, ParamMode::ByRef);
+            }
+            _ => panic!("Expected Function statement"),
+        }
     }
 
     #[test]

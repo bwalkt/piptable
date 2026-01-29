@@ -443,7 +443,8 @@ async fn test_json_append_mode() {
 
     interp
         .set_var("new_data", piptable_core::Value::Sheet(append_sheet))
-        .await;
+        .await
+        .unwrap();
 
     // Append more data using DSL
     let script = format!(
@@ -528,7 +529,8 @@ async fn test_sheet_append_mode() {
 
         interp
             .set_var("append_data", piptable_core::Value::Sheet(sheet))
-            .await;
+            .await
+            .unwrap();
 
         let script = format!(
             r#"
@@ -584,7 +586,8 @@ async fn test_headerless_csv_append() {
 
         interp
             .set_var("new_data", piptable_core::Value::Sheet(append_sheet))
-            .await;
+            .await
+            .unwrap();
 
         let script = format!(
             r#"
@@ -643,7 +646,8 @@ async fn test_mixed_header_append_error() {
 
         interp
             .set_var("new_data", piptable_core::Value::Sheet(headerless_sheet))
-            .await;
+            .await
+            .unwrap();
 
         let script = format!(
             r#"
@@ -693,7 +697,8 @@ async fn test_headerless_tsv_append() {
 
         interp
             .set_var("new_data", piptable_core::Value::Sheet(append_sheet))
-            .await;
+            .await
+            .unwrap();
 
         let script = format!(
             r#"
@@ -817,7 +822,8 @@ async fn test_string_data_header_detection() {
 
         interp
             .set_var("new_data", piptable_core::Value::Sheet(append_sheet))
-            .await;
+            .await
+            .unwrap();
 
         let script = format!(
             r#"
@@ -861,7 +867,8 @@ async fn test_empty_sheet_append() {
 
         interp
             .set_var("data", piptable_core::Value::Sheet(data_sheet))
-            .await;
+            .await
+            .unwrap();
 
         let script = format!(
             r#"

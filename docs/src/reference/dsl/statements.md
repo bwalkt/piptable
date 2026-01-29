@@ -141,6 +141,8 @@ wend
 
 Define a function that returns a value.
 
+Parameters can be annotated with `ByVal` (pass by value) or `ByRef` (pass by reference). `ByVal` is the default.
+
 ```piptable
 [async] function name(parameters)
     ' statements
@@ -152,6 +154,15 @@ end function
 ```piptable
 function add(a, b)
     return a + b
+end function
+
+function increment(ByRef x)
+    x = x + 1
+end function
+
+function add_one(ByVal x)
+    x = x + 1
+    return x
 end function
 
 function factorial(n)
@@ -171,6 +182,8 @@ end function
 
 Define a subroutine (no return value).
 
+Parameters can be annotated with `ByVal` or `ByRef`. `ByVal` is the default.
+
 ```piptable
 [async] sub name(parameters)
     ' statements
@@ -183,6 +196,10 @@ sub printHeader(title)
     print("========================================")
     print(title)
     print("========================================")
+end sub
+
+sub increment(ByRef x)
+    x = x + 1
 end sub
 
 sub logError(message)
