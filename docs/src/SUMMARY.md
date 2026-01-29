@@ -14,6 +14,7 @@
   - [Data Structures](guide/data-structures.md)
   - [Control Flow](guide/control-flow.md)
   - [Functions](guide/functions.md)
+  - [Working with Joins](guide/joins.md)
 
 # Reference
 
@@ -39,6 +40,7 @@
   - [Sheet DSL Integration](reference/api/sheet_dsl_integration.md)
   - [Book API](reference/api/book.md)
   - [File Formats](reference/api/formats.md)
+  - [AST Reference](reference/api/ast.md)
 
 # Cookbook
 
@@ -46,6 +48,7 @@
   - [CSV Operations](cookbook/csv.md)
   - [Excel Processing](cookbook/excel.md)
   - [JSON Transformation](cookbook/json.md)
+  - [Join Operations](cookbook/joins.md)
   - [TOON Processing](cookbook/toon.md)
   - [Sheet Rust API](cookbook/sheet-rust-api.md)
   
