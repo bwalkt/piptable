@@ -78,7 +78,7 @@ These functions are available in the current version of PipTable:
 ### Lookup Functions
 
 | Function | Description | Example | Status |
-|----------|-------------|---------|--------|
+| ---------- | ------------- | --------- | -------- |
 | `vlookup(lookup_value, table, col_index, [exact])` | Vertical lookup | `vlookup("Apple", data, 2, false)` | ✅ Implemented |
 | `hlookup(lookup_value, table, row_index, [exact])` | Horizontal lookup | `hlookup("Q1", data, 2, false)` | ✅ Implemented |
 | `index(array, row_num, [col_num])` | Return value at position | `index(data, 2, 3)` | ✅ Implemented |
@@ -88,7 +88,7 @@ These functions are available in the current version of PipTable:
 #### Excel/PipTable Parity Matrix
 
 | Feature | Excel | PipTable | Notes |
-|---------|-------|----------|-------|
+| --------- | ------- | ---------- | ------- |
 | **VLOOKUP** | | | |
 | Exact match (FALSE/0) | ✅ | ✅ | Identical behavior |
 | Approximate match (TRUE/1) | ✅ | ✅ | Requires sorted data |
@@ -104,8 +104,8 @@ These functions are available in the current version of PipTable:
 | Negative indices | ❌ | ❌ | Returns error |
 | **MATCH** | | | |
 | Exact match (0) | ✅ | ✅ | Case-sensitive |
-| Less than (-1) | ✅ | ✅ | Finds largest ≤ value |
-| Greater than (1) | ✅ | ✅ | Finds smallest ≥ value |
+| Less than (1) | ✅ | ✅ | Finds largest ≤ value |
+| Greater than (-1) | ✅ | ✅ | Finds smallest ≥ value |
 | Wildcard support | ✅ | ❌ | Not yet implemented |
 | **XLOOKUP** | | | |
 | Basic lookup | ✅ | ✅ | Core functionality identical |

@@ -398,8 +398,8 @@ async fn test_vlookup_approximate_match() {
 }
 
 // TODO: Enable these tests when type coercion is fully implemented
-/*
 #[tokio::test]
+#[ignore = "type coercion not fully implemented yet"]
 async fn test_vlookup_type_coercion() {
     let (interp, _) = run_script(
         r#"
@@ -442,6 +442,7 @@ async fn test_vlookup_type_coercion() {
 }
 
 #[tokio::test]
+#[ignore = "type coercion not fully implemented yet"]
 async fn test_match_type_coercion() {
     let (interp, _) = run_script(
         r#"
@@ -465,6 +466,7 @@ async fn test_match_type_coercion() {
 }
 
 #[tokio::test]
+#[ignore = "xlookup search direction not fully implemented yet"]
 async fn test_xlookup_duplicates_with_search_direction() {
     let (interp, _) = run_script(
         r#"
@@ -507,6 +509,7 @@ async fn test_xlookup_duplicates_with_search_direction() {
 }
 
 #[tokio::test]
+#[ignore = "index error handling not fully implemented yet"]
 async fn test_index_invalid_inputs() {
     let (interp, _) = run_script(
         r#"
@@ -560,6 +563,7 @@ async fn test_index_invalid_inputs() {
 }
 
 #[tokio::test]
+#[ignore = "edge case handling not fully implemented yet"]
 async fn test_vlookup_additional_edge_cases() {
     let (interp, _) = run_script(
         r#"
@@ -613,4 +617,3 @@ async fn test_vlookup_additional_edge_cases() {
         Some(Value::String(s)) if s == "Null row"
     ));
 }
-*/
