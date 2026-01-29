@@ -565,13 +565,27 @@ fn xlookup(args: Vec<Value>, line: usize) -> PipResult<Value> {
         -1 => {
             // Exact match or next smallest
             let mut best_match: Option<(usize, &Value)> = None;
+            let mut exact_match: Option<usize> = None;
+
+            // First pass: find all matches
             for (i, val) in flat_lookup.iter().enumerate().map(|(i, v)| (i, *v)) {
                 if values_equal(val, lookup_value) {
-                    return Ok(flat_return[i].clone());
+                    // For exact matches, respect search_mode
+                    match search_mode {
+                        -1 | -2 => exact_match = Some(i), // Keep updating to get last match
+                        _ => return Ok(flat_return[i].clone()), // Return first match
+                    }
                 } else if compare_values(val, lookup_value, line)? < 0 {
                     best_match = Some((i, val));
                 }
             }
+
+            // Return exact match if found (will be last match for search_mode -1/-2)
+            if let Some(i) = exact_match {
+                return Ok(flat_return[i].clone());
+            }
+
+            // Otherwise return best approximate match
             if let Some((i, _)) = best_match {
                 return Ok(flat_return[i].clone());
             }
@@ -579,13 +593,27 @@ fn xlookup(args: Vec<Value>, line: usize) -> PipResult<Value> {
         1 => {
             // Exact match or next largest
             let mut best_match: Option<(usize, &Value)> = None;
+            let mut exact_match: Option<usize> = None;
+
+            // First pass: find all matches
             for (i, val) in flat_lookup.iter().enumerate().map(|(i, v)| (i, *v)) {
                 if values_equal(val, lookup_value) {
-                    return Ok(flat_return[i].clone());
+                    // For exact matches, respect search_mode
+                    match search_mode {
+                        -1 | -2 => exact_match = Some(i), // Keep updating to get last match
+                        _ => return Ok(flat_return[i].clone()), // Return first match
+                    }
                 } else if compare_values(val, lookup_value, line)? > 0 && best_match.is_none() {
                     best_match = Some((i, val));
                 }
             }
+
+            // Return exact match if found (will be last match for search_mode -1/-2)
+            if let Some(i) = exact_match {
+                return Ok(flat_return[i].clone());
+            }
+
+            // Otherwise return best approximate match
             if let Some((i, _)) = best_match {
                 return Ok(flat_return[i].clone());
             }
@@ -610,6 +638,10 @@ fn xlookup(args: Vec<Value>, line: usize) -> PipResult<Value> {
 }
 
 /// Helper function to check if two values are equal
+///
+/// NOTE: String comparisons are case-sensitive, which differs from Excel's
+/// case-insensitive behavior. This is intentional for consistency with
+/// the rest of the PipTable language.
 fn values_equal(left: &Value, right: &Value) -> bool {
     match (left, right) {
         (Value::Null, Value::Null) => true,
@@ -619,8 +651,7 @@ fn values_equal(left: &Value, right: &Value) -> bool {
         (Value::Int(a), Value::Float(b)) | (Value::Float(b), Value::Int(a)) => {
             (*a as f64 - b).abs() < f64::EPSILON
         }
-        // TODO: Consider case-insensitive string comparison for Excel compatibility
-        // Excel typically performs case-insensitive comparisons in lookup functions
+        // String comparison is case-sensitive (differs from Excel)
         (Value::String(a), Value::String(b)) => a == b,
         _ => false,
     }

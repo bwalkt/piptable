@@ -330,6 +330,34 @@ async fn test_xlookup_advanced_modes() {
 }
 
 #[tokio::test]
+async fn test_xlookup_search_mode_with_duplicates() {
+    let (interp, _) = run_script(
+        r#"
+        lkp = [10, 20, 30, 20, 40]
+        ret = ["A", "B", "C", "D", "E"]
+        
+        result1 = xlookup(20, lkp, ret, "Not Found", 0, 1)
+        result2 = xlookup(20, lkp, ret, "Not Found", 0, -1)
+    "#,
+    )
+    .await;
+
+    // Forward search (search_mode=1) should return first match "B"
+    if let Some(Value::String(s)) = interp.get_var("result1").await {
+        assert_eq!(s, "B");
+    } else {
+        panic!("result1 should be string B");
+    }
+
+    // Backward search (search_mode=-1) should return last match "D"
+    if let Some(Value::String(s)) = interp.get_var("result2").await {
+        assert_eq!(s, "D");
+    } else {
+        panic!("result2 should be string D");
+    }
+}
+
+#[tokio::test]
 async fn test_vlookup_approximate_match() {
     let (interp, _) = run_script(
         r#"
