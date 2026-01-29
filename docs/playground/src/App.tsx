@@ -31,7 +31,7 @@ export function App() {
   const themeCompartment = useRef<Compartment>(new Compartment());
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
-  const handleLoadCode = (newCode: string, scriptName: string) => {
+  const handleLoadCode = (newCode: string, _scriptName: string) => {
     code.value = newCode;
     // Clear stale UI state when loading a new script
     output.value = '';

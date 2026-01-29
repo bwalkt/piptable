@@ -134,7 +134,7 @@ export function extractGistId(url: string): string | null {
     // https://gist.github.com/abc123def456
     // abc123def456
     
-    const gistIdRegex = /(?:gist\.github\.com\/(?:\w+\/)?)?([a-f0-9]{32}|[a-f0-9]{20})/i;
+    const gistIdRegex = /(?:gist\.github\.com\/(?:[\w-]+\/)?)?([a-f0-9]{20,32})/i;
     const match = url.match(gistIdRegex);
     
     return match ? match[1] : null;
@@ -323,9 +323,10 @@ export async function getRateLimit(accessToken?: string): Promise<{
       reset: new Date(core.reset * 1000),
     };
   } catch (error) {
-    // Return default values if API call fails
+    // Return conservative values if API call fails - assume limited quota
+    // Note: remaining: 60 indicates unknown state, not rate-limited
     return {
-      remaining: 0,
+      remaining: 60, // Conservative assumption when status unknown
       limit: 60,
       reset: new Date(),
     };

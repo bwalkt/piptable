@@ -23,7 +23,7 @@ const DEFAULT_SETTINGS = {
 
 // Generate unique ID for scripts
 export function generateScriptId(): string {
-  return `script_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+  return `script_${Date.now()}_${Math.random().toString(36).substring(2, 11)}`;
 }
 
 // Load storage state from localStorage
@@ -67,7 +67,7 @@ export function loadStorageState(): StorageState {
 // Save storage state to localStorage
 export function saveStorageState(state: StorageState): void {
   try {
-    const serialized = JSON.stringify(state, null, 2);
+    const serialized = JSON.stringify(state);
     localStorage.setItem(STORAGE_KEY, serialized);
   } catch (error) {
     console.error('Failed to save storage state:', error);

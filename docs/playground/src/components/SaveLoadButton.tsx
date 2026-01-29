@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'preact/hooks';
 import { 
   saveScript, 
-  updateScript, 
   deleteScript, 
   getRecentScripts, 
   getAllScripts, 
@@ -35,6 +34,18 @@ export function SaveLoadButton({ code, onLoadCode, className }: SaveLoadButtonPr
       loadScripts();
     }
   }, [isOpen, searchQuery]);
+
+  // Close modal on Escape key
+  useEffect(() => {
+    if (!isOpen) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setIsOpen(false);
+      }
+    };
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [isOpen]);
 
   const loadScripts = () => {
     try {
@@ -150,9 +161,13 @@ export function SaveLoadButton({ code, onLoadCode, className }: SaveLoadButtonPr
             </div>
 
             {/* Tabs */}
-            <div className="flex border-b">
+            <div className="flex border-b" role="tablist">
               <button
                 onClick={() => setActiveTab('load')}
+                role="tab"
+                aria-selected={activeTab === 'load'}
+                id="tab-load"
+                aria-controls="panel-load"
                 className={cn(
                   "flex-1 px-4 py-3 text-sm font-medium transition-colors",
                   activeTab === 'load' 
@@ -164,6 +179,10 @@ export function SaveLoadButton({ code, onLoadCode, className }: SaveLoadButtonPr
               </button>
               <button
                 onClick={() => setActiveTab('save')}
+                role="tab"
+                aria-selected={activeTab === 'save'}
+                id="tab-save"
+                aria-controls="panel-save"
                 className={cn(
                   "flex-1 px-4 py-3 text-sm font-medium transition-colors",
                   activeTab === 'save' 
@@ -178,7 +197,7 @@ export function SaveLoadButton({ code, onLoadCode, className }: SaveLoadButtonPr
             {/* Content */}
             <div className="flex flex-col min-h-0 flex-1">
               {activeTab === 'load' ? (
-                <div className="flex flex-col min-h-0 flex-1">
+                <div className="flex flex-col min-h-0 flex-1" role="tabpanel" id="panel-load" aria-labelledby="tab-load">
                   {/* Search */}
                   <div className="p-4 border-b">
                     <input
@@ -216,30 +235,38 @@ export function SaveLoadButton({ code, onLoadCode, className }: SaveLoadButtonPr
                       <h3 className="text-sm font-medium text-muted-foreground mb-3">
                         {searchQuery ? 'Search Results' : 'All Scripts'}
                       </h3>
-                      {scripts.length === 0 ? (
-                        <div className="text-center py-8 text-muted-foreground">
-                          {searchQuery ? 'No scripts found matching your search.' : 'No saved scripts yet.'}
-                        </div>
-                      ) : (
-                        <div className="space-y-2">
-                          {scripts.map((script) => (
-                            <ScriptItem 
-                              key={script.id}
-                              script={script}
-                              onLoad={handleLoad}
-                              onDelete={handleDelete}
-                              formatDate={formatDate}
-                              getCodePreview={getCodePreview}
-                            />
-                          ))}
-                        </div>
-                      )}
+                      {(() => {
+                        // Filter out recent scripts from all scripts list when not searching
+                        const recentIds = new Set(recentScripts.map(s => s.id));
+                        const filteredScripts = searchQuery 
+                          ? scripts 
+                          : scripts.filter(s => !recentIds.has(s.id));
+                        
+                        return filteredScripts.length === 0 ? (
+                          <div className="text-center py-8 text-muted-foreground">
+                            {searchQuery ? 'No scripts found matching your search.' : 'No additional scripts.'}
+                          </div>
+                        ) : (
+                          <div className="space-y-2">
+                            {filteredScripts.map((script) => (
+                              <ScriptItem 
+                                key={script.id}
+                                script={script}
+                                onLoad={handleLoad}
+                                onDelete={handleDelete}
+                                formatDate={formatDate}
+                                getCodePreview={getCodePreview}
+                              />
+                            ))}
+                          </div>
+                        );
+                      })()}
                     </div>
                   </div>
                 </div>
               ) : (
                 /* Save Tab */
-                <div className="p-4 space-y-4">
+                <div className="p-4 space-y-4" role="tabpanel" id="panel-save" aria-labelledby="tab-save">
                   <div>
                     <label htmlFor="script-name" className="block text-sm font-medium mb-2">
                       Script Name *
