@@ -18,7 +18,7 @@ export interface GistResponse {
   updated_at: string;
   files: Record<string, {
     filename: string;
-    content: string;
+    content?: string;
     raw_url: string;
     truncated?: boolean;
   }>;
@@ -247,11 +247,18 @@ export async function loadPlaygroundGist(
     throw new Error('No code files found in the gist.');
   }
 
-  // Handle truncated files by fetching the raw content
-  let content = codeFile.content;
-  if (codeFile.truncated) {
+  // Handle truncated or missing content by fetching the raw content
+  let content = codeFile.content ?? '';
+  if (codeFile.truncated || !content) {
+    if (!codeFile.raw_url) {
+      throw new Error('Gist file content is truncated and no raw URL is available.');
+    }
     try {
-      const response = await fetch(codeFile.raw_url);
+      const headers: Record<string, string> = {};
+      if (accessToken) {
+        headers['Authorization'] = `Bearer ${accessToken}`;
+      }
+      const response = await fetch(codeFile.raw_url, { headers });
       if (!response.ok) {
         throw new Error(`Failed to fetch raw content: ${response.status}`);
       }
