@@ -35,7 +35,8 @@ fn parse_table_element_with_options(
 
     // Track occupied cells due to rowspan from previous rows
     // Key: (row_index, col_index), Value: cell_value
-    let mut occupied_cells: std::collections::HashMap<(usize, usize), CellValue> = std::collections::HashMap::new();
+    let mut occupied_cells: std::collections::HashMap<(usize, usize), CellValue> =
+        std::collections::HashMap::new();
 
     // First pass: process all rows and handle colspan/rowspan
     let mut all_rows = Vec::new();
@@ -91,11 +92,16 @@ fn parse_table_element_with_options(
                     let value_to_insert = if row_offset == 0 && col_offset == 0 {
                         // First cell gets the original value
                         cell_value.clone()
-                    } else if row_offset == 0 && col_offset > 0 && 
-                              ((force_first_row_as_strings && is_first_row) || (cell.value().name() == "th" && is_first_row)) {
+                    } else if row_offset == 0
+                        && col_offset > 0
+                        && ((force_first_row_as_strings && is_first_row)
+                            || (cell.value().name() == "th" && is_first_row))
+                    {
                         // For header row cells or th elements in first row with colspan, append a suffix to make them unique
                         match &cell_value {
-                            CellValue::String(s) => CellValue::String(format!("{}_{}", s, col_offset + 1)),
+                            CellValue::String(s) => {
+                                CellValue::String(format!("{}_{}", s, col_offset + 1))
+                            }
                             _ => CellValue::String(format!("{}_{}", &text, col_offset + 1)),
                         }
                     } else {
