@@ -349,7 +349,11 @@ fn format_value(value: &Value) -> String {
             format!("<Table: {} rows>", total_rows)
         }
         Value::Function { name, params, .. } => {
-            let param_list = params.iter().map(|param| param.name.as_str()).collect::<Vec<_>>().join(", ");
+            let param_list = params
+                .iter()
+                .map(|param| param.name.as_str())
+                .collect::<Vec<_>>()
+                .join(", ");
             format!("<Function: {}({})>", name, param_list)
         }
         Value::Sheet(sheet) => {

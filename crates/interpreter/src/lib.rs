@@ -73,10 +73,7 @@ enum VarBinding {
     RefLValue(RefLValue),
 }
 
-fn find_binding(
-    scopes: &[HashMap<String, VarBinding>],
-    name: &str,
-) -> Option<(usize, VarBinding)> {
+fn find_binding(scopes: &[HashMap<String, VarBinding>], name: &str) -> Option<(usize, VarBinding)> {
     for (idx, scope) in scopes.iter().enumerate().rev() {
         if let Some(binding) = scope.get(name) {
             return Some((idx, binding.clone()));
@@ -85,10 +82,7 @@ fn find_binding(
     None
 }
 
-fn resolve_ref_value(
-    scopes: &[HashMap<String, VarBinding>],
-    target: RefTarget,
-) -> Option<Value> {
+fn resolve_ref_value(scopes: &[HashMap<String, VarBinding>], target: RefTarget) -> Option<Value> {
     let mut current = target;
     let mut guard = 0usize;
     while guard < scopes.len() {
@@ -139,11 +133,7 @@ fn resolve_ref_target_info(
     None
 }
 
-fn flatten_lvalue(
-    lvalue: LValue,
-    access: &mut Vec<RefAccess>,
-    line: usize,
-) -> PipResult<String> {
+fn flatten_lvalue(lvalue: LValue, access: &mut Vec<RefAccess>, line: usize) -> PipResult<String> {
     match lvalue {
         LValue::Variable(name) => Ok(name),
         LValue::Field { object, field } => {
@@ -239,10 +229,7 @@ fn assign_ref_lvalue(
     let updated = apply_ref_access(base_value, &ref_lvalue.access, value, line)?;
 
     if let Some(scope) = scopes.get_mut(ref_lvalue.base.scope_index) {
-        scope.insert(
-            ref_lvalue.base.name.clone(),
-            VarBinding::Value(updated),
-        );
+        scope.insert(ref_lvalue.base.name.clone(), VarBinding::Value(updated));
     }
 
     Ok(())
@@ -666,9 +653,7 @@ impl Interpreter {
                 function,
                 args,
                 line,
-            } => {
-                self.call_function(&function, &args, line).await
-            }
+            } => self.call_function(&function, &args, line).await,
 
             Statement::Append {
                 target,
@@ -1122,9 +1107,7 @@ impl Interpreter {
                 }
             }
 
-            Expr::Call { function, args } => {
-                self.call_function(function, args, 0).await
-            }
+            Expr::Call { function, args } => self.call_function(function, args, 0).await,
 
             Expr::CallExpr { callee, args } => {
                 let callee_val = self.eval_expr(callee).await?;
@@ -1654,12 +1637,7 @@ impl Interpreter {
     }
 
     /// Call a function (built-in or user-defined).
-    async fn call_function(
-        &mut self,
-        name: &str,
-        args: &[Expr],
-        line: usize,
-    ) -> PipResult<Value> {
+    async fn call_function(&mut self, name: &str, args: &[Expr], line: usize) -> PipResult<Value> {
         // Check built-in functions first
         let arg_vals = self.eval_args(args, line).await?;
         if let Some(result) = builtins::call_builtin(self, name, arg_vals.clone(), line).await {
@@ -2057,35 +2035,35 @@ impl Interpreter {
                 };
 
                 if let Some(func) = func {
-                if func.params.len() != args.len() {
-                    return Err(PipError::runtime(
-                        line,
-                        format!(
-                            "Function '{}' expects {} arguments, got {}",
-                            name,
-                            func.params.len(),
-                            args.len()
-                        ),
-                    ));
-                }
+                    if func.params.len() != args.len() {
+                        return Err(PipError::runtime(
+                            line,
+                            format!(
+                                "Function '{}' expects {} arguments, got {}",
+                                name,
+                                func.params.len(),
+                                args.len()
+                            ),
+                        ));
+                    }
 
-                // Create new scope with parameters
-                self.push_scope().await;
-                for (idx, param) in func.params.iter().enumerate() {
-                    let arg_expr = &args[idx];
-                    match param.mode {
-                        ParamMode::ByVal => {
-                            self.declare_var(&param.name, arg_vals[idx].clone()).await;
-                        }
-                        ParamMode::ByRef => {
-                            let binding = self.build_ref_binding(arg_expr, line).await?;
-                            let mut scopes = self.scopes.write().await;
-                            if let Some(scope) = scopes.last_mut() {
-                                scope.insert(param.name.clone(), binding);
+                    // Create new scope with parameters
+                    self.push_scope().await;
+                    for (idx, param) in func.params.iter().enumerate() {
+                        let arg_expr = &args[idx];
+                        match param.mode {
+                            ParamMode::ByVal => {
+                                self.declare_var(&param.name, arg_vals[idx].clone()).await;
+                            }
+                            ParamMode::ByRef => {
+                                let binding = self.build_ref_binding(arg_expr, line).await?;
+                                let mut scopes = self.scopes.write().await;
+                                if let Some(scope) = scopes.last_mut() {
+                                    scope.insert(param.name.clone(), binding);
+                                }
                             }
                         }
                     }
-                }
 
                     // Execute function body
                     let mut result = Value::Null;
@@ -2618,7 +2596,10 @@ impl Interpreter {
 
         if let Some(resolved) = resolved {
             match resolved {
-                ResolvedBinding::Value { name: binding_name, scope_index } => {
+                ResolvedBinding::Value {
+                    name: binding_name,
+                    scope_index,
+                } => {
                     if let Some(scope) = scopes.get_mut(scope_index) {
                         scope.insert(binding_name, VarBinding::Value(value));
                     }

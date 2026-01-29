@@ -63,8 +63,14 @@ async fn test_byval_keyword_behaves_as_value_copy() {
     "#,
     )
     .await;
-    assert!(matches!(interp.get_var("result").await, Some(Value::Int(6))));
-    assert!(matches!(interp.get_var("original").await, Some(Value::Int(5))));
+    assert!(matches!(
+        interp.get_var("result").await,
+        Some(Value::Int(6))
+    ));
+    assert!(matches!(
+        interp.get_var("original").await,
+        Some(Value::Int(5))
+    ));
 }
 
 #[tokio::test]
@@ -109,7 +115,10 @@ async fn test_byref_array_element() {
     "#,
     )
     .await;
-    assert!(matches!(interp.get_var("result").await, Some(Value::Int(3))));
+    assert!(matches!(
+        interp.get_var("result").await,
+        Some(Value::Int(3))
+    ));
 }
 
 #[tokio::test]
@@ -125,7 +134,10 @@ async fn test_byref_object_field() {
     "#,
     )
     .await;
-    assert!(matches!(interp.get_var("result").await, Some(Value::Int(2))));
+    assert!(matches!(
+        interp.get_var("result").await,
+        Some(Value::Int(2))
+    ));
 }
 
 /// Verifies that a parameterless function returns its declared value when invoked.
