@@ -34,21 +34,17 @@ pub async fn call_array_builtin(
 /// data = [[1, "A"], [2, "B"], [3, "C"], [4, "D"]]
 /// criteria = [true, false, true, false]
 /// result = filter(data, criteria)  // Returns [[1, "A"], [3, "C"]]
-/// 
+///
 /// // Scalar broadcast
 /// result = filter(data, true)      // Returns all elements
 /// result = filter(data, 0)         // Returns "#CALC!" (all filtered)
-/// 
+///
 /// // Non-boolean criteria
 /// scores = [85, 0, 92, -5]
 /// names = ["Alice", "Bob", "Charlie", "David"]
 /// result = filter(names, scores)   // Returns ["Alice", "Charlie", "David"] (0 is falsy)
 /// ```
-async fn filter(
-    _interpreter: &Interpreter,
-    args: Vec<Value>,
-    line: usize,
-) -> PipResult<Value> {
+async fn filter(_interpreter: &Interpreter, args: Vec<Value>, line: usize) -> PipResult<Value> {
     if args.len() < 2 || args.len() > 3 {
         return Err(PipError::runtime(
             line,
@@ -263,11 +259,7 @@ mod tests {
     #[tokio::test]
     async fn test_filter_scalar_broadcast() {
         let interp = create_interpreter().await;
-        let array = Value::Array(vec![
-            Value::Int(1),
-            Value::Int(2),
-            Value::Int(3),
-        ]);
+        let array = Value::Array(vec![Value::Int(1), Value::Int(2), Value::Int(3)]);
 
         // Test with scalar true (keeps all)
         let result = filter(&interp, vec![array.clone(), Value::Bool(true)], 0)

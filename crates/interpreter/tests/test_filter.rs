@@ -105,7 +105,7 @@ async fn test_filter_with_numeric_criteria() {
 
     match interp.get_var("result").await {
         Some(Value::Array(arr)) => {
-            assert_eq!(arr.len(), 3);  // Only 0 is filtered out
+            assert_eq!(arr.len(), 3); // Only 0 is filtered out
             match &arr[0] {
                 Value::String(s) => assert_eq!(s, "Alice"),
                 _ => panic!("Expected string"),
