@@ -1,0 +1,15 @@
+# Test HTML import functionality
+
+import data from "examples/test_data.html"
+
+# Display the imported data
+print("Imported HTML table:")
+print(data)
+
+# Show the number of rows and columns
+print("\nTable dimensions:")
+print("Rows:", data.rows)
+print("Columns:", data.cols)
+
+# Access specific cells
+print("\nFirst cell (0,0):", data[0][0])

@@ -67,6 +67,22 @@ sudo apt-get install tesseract-ocr-fra tesseract-ocr-spa
 - "Failed to initialize Tesseract" → Tesseract not installed or not in PATH
 - "OCR extraction failed" → PDF rendering or OCR processing error
 
+### HTML Import Support
+
+PipTable can import HTML tables directly from HTML files. This feature automatically extracts table data from HTML documents and converts them to sheets for processing.
+
+```bash
+# Import HTML table data
+import "report.html" into sales
+import "catalog.html" into products with headers
+```
+
+The HTML import feature:
+- Extracts all `<table>` elements from HTML files
+- Automatically detects header rows (`<th>` elements)
+- Preserves data types (integers, floats, booleans, strings)
+- Supports multiple tables per HTML file (returns the first by default)
+
 ### Usage
 
 OCR is automatically enabled when processing PDFs that contain minimal extractable text. You can also explicitly enable OCR:
