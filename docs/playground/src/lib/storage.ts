@@ -15,11 +15,19 @@ export interface StorageState {
   };
 }
 
+interface ImportedScript {
+  name?: string;
+  code?: string;
+  timestamp?: string;
+  description?: string;
+}
+
 const STORAGE_KEY = 'piptable-playground';
 const DEFAULT_SETTINGS = {
   maxRecentScripts: 10,
   autoSave: true,
 };
+const MAX_IMPORT_SCRIPTS = 100;
 
 // Generate unique ID for scripts
 export function generateScriptId(): string {
@@ -125,6 +133,11 @@ export function updateScript(id: string, updates: Partial<Pick<SavedScript, 'nam
 
   // Move to front of recent scripts
   state.recentScripts = [id, ...state.recentScripts.filter(sid => sid !== id)];
+
+  // Limit recent scripts
+  if (state.recentScripts.length > state.settings.maxRecentScripts) {
+    state.recentScripts = state.recentScripts.slice(0, state.settings.maxRecentScripts);
+  }
 
   saveStorageState(state);
 }
@@ -258,8 +271,13 @@ export function importScripts(jsonData: string): number {
 
     const state = loadStorageState();
     let importedCount = 0;
+    const scriptsToImport = Object.values(imported.scripts) as ImportedScript[];
+    
+    if (scriptsToImport.length > MAX_IMPORT_SCRIPTS) {
+      throw new Error(`Cannot import more than ${MAX_IMPORT_SCRIPTS} scripts at once`);
+    }
 
-    Object.values(imported.scripts).forEach((script: any) => {
+    scriptsToImport.forEach((script) => {
       if (script && typeof script === 'object' && script.code && script.name) {
         const id = generateScriptId();
         state.scripts[id] = {
