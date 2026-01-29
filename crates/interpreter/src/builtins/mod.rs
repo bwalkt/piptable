@@ -1,5 +1,6 @@
 //! Built-in functions for the piptable interpreter.
 
+mod array;
 mod core;
 mod lookup;
 mod math;
@@ -46,8 +47,13 @@ pub async fn call_builtin(
         return Some(result);
     }
 
-    if let Some(result) = lookup::call_lookup_builtin(interpreter, &builtin_name, args, line).await
+    if let Some(result) =
+        lookup::call_lookup_builtin(interpreter, &builtin_name, args.clone(), line).await
     {
+        return Some(result);
+    }
+
+    if let Some(result) = array::call_array_builtin(interpreter, &builtin_name, args, line).await {
         return Some(result);
     }
 

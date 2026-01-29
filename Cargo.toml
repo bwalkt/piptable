@@ -96,6 +96,9 @@ piptable-pdf = { path = "crates/pdf" }
 
 [workspace.lints.rust]
 unsafe_code = "forbid"
+unused_variables = "warn"
+unused_imports = "warn"
+dead_code = "warn"
 
 [workspace.lints.clippy]
 # Lint groups (lower priority = higher precedence)
