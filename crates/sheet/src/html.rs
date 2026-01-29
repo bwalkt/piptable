@@ -94,8 +94,8 @@ fn parse_table_element_with_options(
                         cell_value.clone()
                     } else if row_offset == 0
                         && col_offset > 0
-                        && ((force_first_row_as_strings && is_first_row)
-                            || (cell.value().name() == "th" && is_first_row))
+                        && (cell.value().name() == "th" || force_first_row_as_strings)
+                        && is_first_row
                     {
                         // For header row cells or th elements in first row with colspan, append a suffix to make them unique
                         match &cell_value {
