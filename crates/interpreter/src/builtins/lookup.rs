@@ -49,7 +49,7 @@ fn vlookup(args: Vec<Value>, line: usize) -> PipResult<Value> {
             *n as usize
         }
         Value::Float(f) => {
-            if f.is_nan() || f.is_infinite() || *f < 1.0 {
+            if f.is_nan() || f.is_infinite() || *f < 1.0 || *f > (usize::MAX as f64) {
                 return Err(PipError::runtime(
                     line,
                     "VLOOKUP: col_index_num must be a positive number",
@@ -175,7 +175,7 @@ fn hlookup(args: Vec<Value>, line: usize) -> PipResult<Value> {
             *n as usize
         }
         Value::Float(f) => {
-            if f.is_nan() || f.is_infinite() || *f < 1.0 {
+            if f.is_nan() || f.is_infinite() || *f < 1.0 || *f > (usize::MAX as f64) {
                 return Err(PipError::runtime(
                     line,
                     "HLOOKUP: row_index_num must be a positive number",
@@ -297,7 +297,7 @@ fn index(args: Vec<Value>, line: usize) -> PipResult<Value> {
             *n as usize
         }
         Value::Float(f) => {
-            if f.is_nan() || f.is_infinite() || *f < 1.0 {
+            if f.is_nan() || f.is_infinite() || *f < 1.0 || *f > (usize::MAX as f64) {
                 return Err(PipError::runtime(
                     line,
                     "INDEX: row_num must be a positive number",
@@ -338,7 +338,7 @@ fn index(args: Vec<Value>, line: usize) -> PipResult<Value> {
             *n as usize
         }
         Value::Float(f) => {
-            if f.is_nan() || f.is_infinite() || *f < 1.0 {
+            if f.is_nan() || f.is_infinite() || *f < 1.0 || *f > (usize::MAX as f64) {
                 return Err(PipError::runtime(
                     line,
                     "INDEX: column_num must be a positive number",
