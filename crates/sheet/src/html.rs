@@ -122,23 +122,29 @@ fn parse_table_element_with_options(
             col_index += colspan;
         }
 
-        // Add any remaining occupied cells for this row (at the end)
+        // Add any remaining occupied cells for this row, including those after gaps
+        // First, add contiguous occupied cells from current col_index
         while let Some(value) = occupied_cells.remove(&(row_index, col_index)) {
             row_data.push(value);
             col_index += 1;
         }
 
-        // Even if row had no explicit cells, we need to include it if it has occupied cells from rowspan
-        // This handles cases where rowspan cells occupy columns but the row itself is empty or has no cells
-        if row_data.is_empty() {
-            // Check if this row has any occupied cells at all (scanning all possible columns)
-            let mut temp_col = 0;
-            while let Some(value) = occupied_cells.remove(&(row_index, temp_col)) {
+        // Then scan for any remaining occupied cells for this row (handling gaps)
+        // This ensures we don't lose rowspan data even when there are column gaps
+        while occupied_cells.keys().any(|(r, _)| *r == row_index) {
+            if let Some(value) = occupied_cells.remove(&(row_index, col_index)) {
                 row_data.push(value);
-                temp_col += 1;
+            } else {
+                // Fill gap with Null to maintain column alignment
+                row_data.push(CellValue::Null);
             }
+            col_index += 1;
+        }
 
-            // Continue scanning in case there are gaps
+        // Handle the special case where row has no explicit cells but has occupied cells
+        // This handles cases where rowspan cells occupy columns but the row itself is empty
+        if row_data.is_empty() {
+            let mut temp_col = 0;
             while occupied_cells.keys().any(|(r, _)| *r == row_index) {
                 if let Some(value) = occupied_cells.remove(&(row_index, temp_col)) {
                     row_data.push(value);
@@ -869,6 +875,70 @@ mod tests {
         assert_eq!(
             sheet.get(2, 2).unwrap(),
             &CellValue::String("Z2".to_string())
+        );
+    }
+
+    #[test]
+    fn test_rowspan_with_gaps() {
+        // Test for CodeRabbit finding: rowspan cells after gaps should not be dropped
+        // Scenario: rowspan from previous row occupies column 3, current row has only one <td> in column 0
+        let html = r#"
+            <table>
+                <tr>
+                    <th>Col0</th>
+                    <th>Col1</th>
+                    <th>Col2</th>
+                    <th>Col3</th>
+                </tr>
+                <tr>
+                    <td>A0</td>
+                    <td>A1</td>
+                    <td>A2</td>
+                    <td rowspan="2">SpannedData</td>
+                </tr>
+                <tr>
+                    <td>B0</td>
+                    <!-- Column 1 and 2 are empty (gaps) -->
+                    <!-- Column 3 is occupied by rowspan from previous row -->
+                </tr>
+                <tr>
+                    <td>C0</td>
+                    <td>C1</td>
+                </tr>
+            </table>
+        "#;
+
+        let sheet = Sheet::from_html_string(html).unwrap();
+
+        assert_eq!(sheet.row_count(), 4);
+        assert_eq!(sheet.col_count(), 4);
+
+        // Check the rowspan cell appears in both rows
+        assert_eq!(
+            sheet.get(1, 3).unwrap(),
+            &CellValue::String("SpannedData".to_string())
+        );
+        assert_eq!(
+            sheet.get(2, 3).unwrap(), // This should NOT be dropped despite gaps
+            &CellValue::String("SpannedData".to_string())
+        );
+
+        // Check that gaps are filled with Null
+        assert_eq!(
+            sheet.get(2, 0).unwrap(),
+            &CellValue::String("B0".to_string())
+        );
+        assert_eq!(sheet.get(2, 1).unwrap(), &CellValue::Null); // Gap
+        assert_eq!(sheet.get(2, 2).unwrap(), &CellValue::Null); // Gap
+
+        // Check the last row is normal
+        assert_eq!(
+            sheet.get(3, 0).unwrap(),
+            &CellValue::String("C0".to_string())
+        );
+        assert_eq!(
+            sheet.get(3, 1).unwrap(),
+            &CellValue::String("C1".to_string())
         );
     }
 }
