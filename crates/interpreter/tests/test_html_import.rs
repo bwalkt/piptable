@@ -150,7 +150,7 @@ async fn test_import_html_mixed_data_types() {
 
     let script = format!(
         r#"
-        import "{}" into data
+        import "{}" into data without headers
         data
     "#,
         html_path.display()
@@ -172,6 +172,8 @@ async fn test_import_html_mixed_data_types() {
                 sheet.get(0, 0).unwrap(),
                 piptable_sheet::CellValue::String(_)
             ));
+
+            // Now that headers are disabled, this should be parsed as Int(30)
             assert!(matches!(
                 sheet.get(0, 1).unwrap(),
                 piptable_sheet::CellValue::Int(30)
@@ -201,6 +203,136 @@ async fn test_import_html_mixed_data_types() {
             assert!(matches!(
                 sheet.get(1, 3).unwrap(),
                 piptable_sheet::CellValue::Float(_)
+            ));
+        }
+        _ => panic!("Expected a Sheet value"),
+    }
+}
+
+#[tokio::test]
+async fn test_import_html_with_td_headers() {
+    let temp_dir = tempdir().unwrap();
+    let html_path = temp_dir.path().join("test_td_headers.html");
+
+    let html_content = r#"<!DOCTYPE html>
+<html>
+<body>
+    <table>
+        <tr>
+            <td>Product ID</td>
+            <td>Product Name</td>
+            <td>Price</td>
+        </tr>
+        <tr>
+            <td>001</td>
+            <td>Widget A</td>
+            <td>10.50</td>
+        </tr>
+        <tr>
+            <td>002</td>
+            <td>Widget B</td>
+            <td>15.75</td>
+        </tr>
+    </table>
+</body>
+</html>"#;
+    fs::write(&html_path, html_content).unwrap();
+
+    // Test with headers=true to verify td headers are treated as strings
+    let script = format!(
+        r#"
+        import "{}" into products (headers = true)
+        products
+    "#,
+        html_path.display()
+    );
+
+    let mut interp = Interpreter::new();
+    let program = PipParser::parse_str(&script).unwrap();
+    let result = interp.eval(program).await.unwrap();
+
+    // Check that we got a sheet with properly named columns
+    match result {
+        Value::Sheet(sheet) => {
+            assert_eq!(sheet.row_count(), 3, "Expected 3 rows including header");
+            assert_eq!(sheet.col_count(), 3, "Expected 3 columns");
+
+            // Verify column names were set
+            let column_names = sheet.column_names().expect("Should have column names");
+            assert_eq!(column_names[0], "Product ID");
+            assert_eq!(column_names[1], "Product Name");
+            assert_eq!(column_names[2], "Price");
+
+            // Check that header row cells are strings (not parsed as numbers)
+            if let Ok(first_header) = sheet.get(0, 0) {
+                assert!(matches!(first_header, piptable_sheet::CellValue::String(_)));
+            }
+
+            // Check that data rows have correct types
+            if let Ok(product_id) = sheet.get(1, 0) {
+                assert!(matches!(product_id, piptable_sheet::CellValue::String(_)));
+            }
+            if let Ok(price) = sheet.get(1, 2) {
+                assert!(matches!(price, piptable_sheet::CellValue::Float(_)));
+            }
+        }
+        _ => panic!("Expected a Sheet value"),
+    }
+}
+
+#[tokio::test]
+async fn test_import_html_with_colspan() {
+    let temp_dir = tempdir().unwrap();
+    let html_path = temp_dir.path().join("test_colspan.html");
+
+    let html_content = r#"<!DOCTYPE html>
+<html>
+<body>
+    <table>
+        <tr>
+            <th colspan="2">Name</th>
+            <th>Age</th>
+        </tr>
+        <tr>
+            <td>John</td>
+            <td>Doe</td>
+            <td>30</td>
+        </tr>
+    </table>
+</body>
+</html>"#;
+    fs::write(&html_path, html_content).unwrap();
+
+    let script = format!(
+        r#"
+        import "{}" into data
+        data
+    "#,
+        html_path.display()
+    );
+
+    let mut interp = Interpreter::new();
+    let program = PipParser::parse_str(&script).unwrap();
+    let result = interp.eval(program).await.unwrap();
+
+    // Check that colspan is handled correctly
+    match result {
+        Value::Sheet(sheet) => {
+            assert_eq!(sheet.row_count(), 2);
+            assert_eq!(
+                sheet.col_count(),
+                3,
+                "Expected 3 columns after colspan expansion"
+            );
+
+            // Check that the header with colspan="2" appears in first two columns
+            assert!(matches!(
+                sheet.get(0, 0).unwrap(),
+                piptable_sheet::CellValue::String(_)
+            ));
+            assert!(matches!(
+                sheet.get(0, 1).unwrap(),
+                piptable_sheet::CellValue::String(_)
             ));
         }
         _ => panic!("Expected a Sheet value"),
@@ -244,4 +376,58 @@ async fn test_import_html_no_table() {
         "Expected error message about missing table, got: {}",
         error_msg
     );
+}
+
+#[tokio::test]
+async fn test_import_htm_extension() {
+    let temp_dir = tempdir().unwrap();
+    let htm_path = temp_dir.path().join("test.htm"); // Note: .htm extension
+
+    let html_content = r#"<!DOCTYPE html>
+<html>
+<body>
+    <table>
+        <tr>
+            <th>Name</th>
+            <th>Value</th>
+        </tr>
+        <tr>
+            <td>Test</td>
+            <td>123</td>
+        </tr>
+    </table>
+</body>
+</html>"#;
+    fs::write(&htm_path, html_content).unwrap();
+
+    let script = format!(
+        r#"
+        import "{}" into data
+        data
+    "#,
+        htm_path.display()
+    );
+
+    let mut interp = Interpreter::new();
+    let program = PipParser::parse_str(&script).unwrap();
+    let result = interp.eval(program).await.unwrap();
+
+    // Check that .htm files are handled the same as .html files
+    match result {
+        Value::Sheet(sheet) => {
+            assert_eq!(sheet.row_count(), 2, "Expected 2 rows");
+            assert_eq!(sheet.col_count(), 2, "Expected 2 columns");
+
+            // Check that data was parsed correctly
+            assert!(matches!(
+                sheet.get(0, 0).unwrap(),
+                piptable_sheet::CellValue::String(_)
+            ));
+            assert!(matches!(
+                sheet.get(1, 1).unwrap(),
+                piptable_sheet::CellValue::Int(123)
+            ));
+        }
+        _ => panic!("Expected a Sheet value"),
+    }
 }

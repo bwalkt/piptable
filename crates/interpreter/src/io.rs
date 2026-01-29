@@ -678,14 +678,8 @@ pub fn import_sheet(
         // For Phase 1, return the first table found
         Ok(first)
     } else if path_lower.ends_with(".html") || path_lower.ends_with(".htm") {
-        let mut sheet =
-            Sheet::from_html(path).map_err(|e| format!("Failed to import HTML: {}", e))?;
-        if has_headers && sheet.row_count() > 0 {
-            // Check if first row appears to be headers
-            sheet
-                .name_columns_by_row(0)
-                .map_err(|e| format!("Failed to name columns: {}", e))?;
-        }
+        let sheet = Sheet::from_html_with_headers(path, has_headers)
+            .map_err(|e| format!("Failed to import HTML: {}", e))?;
         Ok(sheet)
     } else {
         Err(format!("Unsupported import format for '{}'", path))

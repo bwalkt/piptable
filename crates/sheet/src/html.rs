@@ -6,30 +6,84 @@ use std::fs;
 
 /// Parse a single HTML table element into a Sheet
 fn parse_table_element(table: scraper::ElementRef<'_>) -> Result<Sheet> {
+    parse_table_element_with_options(table, false)
+}
+
+/// Parse a single HTML table element into a Sheet with options
+fn parse_table_element_with_options(
+    table: scraper::ElementRef<'_>,
+    force_first_row_as_strings: bool,
+) -> Result<Sheet> {
     let mut sheet = Sheet::new();
     let row_selector = Selector::parse("tr").unwrap();
+    let mut max_columns = 0;
 
-    for row in table.select(&row_selector) {
+    // First pass: collect all rows and track maximum column count
+    let mut all_rows = Vec::new();
+
+    for (row_index, row) in table.select(&row_selector).enumerate() {
         let mut row_data = Vec::new();
+        let is_first_row = row_index == 0;
 
         // Process all cells (th and td) in DOM order
         let cell_selector = Selector::parse("th, td").unwrap();
         for cell in row.select(&cell_selector) {
             let text: String = cell.text().collect::<String>().trim().to_string();
 
-            // If it's a th element, treat as string (header)
-            // If it's a td element, try to parse the type
+            // Handle colspan attribute - repeat the cell value
+            let colspan = cell
+                .value()
+                .attr("colspan")
+                .and_then(|s| s.parse::<usize>().ok())
+                .unwrap_or(1);
+
+            // Determine cell value type based on element type and options
             let cell_value = if cell.value().name() == "th" {
-                CellValue::String(text)
+                // Always treat th elements as strings
+                CellValue::String(text.clone())
+            } else if force_first_row_as_strings && is_first_row {
+                // Force first row to be strings if headers are expected
+                CellValue::String(text.clone())
             } else {
+                // Normal type inference for td elements
                 parse_cell_value(&text)
             };
-            row_data.push(cell_value);
+
+            // Add the cell value 'colspan' times
+            // For the first occurrence, use the original value
+            // For subsequent ones, append a suffix to avoid duplicate column names
+            for i in 0..colspan {
+                if i == 0 {
+                    row_data.push(cell_value.clone());
+                } else if cell.value().name() == "th"
+                    || (force_first_row_as_strings && is_first_row)
+                {
+                    // For header cells, append a suffix to make them unique
+                    let suffix_value = match &cell_value {
+                        CellValue::String(s) => CellValue::String(format!("{}_{}", s, i + 1)),
+                        _ => CellValue::String(format!("{}_{}", &text, i + 1)),
+                    };
+                    row_data.push(suffix_value);
+                } else {
+                    // For data cells, just duplicate the value
+                    row_data.push(cell_value.clone());
+                }
+            }
         }
 
         if !row_data.is_empty() {
-            sheet.row_append(row_data)?;
+            max_columns = max_columns.max(row_data.len());
+            all_rows.push(row_data);
         }
+    }
+
+    // Second pass: normalize all rows to have the same number of columns
+    for mut row_data in all_rows {
+        // Pad rows that are shorter than max_columns with Null values
+        while row_data.len() < max_columns {
+            row_data.push(CellValue::Null);
+        }
+        sheet.row_append(row_data)?;
     }
 
     Ok(sheet)
@@ -56,6 +110,20 @@ impl Sheet {
         Self::from_html_string(&contents)
     }
 
+    /// Load a sheet from an HTML file with header handling options.
+    ///
+    /// # Arguments
+    /// * `path` - Path to the HTML file
+    /// * `has_headers` - Whether the first row should be treated as headers
+    ///
+    /// # Returns
+    /// A `Sheet` containing data from the first table found in the HTML file.
+    pub fn from_html_with_headers(path: &str, has_headers: bool) -> Result<Self> {
+        let contents = fs::read_to_string(path).map_err(|e| SheetError::Io(e))?;
+
+        Self::from_html_string_with_headers(&contents, has_headers)
+    }
+
     /// Load a sheet from an HTML string containing tables.
     ///
     /// # Arguments
@@ -74,6 +142,34 @@ impl Sheet {
             .ok_or_else(|| SheetError::Parse("No table found in HTML".to_string()))?;
 
         parse_table_element(table)
+    }
+
+    /// Load a sheet from an HTML string with header handling options.
+    ///
+    /// # Arguments
+    /// * `html_content` - HTML content as a string
+    /// * `has_headers` - Whether the first row should be treated as headers
+    ///
+    /// # Returns
+    /// A `Sheet` containing data from the first table found in the HTML.
+    pub fn from_html_string_with_headers(html_content: &str, has_headers: bool) -> Result<Self> {
+        let document = Html::parse_document(html_content);
+
+        // Select the first table
+        let table_selector = Selector::parse("table").unwrap();
+        let table = document
+            .select(&table_selector)
+            .next()
+            .ok_or_else(|| SheetError::Parse("No table found in HTML".to_string()))?;
+
+        let mut sheet = parse_table_element_with_options(table, has_headers)?;
+
+        // If headers are expected, name the columns automatically
+        if has_headers && sheet.row_count() > 0 {
+            sheet.name_columns_by_row(0)?;
+        }
+
+        Ok(sheet)
     }
 
     /// Load a specific table from an HTML file by index.
@@ -138,16 +234,19 @@ impl Sheet {
         let table_selector = Selector::parse("table").unwrap();
 
         let mut sheets = Vec::new();
+        let mut table_count = 0;
 
         for table in document.select(&table_selector) {
+            table_count += 1;
             let sheet = parse_table_element(table)?;
-            if sheet.row_count() > 0 {
-                sheets.push(sheet);
-            }
+            // Include empty tables as valid sheets
+            sheets.push(sheet);
         }
 
-        if sheets.is_empty() {
-            return Err(SheetError::Parse("No tables found in HTML".to_string()));
+        if table_count == 0 {
+            return Err(SheetError::Parse(
+                "No table elements found in HTML".to_string(),
+            ));
         }
 
         Ok(sheets)
@@ -156,8 +255,13 @@ impl Sheet {
 
 /// Parse a cell value from text, attempting to convert to appropriate type
 fn parse_cell_value(text: &str) -> CellValue {
-    // Try to parse as integer
+    // Try to parse as integer (but preserve leading zeros as strings)
     if let Ok(i) = text.parse::<i64>() {
+        // Check if the string has leading zeros (except for "0" itself)
+        if text.len() > 1 && text.starts_with('0') && text != "0" {
+            // Keep as string to preserve leading zeros
+            return CellValue::String(text.to_string());
+        }
         return CellValue::Int(i);
     }
 
