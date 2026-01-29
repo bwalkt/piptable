@@ -137,7 +137,7 @@ fn parse_table_element_with_options(
                 row_data.push(value);
                 temp_col += 1;
             }
-            
+
             // Continue scanning in case there are gaps
             while occupied_cells.keys().any(|(r, _)| *r == row_index) {
                 if let Some(value) = occupied_cells.remove(&(row_index, temp_col)) {
