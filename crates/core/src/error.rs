@@ -15,19 +15,19 @@ pub enum PipError {
 
     /// Exit Function statement (not really an error, used for control flow).
     #[error("Exit Function")]
-    ExitFunction,
+    ExitFunction(usize),
 
     /// Exit Sub statement (not really an error, used for control flow).
     #[error("Exit Sub")]
-    ExitSub,
+    ExitSub(usize),
 
     /// Exit For statement (not really an error, used for control flow).
     #[error("Exit For")]
-    ExitFor,
+    ExitFor(usize),
 
     /// Exit While statement (not really an error, used for control flow).
     #[error("Exit While")]
-    ExitWhile,
+    ExitWhile(usize),
 
     /// Parse error with location information.
     #[error("Parse error at line {line}, column {column}: {message}")]
@@ -122,7 +122,7 @@ impl PipError {
         match self {
             // These errors already have line info or are control flow
             Self::Parse { .. } | Self::Runtime { .. } | Self::Return(_) | 
-            Self::ExitFunction | Self::ExitSub | Self::ExitFor | Self::ExitWhile => self,
+            Self::ExitFunction(_) | Self::ExitSub(_) | Self::ExitFor(_) | Self::ExitWhile(_) => self,
             // Add line info to other errors
             Self::Type { expected, got } => Self::Runtime {
                 line,

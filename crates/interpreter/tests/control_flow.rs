@@ -428,3 +428,148 @@ async fn test_exit_function_with_return_value() {
     assert!(matches!(interp.get_var("result2").await, Some(Value::Null)));
     assert!(matches!(interp.get_var("result3").await, Some(Value::Int(6))));
 }
+
+#[tokio::test]
+async fn test_exit_function_doesnt_leak_previous_value() {
+    let (interp, _) = run_script(
+        r#"
+        function helperFunc() 
+            return 999
+        end function
+        
+        function testFunc()
+            dim temp = helperFunc()  ' This returns 999
+            temp = temp + 1          ' This becomes 1000
+            exit function            ' Should return null, not 1000
+        end function
+        
+        dim result = testFunc()
+    "#,
+    )
+    .await;
+    // Should be null, not 1000 from the previous statement
+    assert!(matches!(interp.get_var("result").await, Some(Value::Null)));
+}
+
+#[tokio::test]
+async fn test_exit_sub_doesnt_leak_previous_value() {
+    let (interp, _) = run_script(
+        r#"
+        dim global_result = 0
+        
+        function helperFunc() 
+            return 555
+        end function
+        
+        sub testSub()
+            dim temp = helperFunc()  ' This returns 555
+            global_result = temp     ' Set global to 555
+            exit sub                 ' Should not return 555
+        end sub
+        
+        dim result = testSub()  ' Sub calls should return null
+    "#,
+    )
+    .await;
+    // result should be null, not 555
+    assert!(matches!(interp.get_var("result").await, Some(Value::Null)));
+    // But global_result should be 555 to confirm the sub executed
+    assert!(matches!(interp.get_var("global_result").await, Some(Value::Int(555))));
+}
+
+#[tokio::test]
+async fn test_exit_function_outside_function_error() {
+    let script = r#"
+        dim x = 1
+        exit function
+    "#;
+    let error_msg = run_script_err(script).await;
+    assert!(error_msg.contains("Exit Function cannot be used outside of a function"));
+}
+
+#[tokio::test]
+async fn test_exit_sub_outside_sub_error() {
+    let script = r#"
+        dim x = 1
+        exit sub
+    "#;
+    let error_msg = run_script_err(script).await;
+    assert!(error_msg.contains("Exit Sub cannot be used outside of a subroutine"));
+}
+
+#[tokio::test]
+async fn test_exit_for_outside_loop_error() {
+    let script = r#"
+        dim x = 1
+        exit for
+    "#;
+    let error_msg = run_script_err(script).await;
+    assert!(error_msg.contains("Exit For cannot be used outside of a for loop"));
+}
+
+#[tokio::test]
+async fn test_exit_while_outside_loop_error() {
+    let script = r#"
+        dim x = 1
+        exit while
+    "#;
+    let error_msg = run_script_err(script).await;
+    assert!(error_msg.contains("Exit While cannot be used outside of a while loop"));
+}
+
+#[tokio::test]
+async fn test_exit_function_in_sub_error() {
+    let script = r#"
+        sub testSub()
+            exit function  ' Should error - this is a sub, not a function
+        end sub
+        call testSub()
+    "#;
+    let error_msg = run_script_err(script).await;
+    assert!(error_msg.contains("Exit Function cannot be used in a subroutine"));
+}
+
+#[tokio::test]
+async fn test_exit_sub_in_function_error() {
+    let script = r#"
+        function testFunc()
+            exit sub  ' Should error - this is a function, not a sub
+        end function
+        dim result = testFunc()
+    "#;
+    let error_msg = run_script_err(script).await;
+    assert!(error_msg.contains("Exit Sub cannot be used in a function"));
+}
+
+#[tokio::test] 
+async fn test_correct_exit_usage() {
+    let (interp, _) = run_script(
+        r#"
+        function testFunc()
+            exit function  ' Correct usage
+        end function
+        
+        sub testSub() 
+            exit sub      ' Correct usage
+        end sub
+        
+        dim result1 = testFunc()
+        call testSub()
+    "#,
+    )
+    .await;
+    // Should execute without errors and return null for function
+    assert!(matches!(interp.get_var("result1").await, Some(Value::Null)));
+}
+
+#[tokio::test]
+async fn test_exit_with_correct_line_numbers() {
+    let script = r#"
+        dim x = 1
+        exit function
+    "#;
+    let error_msg = run_script_err(script).await;
+    assert!(error_msg.contains("Exit Function cannot be used outside of a function"));
+    // The exit function statement should be on line 3 (accounting for the newline at the start)
+    assert!(error_msg.contains("line 3"));
+}
