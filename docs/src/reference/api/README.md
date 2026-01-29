@@ -128,7 +128,7 @@ dim value = sheet.get(0, 0).unwrap_or(0)
 ## Performance Guidelines
 
 ### Memory Management
-- Sheets store data row-major (Vec<Vec<CellValue>>)
+- Sheets store data row-major (`Vec<Vec<CellValue>>`)
 - Books use IndexMap for O(1) sheet lookups
 - Consolidation creates new sheets (no in-place modification)
 

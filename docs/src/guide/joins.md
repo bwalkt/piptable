@@ -20,7 +20,7 @@ A join operation lets you create a combined report showing employee names with t
 
 | Join Type | Description | Use Case |
 |-----------|-------------|-----------|
-| **Inner** | Only matching records | Complete data only |
+| **Inner** | Only matching records | Complete data |
 | **Left** | All from left + matches from right | Preserve all primary records |
 | **Right** | All from right + matches from left | Rare, usually use left instead |
 | **Full** | All records from both sides | Complete picture with gaps |
@@ -50,11 +50,11 @@ Before joining, examine your data structure:
 ' Check what columns are available
 dim employees = import "employees.csv" into sheet
 print "Employee columns:"
-print getColumnNames(employees)
+print sheet_col_count(employees)
 
 dim departments = import "departments.csv" into sheet  
 print "Department columns:"
-print getColumnNames(departments)
+print sheet_col_count(departments)
 ```
 
 ### Step 2: Identify Join Keys
@@ -81,7 +81,7 @@ Ask yourself:
 ' Always test joins with a small sample first
 dim sampleEmployees = query("SELECT * FROM employees LIMIT 10")
 dim testResult = sampleEmployees join departments on "dept_id"
-print "Sample result has " + str(getRowCount(testResult)) + " rows"
+print "Sample result has " + str(sheet_row_count(testResult)) + " rows"
 ```
 
 ## Common Patterns
@@ -144,8 +144,8 @@ dim badOrders = query("
     WHERE customer_name IS NULL
 ")
 
-if getRowCount(badOrders) > 0 then
-    print "Found " + str(getRowCount(badOrders)) + " orders with invalid customer IDs"
+if sheet_row_count(badOrders) > 0 then
+    print "Found " + str(sheet_row_count(badOrders)) + " orders with invalid customer IDs"
     export badOrders to "data_quality_issues.csv"
 else
     print "All orders have valid customer references"
@@ -262,7 +262,7 @@ dim duplicateCheck = query("
     HAVING count > 1
 ")
 
-if getRowCount(duplicateCheck) > 0 then
+if sheet_row_count(duplicateCheck) > 0 then
     print "Found duplicate dept_ids in employees table"
     print duplicateCheck
 end if
@@ -282,20 +282,20 @@ end if
 dim employees = import "employees.csv" into sheet
 dim departments = import "departments.csv" into sheet
 
-print "Employees before join: " + str(getRowCount(employees))
+print "Employees before join: " + str(sheet_row_count(employees))
 
 dim innerResult = employees join departments on "dept_id" = "id"
-print "After inner join: " + str(getRowCount(innerResult))
+print "After inner join: " + str(sheet_row_count(innerResult))
 
 dim leftResult = employees left join departments on "dept_id" = "id"  
-print "After left join: " + str(getRowCount(leftResult))
+print "After left join: " + str(sheet_row_count(leftResult))
 
 ' Find unmatched records
 dim unmatched = query("
     SELECT * FROM leftResult 
     WHERE department_name IS NULL
 ")
-print "Unmatched employees: " + str(getRowCount(unmatched))
+print "Unmatched employees: " + str(sheet_row_count(unmatched))
 ```
 
 **Solutions**:
@@ -340,7 +340,7 @@ function validateJoinData(sheet, keyColumn)
         GROUP BY " + keyColumn + " 
         HAVING count > 1
     ")
-    if getRowCount(dupes) > 0 then
+    if sheet_row_count(dupes) > 0 then
         print "Warning: Duplicate values in " + keyColumn
         print dupes
     end if
@@ -390,11 +390,11 @@ function testJoinScenario(name, leftData, rightData, joinKey)
     print "Testing scenario: " + name
     
     dim result = leftData join rightData on joinKey
-    print "- Result rows: " + str(getRowCount(result))
+    print "- Result rows: " + str(sheet_row_count(result))
     
-    dim leftCount = getRowCount(leftData)
-    dim rightCount = getRowCount(rightData)
-    dim resultCount = getRowCount(result)
+    dim leftCount = sheet_row_count(leftData)
+    dim rightCount = sheet_row_count(rightData)
+    dim resultCount = sheet_row_count(result)
     
     if resultCount = 0 and leftCount > 0 and rightCount > 0 then
         print "- WARNING: No matches found!"
@@ -504,7 +504,7 @@ sub processMonthlyReport()
     ' Load
     export cleanData to "reports/monthly_sales_" + getCurrentMonth() + ".xlsx"
     
-    print "Monthly report generated with " + str(getRowCount(cleanData)) + " records"
+    print "Monthly report generated with " + str(sheet_row_count(cleanData)) + " records"
 end sub
 ```
 
