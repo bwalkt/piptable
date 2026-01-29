@@ -100,10 +100,15 @@ interface ExportModalProps {
 }
 
 function ExportModal({ code, output, exportStatus, lastError, onExport, onClose }: ExportModalProps) {
-  const [selectedFormat, setSelectedFormat] = useState<ExportFormat>('json');
+  const [selectedFormat, setSelectedFormat] = useState<ExportFormat>('pip');
   const [customFilename, setCustomFilename] = useState('');
 
   const formats: Array<{ value: ExportFormat; label: string; description: string }> = [
+    { 
+      value: 'pip', 
+      label: 'PIP Script', 
+      description: 'PipTable source code file for reimporting' 
+    },
     { 
       value: 'json', 
       label: 'JSON', 

@@ -23,12 +23,21 @@ import {
 import { cn } from './lib/utils';
 import { ShareButton } from './components/ShareButton';
 import { ExportButton } from './components/ExportButton';
+import { SaveLoadButton } from './components/SaveLoadButton';
 
 export function App() {
   const editorRef = useRef<HTMLDivElement>(null);
   const editorViewRef = useRef<EditorView | null>(null);
   const themeCompartment = useRef<Compartment>(new Compartment());
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+
+  const handleLoadCode = (newCode: string, _scriptName: string) => {
+    code.value = newCode;
+    // Clear stale UI state when loading a new script
+    output.value = '';
+    error.value = null;
+    selectedExample.value = ''; // Reset to indicate custom/loaded script
+  };
 
   // Initialize WASM on mount
   useEffect(() => {
@@ -155,6 +164,12 @@ export function App() {
         <div className="flex items-center gap-1 sm:gap-2 flex-shrink-0">
           {/* Hide share/export on very small screens */}
           <div className="hidden xs:flex items-center gap-1 sm:gap-2">
+            <SaveLoadButton 
+              code={code.value}
+              onLoadCode={handleLoadCode}
+              className="h-8 sm:h-9 px-2 sm:px-3 text-xs sm:text-sm"
+            />
+            
             <ShareButton getState={getCurrentShareableState} className="h-8 sm:h-9 px-2 sm:px-3 text-xs sm:text-sm" />
             
             <ExportButton 
