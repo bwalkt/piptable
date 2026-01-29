@@ -20,7 +20,7 @@ A join operation lets you create a combined report showing employee names with t
 
 | Join Type | Description | Use Case |
 |-----------|-------------|-----------|
-| **Inner** | Only matching records | Complete data only |
+| **Inner** | Only matching records | Complete data |
 | **Left** | All from left + matches from right | Preserve all primary records |
 | **Right** | All from right + matches from left | Rare, usually use left instead |
 | **Full** | All records from both sides | Complete picture with gaps |

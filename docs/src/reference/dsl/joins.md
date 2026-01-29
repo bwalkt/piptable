@@ -150,9 +150,9 @@ Use joins within SQL query expressions:
 
 ```vba
 dim orderDetails = query("
-    SELECT o.order_id, c.name as customer_name, o.total
+    SELECT oc.order_id, c.name as customer_name, oc.total
     FROM (orders join customers on customer_id) as oc
-    WHERE o.total > 1000
+    WHERE oc.total > 1000
 ")
 ```
 
@@ -281,13 +281,13 @@ dim enrichedUsers = localUsers left join userProfiles on "user_id"
 
 PipTable join syntax maps directly to SQL:
 
-| PipTable | SQL |
-|----------|-----|
-| `a join b on "id"` | `a INNER JOIN b ON a.id = b.id` |
-| `a left join b on "id"` | `a LEFT JOIN b ON a.id = b.id` |
-| `a right join b on "id"` | `a RIGHT JOIN b ON a.id = b.id` |
-| `a full join b on "id"` | `a FULL OUTER JOIN b ON a.id = b.id` |
-| `a join b on "x" = "y"` | `a INNER JOIN b ON a.x = b.y` |
+| PipTable               | SQL                                   |
+| ---------------------- | ------------------------------------- |
+| `a join b on "id"`     | `a INNER JOIN b ON a.id = b.id`       |
+| `a left join b on "id"`| `a LEFT JOIN b ON a.id = b.id`        |
+| `a right join b on "id"`| `a RIGHT JOIN b ON a.id = b.id`      |
+| `a full join b on "id"`| `a FULL OUTER JOIN b ON a.id = b.id`  |
+| `a join b on "x" = "y"`| `a INNER JOIN b ON a.x = b.y`         |
 
 This makes it easy to understand join behavior if you're familiar with SQL, while providing a more readable syntax for those coming from VBA or similar backgrounds.
 
