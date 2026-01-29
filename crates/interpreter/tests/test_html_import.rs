@@ -552,3 +552,65 @@ async fn test_import_html_rowspan_limitation() {
         _ => panic!("Expected a Sheet value"),
     }
 }
+
+#[tokio::test]
+async fn test_import_html_th_in_body_rows() {
+    let temp_dir = tempdir().unwrap();
+    let html_path = temp_dir.path().join("test_th_body.html");
+
+    let html_content = r#"<!DOCTYPE html>
+<html>
+<body>
+    <table>
+        <tr>
+            <th>Category</th>
+            <th>Value</th>
+        </tr>
+        <tr>
+            <th colspan="2">Row Header</th>
+            <!-- This th in a data row should not get suffixed -->
+        </tr>
+        <tr>
+            <td>Item</td>
+            <td>100</td>
+        </tr>
+    </table>
+</body>
+</html>"#;
+    fs::write(&html_path, html_content).unwrap();
+
+    let script = format!(
+        r#"
+        import "{}" into data
+        data
+    "#,
+        html_path.display()
+    );
+
+    let mut interp = Interpreter::new();
+    let program = PipParser::parse_str(&script).unwrap();
+    let result = interp.eval(program).await.unwrap();
+
+    // Verify that th elements in data rows don't get suffixed
+    match result {
+        Value::Sheet(sheet) => {
+            assert_eq!(sheet.row_count(), 3);
+            assert_eq!(sheet.col_count(), 2);
+
+            // Check that the th in row 1 is just duplicated, not suffixed
+            if let Ok(cell_0_0) = sheet.get(1, 0) {
+                assert!(matches!(cell_0_0, piptable_sheet::CellValue::String(_)));
+                if let piptable_sheet::CellValue::String(s) = cell_0_0 {
+                    assert_eq!(s, "Row Header", "th in body row should not be suffixed");
+                }
+            }
+            if let Ok(cell_0_1) = sheet.get(1, 1) {
+                assert!(matches!(cell_0_1, piptable_sheet::CellValue::String(_)));
+                if let piptable_sheet::CellValue::String(s) = cell_0_1 {
+                    assert_eq!(s, "Row Header", "th in body row should not be suffixed");
+                }
+            }
+        }
+        _ => panic!("Expected a Sheet value"),
+    }
+}

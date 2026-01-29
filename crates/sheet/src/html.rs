@@ -62,10 +62,8 @@ fn parse_table_element_with_options(
             for i in 0..colspan {
                 if i == 0 {
                     row_data.push(cell_value.clone());
-                } else if cell.value().name() == "th"
-                    || (force_first_row_as_strings && is_first_row)
-                {
-                    // For header cells, append a suffix to make them unique
+                } else if force_first_row_as_strings && is_first_row {
+                    // For header row cells, append a suffix to make them unique
                     let suffix_value = match &cell_value {
                         CellValue::String(s) => CellValue::String(format!("{}_{}", s, i + 1)),
                         _ => CellValue::String(format!("{}_{}", &text, i + 1)),
