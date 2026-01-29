@@ -431,3 +431,71 @@ async fn test_import_htm_extension() {
         _ => panic!("Expected a Sheet value"),
     }
 }
+
+#[tokio::test]
+async fn test_import_html_uneven_header_row() {
+    let temp_dir = tempdir().unwrap();
+    let html_path = temp_dir.path().join("test_uneven_header.html");
+
+    let html_content = r#"<!DOCTYPE html>
+<html>
+<body>
+    <table>
+        <tr>
+            <th>Name</th>
+            <th>Age</th>
+            <!-- Header row has only 2 columns -->
+        </tr>
+        <tr>
+            <td>Alice</td>
+            <td>30</td>
+            <td>Engineer</td>
+            <!-- Data row has 3 columns -->
+        </tr>
+        <tr>
+            <td>Bob</td>
+            <td>25</td>
+            <td>Designer</td>
+        </tr>
+    </table>
+</body>
+</html>"#;
+    fs::write(&html_path, html_content).unwrap();
+
+    let script = format!(
+        r#"
+        import "{}" into data (headers = true)
+        data
+    "#,
+        html_path.display()
+    );
+
+    let mut interp = Interpreter::new();
+    let program = PipParser::parse_str(&script).unwrap();
+    let result = interp.eval(program).await;
+
+    // This should handle uneven headers gracefully
+    match result {
+        Ok(Value::Sheet(sheet)) => {
+            assert_eq!(sheet.row_count(), 3, "Expected 3 rows");
+            assert_eq!(sheet.col_count(), 3, "Expected 3 columns");
+
+            // Check that column names were set, with generated names for missing headers
+            if let Some(column_names) = sheet.column_names() {
+                assert_eq!(column_names[0], "Name");
+                assert_eq!(column_names[1], "Age");
+                // The third column should have a generated name since header was missing
+                assert_eq!(column_names[2], "Column_3");
+            }
+        }
+        Err(e) => {
+            panic!(
+                "Uneven headers should now be handled gracefully, got error: {}",
+                e
+            );
+        }
+        Ok(other) => {
+            panic!("Expected Sheet, got: {:?}", other);
+        }
+    }
+}

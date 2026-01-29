@@ -16,6 +16,7 @@ fn parse_table_element_with_options(
 ) -> Result<Sheet> {
     let mut sheet = Sheet::new();
     let row_selector = Selector::parse("tr").unwrap();
+    let cell_selector = Selector::parse("th, td").unwrap();
     let mut max_columns = 0;
 
     // First pass: collect all rows and track maximum column count
@@ -26,7 +27,6 @@ fn parse_table_element_with_options(
         let is_first_row = row_index == 0;
 
         // Process all cells (th and td) in DOM order
-        let cell_selector = Selector::parse("th, td").unwrap();
         for cell in row.select(&cell_selector) {
             let text: String = cell.text().collect::<String>().trim().to_string();
 
@@ -78,10 +78,20 @@ fn parse_table_element_with_options(
     }
 
     // Second pass: normalize all rows to have the same number of columns
-    for mut row_data in all_rows {
-        // Pad rows that are shorter than max_columns with Null values
+    for (row_index, mut row_data) in all_rows.into_iter().enumerate() {
+        let is_first_row = row_index == 0;
+
+        // Pad rows that are shorter than max_columns
         while row_data.len() < max_columns {
-            row_data.push(CellValue::Null);
+            if force_first_row_as_strings && is_first_row {
+                // For header rows, generate column names instead of Null values
+                let col_index = row_data.len();
+                let generated_name = format!("Column_{}", col_index + 1);
+                row_data.push(CellValue::String(generated_name));
+            } else {
+                // For data rows, pad with Null values
+                row_data.push(CellValue::Null);
+            }
         }
         sheet.row_append(row_data)?;
     }
