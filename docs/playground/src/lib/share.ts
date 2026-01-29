@@ -70,11 +70,13 @@ export function generateShareURL(state: ShareableState): string {
   url.searchParams.set('share', encoded);
   
   // Remove other query parameters to keep URL clean
-  for (const [key] of url.searchParams.entries()) {
+  const keysToDelete: string[] = [];
+  url.searchParams.forEach((_, key) => {
     if (key !== 'share') {
-      url.searchParams.delete(key);
+      keysToDelete.push(key);
     }
-  }
+  });
+  keysToDelete.forEach(key => url.searchParams.delete(key));
   
   return url.toString();
 }

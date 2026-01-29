@@ -1,4 +1,4 @@
-export type ExportFormat = 'csv' | 'json' | 'txt';
+export type ExportFormat = 'csv' | 'json' | 'txt' | 'pip';
 
 export interface ExportData {
   code: string;
@@ -181,6 +181,23 @@ export function generateText(data: ExportData): string {
   return lines.join('\n');
 }
 
+// Generate .pip file content (just the raw PipTable code)
+export function generatePipFile(data: ExportData): string {
+  // Add header comment with metadata
+  const lines: string[] = [];
+  
+  lines.push(`' PipTable Script`);
+  lines.push(`' Generated: ${data.timestamp.toISOString()}`);
+  if (data.filename) {
+    lines.push(`' Filename: ${data.filename}`);
+  }
+  lines.push(`' `);
+  lines.push('');
+  lines.push(data.code);
+  
+  return lines.join('\n');
+}
+
 // Generate filename with timestamp
 export function generateFilename(format: ExportFormat, customName?: string): string {
   const timestamp = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
@@ -243,6 +260,12 @@ export function exportData(data: ExportData, format: ExportFormat): void {
       filename = generateFilename('txt', data.filename);
       break;
       
+    case 'pip':
+      content = generatePipFile(data);
+      mimeType = 'text/plain;charset=utf-8;';
+      filename = generateFilename('pip', data.filename);
+      break;
+      
     default:
       throw new Error(`Unsupported export format: ${format}`);
   }
@@ -252,4 +275,88 @@ export function exportData(data: ExportData, format: ExportFormat): void {
   }
   
   downloadFile(content, filename, mimeType);
+}
+
+// Import .pip file content
+export function importPipFile(fileContent: string): { code: string; metadata?: any } {
+  try {
+    const lines = fileContent.split('\n');
+    const metadata: any = {};
+    let codeStartIndex = 0;
+    
+    // Parse header comments for metadata
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i].trim();
+      
+      if (line.startsWith("' ") || line === "'") {
+        // Extract metadata from comments
+        const comment = line.substring(2).trim();
+        
+        if (comment.startsWith('Generated:')) {
+          metadata.generated = comment.substring(10).trim();
+        } else if (comment.startsWith('Filename:')) {
+          metadata.filename = comment.substring(9).trim();
+        }
+        
+        codeStartIndex = i + 1;
+      } else if (line === '' && i < 10) {
+        // Skip empty lines at the beginning
+        codeStartIndex = i + 1;
+      } else {
+        // First non-comment, non-empty line - code starts here
+        break;
+      }
+    }
+    
+    // Extract the actual code
+    const code = lines.slice(codeStartIndex).join('\n').trim();
+    
+    return {
+      code,
+      metadata: Object.keys(metadata).length > 0 ? metadata : undefined,
+    };
+  } catch (error) {
+    console.error('Failed to parse .pip file:', error);
+    // If parsing fails, return the raw content as code
+    return { code: fileContent };
+  }
+}
+
+// Handle file input for importing
+export function handleFileImport(
+  file: File,
+  onSuccess: (code: string, filename: string, metadata?: any) => void,
+  onError: (error: string) => void
+): void {
+  if (!file) {
+    onError('No file selected.');
+    return;
+  }
+  
+  const reader = new FileReader();
+  
+  reader.onload = (e) => {
+    try {
+      const content = e.target?.result as string;
+      if (!content) {
+        throw new Error('Empty file or failed to read file content.');
+      }
+      
+      if (file.name.endsWith('.pip') || file.type === 'text/plain' || file.type === '') {
+        const { code, metadata } = importPipFile(content);
+        onSuccess(code, file.name, metadata);
+      } else {
+        onError('Unsupported file type. Please select a .pip file or plain text file.');
+      }
+    } catch (error) {
+      console.error('File import error:', error);
+      onError(error instanceof Error ? error.message : 'Failed to import file.');
+    }
+  };
+  
+  reader.onerror = () => {
+    onError('Failed to read the file. Please try again.');
+  };
+  
+  reader.readAsText(file);
 }
