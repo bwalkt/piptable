@@ -3,6 +3,10 @@ use std::path::PathBuf;
 use std::process::Command;
 
 fn main() {
+    // Tell cargo to rerun this build script if Python environment changes
+    println!("cargo:rerun-if-env-changed=PYO3_PYTHON");
+    println!("cargo:rerun-if-env-changed=PYTHON_SYS_EXECUTABLE");
+
     // Respect PyO3's Python executable selection
     let python_exe = find_python_executable();
 
@@ -67,13 +71,64 @@ fn find_python_config(python_exe: &PathBuf) -> Option<PathBuf> {
         }
     }
 
+    // Fallback: try python-config executables on PATH when no parent or derived paths don't exist
+    // This handles cases like python_exe = "python3" with no parent directory
+
+    // Try python3-config on PATH
+    if let Ok(output) = Command::new("python3-config").arg("--help").output() {
+        if output.status.success() {
+            return Some(PathBuf::from("python3-config"));
+        }
+    }
+
+    // Try python-config on PATH
+    if let Ok(output) = Command::new("python-config").arg("--help").output() {
+        if output.status.success() {
+            return Some(PathBuf::from("python-config"));
+        }
+    }
+
+    // Try versioned python-config on PATH
+    if let Ok(version_output) = Command::new(python_exe)
+        .arg("-c")
+        .arg("import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')")
+        .output()
+    {
+        if version_output.status.success() {
+            let version = String::from_utf8_lossy(&version_output.stdout)
+                .trim()
+                .to_string();
+            let versioned_config = format!("python{}-config", version);
+            if let Ok(output) = Command::new(&versioned_config).arg("--help").output() {
+                if output.status.success() {
+                    return Some(PathBuf::from(versioned_config));
+                }
+            }
+        }
+    }
+
     None
 }
 
 /// Configure linking using python-config
 /// Returns true if successful, false if caller should use fallback
 fn configure_linking_with_config(python_config: &PathBuf) -> bool {
-    if let Ok(output) = Command::new(python_config).arg("--ldflags").output() {
+    // Try --embed first (Python 3.8+), which includes -lpython
+    let args = if let Ok(output) = Command::new(python_config)
+        .arg("--embed")
+        .arg("--ldflags")
+        .output()
+    {
+        if output.status.success() {
+            vec!["--embed", "--ldflags"]
+        } else {
+            vec!["--ldflags"]
+        }
+    } else {
+        vec!["--ldflags"]
+    };
+
+    if let Ok(output) = Command::new(python_config).args(&args).output() {
         if !output.status.success() {
             println!(
                 "cargo:warning=python-config --ldflags failed with exit code {:?}, falling back to sysconfig",
@@ -84,6 +139,18 @@ fn configure_linking_with_config(python_config: &PathBuf) -> bool {
         }
 
         let ldflags = String::from_utf8_lossy(&output.stdout);
+
+        // Also add Python library directory for cases where python-config doesn't include it
+        // This is particularly important for pyenv installations
+        if let Ok(libdir_output) = Command::new(python_config).arg("--prefix").output() {
+            if libdir_output.status.success() {
+                let prefix = String::from_utf8_lossy(&libdir_output.stdout)
+                    .trim()
+                    .to_string();
+                let lib_path = format!("{}/lib", prefix);
+                println!("cargo:rustc-link-search=native={}", lib_path);
+            }
+        }
 
         // Parse all linker flags, not just -L and -l
         let mut skip_next = false;
@@ -181,8 +248,16 @@ if sys.platform == 'darwin':
             } else if let Some(lib_name) = line.strip_prefix("LIBRARY:") {
                 println!("cargo:rustc-link-lib={}", lib_name);
             } else if let Some(ldflags) = line.strip_prefix("LDFLAGS:") {
-                // Parse additional LDFLAGS
-                for flag in ldflags.split_whitespace() {
+                // Parse additional LDFLAGS (including framework flags that can appear here on macOS)
+                let mut skip_next = false;
+                let flags: Vec<&str> = ldflags.split_whitespace().collect();
+
+                for (i, flag) in flags.iter().enumerate() {
+                    if skip_next {
+                        skip_next = false;
+                        continue;
+                    }
+
                     if flag.starts_with("-L") {
                         let path = &flag[2..];
                         println!("cargo:rustc-link-search=native={}", path);
@@ -191,6 +266,20 @@ if sys.platform == 'darwin':
                         if !["intl", "dl", "util", "rt"].contains(&lib) {
                             println!("cargo:rustc-link-lib={}", lib);
                         }
+                    } else if flag.starts_with("-framework") {
+                        if flag.len() > 10 {
+                            // -frameworkName
+                            let framework = &flag[10..];
+                            println!("cargo:rustc-link-lib=framework={}", framework);
+                        } else if i + 1 < flags.len() {
+                            // -framework Name
+                            let framework = flags[i + 1];
+                            println!("cargo:rustc-link-lib=framework={}", framework);
+                            skip_next = true;
+                        }
+                    } else if flag.starts_with("-F") {
+                        let path = &flag[2..];
+                        println!("cargo:rustc-link-search=framework={}", path);
                     } else if flag.starts_with("-Wl,") {
                         println!("cargo:rustc-link-arg={}", flag);
                     }
