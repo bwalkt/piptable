@@ -1,4 +1,11 @@
 //! HTML table import functionality
+//!
+//! ## Limitations
+//!
+//! - **Rowspan**: Tables with `rowspan` attributes are not currently supported and may result in
+//!   misaligned data. Only `colspan` is handled.
+//! - **Text extraction**: Nested HTML elements in cells are concatenated without whitespace
+//!   normalization (e.g., `foo<b>bar</b>` becomes `"foobar"`, not `"foo bar"`).
 
 use crate::{CellValue, Result, Sheet, SheetError};
 use scraper::{Html, Selector};

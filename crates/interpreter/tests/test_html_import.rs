@@ -499,3 +499,56 @@ async fn test_import_html_uneven_header_row() {
         }
     }
 }
+
+#[tokio::test]
+async fn test_import_html_rowspan_limitation() {
+    // This test documents the current limitation with rowspan handling
+    let temp_dir = tempdir().unwrap();
+    let html_path = temp_dir.path().join("test_rowspan.html");
+
+    let html_content = r#"<!DOCTYPE html>
+<html>
+<body>
+    <table>
+        <tr>
+            <th>Name</th>
+            <th>Details</th>
+        </tr>
+        <tr>
+            <td rowspan="2">Alice</td>
+            <td>Engineer</td>
+        </tr>
+        <tr>
+            <td>Senior</td>
+        </tr>
+    </table>
+</body>
+</html>"#;
+    fs::write(&html_path, html_content).unwrap();
+
+    let script = format!(
+        r#"
+        import "{}" into data
+        data
+    "#,
+        html_path.display()
+    );
+
+    let mut interp = Interpreter::new();
+    let program = PipParser::parse_str(&script).unwrap();
+    let result = interp.eval(program).await.unwrap();
+
+    // Note: This test documents current behavior, not ideal behavior
+    // Rowspan is not handled, so the table structure may be misaligned
+    match result {
+        Value::Sheet(sheet) => {
+            // We can import the table, but rowspan isn't properly handled
+            assert!(
+                sheet.row_count() >= 2,
+                "Should have at least header + data rows"
+            );
+            // The actual structure depends on how the HTML is parsed without rowspan support
+        }
+        _ => panic!("Expected a Sheet value"),
+    }
+}
