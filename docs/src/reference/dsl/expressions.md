@@ -342,6 +342,86 @@ Group expressions to control evaluation order.
 query("SELECT * FROM (" + subquery + ")")
 ```
 
+## Lambda Expressions
+
+Lambda expressions create anonymous functions for functional programming operations.
+
+### Basic Syntax
+
+Lambda expressions use the `|param1, param2, ...| expression` syntax:
+
+```vba
+|x| x * 2              ' Single parameter
+|a, b| a + b            ' Multiple parameters  
+|| 42                   ' No parameters
+|x| x > 0 and x < 100   ' Complex boolean expression
+```
+
+### Assignment to Variables
+
+Lambdas can be stored in variables and used later:
+
+```vba
+dim add_one = |x| x + 1
+dim is_positive = |n| n > 0
+dim multiply = |a, b| a * b
+```
+
+### With Sheet Operations
+
+Lambda expressions are commonly used with sheet transformation methods:
+
+```vba
+' Transform each row with named columns
+dim processed = people.map(|row| {
+    ...row,
+    age: row.age + 1,
+    name: upper(row.name)
+})
+
+' Transform each row with unnamed columns
+dim doubled = data.map(|row| [row[0] * 2, row[1] * 2, row[2] * 2])
+
+' Filter rows
+dim adults = people.filter(|row| row.age >= 18)
+
+' Complex transformations
+dim processed_sales = sales.map(|row| {
+    ...row,
+    tax: row.amount * 0.08,
+    total: row.amount * 1.08
+})
+```
+
+### Lambda Parameters
+
+Lambdas receive different types of parameters based on the operation:
+
+- **map()**: Receives entire row objects (for named columns) or arrays (for unnamed columns)
+- **filter()**: Receives entire row objects (for named columns) or arrays (for unnamed columns)
+- Custom functions: Receive whatever arguments you pass
+
+```vba
+' Row-level transformation with named columns
+users.map(|row| {...row, full_name: row.first_name + " " + row.last_name})
+
+' Row-level transformation with unnamed columns  
+data.map(|row| [row[0], round(row[1], 2), row[2] * 1.1])
+
+' Row-level filtering  
+data.filter(|row| row.status = "active" and row.score > 50)
+```
+
+### Return Values
+
+The expression after the `|params|` becomes the return value:
+
+```vba
+|x| x * x              ' Returns x squared
+|name| "Hello " + name  ' Returns greeting string
+|row| row.price > 100   ' Returns boolean for filtering
+```
+
 ## See Also
 
 - [Operators](operators.md) - Combining expressions

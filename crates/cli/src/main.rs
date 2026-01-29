@@ -354,6 +354,9 @@ fn format_value(value: &Value) -> String {
         Value::Sheet(sheet) => {
             format!("<Sheet: {}x{}>", sheet.row_count(), sheet.col_count())
         }
+        Value::Lambda { params, .. } => {
+            format!("<Lambda: |{}|>", params.join(", "))
+        }
     }
 }
 

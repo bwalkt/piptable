@@ -594,6 +594,7 @@ pub fn build_expr(pair: Pair<Rule>) -> BuildResult<Expr> {
         Rule::literal => build_literal_expr(pair),
         Rule::query_expr => build_query_expr(pair),
         Rule::fetch_expr => build_fetch_expr(pair),
+        Rule::lambda_expr => build_lambda_expr(pair),
         Rule::array_literal => build_array_literal(pair),
         Rule::object_literal => build_object_literal(pair),
         Rule::ident => Ok(Expr::Variable(pair.as_str().to_string())),
@@ -1571,6 +1572,39 @@ fn build_fetch_expr(pair: Pair<Rule>) -> BuildResult<Expr> {
     Ok(Expr::Fetch {
         url: Box::new(url),
         options,
+    })
+}
+
+fn build_lambda_expr(pair: Pair<Rule>) -> BuildResult<Expr> {
+    let span = pair.as_span();
+    let (line, col) = span.start_pos().line_col();
+    let mut inner = pair.into_inner();
+
+    let mut params = Vec::new();
+    if let Some(params_pair) = inner.next() {
+        if params_pair.as_rule() == Rule::lambda_params {
+            for param in params_pair.into_inner() {
+                params.push(param.as_str().to_string());
+            }
+        } else {
+            // This is the body expression if no parameters
+            let body = build_expr(params_pair)?;
+            return Ok(Expr::Lambda {
+                params: Vec::new(),
+                body: Box::new(body),
+            });
+        }
+    }
+
+    // Get the body expression
+    let body_pair = inner
+        .next()
+        .ok_or_else(|| BuildError::new(line, col, "Lambda expression missing body"))?;
+    let body = build_expr(body_pair)?;
+
+    Ok(Expr::Lambda {
+        params,
+        body: Box::new(body),
     })
 }
 

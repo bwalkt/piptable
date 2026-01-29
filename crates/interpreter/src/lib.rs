@@ -999,6 +999,11 @@ impl Interpreter {
                 Ok(sheet_conversions::sheet_to_value(&result))
             }
 
+            Expr::Lambda { params, body } => Ok(Value::Lambda {
+                params: params.clone(),
+                body: (**body).clone(),
+            }),
+
             Expr::Ask { .. } => {
                 // TODO: Implement LLM integration
                 Err(PipError::runtime(0, "Ask expression not yet implemented"))
@@ -2153,6 +2158,34 @@ impl Interpreter {
     pub fn http(&self) -> &HttpClient {
         &self.http
     }
+
+    /// Apply a lambda expression with given arguments
+    async fn apply_lambda(
+        &mut self,
+        lambda_params: &[String],
+        lambda_body: &Expr,
+        args: &[Value],
+    ) -> PipResult<Value> {
+        // Check argument count
+        if args.len() != lambda_params.len() {
+            return Err(PipError::runtime(
+                0,
+                format!(
+                    "Lambda expects {} arguments, got {}",
+                    lambda_params.len(),
+                    args.len()
+                ),
+            ));
+        }
+
+        self.push_scope().await;
+        for (param, arg) in lambda_params.iter().zip(args.iter()) {
+            self.declare_var(param, arg.clone()).await;
+        }
+        let result = self.eval_expr(lambda_body).await;
+        self.pop_scope().await;
+        result
+    }
 }
 
 impl Default for Interpreter {
@@ -2316,6 +2349,214 @@ impl Interpreter {
                     None => Ok(Value::Null),
                 }
             }
+
+            "map" => {
+                if args.len() != 1 {
+                    return Err(PipError::runtime(0, "map() takes exactly 1 argument"));
+                }
+
+                match &args[0] {
+                    Value::Lambda { params, body } => {
+                        if params.len() != 1 {
+                            return Err(PipError::runtime(
+                                0,
+                                "Lambda for map() must take exactly 1 parameter",
+                            ));
+                        }
+
+                        let mut new_sheet = sheet.clone();
+                        let column_names = sheet.column_names().cloned();
+
+                        // Apply lambda to each data row (skip header if present)
+                        // Check if a physical header row exists by comparing first row with column names
+                        let start_row = if let Some(names) = &column_names {
+                            if sheet.data().is_empty() {
+                                0
+                            } else {
+                                let first_row = &sheet.data()[0];
+                                let names_match = names.iter().enumerate().all(|(idx, name)| {
+                                    first_row
+                                        .get(idx)
+                                        .map(|cell| cell.as_str() == name.as_str())
+                                        .unwrap_or(false)
+                                });
+                                usize::from(names_match)
+                            }
+                        } else {
+                            0
+                        };
+
+                        for row_idx in start_row..new_sheet.row_count() {
+                            let row_value = if let Some(col_names) = &column_names {
+                                let mut row_obj = std::collections::HashMap::new();
+                                for (col_idx, col_name) in col_names.iter().enumerate() {
+                                    let cell = sheet
+                                        .get(row_idx, col_idx)
+                                        .cloned()
+                                        .unwrap_or(piptable_sheet::CellValue::Null);
+                                    row_obj.insert(
+                                        col_name.clone(),
+                                        sheet_conversions::cell_to_value(cell),
+                                    );
+                                }
+                                Value::Object(row_obj)
+                            } else {
+                                let row = sheet.row(row_idx).map_err(|e| {
+                                    PipError::runtime(0, format!("Failed to access row: {}", e))
+                                })?;
+                                let values: Vec<Value> = row
+                                    .iter()
+                                    .cloned()
+                                    .map(sheet_conversions::cell_to_value)
+                                    .collect();
+                                Value::Array(values)
+                            };
+
+                            match self.apply_lambda(params, body, &[row_value]).await {
+                                Ok(result) => match result {
+                                    Value::Object(obj) => {
+                                        let col_names = column_names.as_ref().ok_or_else(|| {
+                                            PipError::runtime(
+                                                0,
+                                                "map() with unnamed columns must return an array",
+                                            )
+                                        })?;
+                                        for (col_idx, col_name) in col_names.iter().enumerate() {
+                                            let value =
+                                                obj.get(col_name).cloned().unwrap_or(Value::Null);
+                                            let new_cell = sheet_conversions::value_to_cell(&value);
+                                            let _ = new_sheet.set(row_idx, col_idx, new_cell);
+                                        }
+                                    }
+                                    Value::Array(values) => {
+                                        let col_count = new_sheet.col_count();
+                                        for col_idx in 0..col_count {
+                                            let value =
+                                                values.get(col_idx).cloned().unwrap_or(Value::Null);
+                                            let new_cell = sheet_conversions::value_to_cell(&value);
+                                            let _ = new_sheet.set(row_idx, col_idx, new_cell);
+                                        }
+                                    }
+                                    _ => {
+                                        return Err(PipError::runtime(
+                                            0,
+                                            "map() lambda must return an object or array",
+                                        ));
+                                    }
+                                },
+                                Err(e) => {
+                                    return Err(PipError::runtime(
+                                        0,
+                                        format!("Lambda error in map() at row {}: {}", row_idx, e),
+                                    ));
+                                }
+                            }
+                        }
+
+                        Ok(Value::Sheet(new_sheet))
+                    }
+                    _ => Err(PipError::runtime(0, "map() requires a lambda expression")),
+                }
+            }
+
+            "filter" => {
+                if args.len() != 1 {
+                    return Err(PipError::runtime(0, "filter() takes exactly 1 argument"));
+                }
+
+                match &args[0] {
+                    Value::Lambda { params, body } => {
+                        if params.len() != 1 {
+                            return Err(PipError::runtime(
+                                0,
+                                "Lambda for filter() must take exactly 1 parameter",
+                            ));
+                        }
+
+                        let mut new_sheet = sheet.clone();
+                        let mut rows_to_keep = std::collections::HashSet::new();
+
+                        // Determine which rows to keep (skip header if present)
+                        // Check if a physical header row exists by comparing first row with column names
+                        let start_row = if let Some(names) = sheet.column_names() {
+                            if sheet.data().is_empty() {
+                                0
+                            } else {
+                                let first_row = &sheet.data()[0];
+                                let names_match = names.iter().enumerate().all(|(idx, name)| {
+                                    first_row
+                                        .get(idx)
+                                        .map(|cell| cell.as_str() == name.as_str())
+                                        .unwrap_or(false)
+                                });
+                                if names_match {
+                                    // Physical header exists, keep it
+                                    rows_to_keep.insert(0);
+                                    1
+                                } else {
+                                    0
+                                }
+                            }
+                        } else {
+                            0
+                        };
+
+                        for row_idx in start_row..sheet.row_count() {
+                            let row_value = if let Some(col_names) = sheet.column_names() {
+                                let mut row_obj = std::collections::HashMap::new();
+                                for (col_idx, col_name) in col_names.iter().enumerate() {
+                                    let cell = sheet
+                                        .get(row_idx, col_idx)
+                                        .cloned()
+                                        .unwrap_or(piptable_sheet::CellValue::Null);
+                                    row_obj.insert(
+                                        col_name.clone(),
+                                        sheet_conversions::cell_to_value(cell),
+                                    );
+                                }
+                                Value::Object(row_obj)
+                            } else {
+                                let row = sheet.row(row_idx).map_err(|e| {
+                                    PipError::runtime(0, format!("Failed to access row: {}", e))
+                                })?;
+                                let values: Vec<Value> = row
+                                    .iter()
+                                    .cloned()
+                                    .map(sheet_conversions::cell_to_value)
+                                    .collect();
+                                Value::Array(values)
+                            };
+
+                            match self.apply_lambda(params, body, &[row_value]).await {
+                                Ok(result) => {
+                                    if result.is_truthy() {
+                                        rows_to_keep.insert(row_idx);
+                                    }
+                                }
+                                Err(e) => {
+                                    return Err(PipError::runtime(
+                                        0,
+                                        format!(
+                                            "Lambda error in filter() at row {}: {}",
+                                            row_idx, e
+                                        ),
+                                    ));
+                                }
+                            }
+                        }
+
+                        // Filter the sheet to keep only selected rows (HashSet for O(1) lookup)
+                        new_sheet.filter_rows(|row_idx, _row| rows_to_keep.contains(&row_idx));
+
+                        Ok(Value::Sheet(new_sheet))
+                    }
+                    _ => Err(PipError::runtime(
+                        0,
+                        "filter() requires a lambda expression",
+                    )),
+                }
+            }
+
             _ => Err(PipError::runtime(
                 0,
                 format!("Unknown sheet method: {}", method),

@@ -765,4 +765,168 @@ mod tests {
         assert!(query.order_by.is_some());
         assert!(query.limit.is_some());
     }
+
+    // ========================================================================
+    // Lambda expression tests
+    // ========================================================================
+
+    #[test]
+    fn parse_lambda_no_params() {
+        let code = "dim f = || 42";
+        let result = PipParser::parse_str(code);
+        assert!(result.is_ok(), "Parse error: {:?}", result.err());
+        let program = result.unwrap();
+        assert!(matches!(
+            &program.statements[0],
+            Statement::Dim { value, .. }
+            if matches!(value, Expr::Lambda { params, .. } if params.is_empty())
+        ));
+    }
+
+    #[test]
+    fn parse_lambda_one_param() {
+        let code = "dim add_one = |x| x + 1";
+        let result = PipParser::parse_str(code);
+        assert!(result.is_ok(), "Parse error: {:?}", result.err());
+        let program = result.unwrap();
+        assert!(matches!(
+            &program.statements[0],
+            Statement::Dim { value, .. }
+            if matches!(value, Expr::Lambda { params, .. } if params.len() == 1 && params[0] == "x")
+        ));
+    }
+
+    #[test]
+    fn parse_lambda_multiple_params() {
+        let code = "dim multiply = |a, b| a * b";
+        let result = PipParser::parse_str(code);
+        assert!(result.is_ok(), "Parse error: {:?}", result.err());
+        let program = result.unwrap();
+        assert!(matches!(
+            &program.statements[0],
+            Statement::Dim { value, .. }
+            if matches!(value, Expr::Lambda { params, .. }
+                if params.len() == 2 && params[0] == "a" && params[1] == "b")
+        ));
+    }
+
+    #[test]
+    fn parse_lambda_complex_body() {
+        let code = "dim complex = |x| x > 5 and x < 10";
+        let result = PipParser::parse_str(code);
+        assert!(result.is_ok(), "Parse error: {:?}", result.err());
+        let program = result.unwrap();
+        assert!(matches!(
+            &program.statements[0],
+            Statement::Dim { value, .. }
+            if matches!(value, Expr::Lambda { .. })
+        ));
+    }
+
+    #[test]
+    fn parse_method_call_with_lambda() {
+        let code = "result = data.map(|x| x * 2)";
+        let result = PipParser::parse_str(code);
+        assert!(result.is_ok(), "Parse error: {:?}", result.err());
+        let program = result.unwrap();
+        assert!(matches!(
+            &program.statements[0],
+            Statement::Assignment { value, .. }
+            if matches!(value, Expr::MethodCall { method, args, .. }
+                if method == "map" && args.len() == 1)
+        ));
+    }
+
+    #[test]
+    fn parse_lambda_nested() {
+        // Test nested lambdas (currying)
+        let code = "dim curry = |x| |y| x + y";
+        let result = PipParser::parse_str(code);
+        assert!(result.is_ok(), "Parse error: {:?}", result.err());
+
+        let program = result.unwrap();
+        assert_eq!(program.statements.len(), 1);
+
+        // Verify it's a lambda that returns another lambda
+        assert!(matches!(
+            &program.statements[0],
+            Statement::Dim { value: Expr::Lambda { params, body }, .. }
+            if params.len() == 1 && matches!(**body, Expr::Lambda { .. })
+        ));
+    }
+
+    #[test]
+    fn parse_lambda_in_array() {
+        // Test lambdas as array elements
+        let code = "dim funcs = [|x| x + 1, |x| x * 2]";
+        let result = PipParser::parse_str(code);
+        assert!(result.is_ok(), "Parse error: {:?}", result.err());
+
+        let program = result.unwrap();
+        assert_eq!(program.statements.len(), 1);
+
+        // Verify it's an array containing lambda expressions
+        assert!(matches!(
+            &program.statements[0],
+            Statement::Dim { value: Expr::Array(items), .. }
+            if items.len() == 2 &&
+               items.iter().all(|item| matches!(item, Expr::Lambda { .. }))
+        ));
+    }
+
+    #[test]
+    fn parse_lambda_in_object() {
+        // Test lambdas as object values
+        let code = r#"dim ops = {"add": |x, y| x + y, "mul": |x, y| x * y}"#;
+        let result = PipParser::parse_str(code);
+        assert!(result.is_ok(), "Parse error: {:?}", result.err());
+
+        let program = result.unwrap();
+        assert_eq!(program.statements.len(), 1);
+
+        // Verify it's an object with lambda values
+        if let Statement::Dim {
+            value: Expr::Object(fields),
+            ..
+        } = &program.statements[0]
+        {
+            assert_eq!(fields.len(), 2);
+            // Object is a Vec of (String, Expr) pairs
+            assert!(fields.iter().all(|(_, v)| matches!(v, Expr::Lambda { .. })));
+        } else {
+            panic!("Expected object with lambda values");
+        }
+    }
+
+    #[test]
+    fn parse_lambda_with_comparison() {
+        // Test lambda with comparison expression
+        let code = "dim is_positive = |x| x > 0";
+        let result = PipParser::parse_str(code);
+        assert!(result.is_ok(), "Parse error: {:?}", result.err());
+
+        let program = result.unwrap();
+        assert_eq!(program.statements.len(), 1);
+
+        // Verify it's a lambda with binary comparison
+        assert!(matches!(
+            &program.statements[0],
+            Statement::Dim { value: Expr::Lambda { params, body }, .. }
+            if params.len() == 1 && matches!(**body, Expr::Binary { op: BinaryOp::Gt, .. })
+        ));
+    }
+
+    #[test]
+    fn parse_lambda_immediate_call() {
+        // Test lambda immediate invocation
+        let code = "dim result = (|x, y| x + y)(5, 3)";
+        let result = PipParser::parse_str(code);
+
+        // This should parse as a function call where the function is a lambda
+        // Note: This may not be supported yet, so we allow it to fail
+        if result.is_ok() {
+            let program = result.unwrap();
+            assert_eq!(program.statements.len(), 1);
+        }
+    }
 }

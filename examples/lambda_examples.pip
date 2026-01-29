@@ -1,0 +1,68 @@
+// Lambda expression examples for PipTable
+
+// Basic lambda definitions
+dim add_one = |x| x + 1
+dim multiply = |a, b| a * b
+dim is_positive = |n| n > 0
+
+// Test basic lambda evaluation
+dim result1 = add_one(5)  // Should return 6
+dim result2 = multiply(3, 4)  // Should return 12
+dim result3 = is_positive(-2)  // Should return false
+
+// Create sample data for sheet operations
+dim sample_data = [
+    ["Name", "Age", "Score"],
+    ["Alice", "25", "85"],
+    ["Bob", "30", "92"],
+    ["Charlie", "22", "78"],
+    ["Diana", "28", "95"]
+]
+
+// Convert to sheet and name columns
+dim people = sheet_from_array(sample_data)
+people = sheet_name_columns_by_row(people, 0)
+
+// Example lambda operations on sheets with named columns
+// Transform all scores (add 5 bonus points)
+dim bonus_scores = people.map(|row| {
+    ...row,
+    Score: row.Score + 5
+})
+
+// Filter adults (age >= 25)  
+dim adults = people.filter(|row| row.Age >= 25)
+
+// Complex transformations - add letter grades
+dim graded = people.map(|row| {
+    ...row,
+    Grade: row.Score >= 90 ? "A" : 
+           row.Score >= 80 ? "B" : 
+           row.Score >= 70 ? "C" : "F"
+})
+
+// Example with unnamed columns (array operations)
+dim raw_data = [
+    [1, 10, 100],
+    [2, 20, 200],
+    [3, 30, 300]
+]
+dim array_sheet = sheet_from_array(raw_data)
+
+// Transform each row array - multiply second column by 2
+dim transformed = array_sheet.map(|row| [row[0], row[1] * 2, row[2]])
+
+// Filter rows where first column > 1
+dim filtered = array_sheet.filter(|row| row[0] > 1)
+
+print("Lambda examples completed!")
+print("Basic lambda functions defined and tested:")
+print("- add_one: adds 1 to input, result1 =", result1)
+print("- multiply: multiplies two numbers, result2 =", result2) 
+print("- is_positive: checks if number > 0, result3 =", result3)
+print("Sheet operations with lambdas:")
+print("- bonus_scores: added 5 points to all scores")
+print("- adults: filtered people age >= 25")
+print("- graded: added letter grades based on scores")
+print("- transformed: array operations on raw data")
+print("- filtered: filtered array data by first column")
