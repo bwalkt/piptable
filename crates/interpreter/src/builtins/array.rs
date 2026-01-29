@@ -56,7 +56,7 @@ async fn filter(_interpreter: &Interpreter, args: Vec<Value>, line: usize) -> Pi
         return Err(PipError::runtime(
             line,
             "FILTER: first argument must be an array",
-        ))
+        ));
     };
 
     // Handle the include criteria
