@@ -187,6 +187,49 @@ impl Sheet {
         Ok(Sheet { inner: sheet })
     }
 
+    /// Load a sheet from an HTML file containing tables
+    ///
+    /// Args:
+    ///     path: Path to the HTML file
+    ///     has_headers: If True, first row is treated as headers
+    ///
+    /// Returns:
+    ///     A new Sheet instance containing data from the first table
+    ///
+    /// Example:
+    ///     >>> sheet = Sheet.from_html("data.html", has_headers=True)
+    #[staticmethod]
+    #[pyo3(signature = (path, has_headers=false))]
+    fn from_html(path: &str, has_headers: bool) -> PyResult<Self> {
+        let sheet = if has_headers {
+            RustSheet::from_html_with_headers(path, has_headers)
+        } else {
+            RustSheet::from_html(path)
+        }
+        .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
+        Ok(Sheet { inner: sheet })
+    }
+
+    /// Load a sheet from an HTML string containing tables
+    ///
+    /// Args:
+    ///     html_content: HTML content as a string
+    ///     has_headers: If True, first row is treated as headers
+    ///
+    /// Returns:
+    ///     A new Sheet instance containing data from the first table
+    #[staticmethod]
+    #[pyo3(signature = (html_content, has_headers=false))]
+    fn from_html_string(html_content: &str, has_headers: bool) -> PyResult<Self> {
+        let sheet = if has_headers {
+            RustSheet::from_html_string_with_headers(html_content, has_headers)
+        } else {
+            RustSheet::from_html_string(html_content)
+        }
+        .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
+        Ok(Sheet { inner: sheet })
+    }
+
     /// Get the sheet name
     fn name(&self) -> &str {
         self.inner.name()
