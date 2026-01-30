@@ -637,6 +637,7 @@ fn parse_error_literal(literal: &str) -> Result<ErrorValue, FormulaError> {
 
 /// Parse a formula string into an AST
 pub fn parse_formula(formula: &str) -> Result<FormulaExpr, FormulaError> {
+    let formula = formula.trim_start();
     let formula = formula.strip_prefix('=').unwrap_or(formula);
     if formula.trim().is_empty() {
         return Err(FormulaError::ParseError("Empty formula".to_string()));
