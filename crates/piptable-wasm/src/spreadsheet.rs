@@ -273,6 +273,7 @@ fn apply_cell_update(sheet: &mut SheetPayload, update: CellUpdate) -> Result<(),
 
 struct WasmEvalContext {
     sheet: SheetPayload,
+    #[allow(dead_code)]
     globals: HashMap<String, ToonValue>,
 }
 
