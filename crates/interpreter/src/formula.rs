@@ -60,7 +60,7 @@ struct SheetResolver<'a> {
     sheet: &'a Sheet,
 }
 
-impl<'a> ValueResolver for SheetResolver<'a> {
+impl ValueResolver for SheetResolver<'_> {
     fn get_cell(&self, addr: &CellAddress) -> FormulaValue {
         let row = addr.row as usize;
         let col = addr.col as usize;
