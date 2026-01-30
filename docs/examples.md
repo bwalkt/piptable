@@ -147,9 +147,9 @@ print(factorial(5))   ' 120
 ### Sub Procedures (no return)
 
 ```vba
-sub greet(name)
+function greet(name)
   print("Hello, " + name + "!")
-end sub
+end function
 
 greet("World")
 ```

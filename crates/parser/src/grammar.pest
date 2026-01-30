@@ -21,10 +21,8 @@ statement = {
   | for_stmt
   | while_stmt
   | function_def
-  | sub_def
   | return_stmt
   | exit_function_stmt
-  | exit_sub_stmt
   | exit_for_stmt
   | exit_while_stmt
   | call_stmt
@@ -78,12 +76,6 @@ function_def = {
     "end" ~ "function"
 }
 
-sub_def = {
-    "async"? ~ "sub" ~ ident ~ "(" ~ param_list? ~ ")" ~
-    (!("end") ~ statement)* ~
-    "end" ~ "sub"
-}
-
 param_list = { param ~ ("," ~ param)* }
 param = { param_modifier* ~ ident ~ default_value? }
 default_value = { "=" ~ expr }
@@ -92,7 +84,6 @@ param_modifier = { ^"byval" | ^"byref" | ^"optional" | ^"paramarray" }
 return_stmt = { "return" ~ expr? }
 
 exit_function_stmt = { "exit" ~ "function" }
-exit_sub_stmt = { "exit" ~ "sub" }
 exit_for_stmt = { "exit" ~ "for" }
 exit_while_stmt = { "exit" ~ "while" }
 

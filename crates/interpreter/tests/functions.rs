@@ -77,9 +77,9 @@ async fn test_byval_keyword_behaves_as_value_copy() {
 async fn test_byref_updates_caller() {
     let (interp, _) = run_script(
         r#"
-        sub increment(ByRef x)
+        function increment(ByRef x)
             x = x + 1
-        end sub
+        end function
         dim n = 5
         call increment(n)
     "#,
@@ -92,9 +92,9 @@ async fn test_byref_updates_caller() {
 async fn test_byref_requires_variable_argument() {
     let error_msg = run_script_err(
         r#"
-        sub increment(ByRef x)
+        function increment(ByRef x)
             x = x + 1
-        end sub
+        end function
         call increment(5)
     "#,
     )
@@ -106,9 +106,9 @@ async fn test_byref_requires_variable_argument() {
 async fn test_byref_array_element() {
     let (interp, _) = run_script(
         r#"
-        sub bump(ByRef x)
+        function bump(ByRef x)
             x = x + 1
-        end sub
+        end function
         dim arr = [1, 2, 3]
         call bump(arr[1])
         dim result = arr[1]
@@ -125,9 +125,9 @@ async fn test_byref_array_element() {
 async fn test_byref_object_field() {
     let (interp, _) = run_script(
         r#"
-        sub bump(ByRef x)
+        function bump(ByRef x)
             x = x + 1
-        end sub
+        end function
         dim obj = { a: 1, b: 2 }
         call bump(obj->a)
         dim result = obj->a
@@ -299,19 +299,19 @@ async fn test_function_with_local_var() {
     ));
 }
 
-/// Verifies that a sub procedure can modify a module-level variable.
+/// Verifies that a function procedure can modify a module-level variable.
 ///
 /// # Examples
 ///
 /// ```
 /// #[tokio::test]
-/// async fn example_sub_procedure_increments_module_var() {
+/// async fn example_function_procedure_increments_module_var() {
 ///     let (interp, _) = run_script(
 ///         r#"
 ///         dim counter = 0
-///         sub increment()
+///         function increment()
 ///             counter = counter + 1
-///         end sub
+///         end function
 ///         increment()
 ///         increment()
 ///         increment()
@@ -325,13 +325,13 @@ async fn test_function_with_local_var() {
 /// }
 /// ```
 #[tokio::test]
-async fn test_sub_procedure() {
+async fn test_function_procedure() {
     let (interp, _) = run_script(
         r#"
         dim counter = 0
-        sub increment()
+        function increment()
             counter = counter + 1
-        end sub
+        end function
         increment()
         increment()
         increment()
@@ -370,10 +370,10 @@ async fn test_complex_param_combinations() {
 async fn test_multiple_byref_params() {
     let (interp, _) = run_script(
         r#"
-        sub modify_both(byref a, byref b, byval multiplier)
+        function modify_both(byref a, byref b, byval multiplier)
             a = a * multiplier
             b = b + multiplier
-        end sub
+        end function
         dim x = 5
         dim y = 10
         call modify_both(x, y, 3)
@@ -389,9 +389,9 @@ async fn test_multiple_byref_params() {
 async fn test_invalid_byref_argument_error() {
     let error_msg = run_script_err(
         r#"
-        sub modify(byref x)
+        function modify(byref x)
             x = x + 1
-        end sub
+        end function
         call modify(42)
     "#,
     )
@@ -428,14 +428,14 @@ async fn test_mixed_byval_byref_semantics() {
 async fn test_nested_function_calls_with_byref() {
     let (interp, _) = run_script(
         r#"
-        sub increment(byref x)
+        function increment(byref x)
             x = x + 1
-        end sub
+        end function
         
-        sub double_increment(byref y)
+        function double_increment(byref y)
             call increment(y)
             call increment(y)
-        end sub
+        end function
         
         dim value = 10
         call double_increment(value)
@@ -453,12 +453,12 @@ async fn test_nested_function_calls_with_byref() {
 async fn test_function_with_all_byref_params() {
     let (interp, _) = run_script(
         r#"
-        sub transform_values(byref a, byref b, byref c)
+        function transform_values(byref a, byref b, byref c)
             dim temp = a
             a = b
             b = c
             c = temp
-        end sub
+        end function
         dim x = 1
         dim y = 2
         dim z = 3

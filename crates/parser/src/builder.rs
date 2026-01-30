@@ -147,10 +147,8 @@ fn build_statement(pair: Pair<Rule>) -> BuildResult<Statement> {
         Rule::for_stmt => build_for_stmt(inner, line),
         Rule::while_stmt => build_while_stmt(inner, line),
         Rule::function_def => build_function_def(inner, line),
-        Rule::sub_def => build_sub_def(inner, line),
         Rule::return_stmt => build_return_stmt(inner, line),
         Rule::exit_function_stmt => Ok(Statement::ExitFunction { line }),
-        Rule::exit_sub_stmt => Ok(Statement::ExitSub { line }),
         Rule::exit_for_stmt => Ok(Statement::ExitFor { line }),
         Rule::exit_while_stmt => Ok(Statement::ExitWhile { line }),
         Rule::call_stmt => build_call_stmt(inner, line),
@@ -362,48 +360,9 @@ fn build_function_def(pair: Pair<Rule>, line: usize) -> BuildResult<Statement> {
     })
 }
 
-fn build_sub_def(pair: Pair<Rule>, line: usize) -> BuildResult<Statement> {
-    let mut inner = pair.clone().into_inner();
-    let mut is_async = false;
-
-    let mut next = inner.next().unwrap();
-    if next.as_str().eq_ignore_ascii_case("async") {
-        is_async = true;
-        next = inner.next().unwrap();
-    }
-
-    let name = next.as_str().to_string();
-    let mut params = Vec::new();
-    let mut body = Vec::new();
-
-    for item in inner {
-        match item.as_rule() {
-            Rule::param_list => {
-                for param in item.into_inner() {
-                    params.push(build_param(param)?);
-                }
-            }
-            Rule::statement => {
-                body.push(build_statement(item)?);
-            }
-            _ => {}
-        }
-    }
-
-    validate_param_list(&params, &pair)?;
-
-    Ok(Statement::Sub {
-        name,
-        params,
-        body,
-        is_async,
-        line,
-    })
-}
-
 /// Build a parameter definition from a pest parse pair.
 ///
-/// Parses a function or subroutine parameter definition, extracting the parameter
+/// Parses a function parameter definition, extracting the parameter
 /// name and any modifiers (ByVal/ByRef). Parameters default to ByVal if no modifier
 /// is specified.
 ///

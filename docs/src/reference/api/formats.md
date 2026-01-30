@@ -324,7 +324,7 @@ export processed to "report.json"  ' For web dashboard
 
 ```piptable
 ' Generic format converter
-sub convert_file(input_path, output_path)
+function convert_file(input_path, output_path)
     ' Detect format by extension
     dim data = import input_path into sheet
     
@@ -335,7 +335,7 @@ sub convert_file(input_path, output_path)
     export data to output_path
     
     print("Converted: " + input_path + " -> " + output_path)
-end sub
+end function
 
 ' Usage
 convert_file("data.csv", "data.parquet")

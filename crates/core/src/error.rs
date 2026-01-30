@@ -17,10 +17,6 @@ pub enum PipError {
     #[error("Exit Function")]
     ExitFunction(usize),
 
-    /// Exit Sub statement (not really an error, used for control flow).
-    #[error("Exit Sub")]
-    ExitSub(usize),
-
     /// Exit For statement (not really an error, used for control flow).
     #[error("Exit For")]
     ExitFor(usize),
@@ -125,7 +121,6 @@ impl PipError {
             | Self::Runtime { .. }
             | Self::Return(_)
             | Self::ExitFunction(_)
-            | Self::ExitSub(_)
             | Self::ExitFor(_)
             | Self::ExitWhile(_) => self,
             // Add line info to other errors

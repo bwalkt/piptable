@@ -69,23 +69,11 @@ pub enum Statement {
         line: usize,
     },
 
-    /// Sub (procedure) definition
-    Sub {
-        name: String,
-        params: Vec<Param>,
-        body: Vec<Statement>,
-        is_async: bool,
-        line: usize,
-    },
-
     /// Return statement
     Return { value: Option<Expr>, line: usize },
 
     /// Exit Function statement
     ExitFunction { line: usize },
-
-    /// Exit Sub statement  
-    ExitSub { line: usize },
 
     /// Exit For statement
     ExitFor { line: usize },
@@ -147,9 +135,9 @@ pub enum Statement {
     Expr { expr: Expr, line: usize },
 }
 
-/// Parameter passing mode for function/sub parameters.
+/// Parameter passing mode for function parameters.
 ///
-/// This enum determines how arguments are passed to functions and subroutines:
+/// This enum determines how arguments are passed to functions:
 /// - `ByVal`: Parameters are passed by value (copied), modifications don't affect the original
 /// - `ByRef`: Parameters are passed by reference, modifications affect the original variable
 ///
@@ -165,9 +153,9 @@ pub enum Statement {
 /// dim result = double_byval(original)  // result = 10, original = 5
 ///
 /// // ByRef example - original variable modified
-/// sub double_byref(ByRef x)
+/// function double_byref(ByRef x)
 ///     x = x * 2
-/// end sub
+/// end function
 /// dim value = 5
 /// call double_byref(value)  // value = 10
 /// ```
@@ -179,9 +167,9 @@ pub enum ParamMode {
     ByRef,
 }
 
-/// Function/sub parameter definition.
+/// Function parameter definition.
 ///
-/// Represents a single parameter in a function or subroutine definition, including
+/// Represents a single parameter in a function definition, including
 /// its name, passing mode, default value, and special parameter attributes.
 /// This structure is used during parsing and execution to manage parameter
 /// binding and reference semantics.

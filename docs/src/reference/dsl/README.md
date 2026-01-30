@@ -28,7 +28,7 @@ Control program flow and data operations:
 - Variable declarations (`dim`)
 - Control flow (`if`, `for`, `while`)
 - Data operations (`import`, `export`, `append`, `upsert`)
-- Functions and subroutines
+- Functions
 
 ### [Expressions](expressions.md)
 Compute and transform values:
