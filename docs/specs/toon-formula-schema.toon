@@ -1,0 +1,94 @@
+# TOON Schema for Formula Engine WASM Boundary
+# Version: 0.1
+# Purpose: Define data exchange format between Rust and JavaScript for spreadsheet operations
+
+schema[1]{name,version,types,notes}:
+  "piptable-formula-boundary","0.1","Value,CellAddr,Range,SheetPayload,CompileRequest,CompileResponse,EvalRequest,EvalResponse","WASM boundary schema for spreadsheet engine"
+
+# Core Value Types
+# Maps to piptable_core::Value with WASM-safe subset
+
+value_types[7]{type,toon_tag,rust_type,js_type,notes}:
+  "Null","null","Value::Null","null","Empty cell or null value"
+  "Boolean","bool","Value::Bool","boolean","0 or 1 for compactness"
+  "Integer","int","Value::Int(i64)","number","64-bit integer"
+  "Float","float","Value::Float(f64)","number","64-bit float"
+  "String","str","Value::String","string","UTF-8 string"
+  "Array","arr","Value::Array","Array","Recursive values"
+  "Object","obj","Value::Object","Object","Key-value map"
+
+# Extended Value Types (optional)
+extended_types[3]{type,toon_tag,rust_type,js_type,notes}:
+  "Date","date","i64 (unix ms)","Date","Unix timestamp in milliseconds"
+  "Duration","duration","i64 (ms)","number","Duration in milliseconds"
+  "Error","error","{code,msg}","Error","Error with code and message"
+
+# Unsupported Core Types (convert or error at boundary)
+unsupported_types[3]{rust_type,handling,notes}:
+  "Value::Table","Error or stringify","Too heavy for WASM boundary"
+  "Value::Sheet","Convert to SheetPayload","Use dense or sparse encoding"
+  "Value::Function/Lambda","Error","Non-serializable, use handle IDs if needed"
+
+# Cell Addressing
+cell_addr[1]{fields,example,notes}:
+  "r:u32,c:u32","{r:0,c:0}","0-based row and column"
+
+# Range Definition
+range[1]{fields,example,notes}:
+  "s:CellAddr,e:CellAddr","{s:{r:0,c:0},e:{r:9,c:9}}","Inclusive bounds, 10x10 range"
+
+# Sheet Payload Formats
+
+## Dense Format (row-major)
+sheet_payload_dense[1]{fields,when_to_use,notes}:
+  "range:Range,values:[Value]","density>0.2 or small ranges","Length = rows*cols, row-major order"
+
+## Sparse Format
+sheet_payload_sparse[1]{fields,when_to_use,notes}:
+  "range:Range,items:[{r,c,v}]","density<0.2 or large ranges","Only non-null/non-empty cells"
+
+# Encoding Selection Heuristic
+encoding_heuristic[3]{condition,encoding,reason}:
+  "nonNullCount/(rows*cols) < 0.2","sparse","Low density, save space"
+  "rows*cols > 10000 AND many empties","sparse","Large grid optimization"
+  "default","dense","Fewer allocations, faster eval"
+
+# Formula Compilation
+
+## Compile Request
+compile_request[1]{fields,example}:
+  "formulas:[FormulaText],options?:{locale?,decimal?}","{formulas:[{kind:'text',f:'=A1+B1'}]}"
+
+## Compile Response
+compile_response[1]{fields,example}:
+  "compiled:[FormulaBytecode],errors:[{idx,msg}]","{compiled:[{kind:'bc',b:[...]}],errors:[]}"
+
+# Formula Evaluation
+
+## Eval Request
+eval_request[1]{fields,example}:
+  "compiled:[FormulaBytecode],sheet:SheetPayload,globals?:{name:Value}","{compiled:[...],sheet:{...}}"
+
+## Eval Response
+eval_response[1]{fields,example}:
+  "results:[Value],errors:[{idx,msg}]","{results:[{t:'float',v:42}],errors:[]}"
+
+# Range Updates
+
+## Update Request
+range_update_request[1]{fields,example}:
+  "sheet:SheetPayload,updates:[{addr,value}]","{sheet:{...},updates:[{addr:{r:0,c:0},value:{t:'int',v:1}}]}"
+
+## Update Response
+range_update_response[2]{variant,fields,notes}:
+  "Updated","SheetPayload","Full updated sheet"
+  "Success","{ok:bool}","Simple success flag"
+
+# Format Detection
+format_detection[2]{first_byte,format,notes}:
+  "0x7B ('{')","JSON","Debug mode or small payloads"
+  "other","MessagePack/TOON","Production mode, large payloads"
+
+# Size Thresholds
+size_thresholds[1]{threshold_bytes,format,reason}:
+  "4096","Switch to TOON","Payloads > 4KB benefit from binary encoding"

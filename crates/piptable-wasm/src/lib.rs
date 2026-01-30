@@ -3,6 +3,8 @@ use piptable_parser::PipParser;
 use serde::{Deserialize, Serialize};
 use wasm_bindgen::prelude::*;
 
+pub mod spreadsheet;
+
 #[wasm_bindgen]
 extern "C" {
     #[wasm_bindgen(js_namespace = console)]

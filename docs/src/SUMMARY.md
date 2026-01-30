@@ -72,6 +72,11 @@
   - [Examples](dev/parameter-examples.md)
   - [Performance](dev/parameter-performance.md)
 
+# TODO
+
+- [TOON Formula Boundary (Draft)](specs/toon-formula-boundary.md)
+- [SheetXL Reference (Local)](specs/sheetxl-reference.md)
+
 ---
 
 [Playground](playground.md)
