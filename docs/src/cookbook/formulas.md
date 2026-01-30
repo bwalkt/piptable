@@ -21,8 +21,8 @@ with DSL built-ins like `sum`, `avg/average`, `min`, `max`, and `len`.
 Retrieve raw formula text or computed values:
 
 ```piptable
-dim raw = sheet_get_cell(sales, "B1")       // returns "=SUM(A1:A2)" if that's stored
-dim value = sheet_get_cell_value(sales, "B1") // returns the evaluated result
+dim raw = sheet_get_cell(sales, "B1")       ' returns "=SUM(A1:A2)" if that's stored
+dim value = sheet_get_cell_value(sales, "B1") ' returns the evaluated result
 dim is_formula = is_sheet_cell_formula(sales, "B1")
 ```
 
@@ -33,6 +33,7 @@ import sales from "sales.csv"
 
 dim a1 = sheet_get_cell_value(sales, "B1")
 dim total = sheet_eval_formula(sales, "SUM(A1:A10)")
+dim cached = sheet_get_a1_eval(sales, "B1")
 ```
 
 Notes:

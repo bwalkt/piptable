@@ -90,7 +90,7 @@ fn validate_arg_count(
         return Err(PipError::runtime(
             line,
             format!(
-                "Function '{}' expects {} arguments, got {}",
+                "Function '{}' expects {}, got {}",
                 name,
                 format_expected_args(min_args, max_args),
                 provided
@@ -102,7 +102,7 @@ fn validate_arg_count(
             return Err(PipError::runtime(
                 line,
                 format!(
-                    "Function '{}' expects {} arguments, got {}",
+                    "Function '{}' expects {}, got {}",
                     name,
                     format_expected_args(min_args, max_args),
                     provided
@@ -115,9 +115,15 @@ fn validate_arg_count(
 
 fn format_expected_args(min_args: usize, max_args: Option<usize>) -> String {
     match max_args {
-        Some(max) if max == min_args => format!("{min_args}"),
-        Some(max) => format!("{min_args}..{max}"),
-        None => format!("{min_args}+"),
+        Some(max) if max == min_args => {
+            if min_args == 1 {
+                "1 argument".to_string()
+            } else {
+                format!("{min_args} arguments")
+            }
+        }
+        Some(max) => format!("{min_args}..{max} arguments"),
+        None => format!("{min_args}+ arguments"),
     }
 }
 

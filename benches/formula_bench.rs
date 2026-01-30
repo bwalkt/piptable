@@ -21,11 +21,13 @@ impl BenchContext {
         }
 
         let mut ranges = HashMap::new();
-        let range = CellRange::new(
-            CellAddress::new(0, 0),
-            CellAddress::new((size - 1) as u32, 0),
-        );
-        ranges.insert(range, values);
+        if size > 0 {
+            let range = CellRange::new(
+                CellAddress::new(0, 0),
+                CellAddress::new((size - 1) as u32, 0),
+            );
+            ranges.insert(range, values);
+        }
 
         Self { cells, ranges }
     }

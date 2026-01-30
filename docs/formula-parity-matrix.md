@@ -8,7 +8,7 @@ This document tracks formula function parity between Piptable's implementation a
 ### ✅ Implemented (16 functions)
 
 | Category | Function | Piptable | SheetXL | Notes |
-|----------|----------|----------|---------|-------|
+| -------- | -------- | -------- | ------- | ----- |
 | **Math & Aggregation** | | | | |
 | | SUM | ✅ | ✅ | Basic aggregation |
 | | AVERAGE | ✅ | ✅ | Mean calculation |
@@ -34,7 +34,7 @@ This document tracks formula function parity between Piptable's implementation a
 ### 🔄 Planned for Next Phase
 
 | Category | Function | Priority | Notes |
-|----------|----------|----------|-------|
+| -------- | -------- | -------- | ----- |
 | **Lookup & Reference** | | | |
 | | VLOOKUP | High | Essential for spreadsheets |
 | | HLOOKUP | High | Horizontal lookup |
@@ -62,7 +62,7 @@ This document tracks formula function parity between Piptable's implementation a
 ### 📊 SheetXL Categories Not Yet Addressed
 
 | Category | Function Count | Examples | Priority |
-|----------|---------------|----------|----------|
+| -------- | -------------- | -------- | -------- |
 | Financial | ~50 | PV, FV, PMT, IRR, NPV | Low |
 | Engineering | ~40 | CONVERT, BIN2DEC, COMPLEX | Low |
 | Statistical | ~100+ | NORM.DIST, T.TEST, CORREL | Medium |
@@ -80,7 +80,7 @@ This document tracks formula function parity between Piptable's implementation a
 ## Performance Baselines
 
 | Operation | Target | Current | Status |
-|-----------|--------|---------|--------|
+| --------- | ------ | ------- | ------ |
 | Parse formula (simple) | <1ms | TBD | 🔄 |
 | Parse formula (complex) | <5ms | TBD | 🔄 |
 | Evaluate SUM (100 cells) | <1ms | TBD | 🔄 |
