@@ -119,7 +119,11 @@ fn create_eval_context(
     }
 }
 
-fn apply_cell_update(sheet: &mut SheetPayload, update: CellUpdate) -> Result<(), JsValue> {
+fn apply_cell_update(
+    sheet: &mut SheetPayload,
+    update: CellUpdate,
+    compact: bool,
+) -> Result<(), JsValue> {
     match sheet {
         SheetPayload::Dense { range, values } => {
             if update.addr.r < range.s.r
@@ -173,7 +177,9 @@ fn apply_cell_update(sheet: &mut SheetPayload, update: CellUpdate) -> Result<(),
                 });
             }
 
-            items.retain(|item| !matches!(item.v, ToonValue::Null));
+            if compact {
+                items.retain(|item| !matches!(item.v, ToonValue::Null));
+            }
             Ok(())
         }
     }
@@ -243,8 +249,11 @@ pub fn apply_range_bytes(toon_bytes: &[u8]) -> Result<Vec<u8>, String> {
     let request: RangeUpdateRequest = decode_request(toon_bytes)?;
 
     let mut sheet = request.sheet;
-    for update in request.updates {
-        apply_cell_update(&mut sheet, update).map_err(|e| e.as_string().unwrap_or_default())?;
+    let total = request.updates.len();
+    for (idx, update) in request.updates.into_iter().enumerate() {
+        let is_last = idx + 1 == total;
+        apply_cell_update(&mut sheet, update, is_last)
+            .map_err(|e| e.as_string().unwrap_or_default())?;
     }
 
     let response = RangeUpdateResponse::Updated(sheet);
