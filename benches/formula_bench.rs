@@ -230,11 +230,11 @@ fn bench_cache_operations(c: &mut Criterion) {
     });
 
     group.bench_function("invalidate", |b| {
-        b.iter(|| {
-            engine.invalidate(black_box(&addr));
-            // Re-add for next iteration
-            engine.set_formula(addr, "=A51+1").unwrap();
-        })
+        b.iter_batched(
+            || engine.set_formula(addr, "=A51+1").unwrap(),
+            |_| engine.invalidate(black_box(&addr)),
+            criterion::BatchSize::SmallInput,
+        )
     });
 
     group.finish();
