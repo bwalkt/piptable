@@ -245,11 +245,13 @@ pub fn apply_range_bytes(toon_bytes: &[u8]) -> Result<Vec<u8>, String> {
 }
 
 fn is_json_bytes(bytes: &[u8]) -> bool {
-    let first = bytes
-        .iter()
-        .copied()
-        .skip_while(|b| b.is_ascii_whitespace())
-        .next();
+    let mut first = None;
+    for b in bytes {
+        if !b.is_ascii_whitespace() {
+            first = Some(*b);
+            break;
+        }
+    }
     matches!(first, Some(b'{') | Some(b'['))
 }
 
