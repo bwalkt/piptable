@@ -26,6 +26,9 @@ repository = "https://github.com/bwalkt/piptable"
 authors = ["piptable contributors"]
 
 [workspace.dependencies]
+# Benchmarking
+criterion = "0.5"
+
 # Async runtime
 tokio = { version = "1", features = ["full"] }
 
