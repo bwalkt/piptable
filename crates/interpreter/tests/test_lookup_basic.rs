@@ -25,10 +25,10 @@ async fn test_vlookup_basic() {
 #[tokio::test]
 async fn test_index_basic() {
     let (interp, _) = run_script(
-        r#"
+        r"
         data = [[1, 2], [3, 4]]
         result = index(data, 2, 2)
-    "#,
+    ",
     )
     .await;
     assert!(matches!(

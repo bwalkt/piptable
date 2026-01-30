@@ -2077,10 +2077,10 @@ impl Interpreter {
                                     format!(
                                         "{}{}",
                                         required_count,
-                                        if required_count != func.params.len() {
-                                            format!(" to {}", func.params.len())
-                                        } else {
+                                        if required_count == func.params.len() {
                                             String::new()
+                                        } else {
+                                            format!(" to {}", func.params.len())
                                         }
                                     )
                                 },
@@ -2093,7 +2093,7 @@ impl Interpreter {
                     self.push_scope().await;
                     let param_result: PipResult<()> = async {
                         let mut arg_index = 0usize;
-                        for param in func.params.iter() {
+                        for param in &func.params {
                             if param.is_param_array {
                                 let mut values = Vec::new();
                                 while arg_index < args.len() {
@@ -3745,9 +3745,9 @@ combined = consolidate(stores, "_store")
             .await
             .unwrap();
 
-        let script = r#"
+        let script = r"
             dim result = query(SELECT * FROM products WHERE price > 150)
-        "#;
+        ";
 
         let program = PipParser::parse_str(script).unwrap();
         let result = interp.eval(program).await;
@@ -3770,8 +3770,10 @@ combined = consolidate(stores, "_store")
 
         // Create a sheet with headers using from_csv_str_with_options
         let csv_content = "name,age,city\nAlice,30,NYC\nBob,25,LA\nCharlie,35,SF";
-        let mut csv_options = piptable_sheet::CsvOptions::default();
-        csv_options.has_headers = true;
+        let csv_options = piptable_sheet::CsvOptions {
+            has_headers: true,
+            ..Default::default()
+        };
         let sheet = Sheet::from_csv_str_with_options(csv_content, csv_options).unwrap();
 
         // Verify column names are detected (fixes issue #163)
@@ -3783,7 +3785,7 @@ combined = consolidate(stores, "_store")
         interp.set_var("data", Value::Sheet(sheet)).await.unwrap();
 
         // Test positive indexing
-        let script = r#"
+        let script = r"
             dim first_row = data[0]
             dim second_row = data[1]
             dim third_row = data[2]
@@ -3792,7 +3794,7 @@ combined = consolidate(stores, "_store")
             dim alice_name = first_row.name
             dim bob_age = second_row.age
             dim charlie_city = third_row.city
-        "#;
+        ";
 
         let program = PipParser::parse_str(script).unwrap();
         let result = interp.eval(program).await;
@@ -3813,10 +3815,10 @@ combined = consolidate(stores, "_store")
         }
 
         // Test negative indexing
-        let script = r#"
+        let script = r"
             dim last_row = data[-1]
             dim charlie_name = last_row.name
-        "#;
+        ";
 
         let program = PipParser::parse_str(script).unwrap();
         interp.eval(program).await.unwrap();
@@ -3827,7 +3829,7 @@ combined = consolidate(stores, "_store")
         }
 
         // Test out of bounds
-        let script = r#"dim invalid = data[10]"#;
+        let script = r"dim invalid = data[10]";
         let program = PipParser::parse_str(script).unwrap();
         let result = interp.eval(program).await;
         assert!(result.is_err(), "Should fail with index out of bounds");
@@ -3851,9 +3853,9 @@ combined = consolidate(stores, "_store")
             .unwrap();
 
         // This should work and not treat the single row as header-only
-        let script = r#"
+        let script = r"
             dim result = query(SELECT * FROM single_row)
-        "#;
+        ";
 
         let program = PipParser::parse_str(script).unwrap();
         let result = interp.eval(program).await;
@@ -3882,8 +3884,10 @@ combined = consolidate(stores, "_store")
 
         // Sheet with column names
         let csv_with_header = "col1,col2\na,b\nc,d\ne,f";
-        let mut csv_options = piptable_sheet::CsvOptions::default();
-        csv_options.has_headers = true;
+        let csv_options = piptable_sheet::CsvOptions {
+            has_headers: true,
+            ..Default::default()
+        };
         let sheet_with_header =
             Sheet::from_csv_str_with_options(csv_with_header, csv_options).unwrap();
         interp
@@ -3907,10 +3911,10 @@ combined = consolidate(stores, "_store")
             .await
             .unwrap();
 
-        let script = r#"
+        let script = r"
             dim data_len = len(data)
             dim raw_len = len(raw_data)
-        "#;
+        ";
 
         let program = PipParser::parse_str(script).unwrap();
         interp.eval(program).await.unwrap();
@@ -5014,7 +5018,7 @@ combined = consolidate(stores, "_store")
         let mut interp = Interpreter::new();
 
         // First create a table from a query (simplest version)
-        let program1 = PipParser::parse_str(r#"dim data = query(SELECT 1 as id)"#).unwrap();
+        let program1 = PipParser::parse_str(r"dim data = query(SELECT 1 as id)").unwrap();
         interp.eval(program1).await.unwrap();
 
         // Verify we have a table
@@ -5022,7 +5026,7 @@ combined = consolidate(stores, "_store")
         assert!(matches!(data, Some(Value::Table(_))));
 
         // Now query the in-memory table variable
-        let program2 = PipParser::parse_str(r#"dim result = query(SELECT * FROM data)"#).unwrap();
+        let program2 = PipParser::parse_str(r"dim result = query(SELECT * FROM data)").unwrap();
         interp.eval(program2).await.unwrap();
 
         // Verify the result
@@ -5042,17 +5046,17 @@ combined = consolidate(stores, "_store")
         let mut interp = Interpreter::new();
 
         // Create first table
-        let program1 = PipParser::parse_str(r#"dim users = query(SELECT 1 as uid)"#).unwrap();
+        let program1 = PipParser::parse_str(r"dim users = query(SELECT 1 as uid)").unwrap();
         interp.eval(program1).await.unwrap();
 
         // Create second table
         let program2 =
-            PipParser::parse_str(r#"dim scores = query(SELECT 1 as uid, 100 as points)"#).unwrap();
+            PipParser::parse_str(r"dim scores = query(SELECT 1 as uid, 100 as points)").unwrap();
         interp.eval(program2).await.unwrap();
 
         // Join the two tables - now using natural names thanks to automatic aliasing
         let program3 = PipParser::parse_str(
-            r#"dim joined = query(SELECT users.uid, scores.points FROM users JOIN scores ON users.uid = scores.uid)"#,
+            r"dim joined = query(SELECT users.uid, scores.points FROM users JOIN scores ON users.uid = scores.uid)",
         )
         .unwrap();
         interp.eval(program3).await.unwrap();
@@ -5076,12 +5080,12 @@ combined = consolidate(stores, "_store")
         let mut interp = Interpreter::new();
 
         // Create a table (use simpler query due to parser limitations)
-        let program1 = PipParser::parse_str(r#"dim users = query(SELECT 1 as id)"#).unwrap();
+        let program1 = PipParser::parse_str(r"dim users = query(SELECT 1 as id)").unwrap();
         interp.eval(program1).await.unwrap();
 
         // Query with explicit alias - should NOT produce "table_users AS users AS u"
         let program2 =
-            PipParser::parse_str(r#"dim result = query(SELECT u.id FROM users AS u)"#).unwrap();
+            PipParser::parse_str(r"dim result = query(SELECT u.id FROM users AS u)").unwrap();
         interp.eval(program2).await.unwrap();
 
         // Verify it works
@@ -5498,10 +5502,10 @@ combined = consolidate(stores, "_store")
 
         // Test positive indexing
         let program = PipParser::parse_str(
-            r#"
+            r"
             dim row0 = sheet1[0]
             dim row1 = sheet1[1]
-        "#,
+        ",
         )
         .unwrap();
         interp.eval(program).await.unwrap();
@@ -5524,10 +5528,10 @@ combined = consolidate(stores, "_store")
 
         // Test negative indexing
         let program = PipParser::parse_str(
-            r#"
+            r"
             dim last_row = sheet1[-1]
             dim second_last = sheet1[-2]
-        "#,
+        ",
         )
         .unwrap();
         interp.eval(program).await.unwrap();
@@ -5549,12 +5553,12 @@ combined = consolidate(stores, "_store")
         }
 
         // Test out of bounds
-        let program = PipParser::parse_str(r#"dim oob = sheet1[2]"#).unwrap();
+        let program = PipParser::parse_str(r"dim oob = sheet1[2]").unwrap();
         let result = interp.eval(program).await;
         assert!(result.is_err());
         assert!(result.unwrap_err().to_string().contains("out of bounds"));
 
-        let program = PipParser::parse_str(r#"dim neg_oob = sheet1[-3]"#).unwrap();
+        let program = PipParser::parse_str(r"dim neg_oob = sheet1[-3]").unwrap();
         let result = interp.eval(program).await;
         assert!(result.is_err());
         assert!(result.unwrap_err().to_string().contains("out of bounds"));
@@ -5576,7 +5580,7 @@ combined = consolidate(stores, "_store")
             .unwrap();
 
         // Sheet2 has column_names AND first row matches those names, so it should skip header
-        let program = PipParser::parse_str(r#"dim sheet2_row0 = sheet2[0]"#).unwrap();
+        let program = PipParser::parse_str(r"dim sheet2_row0 = sheet2[0]").unwrap();
         interp.eval(program).await.unwrap();
 
         let sheet2_row0 = interp.get_var("sheet2_row0").await.unwrap();
@@ -5611,7 +5615,7 @@ combined = consolidate(stores, "_store")
 
         // Try to query it with SQL
         let program =
-            PipParser::parse_str(r#"dim result = query(SELECT * FROM single_row)"#).unwrap();
+            PipParser::parse_str(r"dim result = query(SELECT * FROM single_row)").unwrap();
 
         let result = interp.eval(program).await;
         assert!(
@@ -5690,11 +5694,11 @@ combined = consolidate(stores, "_store")
 
         // Test len() for each sheet
         let program = PipParser::parse_str(
-            r#"
+            r"
             dim len1 = len(sheet1)
             dim len2 = len(sheet2)
             dim len3 = len(sheet3)
-        "#,
+        ",
         )
         .unwrap();
         interp.eval(program).await.unwrap();

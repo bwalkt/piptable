@@ -6,13 +6,14 @@ mod common {
 use common::*;
 
 use piptable_core::Value;
+use piptable_sheet::CellValue;
 
 #[tokio::test]
 async fn test_lambda_single_param_arrow_syntax() {
     let (interp, _) = run_script(
-        r#"
+        r"
         dim double = x => x * 2
-    "#,
+    ",
     )
     .await;
 
@@ -27,10 +28,10 @@ async fn test_lambda_single_param_arrow_syntax() {
 
     // Now test calling it
     let (interp2, _) = run_script(
-        r#"
+        r"
         dim double = x => x * 2
         dim result = double(5)
-    "#,
+    ",
     )
     .await;
 
@@ -43,10 +44,10 @@ async fn test_lambda_single_param_arrow_syntax() {
 #[tokio::test]
 async fn test_lambda_multiple_params_arrow_syntax() {
     let (interp, _) = run_script(
-        r#"
+        r"
         dim add = (x, y) => x + y
         dim result = add(3, 4)
-    "#,
+    ",
     )
     .await;
 
@@ -59,9 +60,9 @@ async fn test_lambda_multiple_params_arrow_syntax() {
 #[tokio::test]
 async fn test_lambda_immediate_call() {
     let (interp, _) = run_script(
-        r#"
+        r"
         dim result = ((x, y) => x + y)(5, 3)
-    "#,
+    ",
     )
     .await;
 
@@ -74,10 +75,10 @@ async fn test_lambda_immediate_call() {
 #[tokio::test]
 async fn test_lambda_no_params_arrow_syntax() {
     let (interp, _) = run_script(
-        r#"
+        r"
         dim constant = () => 42
         dim result = constant()
-    "#,
+    ",
     )
     .await;
 
@@ -88,7 +89,7 @@ async fn test_lambda_no_params_arrow_syntax() {
 }
 
 #[tokio::test]
-#[ignore] // Lambda block expressions not yet supported
+#[ignore = "lambda block expressions not yet supported"]
 async fn test_lambda_with_sheet_map() {
     let (interp, _) = run_script(
         r#"
@@ -116,7 +117,6 @@ async fn test_lambda_with_sheet_map() {
             assert_eq!(data.len(), 4); // Header + 3 data rows
 
             // Check transformed ages (column 1)
-            use piptable_sheet::CellValue;
             if let Some(row) = data.get(1) {
                 assert!(matches!(row.get(1), Some(CellValue::Int(35)))); // Alice: 25 + 10
             }
@@ -155,13 +155,12 @@ async fn test_lambda_with_sheet_filter() {
             assert_eq!(data.len(), 3);
 
             // Check that we have Bob and David
-            use piptable_sheet::CellValue;
             if let Some(row) = data.get(1) {
-                assert!(matches!(row.get(0), Some(CellValue::String(s)) if s == "Bob"));
+                assert!(matches!(row.first(), Some(CellValue::String(s)) if s == "Bob"));
                 assert!(matches!(row.get(1), Some(CellValue::Int(30))));
             }
             if let Some(row) = data.get(2) {
-                assert!(matches!(row.get(0), Some(CellValue::String(s)) if s == "David"));
+                assert!(matches!(row.first(), Some(CellValue::String(s)) if s == "David"));
                 assert!(matches!(row.get(1), Some(CellValue::Int(35))));
             }
         }
@@ -172,11 +171,11 @@ async fn test_lambda_with_sheet_filter() {
 #[tokio::test]
 async fn test_lambda_closure_capture() {
     let (interp, _) = run_script(
-        r#"
+        r"
         dim factor = 10
         dim multiply = x => x * factor
         dim result = multiply(5)
-    "#,
+    ",
     )
     .await;
 
@@ -189,7 +188,7 @@ async fn test_lambda_closure_capture() {
 #[tokio::test]
 async fn test_lambda_in_array_map() {
     let (interp, _) = run_script(
-        r#"
+        r"
         dim numbers = [1, 2, 3, 4, 5]
         
         ' Use lambda to transform each number
@@ -201,7 +200,7 @@ async fn test_lambda_in_array_map() {
         dim result5 = square_fn(numbers[4])
         
         dim squares = [result1, result2, result3, result4, result5]
-    "#,
+    ",
     )
     .await;
 
@@ -219,14 +218,14 @@ async fn test_lambda_in_array_map() {
 }
 
 #[tokio::test]
-#[ignore] // Nested lambdas with closures not yet fully supported
+#[ignore = "nested lambdas with closures not yet supported"]
 async fn test_lambda_nested() {
     let (interp, _) = run_script(
-        r#"
+        r"
         dim outer = x => (y => x + y)
         dim add5 = outer(5)
         dim result = add5(3)
-    "#,
+    ",
     )
     .await;
 
@@ -253,10 +252,10 @@ async fn test_lambda_with_string_operations() {
 }
 
 #[tokio::test]
-#[ignore] // Lambda block expressions not yet supported
+#[ignore = "lambda block expressions not yet supported"]
 async fn test_lambda_with_conditional() {
     let (interp, _) = run_script(
-        r#"
+        r"
         dim abs_value = x => {
             if x < 0 then
                 return -x
@@ -266,7 +265,7 @@ async fn test_lambda_with_conditional() {
         }
         dim result1 = abs_value(-5)
         dim result2 = abs_value(3)
-    "#,
+    ",
     )
     .await;
 
@@ -284,11 +283,11 @@ async fn test_lambda_with_conditional() {
 #[tokio::test]
 async fn test_lambda_with_simple_conditional() {
     let (interp, _) = run_script(
-        r#"
+        r"
         dim is_positive = x => x > 0
         dim result1 = is_positive(5)
         dim result2 = is_positive(-3)
-    "#,
+    ",
     )
     .await;
 

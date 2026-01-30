@@ -39,8 +39,9 @@ async fn test_dim_integer() {
 #[tokio::test]
 async fn test_dim_float() {
     let (interp, _) = run_script("dim x = 3.14").await;
+    let expected: f64 = "3.14".parse().unwrap();
     match interp.get_var("x").await {
-        Some(Value::Float(f)) => assert!((f - 3.14).abs() < 0.001),
+        Some(Value::Float(f)) => assert!((f - expected).abs() < 0.001),
         _ => panic!("Expected float"),
     }
 }

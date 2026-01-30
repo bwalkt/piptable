@@ -395,7 +395,7 @@ mod tests {
 
     #[test]
     fn test_parse_simple_html_table() {
-        let html = r#"
+        let html = r"
             <table>
                 <tr>
                     <th>Name</th>
@@ -413,7 +413,7 @@ mod tests {
                     <td>Los Angeles</td>
                 </tr>
             </table>
-        "#;
+        ";
 
         let sheet = Sheet::from_html_string(html).unwrap();
 
@@ -448,7 +448,7 @@ mod tests {
 
     #[test]
     fn test_parse_multiple_tables() {
-        let html = r#"
+        let html = r"
             <table>
                 <tr><th>A</th><th>B</th></tr>
                 <tr><td>1</td><td>2</td></tr>
@@ -457,7 +457,7 @@ mod tests {
                 <tr><th>X</th><th>Y</th></tr>
                 <tr><td>3</td><td>4</td></tr>
             </table>
-        "#;
+        ";
 
         let sheets = Sheet::from_html_all_tables_string(html).unwrap();
 
@@ -482,12 +482,12 @@ mod tests {
 
     #[test]
     fn test_parse_table_with_mixed_types() {
-        let html = r#"
+        let html = r"
             <table>
                 <tr><td>Alice</td><td>30</td><td>true</td><td>3.14</td></tr>
                 <tr><td>Bob</td><td>25</td><td>false</td><td>2.71</td></tr>
             </table>
-        "#;
+        ";
 
         let sheet = Sheet::from_html_string(html).unwrap();
 
@@ -501,12 +501,13 @@ mod tests {
         );
         assert_eq!(sheet.get(0, 1).unwrap(), &CellValue::Int(30));
         assert_eq!(sheet.get(0, 2).unwrap(), &CellValue::Bool(true));
-        assert_eq!(sheet.get(0, 3).unwrap(), &CellValue::Float(3.14));
+        let expected = CellValue::Float("3.14".parse::<f64>().unwrap());
+        assert_eq!(sheet.get(0, 3).unwrap(), &expected);
     }
 
     #[test]
     fn test_no_table_in_html() {
-        let html = r#"<div>No table here</div>"#;
+        let html = r"<div>No table here</div>";
 
         let result = Sheet::from_html_string(html);
         assert!(result.is_err());
@@ -515,7 +516,7 @@ mod tests {
     #[test]
     fn test_mixed_th_td_rows() {
         // Test that rows with both th and td cells work correctly
-        let html = r#"
+        let html = r"
             <table>
                 <tr>
                     <th>Row Header</th>
@@ -528,7 +529,7 @@ mod tests {
                     <td>200</td>
                 </tr>
             </table>
-        "#;
+        ";
 
         let sheet = Sheet::from_html_string(html).unwrap();
 

@@ -75,7 +75,7 @@ async fn test_hlookup_exact_match() {
 #[tokio::test]
 async fn test_hlookup_approximate_match() {
     let (interp, _) = run_script(
-        r#"
+        r"
         salary_table = [
             [0, 30000, 40000, 50000, 60000, 70000],
             [10000, 35000, 45000, 55000, 65000, 75000],
@@ -85,7 +85,7 @@ async fn test_hlookup_approximate_match() {
         salary2 = hlookup(45000, salary_table, 2, true)
         bonus1 = hlookup(55000, salary_table, 3, true)
         bonus2 = hlookup(65000, salary_table, 3, true)
-    "#,
+    ",
     )
     .await;
 
@@ -113,7 +113,7 @@ async fn test_hlookup_approximate_match() {
 #[tokio::test]
 async fn test_index_function() {
     let (interp, _) = run_script(
-        r#"
+        r"
         data = [
             [10, 20, 30],
             [40, 50, 60],
@@ -122,7 +122,7 @@ async fn test_index_function() {
         val1 = index(data, 2, 3)
         val2 = index(data, 3, 1)
         row2 = index(data, 2)
-    "#,
+    ",
     )
     .await;
 
@@ -169,13 +169,13 @@ async fn test_match_exact() {
 #[tokio::test]
 async fn test_match_less_than_or_equal() {
     let (interp, _) = run_script(
-        r#"
+        r"
         sorted_nums = [10, 20, 30, 40, 50]
         pos1 = match(25, sorted_nums, 1)
         pos2 = match(30, sorted_nums, 1)
         pos3 = match(55, sorted_nums, 1)
         pos4 = match(5, sorted_nums, 1)
-    "#,
+    ",
     )
     .await;
 
@@ -194,12 +194,12 @@ async fn test_match_less_than_or_equal() {
 #[tokio::test]
 async fn test_match_greater_than_or_equal() {
     let (interp, _) = run_script(
-        r#"
+        r"
         descending = [50, 40, 30, 20, 10]
         pos1 = match(35, descending, -1)
         pos2 = match(50, descending, -1)
         pos3 = match(60, descending, -1)
-    "#,
+    ",
     )
     .await;
 
@@ -360,7 +360,7 @@ async fn test_xlookup_search_mode_with_duplicates() {
 #[tokio::test]
 async fn test_vlookup_approximate_match() {
     let (interp, _) = run_script(
-        r#"
+        r"
         tax_table = [
             [0, 0.10],
             [10000, 0.12],
@@ -372,7 +372,7 @@ async fn test_vlookup_approximate_match() {
         rate2 = vlookup(25000, tax_table, 2, true)
         rate3 = vlookup(50000, tax_table, 2, true)
         rate4 = vlookup(100000, tax_table, 2, true)
-    "#,
+    ",
     )
     .await;
 
@@ -512,7 +512,7 @@ async fn test_xlookup_duplicates_with_search_direction() {
 #[ignore = "index error handling not fully implemented yet"]
 async fn test_index_invalid_inputs() {
     let (interp, _) = run_script(
-        r#"
+        r"
         data = [
             [1, 2, 3],
             [4, 5, 6],
@@ -526,39 +526,39 @@ async fn test_index_invalid_inputs() {
         result4 = index(data, 1, 4)     ' Column index out of bounds
         result5 = index(data, -1, 1)    ' Negative row index
         result6 = index(data, 1, -1)    ' Negative column index
-    "#,
+    ",
     )
     .await;
 
     // All invalid indices should return error
     assert!(matches!(
         interp.get_var("result1").await,
-        Some(Value::String(s)) if s.starts_with("#")
+        Some(Value::String(s)) if s.starts_with('#')
     ));
 
     assert!(matches!(
         interp.get_var("result2").await,
-        Some(Value::String(s)) if s.starts_with("#")
+        Some(Value::String(s)) if s.starts_with('#')
     ));
 
     assert!(matches!(
         interp.get_var("result3").await,
-        Some(Value::String(s)) if s.starts_with("#")
+        Some(Value::String(s)) if s.starts_with('#')
     ));
 
     assert!(matches!(
         interp.get_var("result4").await,
-        Some(Value::String(s)) if s.starts_with("#")
+        Some(Value::String(s)) if s.starts_with('#')
     ));
 
     assert!(matches!(
         interp.get_var("result5").await,
-        Some(Value::String(s)) if s.starts_with("#")
+        Some(Value::String(s)) if s.starts_with('#')
     ));
 
     assert!(matches!(
         interp.get_var("result6").await,
-        Some(Value::String(s)) if s.starts_with("#")
+        Some(Value::String(s)) if s.starts_with('#')
     ));
 }
 
@@ -609,7 +609,7 @@ async fn test_vlookup_additional_edge_cases() {
 
     assert!(matches!(
         interp.get_var("result4").await,
-        Some(Value::String(s)) if s.starts_with("#")
+        Some(Value::String(s)) if s.starts_with('#')
     ));
 
     assert!(matches!(

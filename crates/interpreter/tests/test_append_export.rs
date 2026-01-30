@@ -192,7 +192,7 @@ async fn test_tsv_append_mode() {
 
     // Verify TSV has tab separators and all data
     let content = fs::read_to_string(&tsv_path).unwrap();
-    assert!(content.contains("\t")); // Has tab separators
+    assert!(content.contains('\t')); // Has tab separators
     assert!(content.contains("Widget"));
     assert!(content.contains("Gadget"));
     assert!(content.contains("Doohickey"));
@@ -713,7 +713,7 @@ async fn test_headerless_tsv_append() {
 
     // Verify TSV has tab separators and all data
     let content = fs::read_to_string(&tsv_path).unwrap();
-    assert!(content.contains("\t")); // Has tab separators
+    assert!(content.contains('\t')); // Has tab separators
     assert!(content.contains("Widget"));
     assert!(content.contains("Gadget"));
     assert!(content.contains("Doohickey"));

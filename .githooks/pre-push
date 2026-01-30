@@ -22,13 +22,13 @@ if ! cargo fmt --all -- --check > /dev/null 2>&1; then
 fi
 echo "✅ Formatting check passed"
 
-# 2. Clippy check (excluding piptable-python as CI does)
+# 2. Clippy check
 echo "🔧 Running clippy..."
-if ! cargo clippy --workspace --exclude piptable-python -- -D warnings > /dev/null 2>&1; then
+if ! scripts/clippy.sh -- -D warnings > /dev/null 2>&1; then
     echo "❌ Clippy warnings found! Fix them before pushing."
     echo ""
     echo "Showing clippy output:"
-    cargo clippy --workspace --exclude piptable-python -- -D warnings 2>&1 | grep -E "error|warning" | head -20
+    scripts/clippy.sh -- -D warnings 2>&1 | grep -E "error|warning" | head -20
     exit 1
 fi
 echo "✅ Clippy check passed"
