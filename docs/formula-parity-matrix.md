@@ -73,8 +73,8 @@ This document tracks formula function parity between Piptable's implementation a
 
 ## Coverage Metrics
 
-- **Current Coverage**: 16/400+ (~4%)
-- **Core Functions**: 16/50 (~32%)
+- **Current Coverage**: 17/400+ (~4%)
+- **Core Functions**: 17/50 (34%)
 - **Categories Covered**: 4/12 (33%)
 
 ## Performance Baselines
