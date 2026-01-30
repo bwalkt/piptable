@@ -2053,13 +2053,37 @@ impl Interpreter {
                 };
 
                 if let Some(func) = func {
-                    if func.params.len() != args.len() {
+                    let mut required_count = 0usize;
+                    let mut has_param_array = false;
+                    for param in &func.params {
+                        if param.is_param_array {
+                            has_param_array = true;
+                        } else if param.default.is_none() {
+                            required_count += 1;
+                        }
+                    }
+
+                    if args.len() < required_count
+                        || (!has_param_array && args.len() > func.params.len())
+                    {
                         return Err(PipError::runtime(
                             line,
                             format!(
                                 "Function '{}' expects {} arguments, got {}",
                                 name,
-                                func.params.len(),
+                                if has_param_array {
+                                    format!("at least {required_count}")
+                                } else {
+                                    format!(
+                                        "{}{}",
+                                        required_count,
+                                        if required_count != func.params.len() {
+                                            format!(" to {}", func.params.len())
+                                        } else {
+                                            String::new()
+                                        }
+                                    )
+                                },
                                 args.len()
                             ),
                         ));
@@ -2067,24 +2091,65 @@ impl Interpreter {
 
                     // Create new scope with parameters
                     self.push_scope().await;
-                    for (idx, param) in func.params.iter().enumerate() {
-                        let arg_expr = &args[idx];
-                        match param.mode {
-                            ParamMode::ByVal => {
+                    let param_result: PipResult<()> = async {
+                        let mut arg_index = 0usize;
+                        for param in func.params.iter() {
+                            if param.is_param_array {
+                                let mut values = Vec::new();
+                                while arg_index < args.len() {
+                                    let value = self
+                                        .eval_expr(&args[arg_index])
+                                        .await
+                                        .map_err(|e| e.with_line(line))?;
+                                    values.push(value);
+                                    arg_index += 1;
+                                }
+                                self.declare_var(&param.name, Value::Array(values)).await;
+                                continue;
+                            }
+
+                            if let Some(arg_expr) = args.get(arg_index) {
+                                match param.mode {
+                                    ParamMode::ByVal => {
+                                        let value = self
+                                            .eval_expr(arg_expr)
+                                            .await
+                                            .map_err(|e| e.with_line(line))?;
+                                        self.declare_var(&param.name, value).await;
+                                    }
+                                    ParamMode::ByRef => {
+                                        let binding =
+                                            self.build_ref_binding(arg_expr, line).await?;
+                                        let mut scopes = self.scopes.write().await;
+                                        if let Some(scope) = scopes.last_mut() {
+                                            scope.insert(param.name.clone(), binding);
+                                        }
+                                    }
+                                }
+                                arg_index += 1;
+                            } else if let Some(default_expr) = &param.default {
                                 let value = self
-                                    .eval_expr(arg_expr)
+                                    .eval_expr(default_expr)
                                     .await
                                     .map_err(|e| e.with_line(line))?;
                                 self.declare_var(&param.name, value).await;
-                            }
-                            ParamMode::ByRef => {
-                                let binding = self.build_ref_binding(arg_expr, line).await?;
-                                let mut scopes = self.scopes.write().await;
-                                if let Some(scope) = scopes.last_mut() {
-                                    scope.insert(param.name.clone(), binding);
-                                }
+                            } else {
+                                return Err(PipError::runtime(
+                                    line,
+                                    format!(
+                                        "Function '{}' missing argument for parameter '{}'",
+                                        name, param.name
+                                    ),
+                                ));
                             }
                         }
+                        Ok(())
+                    }
+                    .await;
+
+                    if let Err(e) = param_result {
+                        self.pop_scope().await;
+                        return Err(e);
                     }
 
                     // Execute function body

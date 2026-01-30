@@ -68,6 +68,9 @@
 - [Contributing](dev/contributing.md)
 - [Testing](dev/testing.md)
 - [Building from Source](dev/building.md)
+- [Parameters (Planned)](dev/parameter-validation.md)
+  - [Examples](dev/parameter-examples.md)
+  - [Performance](dev/parameter-performance.md)
 
 ---
 

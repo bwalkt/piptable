@@ -10,14 +10,36 @@ use piptable_core::{
 use crate::Rule;
 
 /// Error during AST building with location info.
+///
+/// Represents an error that occurred while converting a pest parse tree into
+/// an AST. Contains location information (line and column) to help identify
+/// where the error occurred in the source code.
 #[derive(Debug)]
 pub struct BuildError {
+    /// Line number where the error occurred (1-based)
     pub line: usize,
+    /// Column number where the error occurred (1-based)  
     pub column: usize,
+    /// Human-readable error message describing what went wrong
     pub message: String,
 }
 
 impl BuildError {
+    /// Create a new build error with location and message.
+    ///
+    /// # Arguments
+    ///
+    /// * `line` - Line number where error occurred (1-based)
+    /// * `column` - Column number where error occurred (1-based)
+    /// * `message` - Error description
+    ///
+    /// # Examples
+    ///
+    /// ```rust,ignore
+    /// let error = BuildError::new(5, 10, "Unexpected token");
+    /// assert_eq!(error.line, 5);
+    /// assert_eq!(error.column, 10);
+    /// ```
     pub fn new(line: usize, column: usize, message: impl Into<String>) -> Self {
         Self {
             line,
@@ -26,6 +48,22 @@ impl BuildError {
         }
     }
 
+    /// Create a build error from a pest parse pair.
+    ///
+    /// Extracts line and column information from the parse pair and creates
+    /// an error with the provided message. This is the preferred way to create
+    /// build errors since it automatically extracts location information.
+    ///
+    /// # Arguments
+    ///
+    /// * `pair` - The pest parse pair where the error occurred
+    /// * `message` - Error description
+    ///
+    /// # Examples
+    ///
+    /// ```rust,ignore
+    /// let error = BuildError::from_pair(&pair, "Invalid parameter syntax");
+    /// ```
     pub fn from_pair(pair: &Pair<Rule>, message: impl Into<String>) -> Self {
         let (line, column) = pair.line_col();
         Self::new(line, column, message)
@@ -35,6 +73,36 @@ impl BuildError {
 type BuildResult<T> = Result<T, BuildError>;
 
 /// Build a Program AST from pest pairs.
+///
+/// Converts a pest parse tree into a structured AST representation. This is the
+/// main entry point for AST construction after parsing the source code with pest.
+/// The function processes each statement in the parse tree and builds the
+/// corresponding AST nodes.
+///
+/// # Arguments
+///
+/// * `pairs` - Iterator over pest parse pairs representing the parsed program
+///
+/// # Returns
+///
+/// * `Ok(Program)` - Successfully built AST program
+/// * `Err(BuildError)` - If any statement fails to build, with location info
+///
+/// # Examples
+///
+/// ```rust,ignore
+/// use pest::Parser;
+/// let parse_result = PiptableParser::parse(Rule::program, source_code)?;
+/// let program = build_program(parse_result)?;
+/// ```
+///
+/// # Errors
+///
+/// Returns `BuildError` if:
+/// - Any statement contains invalid syntax
+/// - Function parameters are malformed
+/// - Type assertions reference unknown types
+/// - Join conditions are invalid
 pub fn build_program(pairs: Pairs<Rule>) -> BuildResult<Program> {
     let mut statements = Vec::new();
 
@@ -98,7 +166,7 @@ fn build_statement(pair: Pair<Rule>) -> BuildResult<Statement> {
 }
 
 fn build_dim_stmt(pair: Pair<Rule>, line: usize) -> BuildResult<Statement> {
-    let mut inner = pair.into_inner();
+    let mut inner = pair.clone().into_inner();
     let name = inner.next().unwrap().as_str().to_string();
 
     // Check for type hint
@@ -122,7 +190,7 @@ fn build_dim_stmt(pair: Pair<Rule>, line: usize) -> BuildResult<Statement> {
 }
 
 fn build_assignment_stmt(pair: Pair<Rule>, line: usize) -> BuildResult<Statement> {
-    let mut inner = pair.into_inner();
+    let mut inner = pair.clone().into_inner();
     let lvalue_pair = inner.next().unwrap();
     let value_pair = inner.next().unwrap();
 
@@ -256,7 +324,7 @@ fn build_while_stmt(pair: Pair<Rule>, line: usize) -> BuildResult<Statement> {
 }
 
 fn build_function_def(pair: Pair<Rule>, line: usize) -> BuildResult<Statement> {
-    let mut inner = pair.into_inner();
+    let mut inner = pair.clone().into_inner();
     let mut is_async = false;
 
     let mut next = inner.next().unwrap();
@@ -282,6 +350,8 @@ fn build_function_def(pair: Pair<Rule>, line: usize) -> BuildResult<Statement> {
             _ => {}
         }
     }
+
+    validate_param_list(&params, &pair)?;
 
     Ok(Statement::Function {
         name,
@@ -293,7 +363,7 @@ fn build_function_def(pair: Pair<Rule>, line: usize) -> BuildResult<Statement> {
 }
 
 fn build_sub_def(pair: Pair<Rule>, line: usize) -> BuildResult<Statement> {
-    let mut inner = pair.into_inner();
+    let mut inner = pair.clone().into_inner();
     let mut is_async = false;
 
     let mut next = inner.next().unwrap();
@@ -320,6 +390,8 @@ fn build_sub_def(pair: Pair<Rule>, line: usize) -> BuildResult<Statement> {
         }
     }
 
+    validate_param_list(&params, &pair)?;
+
     Ok(Statement::Sub {
         name,
         params,
@@ -329,20 +401,61 @@ fn build_sub_def(pair: Pair<Rule>, line: usize) -> BuildResult<Statement> {
     })
 }
 
+/// Build a parameter definition from a pest parse pair.
+///
+/// Parses a function or subroutine parameter definition, extracting the parameter
+/// name and any modifiers (ByVal/ByRef). Parameters default to ByVal if no modifier
+/// is specified.
+///
+/// # Arguments
+///
+/// * `pair` - The pest parse pair containing the parameter definition
+///
+/// # Returns
+///
+/// * `Ok(Param)` - Successfully parsed parameter with name and mode
+/// * `Err(BuildError)` - If parameter name is missing or invalid
+///
+/// # Examples
+///
+/// Parses parameter definitions like:
+/// - `x` -> `Param { name: "x", mode: ByVal }`
+/// - `ByVal x` -> `Param { name: "x", mode: ByVal }`
+/// - `ByRef y` -> `Param { name: "y", mode: ByRef }`
+///
+/// # Errors
+///
+/// Returns `BuildError` if the parameter name is missing from the parse tree.
 fn build_param(pair: Pair<Rule>) -> BuildResult<Param> {
     let mut mode = ParamMode::ByVal;
     let mut name: Option<String> = None;
+    let mut default: Option<Expr> = None;
+    let mut saw_optional = false;
+    let mut is_param_array = false;
+    let mut saw_byval = false;
+    let mut saw_byref = false;
 
     for item in pair.clone().into_inner() {
         match item.as_rule() {
-            Rule::param_modifier => {
-                mode = match item.as_str().to_lowercase().as_str() {
-                    "byref" => ParamMode::ByRef,
-                    _ => ParamMode::ByVal,
-                };
-            }
+            Rule::param_modifier => match item.as_str().to_lowercase().as_str() {
+                "byref" => {
+                    saw_byref = true;
+                    mode = ParamMode::ByRef;
+                }
+                "byval" => {
+                    saw_byval = true;
+                    mode = ParamMode::ByVal;
+                }
+                "optional" => saw_optional = true,
+                "paramarray" => is_param_array = true,
+                _ => {}
+            },
             Rule::ident => {
                 name = Some(item.as_str().to_string());
+            }
+            Rule::default_value => {
+                let expr_pair = item.into_inner().next().unwrap();
+                default = Some(build_expr(expr_pair)?);
             }
             _ => {}
         }
@@ -352,7 +465,82 @@ fn build_param(pair: Pair<Rule>) -> BuildResult<Param> {
         return Err(BuildError::from_pair(&pair, "Expected parameter name"));
     };
 
-    Ok(Param { name, mode })
+    if saw_byval && saw_byref {
+        return Err(BuildError::from_pair(
+            &pair,
+            "Parameter cannot be both ByVal and ByRef",
+        ));
+    }
+
+    if default.is_some() && !saw_optional {
+        return Err(BuildError::from_pair(
+            &pair,
+            "Default value requires Optional parameter",
+        ));
+    }
+
+    if saw_optional && default.is_none() {
+        return Err(BuildError::from_pair(
+            &pair,
+            "Optional parameters require a default value",
+        ));
+    }
+
+    if saw_optional && mode == ParamMode::ByRef {
+        return Err(BuildError::from_pair(
+            &pair,
+            "Optional parameters cannot be ByRef",
+        ));
+    }
+
+    if is_param_array && mode == ParamMode::ByRef {
+        return Err(BuildError::from_pair(
+            &pair,
+            "ParamArray cannot be passed ByRef",
+        ));
+    }
+
+    if is_param_array && default.is_some() {
+        return Err(BuildError::from_pair(
+            &pair,
+            "ParamArray cannot have a default value",
+        ));
+    }
+
+    if is_param_array && saw_optional {
+        return Err(BuildError::from_pair(
+            &pair,
+            "ParamArray cannot be Optional",
+        ));
+    }
+
+    Ok(Param {
+        name,
+        mode,
+        default,
+        is_param_array,
+    })
+}
+
+fn validate_param_list(params: &[Param], pair: &Pair<Rule>) -> BuildResult<()> {
+    let mut seen_optional = false;
+    for (idx, param) in params.iter().enumerate() {
+        if param.is_param_array && idx + 1 != params.len() {
+            return Err(BuildError::from_pair(
+                pair,
+                "ParamArray must be the last parameter",
+            ));
+        }
+        if param.default.is_some() {
+            seen_optional = true;
+        } else if seen_optional && !param.is_param_array {
+            return Err(BuildError::from_pair(
+                pair,
+                "Required parameters cannot follow optional parameters",
+            ));
+        }
+    }
+    Ok(())
 }
 
 fn build_return_stmt(pair: Pair<Rule>, line: usize) -> BuildResult<Statement> {

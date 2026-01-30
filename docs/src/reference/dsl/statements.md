@@ -141,7 +141,10 @@ wend
 
 Define a function that returns a value.
 
-Parameters can be annotated with `ByVal` (pass by value) or `ByRef` (pass by reference). `ByVal` is the default.
+Parameters can be annotated with:
+- `ByVal` (pass by value) or `ByRef` (pass by reference). `ByVal` is the default.
+- `Optional` for default values (optional parameters must include a default and appear after required parameters; `Optional` is `ByVal` only).
+- `ParamArray` for variadic arguments (must be the last parameter; receives remaining args as an array; `ParamArray` is `ByVal` only).
 
 ```piptable
 [async] function name(parameters)
@@ -165,6 +168,14 @@ function add_one(ByVal x)
     return x
 end function
 
+function greet(name, Optional suffix = "!")
+    return "Hello " + name + suffix
+end function
+
+function sum_all(ParamArray nums)
+    return sum(nums)
+end function
+
 function factorial(n)
     if n <= 1 then
         return 1
@@ -182,7 +193,7 @@ end function
 
 Define a subroutine (no return value).
 
-Parameters can be annotated with `ByVal` or `ByRef`. `ByVal` is the default.
+Parameters can be annotated with `ByVal`, `ByRef`, `Optional`, or `ParamArray`. `ByVal` is the default.
 
 ```piptable
 [async] sub name(parameters)
@@ -200,6 +211,12 @@ end sub
 
 sub increment(ByRef x)
     x = x + 1
+end sub
+
+sub log_items(ParamArray items)
+    for each item in items
+        print(item)
+    next
 end sub
 
 sub logError(message)
