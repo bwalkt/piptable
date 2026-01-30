@@ -404,7 +404,7 @@ impl Parser {
     }
 
     fn parse_mul_div(&mut self) -> Result<FormulaExpr, FormulaError> {
-        let mut expr = self.parse_power()?;
+        let mut expr = self.parse_unary()?;
         loop {
             let op = match self.peek_kind() {
                 TokenKind::Star => BinaryOperator::Multiply,
@@ -412,7 +412,7 @@ impl Parser {
                 _ => break,
             };
             self.advance();
-            let right = self.parse_power()?;
+            let right = self.parse_unary()?;
             expr = FormulaExpr::BinaryOp {
                 op,
                 left: Box::new(expr),
@@ -423,10 +423,10 @@ impl Parser {
     }
 
     fn parse_power(&mut self) -> Result<FormulaExpr, FormulaError> {
-        let mut expr = self.parse_unary()?;
+        let mut expr = self.parse_postfix()?;
         if matches!(self.peek_kind(), TokenKind::Caret) {
             self.advance();
-            let right = self.parse_power()?;
+            let right = self.parse_unary()?;
             expr = FormulaExpr::BinaryOp {
                 op: BinaryOperator::Power,
                 left: Box::new(expr),
@@ -450,7 +450,7 @@ impl Parser {
                     expr: Box::new(expr),
                 })
             }
-            _ => self.parse_postfix(),
+            _ => self.parse_power(),
         }
     }
 
@@ -679,6 +679,39 @@ mod tests {
         match expr {
             FormulaExpr::BinaryOp { op, .. } => assert_eq!(op, BinaryOperator::Add),
             _ => panic!("expected binary op"),
+        }
+    }
+
+    #[test]
+    fn test_parse_exponent_precedence() {
+        let expr = parse_formula("-2^2").unwrap();
+        match expr {
+            FormulaExpr::UnaryOp { op, expr } => {
+                assert_eq!(op, UnaryOperator::Negate);
+                assert!(matches!(
+                    *expr,
+                    FormulaExpr::BinaryOp {
+                        op: BinaryOperator::Power,
+                        ..
+                    }
+                ));
+            }
+            _ => panic!("expected unary negate over power"),
+        }
+
+        let expr = parse_formula("2^-3").unwrap();
+        match expr {
+            FormulaExpr::BinaryOp { op, right, .. } => {
+                assert_eq!(op, BinaryOperator::Power);
+                assert!(matches!(
+                    *right,
+                    FormulaExpr::UnaryOp {
+                        op: UnaryOperator::Negate,
+                        ..
+                    }
+                ));
+            }
+            _ => panic!("expected power with unary exponent"),
         }
     }
 
