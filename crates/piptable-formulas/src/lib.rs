@@ -97,7 +97,13 @@ impl FormulaEngine {
     /// Compile a formula string
     pub fn compile(&mut self, formula: &str) -> Result<CompiledFormula, FormulaError> {
         // TODO: Implement formula parsing and compilation
+        let _ = formula;
         todo!("Implement formula compilation")
+    }
+
+    /// Access registered functions
+    pub fn functions(&self) -> &FunctionRegistry {
+        &self.functions
     }
 
     /// Set a formula for a cell
@@ -165,6 +171,12 @@ impl FunctionRegistry {
     /// Check if a function exists
     pub fn has_function(&self, name: &str) -> bool {
         self.functions.contains_key(&name.to_uppercase())
+    }
+}
+
+impl Default for FormulaEngine {
+    fn default() -> Self {
+        Self::new()
     }
 }
 

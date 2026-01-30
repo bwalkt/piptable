@@ -127,7 +127,7 @@ pub fn column_index_to_letter(index: u32) -> String {
     loop {
         let remainder = n % 26;
         result.push((b'A' + remainder as u8) as char);
-        n = n / 26;
+        n /= 26;
 
         if n == 0 {
             break;
