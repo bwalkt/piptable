@@ -41,7 +41,7 @@ struct Token {
 
 struct Lexer<'a> {
     input: &'a str,
-    chars: Vec<char>,
+    chars: Vec<(usize, char)>,
     pos: usize,
 }
 
@@ -49,7 +49,7 @@ impl<'a> Lexer<'a> {
     fn new(input: &'a str) -> Self {
         Self {
             input,
-            chars: input.chars().collect(),
+            chars: input.char_indices().collect(),
             pos: 0,
         }
     }
@@ -201,7 +201,7 @@ impl<'a> Lexer<'a> {
             }
         }
 
-        let text = &self.input[start..self.pos];
+        let text = self.slice(start, self.pos);
         let value: f64 = text
             .parse()
             .map_err(|_| FormulaError::ParseError(format!("Invalid number literal '{}'", text)))?;
@@ -238,7 +238,7 @@ impl<'a> Lexer<'a> {
                 }
             }
             if !row_digits.is_empty() && is_boundary(self.peek()) && self.peek() != Some('!') {
-                let text = &self.input[start..self.pos];
+                let text = self.slice(start, self.pos);
                 if has_dollar || !col_letters.is_empty() {
                     return Ok(TokenKind::CellRef(text.to_string()));
                 }
@@ -268,7 +268,7 @@ impl<'a> Lexer<'a> {
     }
 
     fn peek(&self) -> Option<char> {
-        self.chars.get(self.pos).copied()
+        self.chars.get(self.pos).map(|(_, ch)| *ch)
     }
 
     fn advance(&mut self) {
@@ -282,6 +282,17 @@ impl<'a> Lexer<'a> {
         } else {
             false
         }
+    }
+
+    fn byte_pos(&self, idx: usize) -> usize {
+        self.chars
+            .get(idx)
+            .map(|(i, _)| *i)
+            .unwrap_or(self.input.len())
+    }
+
+    fn slice(&self, start: usize, end: usize) -> &str {
+        &self.input[self.byte_pos(start)..self.byte_pos(end)]
     }
 }
 
