@@ -87,7 +87,11 @@ export async function wasmEvalMany(request, debug = false) {
   if (debug) {
     console.log("Eval request:", request);
     console.log("Using format:", useToon ? "TOON" : "JSON");
-    console.log("Sheet size:", request.sheet.values.length, "cells");
+    if (request.sheet.values) {
+      console.log("Sheet size:", request.sheet.values.length, "cells");
+    } else if (request.sheet.items) {
+      console.log("Sheet sparse items:", request.sheet.items.length);
+    }
   }
   
   const bytes = encodePayload(request, useToon);
@@ -162,8 +166,44 @@ export async function wasmValidateFormula(formula, debug = false) {
  * @returns {SheetPayload}
  */
 export function createSheetPayload(data, startRow = 0, startCol = 0) {
+  return createSheetPayloadWithOptions(data, startRow, startCol, { autoSparse: false });
+}
+
+/**
+ * Helper to create a sheet payload with sparse/dense options
+ *
+ * @param {Array<Array<any>>} data - 2D array of cell values
+ * @param {number} startRow - Starting row (0-based)
+ * @param {number} startCol - Starting column (0-based)
+ * @param {{ sparse?: boolean, autoSparse?: boolean }} options
+ * @returns {SheetPayload}
+ */
+export function createSheetPayloadWithOptions(data, startRow = 0, startCol = 0, options = {}) {
   const rows = data.length;
   const cols = data[0]?.length || 0;
+
+  if (options.sparse || (options.autoSparse && shouldUseSparse(data))) {
+    const items = [];
+    for (let r = 0; r < rows; r++) {
+      for (let c = 0; c < cols; c++) {
+        const cellValue = data[r][c];
+        if (cellValue !== null && cellValue !== undefined && cellValue !== "") {
+          items.push({
+            r: startRow + r,
+            c: startCol + c,
+            v: convertToToonValue(cellValue),
+          });
+        }
+      }
+    }
+    return {
+      range: {
+        s: { r: startRow, c: startCol },
+        e: { r: startRow + rows - 1, c: startCol + cols - 1 },
+      },
+      items,
+    };
+  }
   
   const values = [];
   for (let r = 0; r < rows; r++) {
@@ -180,6 +220,26 @@ export function createSheetPayload(data, startRow = 0, startCol = 0) {
     },
     values
   };
+}
+
+function shouldUseSparse(data) {
+  const rows = data.length;
+  const cols = data[0]?.length || 0;
+  const total = rows * cols;
+  if (total === 0) return false;
+
+  let nonEmpty = 0;
+  for (let r = 0; r < rows; r++) {
+    for (let c = 0; c < cols; c++) {
+      const cellValue = data[r][c];
+      if (cellValue !== null && cellValue !== undefined && cellValue !== "") {
+        nonEmpty += 1;
+      }
+    }
+  }
+
+  const density = nonEmpty / total;
+  return density < 0.2 || (total > 10000 && density < 0.5);
 }
 
 /**

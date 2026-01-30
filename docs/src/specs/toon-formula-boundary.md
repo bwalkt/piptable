@@ -15,7 +15,7 @@ Supported value envelope:
 - `str` -> `{ t: "str", v: string }`
 - `arr` -> `{ t: "arr", v: [Value] }`
 - `obj` -> `{ t: "obj", v: {string: Value} }`
-- `error` -> `{ t: "error", v: {code: string, msg: string} }`
+- `error` -> `{ t: "error", code: string, msg: string }`
 
 ### CellAddr
 Zero-based coordinates:

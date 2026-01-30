@@ -2,12 +2,13 @@
 //!
 //! Minimal, batch-oriented APIs using TOON for efficient data exchange
 
-use piptable_formulas::FormulaEngine;
+use piptable_formulas::{CompiledFormula, FormulaEngine, ValueResolver};
 use piptable_primitives::toon::{
     CellUpdate, CompileError, CompileRequest, CompileResponse, EvalError, EvalRequest,
     EvalResponse, FormulaBytecode, FormulaText, RangeUpdateRequest, RangeUpdateResponse,
     SheetPayload, ToonValue,
 };
+use piptable_primitives::{CellAddress, CellRange, Value};
 use std::collections::HashMap;
 use wasm_bindgen::prelude::*;
 
@@ -198,51 +199,100 @@ pub fn validate_formula(toon_bytes: &[u8]) -> Result<Vec<u8>, JsValue> {
 // Helper functions
 
 fn compile_formula(engine: &mut FormulaEngine, formula: &str) -> Result<Vec<u8>, String> {
-    // TODO: Implement actual compilation
-    // For now, just store the formula text as "bytecode"
-    let _ = engine;
-    Ok(formula.as_bytes().to_vec())
+    let compiled = engine.compile(formula).map_err(|e| e.to_string())?;
+    rmp_serde::to_vec(&compiled).map_err(|e| e.to_string())
 }
 
-fn evaluate_bytecode(bytecode: &[u8], _context: &EvalContext) -> Result<ToonValue, String> {
-    // TODO: Implement actual evaluation
-    // For now, return a placeholder
-    Ok(ToonValue::Str {
-        v: format!(
-            "=TODO({})",
-            std::str::from_utf8(bytecode).unwrap_or("invalid")
-        ),
-    })
+fn evaluate_bytecode(bytecode: &[u8], context: &WasmEvalContext) -> Result<ToonValue, String> {
+    let compiled: CompiledFormula = rmp_serde::from_slice(bytecode).map_err(|e| e.to_string())?;
+    let engine = FormulaEngine::new();
+    let value = engine
+        .evaluate(&compiled, context)
+        .map_err(|e| e.to_string())?;
+    Ok(ToonValue::from(value))
 }
 
 fn create_eval_context(
     sheet: &SheetPayload,
     globals: Option<HashMap<String, ToonValue>>,
-) -> EvalContext {
-    EvalContext {
+) -> WasmEvalContext {
+    WasmEvalContext {
         sheet: sheet.clone(),
         globals: globals.unwrap_or_default(),
     }
 }
 
 fn apply_cell_update(sheet: &mut SheetPayload, update: CellUpdate) -> Result<(), JsValue> {
-    let row_offset = (update.addr.r - sheet.range.s.r) as usize;
-    let col_offset = (update.addr.c - sheet.range.s.c) as usize;
-    let cols = (sheet.range.e.c - sheet.range.s.c + 1) as usize;
+    match sheet {
+        SheetPayload::Dense { range, values } => {
+            let row_offset = (update.addr.r - range.s.r) as usize;
+            let col_offset = (update.addr.c - range.s.c) as usize;
+            let cols = (range.e.c - range.s.c + 1) as usize;
+            let index = row_offset * cols + col_offset;
 
-    let index = row_offset * cols + col_offset;
+            if index < values.len() {
+                values[index] = update.value;
+                Ok(())
+            } else {
+                Err(JsValue::from_str("Cell address out of range"))
+            }
+        }
+        SheetPayload::Sparse { range, items } => {
+            if update.addr.r < range.s.r
+                || update.addr.r > range.e.r
+                || update.addr.c < range.s.c
+                || update.addr.c > range.e.c
+            {
+                return Err(JsValue::from_str("Cell address out of range"));
+            }
 
-    if index < sheet.values.len() {
-        sheet.values[index] = update.value;
-        Ok(())
-    } else {
-        Err(JsValue::from_str("Cell address out of range"))
+            let is_null = matches!(update.value, ToonValue::Null);
+            if let Some(existing) = items
+                .iter_mut()
+                .find(|item| item.r == update.addr.r && item.c == update.addr.c)
+            {
+                if is_null {
+                    // remove existing by marking for removal
+                    existing.v = ToonValue::Null;
+                } else {
+                    existing.v = update.value;
+                }
+            } else if !is_null {
+                items.push(piptable_primitives::toon::SparseCell {
+                    r: update.addr.r,
+                    c: update.addr.c,
+                    v: update.value,
+                });
+            }
+
+            items.retain(|item| !matches!(item.v, ToonValue::Null));
+            Ok(())
+        }
     }
 }
 
-struct EvalContext {
-    #[allow(dead_code)]
+struct WasmEvalContext {
     sheet: SheetPayload,
-    #[allow(dead_code)]
     globals: HashMap<String, ToonValue>,
+}
+
+impl ValueResolver for WasmEvalContext {
+    fn get_cell(&self, addr: &CellAddress) -> Value {
+        self.sheet
+            .get_cell(addr.row, addr.col)
+            .unwrap_or(ToonValue::Null)
+            .into()
+    }
+
+    fn get_range(&self, range: &CellRange) -> Vec<Value> {
+        range.iter().map(|addr| self.get_cell(&addr)).collect()
+    }
+
+    fn get_sheet_cell(&self, _sheet: &str, addr: &CellAddress) -> Value {
+        self.get_cell(addr)
+    }
+
+    fn get_sheet_range(&self, _sheet: &str, range: &CellRange) -> Vec<Value> {
+        self.get_range(range)
+    }
 }
