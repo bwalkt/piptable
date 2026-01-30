@@ -54,7 +54,7 @@ Use when most cells are empty/null.
 ```
 
 ### Heuristic
-- Use sparse if `(non_null / total) < 0.2` or `rows*cols > 10_000` with many empty cells.
+- Use sparse if `(non_null / total) < 0.2` or `rows*cols > 10_000` with density `< 0.5`.
 - Otherwise use dense.
 
 ## 3) Compile + Eval Requests

@@ -85,9 +85,12 @@ fn compile_formula(engine: &mut FormulaEngine, formula: &str) -> Result<Vec<u8>,
     rmp_serde::to_vec(&compiled).map_err(|e| e.to_string())
 }
 
-fn evaluate_bytecode(bytecode: &[u8], context: &WasmEvalContext) -> Result<ToonValue, String> {
+fn evaluate_bytecode(
+    engine: &FormulaEngine,
+    bytecode: &[u8],
+    context: &WasmEvalContext,
+) -> Result<ToonValue, String> {
     let compiled: CompiledFormula = rmp_serde::from_slice(bytecode).map_err(|e| e.to_string())?;
-    let engine = FormulaEngine::new();
     let value = engine
         .evaluate(&compiled, context)
         .map_err(|e| e.to_string())?;
@@ -192,12 +195,13 @@ pub fn compile_many_bytes(toon_bytes: &[u8]) -> Result<Vec<u8>, String> {
 pub fn eval_many_bytes(toon_bytes: &[u8]) -> Result<Vec<u8>, String> {
     let request: EvalRequest = decode_request(toon_bytes)?;
     let context = create_eval_context(&request.sheet, request.globals);
+    let engine = FormulaEngine::new();
 
     let mut results = Vec::new();
     let mut errors = Vec::new();
 
     for (idx, bytecode) in request.compiled.iter().enumerate() {
-        match evaluate_bytecode(&bytecode.b, &context) {
+        match evaluate_bytecode(&engine, &bytecode.b, &context) {
             Ok(value) => results.push(value),
             Err(e) => {
                 results.push(ToonValue::Error {
@@ -250,6 +254,7 @@ fn encode_response<T: serde::Serialize>(
 struct WasmEvalContext {
     sheet: SheetPayload,
     #[allow(dead_code)]
+    // Reserved for future global resolution (named values/functions).
     globals: HashMap<String, ToonValue>,
 }
 

@@ -180,13 +180,14 @@ export function createSheetPayload(data, startRow = 0, startCol = 0) {
  */
 export function createSheetPayloadWithOptions(data, startRow = 0, startCol = 0, options = {}) {
   const rows = data.length;
-  const cols = data[0]?.length || 0;
+  const cols = Math.max(0, ...data.map((row) => (row ? row.length : 0)));
 
   if (options.sparse || (options.autoSparse && shouldUseSparse(data))) {
     const items = [];
     for (let r = 0; r < rows; r++) {
+      const rowData = data[r] || [];
       for (let c = 0; c < cols; c++) {
-        const cellValue = data[r][c];
+        const cellValue = rowData[c];
         if (cellValue !== null && cellValue !== undefined && cellValue !== "") {
           items.push({
             r: startRow + r,
@@ -207,8 +208,9 @@ export function createSheetPayloadWithOptions(data, startRow = 0, startCol = 0, 
   
   const values = [];
   for (let r = 0; r < rows; r++) {
+    const rowData = data[r] || [];
     for (let c = 0; c < cols; c++) {
-      const cellValue = data[r][c];
+      const cellValue = rowData[c];
       values.push(convertToToonValue(cellValue));
     }
   }
