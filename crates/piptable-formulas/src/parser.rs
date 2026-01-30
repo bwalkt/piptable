@@ -743,4 +743,49 @@ mod tests {
             _ => panic!("expected function call"),
         }
     }
+
+    #[test]
+    fn test_parse_literals_and_concat() {
+        let expr = parse_formula("\"hello\"").unwrap();
+        assert!(matches!(expr, FormulaExpr::Literal(Value::String(s)) if s == "hello"));
+
+        let expr = parse_formula("TRUE").unwrap();
+        assert!(matches!(expr, FormulaExpr::Literal(Value::Bool(true))));
+
+        let expr = parse_formula("#VALUE!").unwrap();
+        assert!(matches!(expr, FormulaExpr::Literal(Value::Error(ErrorValue::Value))));
+
+        let expr = parse_formula("\"a\"&\"b\"").unwrap();
+        match expr {
+            FormulaExpr::BinaryOp { op, .. } => assert_eq!(op, BinaryOperator::Concat),
+            _ => panic!("expected concat op"),
+        }
+    }
+
+    #[test]
+    fn test_parse_semicolon_args_and_percent() {
+        let expr = parse_formula("SUM(1;2;3)").unwrap();
+        match expr {
+            FormulaExpr::FunctionCall { args, .. } => assert_eq!(args.len(), 3),
+            _ => panic!("expected function call"),
+        }
+
+        let expr = parse_formula("5%").unwrap();
+        match expr {
+            FormulaExpr::UnaryOp { op, expr } => {
+                assert_eq!(op, UnaryOperator::Percent);
+                assert!(matches!(*expr, FormulaExpr::Literal(Value::Int(5))));
+            }
+            _ => panic!("expected percent unary"),
+        }
+    }
+
+    #[test]
+    fn test_parse_leading_whitespace() {
+        let expr = parse_formula(" =1+2").unwrap();
+        match expr {
+            FormulaExpr::BinaryOp { op, .. } => assert_eq!(op, BinaryOperator::Add),
+            _ => panic!("expected binary op"),
+        }
+    }
 }

@@ -794,4 +794,47 @@ mod tests {
         let value = engine.eval_expr(&expr, &ctx).expect("eval ok");
         assert_eq!(value, Value::Error(ErrorValue::Div0));
     }
+
+    #[test]
+    fn test_evaluate_arithmetic_and_percent() {
+        let mut engine = FormulaEngine::new();
+        let compiled = engine.compile("=5%+1").unwrap();
+        let ctx = EvalContext::default();
+        let value = engine.evaluate(&compiled, &ctx).expect("eval ok");
+        assert!(matches!(value, Value::Float(f) if (f - 1.05).abs() < 1e-9));
+    }
+
+    #[test]
+    fn test_evaluate_concat_and_compare() {
+        let mut engine = FormulaEngine::new();
+        let compiled = engine.compile("=\"a\"&\"b\"").unwrap();
+        let ctx = EvalContext::default();
+        let value = engine.evaluate(&compiled, &ctx).expect("eval ok");
+        assert_eq!(value, Value::String("ab".to_string()));
+
+        let compiled = engine.compile("=1<2").unwrap();
+        let value = engine.evaluate(&compiled, &ctx).expect("eval ok");
+        assert_eq!(value, Value::Bool(true));
+    }
+
+    #[test]
+    fn test_evaluate_cells_and_ranges() {
+        let mut engine = FormulaEngine::new();
+        let compiled = engine.compile("=A1+1").unwrap();
+        let mut cells = HashMap::new();
+        cells.insert(CellAddress::new(0, 0), Value::Int(2));
+        let ctx = EvalContext::with_cells(cells);
+        let value = engine.evaluate(&compiled, &ctx).expect("eval ok");
+        assert!(matches!(value, Value::Float(f) if (f - 3.0).abs() < 1e-9));
+
+        let compiled = engine.compile("=SUM(A1:A2)").unwrap();
+        let mut ranges = HashMap::new();
+        ranges.insert(
+            CellRange::new(CellAddress::new(0, 0), CellAddress::new(1, 0)),
+            vec![Value::Int(2), Value::Int(3)],
+        );
+        let ctx = EvalContext::with_ranges(ranges);
+        let value = engine.evaluate(&compiled, &ctx).expect("eval ok");
+        assert!(matches!(value, Value::Float(f) if (f - 5.0).abs() < 1e-9));
+    }
 }

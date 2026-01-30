@@ -244,6 +244,95 @@ mod tests {
         let result = date(&[Value::Int(2024), Value::Int(1), Value::Int(1)]);
         assert!(matches!(result, Value::Float(_)));
     }
+
+    #[test]
+    fn test_count_and_counta() {
+        let values = vec![
+            Value::Int(1),
+            Value::Float(2.5),
+            Value::String("x".to_string()),
+            Value::Empty,
+            Value::Array(vec![Value::Int(7), Value::String("y".to_string())]),
+        ];
+        assert_eq!(count(&values), Value::Int(3));
+
+        let values = vec![Value::Empty, Value::String("a".to_string())];
+        assert_eq!(counta(&values), Value::Int(1));
+
+        let values = vec![Value::Int(1), Value::Error(ErrorValue::Div0)];
+        assert_eq!(counta(&values), Value::Error(ErrorValue::Div0));
+    }
+
+    #[test]
+    fn test_if_truthiness() {
+        let result = if_fn(&[
+            Value::Bool(true),
+            Value::Int(1),
+            Value::Int(2),
+        ]);
+        assert_eq!(result, Value::Int(1));
+
+        let result = if_fn(&[Value::Int(0), Value::Int(1), Value::Int(2)]);
+        assert_eq!(result, Value::Int(2));
+
+        let result = if_fn(&[Value::Empty, Value::Int(1), Value::Int(2)]);
+        assert_eq!(result, Value::Int(2));
+
+        let result = if_fn(&[
+            Value::String("x".to_string()),
+            Value::Int(1),
+            Value::Int(2),
+        ]);
+        assert_eq!(result, Value::Error(ErrorValue::Value));
+    }
+
+    #[test]
+    fn test_and_or_behaviors() {
+        let result = and_fn(&[Value::Bool(true), Value::Int(1), Value::Float(1.0)]);
+        assert_eq!(result, Value::Bool(true));
+
+        let result = and_fn(&[Value::Bool(true), Value::Int(0)]);
+        assert_eq!(result, Value::Bool(false));
+
+        let result = and_fn(&[Value::Empty]);
+        assert_eq!(result, Value::Error(ErrorValue::Value));
+
+        let result = and_fn(&[Value::Float(f64::NAN), Value::Empty]);
+        assert_eq!(result, Value::Error(ErrorValue::Value));
+
+        let result = and_fn(&[Value::Error(ErrorValue::Div0), Value::Bool(false)]);
+        assert_eq!(result, Value::Error(ErrorValue::Div0));
+
+        let result = or_fn(&[Value::Bool(false), Value::Int(1)]);
+        assert_eq!(result, Value::Bool(true));
+
+        let result = or_fn(&[Value::Empty]);
+        assert_eq!(result, Value::Error(ErrorValue::Value));
+
+        let result = or_fn(&[Value::Error(ErrorValue::Div0), Value::Bool(true)]);
+        assert_eq!(result, Value::Error(ErrorValue::Div0));
+    }
+
+    #[test]
+    fn test_not_semantics() {
+        let result = not_fn(&[Value::Empty]);
+        assert_eq!(result, Value::Bool(true));
+
+        let result = not_fn(&[Value::Int(1)]);
+        assert_eq!(result, Value::Bool(false));
+
+        let result = not_fn(&[Value::String("x".to_string())]);
+        assert_eq!(result, Value::Error(ErrorValue::Value));
+    }
+
+    #[test]
+    fn test_today_now_returns_number() {
+        let result = today(&[]);
+        assert!(matches!(result, Value::Float(_)));
+
+        let result = now(&[]);
+        assert!(matches!(result, Value::Float(_)));
+    }
 }
 
 /// Max function - finds maximum value
