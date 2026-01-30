@@ -326,23 +326,33 @@ if sys.platform == 'darwin':
                 .or_else(|| line.strip_prefix("SYSLIBS:"))
                 .or_else(|| line.strip_prefix("LINKFORSHARED:"))
             {
-                for flag in extra.split_whitespace() {
+                let mut iter = extra.split_whitespace().peekable();
+                while let Some(flag) = iter.next() {
                     if let Some(path) = flag.strip_prefix("-L") {
-                        if !path.is_empty() {
+                        let path = if !path.is_empty() {
+                            Some(path)
+                        } else {
+                            iter.peek().copied()
+                        };
+                        if let Some(path) = path {
                             println!("cargo:rustc-link-search=native={}", path);
-                        } else if let Some(next_path) = flags.get(i + 1) {
-                            println!("cargo:rustc-link-search=native={}", next_path);
+                            if flag == "-L" {
+                                iter.next();
+                            }
                         }
                     } else if let Some(lib) = flag.strip_prefix("-l") {
                         let lib = if !lib.is_empty() {
-                            lib
-                        } else if let Some(next_lib) = flags.get(i + 1) {
-                            next_lib
+                            Some(lib)
                         } else {
-                            ""
+                            iter.peek().copied()
                         };
-                        if !lib.is_empty() && !["intl", "dl", "util", "rt"].contains(&lib) {
-                            println!("cargo:rustc-link-lib={}", lib);
+                        if let Some(lib) = lib {
+                            if !lib.is_empty() && !["intl", "dl", "util", "rt"].contains(&lib) {
+                                println!("cargo:rustc-link-lib={}", lib);
+                            }
+                            if flag == "-l" {
+                                iter.next();
+                            }
                         }
                     } else if flag.starts_with("-Wl,") || flag == "-pthread" {
                         println!("cargo:rustc-link-arg={}", flag);

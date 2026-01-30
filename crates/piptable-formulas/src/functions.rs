@@ -4,6 +4,21 @@ use chrono::{Local, TimeZone, Utc};
 use piptable_primitives::{ErrorValue, Value};
 use piptable_utils::datetime::datetime_to_excel_date;
 
+fn local_to_excel(local_dt: Option<chrono::DateTime<Local>>) -> Value {
+    match local_dt {
+        Some(dt) => Value::Float(datetime_to_excel_date(dt.with_timezone(&Utc))),
+        None => Value::Error(ErrorValue::Value),
+    }
+}
+
+fn date_to_local(date: chrono::NaiveDate, hour: u32, minute: u32, second: u32) -> Value {
+    let Some(naive) = date.and_hms_opt(hour, minute, second) else {
+        return Value::Error(ErrorValue::Value);
+    };
+    let local_dt = Local.from_local_datetime(&naive).single();
+    local_to_excel(local_dt)
+}
+
 fn walk_values(values: &[Value], f: &mut dyn FnMut(&Value)) {
     for value in values {
         match value {
@@ -104,20 +119,13 @@ pub fn concat(values: &[Value]) -> Value {
     let mut first_error: Option<ErrorValue> = None;
     let mut result = String::new();
 
-    walk_values(values, &mut |value| match value {
-        Value::Error(err) => {
+    walk_values(values, &mut |value| match coerce_to_text(value) {
+        Ok(text) => result.push_str(&text),
+        Err(err) => {
             if first_error.is_none() {
-                first_error = Some(err.clone());
+                first_error = Some(err);
             }
         }
-        _ => match coerce_to_text(value) {
-            Ok(text) => result.push_str(&text),
-            Err(err) => {
-                if first_error.is_none() {
-                    first_error = Some(err);
-                }
-            }
-        },
     });
 
     if let Some(err) = first_error {
@@ -172,19 +180,12 @@ pub fn right(values: &[Value]) -> Value {
 pub fn today(_: &[Value]) -> Value {
     let local = Local::now();
     let date = local.date_naive();
-    let Some(naive) = date.and_hms_opt(0, 0, 0) else {
-        return Value::Error(ErrorValue::Value);
-    };
-    let local_dt = Local.from_local_datetime(&naive).single();
-    match local_dt {
-        Some(dt) => Value::Float(datetime_to_excel_date(dt.with_timezone(&Utc))),
-        None => Value::Error(ErrorValue::Value),
-    }
+    date_to_local(date, 0, 0, 0)
 }
 
 pub fn now(_: &[Value]) -> Value {
     let local = Local::now();
-    Value::Float(datetime_to_excel_date(local.with_timezone(&Utc)))
+    local_to_excel(Some(local))
 }
 
 pub fn date(values: &[Value]) -> Value {
@@ -203,14 +204,7 @@ pub fn date(values: &[Value]) -> Value {
     let Some(date) = chrono::NaiveDate::from_ymd_opt(year, month, day) else {
         return Value::Error(ErrorValue::Value);
     };
-    let Some(naive) = date.and_hms_opt(0, 0, 0) else {
-        return Value::Error(ErrorValue::Value);
-    };
-    let local_dt = Local.from_local_datetime(&naive).single();
-    match local_dt {
-        Some(dt) => Value::Float(datetime_to_excel_date(dt.with_timezone(&Utc))),
-        None => Value::Error(ErrorValue::Value),
-    }
+    date_to_local(date, 0, 0, 0)
 }
 
 #[cfg(test)]
@@ -243,6 +237,238 @@ mod tests {
     fn test_date_returns_number() {
         let result = date(&[Value::Int(2024), Value::Int(1), Value::Int(1)]);
         assert!(matches!(result, Value::Float(_)));
+    }
+
+    #[test]
+    fn test_count_and_counta() {
+        let values = vec![
+            Value::Int(1),
+            Value::Float(2.5),
+            Value::String("x".to_string()),
+            Value::Empty,
+            Value::Array(vec![Value::Int(7), Value::String("y".to_string())]),
+        ];
+        assert_eq!(count(&values), Value::Int(3));
+
+        let values = vec![Value::Empty, Value::String("a".to_string())];
+        assert_eq!(counta(&values), Value::Int(1));
+
+        let values = vec![Value::Int(1), Value::Error(ErrorValue::Div0)];
+        assert_eq!(counta(&values), Value::Error(ErrorValue::Div0));
+    }
+
+    #[test]
+    fn test_if_truthiness() {
+        let result = if_fn(&[Value::Bool(true), Value::Int(1), Value::Int(2)]);
+        assert_eq!(result, Value::Int(1));
+
+        let result = if_fn(&[Value::Int(0), Value::Int(1), Value::Int(2)]);
+        assert_eq!(result, Value::Int(2));
+
+        let result = if_fn(&[Value::Empty, Value::Int(1), Value::Int(2)]);
+        assert_eq!(result, Value::Int(2));
+
+        let result = if_fn(&[Value::String("x".to_string()), Value::Int(1), Value::Int(2)]);
+        assert_eq!(result, Value::Error(ErrorValue::Value));
+    }
+
+    #[test]
+    fn test_and_or_behaviors() {
+        let result = and_fn(&[Value::Bool(true), Value::Int(1), Value::Float(1.0)]);
+        assert_eq!(result, Value::Bool(true));
+
+        let result = and_fn(&[Value::Bool(true), Value::Int(0)]);
+        assert_eq!(result, Value::Bool(false));
+
+        let result = and_fn(&[Value::Empty]);
+        assert_eq!(result, Value::Error(ErrorValue::Value));
+
+        let result = and_fn(&[Value::Float(f64::NAN), Value::Empty]);
+        assert_eq!(result, Value::Error(ErrorValue::Value));
+
+        let result = and_fn(&[Value::Error(ErrorValue::Div0), Value::Bool(false)]);
+        assert_eq!(result, Value::Error(ErrorValue::Div0));
+
+        let result = or_fn(&[Value::Bool(false), Value::Int(1)]);
+        assert_eq!(result, Value::Bool(true));
+
+        let result = or_fn(&[Value::Empty]);
+        assert_eq!(result, Value::Error(ErrorValue::Value));
+
+        let result = or_fn(&[Value::Error(ErrorValue::Div0), Value::Bool(true)]);
+        assert_eq!(result, Value::Error(ErrorValue::Div0));
+    }
+
+    #[test]
+    fn test_not_semantics() {
+        let result = not_fn(&[Value::Empty]);
+        assert_eq!(result, Value::Bool(true));
+
+        let result = not_fn(&[Value::Int(1)]);
+        assert_eq!(result, Value::Bool(false));
+
+        let result = not_fn(&[Value::String("x".to_string())]);
+        assert_eq!(result, Value::Error(ErrorValue::Value));
+    }
+
+    #[test]
+    fn test_today_now_returns_number() {
+        let result = today(&[]);
+        assert!(matches!(result, Value::Float(_)));
+
+        let result = now(&[]);
+        assert!(matches!(result, Value::Float(_)));
+    }
+
+    #[test]
+    fn test_average_no_numbers() {
+        let result = average(&[Value::String("x".to_string()), Value::Empty]);
+        assert_eq!(result, Value::Error(ErrorValue::Div0));
+    }
+
+    #[test]
+    fn test_max_min_no_numbers() {
+        let result = max(&[Value::String("x".to_string()), Value::Empty]);
+        assert_eq!(result, Value::Error(ErrorValue::Value));
+
+        let result = min(&[Value::String("x".to_string()), Value::Empty]);
+        assert_eq!(result, Value::Error(ErrorValue::Value));
+    }
+
+    #[test]
+    fn test_left_right_errors() {
+        let result = left(&[Value::String("hello".to_string()), Value::Int(-1)]);
+        assert_eq!(result, Value::Error(ErrorValue::Value));
+
+        let result = right(&[Value::String("hello".to_string()), Value::Int(-2)]);
+        assert_eq!(result, Value::Error(ErrorValue::Value));
+
+        let result = left(&[Value::Error(ErrorValue::Ref)]);
+        assert_eq!(result, Value::Error(ErrorValue::Ref));
+    }
+
+    #[test]
+    fn test_len_error_and_array_coercion() {
+        let result = len(&[Value::Error(ErrorValue::Num)]);
+        assert_eq!(result, Value::Error(ErrorValue::Num));
+
+        let result = len(&[Value::Array(vec![Value::String("abc".to_string())])]);
+        assert_eq!(result, Value::Int(3));
+
+        let result = len(&[Value::Array(vec![])]);
+        assert_eq!(result, Value::Int(0));
+    }
+
+    #[test]
+    fn test_date_invalid_inputs() {
+        let result = date(&[Value::Int(2024), Value::Int(13), Value::Int(1)]);
+        assert_eq!(result, Value::Error(ErrorValue::Value));
+
+        let result = date(&[Value::Int(2024), Value::Int(1)]);
+        assert_eq!(result, Value::Error(ErrorValue::Value));
+    }
+
+    #[test]
+    fn test_not_implemented_returns_na() {
+        let result = not_implemented(&[]);
+        assert_eq!(result, Value::Error(ErrorValue::NA));
+    }
+
+    #[test]
+    fn test_concat_array_and_error() {
+        let result = concat(&[Value::Array(vec![]), Value::String("x".to_string())]);
+        assert_eq!(result, Value::String("x".to_string()));
+
+        let result = concat(&[Value::Array(vec![Value::Error(ErrorValue::Ref)])]);
+        assert_eq!(result, Value::Error(ErrorValue::Ref));
+
+        let result = concat(&[Value::Bool(true), Value::Float(1.5)]);
+        assert_eq!(result, Value::String("true1.5".to_string()));
+    }
+
+    #[test]
+    fn test_sum_with_nested_arrays() {
+        let values = vec![
+            Value::Array(vec![Value::Int(1), Value::String("x".to_string())]),
+            Value::Array(vec![Value::Float(2.5), Value::Empty]),
+        ];
+        let result = sum(&values);
+        assert!(matches!(result, Value::Float(f) if (f - 3.5).abs() < 1e-9));
+    }
+
+    #[test]
+    fn test_average_with_numbers() {
+        let values = vec![Value::Int(2), Value::Float(4.0)];
+        let result = average(&values);
+        assert!(matches!(result, Value::Float(f) if (f - 3.0).abs() < 1e-9));
+    }
+
+    #[test]
+    fn test_max_min_with_numbers() {
+        let values = vec![Value::Int(2), Value::Float(4.0)];
+        let result = max(&values);
+        assert!(matches!(result, Value::Float(f) if (f - 4.0).abs() < 1e-9));
+
+        let result = min(&values);
+        assert!(matches!(result, Value::Float(f) if (f - 2.0).abs() < 1e-9));
+    }
+
+    #[test]
+    fn test_if_defaults() {
+        let result = if_fn(&[Value::Bool(true)]);
+        assert_eq!(result, Value::Bool(true));
+
+        let result = if_fn(&[Value::Bool(false), Value::Int(1)]);
+        assert_eq!(result, Value::Bool(false));
+
+        let result = if_fn(&[Value::Float(1.0), Value::Int(1), Value::Int(2)]);
+        assert_eq!(result, Value::Int(1));
+    }
+
+    #[test]
+    fn test_local_to_excel_failure() {
+        let result = local_to_excel(None);
+        assert_eq!(result, Value::Error(ErrorValue::Value));
+    }
+
+    #[test]
+    fn test_date_to_local_invalid_time() {
+        let date = chrono::NaiveDate::from_ymd_opt(2024, 1, 1).unwrap();
+        let result = date_to_local(date, 24, 0, 0);
+        assert_eq!(result, Value::Error(ErrorValue::Value));
+    }
+
+    #[test]
+    fn test_right_error_and_or_float_cases() {
+        let result = right(&[Value::Error(ErrorValue::Div0)]);
+        assert_eq!(result, Value::Error(ErrorValue::Div0));
+
+        let result = and_fn(&[Value::Float(0.0), Value::Bool(true)]);
+        assert_eq!(result, Value::Bool(false));
+
+        let result = and_fn(&[Value::String("x".to_string())]);
+        assert_eq!(result, Value::Error(ErrorValue::Value));
+
+        let result = or_fn(&[Value::Float(0.0), Value::Int(0)]);
+        assert_eq!(result, Value::Bool(false));
+
+        let result = or_fn(&[Value::Float(2.0), Value::Int(0)]);
+        assert_eq!(result, Value::Bool(true));
+
+        let result = or_fn(&[Value::Float(f64::NAN), Value::Empty]);
+        assert_eq!(result, Value::Error(ErrorValue::Value));
+
+        let result = or_fn(&[Value::String("x".to_string())]);
+        assert_eq!(result, Value::Error(ErrorValue::Value));
+    }
+
+    #[test]
+    fn test_not_bool_and_float() {
+        let result = not_fn(&[Value::Bool(true)]);
+        assert_eq!(result, Value::Bool(false));
+
+        let result = not_fn(&[Value::Float(0.0)]);
+        assert_eq!(result, Value::Bool(true));
     }
 }
 

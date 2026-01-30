@@ -794,4 +794,222 @@ mod tests {
         let value = engine.eval_expr(&expr, &ctx).expect("eval ok");
         assert_eq!(value, Value::Error(ErrorValue::Div0));
     }
+
+    #[test]
+    fn test_evaluate_arithmetic_and_percent() {
+        let mut engine = FormulaEngine::new();
+        let compiled = engine.compile("=5%+1").unwrap();
+        let ctx = EvalContext::default();
+        let value = engine.evaluate(&compiled, &ctx).expect("eval ok");
+        assert!(matches!(value, Value::Float(f) if (f - 1.05).abs() < 1e-9));
+    }
+
+    #[test]
+    fn test_evaluate_concat_and_compare() {
+        let mut engine = FormulaEngine::new();
+        let compiled = engine.compile("=\"a\"&\"b\"").unwrap();
+        let ctx = EvalContext::default();
+        let value = engine.evaluate(&compiled, &ctx).expect("eval ok");
+        assert_eq!(value, Value::String("ab".to_string()));
+
+        let compiled = engine.compile("=1<2").unwrap();
+        let value = engine.evaluate(&compiled, &ctx).expect("eval ok");
+        assert_eq!(value, Value::Bool(true));
+    }
+
+    #[test]
+    fn test_evaluate_cells_and_ranges() {
+        let mut engine = FormulaEngine::new();
+        let compiled = engine.compile("=A1+1").unwrap();
+        let mut cells = HashMap::new();
+        cells.insert(CellAddress::new(0, 0), Value::Int(2));
+        let ctx = EvalContext::with_cells(cells);
+        let value = engine.evaluate(&compiled, &ctx).expect("eval ok");
+        assert!(matches!(value, Value::Float(f) if (f - 3.0).abs() < 1e-9));
+
+        let compiled = engine.compile("=SUM(A1:A2)").unwrap();
+        let mut ranges = HashMap::new();
+        ranges.insert(
+            CellRange::new(CellAddress::new(0, 0), CellAddress::new(1, 0)),
+            vec![Value::Int(2), Value::Int(3)],
+        );
+        let ctx = EvalContext::with_ranges(ranges);
+        let value = engine.evaluate(&compiled, &ctx).expect("eval ok");
+        assert!(matches!(value, Value::Float(f) if (f - 5.0).abs() < 1e-9));
+    }
+
+    #[test]
+    fn test_engine_cache_helpers() {
+        let mut engine = FormulaEngine::new();
+        let cell = CellAddress::new(0, 0);
+        engine.set_formula(cell, "=1+2").expect("set ok");
+        let compiled = engine.get_formula(&cell).expect("cached");
+        assert_eq!(compiled.source, "=1+2");
+        engine.invalidate(&cell);
+        assert!(engine.get_formula(&cell).is_none());
+    }
+
+    #[test]
+    fn test_sheet_qualified_refs_and_defaults() {
+        let mut engine = FormulaEngine::new();
+        let compiled = engine.compile("=Sheet1!A1+SUM(Sheet1!A1:A2)").unwrap();
+        let mut ranges = HashMap::new();
+        ranges.insert(
+            CellRange::new(CellAddress::new(0, 0), CellAddress::new(1, 0)),
+            vec![Value::Int(2), Value::Int(3)],
+        );
+        let mut cells = HashMap::new();
+        cells.insert(CellAddress::new(0, 0), Value::Int(2));
+        let ctx = EvalContext { cells, ranges };
+        let value = engine.evaluate(&compiled, &ctx).expect("eval ok");
+        assert!(matches!(value, Value::Float(f) if (f - 7.0).abs() < 1e-9));
+    }
+
+    #[test]
+    fn test_function_definition_arg_count_labels() {
+        let fixed =
+            FunctionDefinition::fixed(vec![ParamType::Number], ReturnType::Number, functions::sum);
+        assert_eq!(fixed.expected_args_label(), "1");
+        assert!(fixed.validate_arg_count(1).is_ok());
+        assert!(fixed.validate_arg_count(2).is_err());
+
+        let ranged = FunctionDefinition::range(
+            2,
+            3,
+            vec![ParamType::Number, ParamType::Number, ParamType::Number],
+            ReturnType::Number,
+            functions::sum,
+        );
+        assert_eq!(ranged.expected_args_label(), "2..3");
+        assert!(ranged.validate_arg_count(2).is_ok());
+        assert!(ranged.validate_arg_count(4).is_err());
+
+        let variadic =
+            FunctionDefinition::variadic(1, ParamType::Number, ReturnType::Number, functions::sum);
+        assert_eq!(variadic.expected_args_label(), "1+");
+        assert!(variadic.validate_arg_count(10).is_ok());
+    }
+
+    #[test]
+    fn test_unary_and_binary_error_paths() {
+        let mut engine = FormulaEngine::new();
+        let ctx = EvalContext::default();
+
+        let compiled = engine.compile("=-\"a\"").unwrap();
+        let value = engine.evaluate(&compiled, &ctx).expect("eval ok");
+        assert_eq!(value, Value::Error(ErrorValue::Value));
+
+        let compiled = engine.compile("=\"a\"^2").unwrap();
+        let value = engine.evaluate(&compiled, &ctx).expect("eval ok");
+        assert_eq!(value, Value::Error(ErrorValue::Value));
+
+        let compiled = engine.compile("=1/0").unwrap();
+        let value = engine.evaluate(&compiled, &ctx).expect("eval ok");
+        assert_eq!(value, Value::Error(ErrorValue::Div0));
+
+        let expr = FormulaExpr::BinaryOp {
+            op: BinaryOperator::And,
+            left: Box::new(FormulaExpr::Literal(Value::String("a".to_string()))),
+            right: Box::new(FormulaExpr::Literal(Value::Bool(true))),
+        };
+        let value = engine.eval_expr(&expr, &ctx).expect("eval ok");
+        assert_eq!(value, Value::Error(ErrorValue::Value));
+    }
+
+    #[test]
+    fn test_collect_dependencies_and_hash() {
+        let expr = FormulaExpr::BinaryOp {
+            op: BinaryOperator::Add,
+            left: Box::new(FormulaExpr::CellRef(CellAddress::new(0, 0))),
+            right: Box::new(FormulaExpr::RangeRef(CellRange::new(
+                CellAddress::new(0, 1),
+                CellAddress::new(1, 1),
+            ))),
+        };
+        let mut deps = HashSet::new();
+        collect_dependencies(&expr, &mut deps);
+        assert!(deps.contains(&CellAddress::new(0, 0)));
+        assert!(deps.contains(&CellAddress::new(0, 1)));
+        assert!(deps.contains(&CellAddress::new(1, 1)));
+        assert_eq!(hash_formula("=A1"), hash_formula("=A1"));
+    }
+
+    #[test]
+    fn test_value_to_string_error_and_array() {
+        let err = Value::Error(ErrorValue::Value);
+        assert_eq!(value_to_string(err), "#VALUE!");
+        let arr = Value::Array(vec![Value::Int(1)]);
+        assert_eq!(value_to_string(arr), "");
+    }
+
+    #[test]
+    fn test_eval_context_defaults() {
+        let ctx = EvalContext::default();
+        let range = CellRange::new(CellAddress::new(0, 0), CellAddress::new(0, 0));
+        assert!(ctx.get_range(&range).is_empty());
+    }
+
+    #[test]
+    fn test_eval_context_cells_and_ranges_fallbacks() {
+        let mut cells = HashMap::new();
+        cells.insert(CellAddress::new(1, 2), Value::Int(7));
+        let ctx = EvalContext::with_cells(cells);
+        assert_eq!(ctx.get_cell(&CellAddress::new(1, 2)), Value::Int(7));
+        assert_eq!(ctx.get_cell(&CellAddress::new(9, 9)), Value::Empty);
+
+        let mut ranges = HashMap::new();
+        let range = CellRange::new(CellAddress::new(0, 0), CellAddress::new(0, 1));
+        ranges.insert(range, vec![Value::Int(1), Value::Int(2)]);
+        let ctx = EvalContext::with_ranges(ranges);
+        assert_eq!(ctx.get_range(&range), vec![Value::Int(1), Value::Int(2)]);
+        let missing = CellRange::new(CellAddress::new(9, 9), CellAddress::new(9, 9));
+        assert!(ctx.get_range(&missing).is_empty());
+    }
+
+    #[test]
+    fn test_collect_dependencies_sheet_refs_noop() {
+        let expr = FormulaExpr::SheetCellRef {
+            sheet: "S".to_string(),
+            addr: CellAddress::new(0, 0),
+        };
+        let mut deps = HashSet::new();
+        collect_dependencies(&expr, &mut deps);
+        assert!(deps.is_empty());
+
+        let expr = FormulaExpr::SheetRangeRef {
+            sheet: "S".to_string(),
+            range: CellRange::new(CellAddress::new(0, 0), CellAddress::new(0, 1)),
+        };
+        collect_dependencies(&expr, &mut deps);
+        assert!(deps.is_empty());
+    }
+
+    #[test]
+    fn test_logical_op_error_on_non_coercible() {
+        let engine = FormulaEngine::new();
+        let ctx = EvalContext::default();
+        let expr = FormulaExpr::BinaryOp {
+            op: BinaryOperator::Or,
+            left: Box::new(FormulaExpr::Literal(Value::Array(vec![Value::Int(1)]))),
+            right: Box::new(FormulaExpr::Literal(Value::Bool(false))),
+        };
+        let value = engine.eval_expr(&expr, &ctx).expect("eval ok");
+        assert_eq!(value, Value::Error(ErrorValue::Value));
+    }
+
+    #[test]
+    fn test_value_to_string_basic_types() {
+        assert_eq!(value_to_string(Value::Bool(true)), "true");
+        assert_eq!(value_to_string(Value::Int(3)), "3");
+        assert_eq!(value_to_string(Value::Float(1.25)), "1.25");
+    }
+
+    #[test]
+    fn test_compare_non_numeric_returns_false() {
+        let mut engine = FormulaEngine::new();
+        let ctx = EvalContext::default();
+        let compiled = engine.compile("=\"a\"<1").unwrap();
+        let value = engine.evaluate(&compiled, &ctx).expect("eval ok");
+        assert_eq!(value, Value::Bool(false));
+    }
 }
