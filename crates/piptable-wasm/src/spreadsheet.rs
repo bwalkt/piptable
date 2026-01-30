@@ -101,9 +101,21 @@ fn create_eval_context(
     sheet: &SheetPayload,
     globals: Option<HashMap<String, ToonValue>>,
 ) -> WasmEvalContext {
+    let sparse_index = match sheet {
+        SheetPayload::Sparse { items, .. } => {
+            let mut map = HashMap::with_capacity(items.len());
+            for item in items {
+                map.insert((item.r, item.c), item.v.clone());
+            }
+            Some(map)
+        }
+        _ => None,
+    };
+
     WasmEvalContext {
         sheet: sheet.clone(),
         globals: globals.unwrap_or_default(),
+        sparse_index,
     }
 }
 
@@ -256,14 +268,23 @@ struct WasmEvalContext {
     #[allow(dead_code)]
     // Reserved for future global resolution (named values/functions).
     globals: HashMap<String, ToonValue>,
+    sparse_index: Option<HashMap<(u32, u32), ToonValue>>,
 }
 
 impl ValueResolver for WasmEvalContext {
     fn get_cell(&self, addr: &CellAddress) -> Value {
-        self.sheet
-            .get_cell(addr.row, addr.col)
-            .unwrap_or(ToonValue::Null)
-            .into()
+        let toon = match &self.sheet {
+            SheetPayload::Sparse { .. } => self
+                .sparse_index
+                .as_ref()
+                .and_then(|map| map.get(&(addr.row, addr.col)).cloned())
+                .unwrap_or(ToonValue::Null),
+            _ => self
+                .sheet
+                .get_cell(addr.row, addr.col)
+                .unwrap_or(ToonValue::Null),
+        };
+        toon.into()
     }
 
     fn get_range(&self, range: &CellRange) -> Vec<Value> {
