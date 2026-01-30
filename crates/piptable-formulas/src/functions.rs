@@ -188,7 +188,7 @@ pub fn now(_: &[Value]) -> Value {
 }
 
 pub fn date(values: &[Value]) -> Value {
-    let year = values.get(0).and_then(to_number);
+    let year = values.first().and_then(to_number);
     let month = values.get(1).and_then(to_number);
     let day = values.get(2).and_then(to_number);
 
