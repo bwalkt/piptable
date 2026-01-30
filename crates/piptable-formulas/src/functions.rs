@@ -101,7 +101,7 @@ pub fn min(values: &[Value]) -> Value {
 }
 
 pub fn if_fn(values: &[Value]) -> Value {
-    let condition = values.get(0).unwrap_or(&Value::Empty);
+    let condition = values.first().unwrap_or(&Value::Empty);
     let then_value = values.get(1).cloned().unwrap_or(Value::Empty);
     let else_value = values.get(2).cloned().unwrap_or(Value::Empty);
 
@@ -169,7 +169,7 @@ pub fn or_fn(values: &[Value]) -> Value {
 }
 
 pub fn not_fn(values: &[Value]) -> Value {
-    let value = values.get(0).unwrap_or(&Value::Empty);
+    let value = values.first().unwrap_or(&Value::Empty);
     match value {
         Value::Bool(b) => Value::Bool(!b),
         Value::Int(n) => Value::Bool(*n == 0),
