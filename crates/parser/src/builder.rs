@@ -344,21 +344,19 @@ fn build_param(pair: Pair<Rule>) -> BuildResult<Param> {
 
     for item in pair.clone().into_inner() {
         match item.as_rule() {
-            Rule::param_modifier => {
-                match item.as_str().to_lowercase().as_str() {
-                    "byref" => {
-                        saw_byref = true;
-                        mode = ParamMode::ByRef;
-                    }
-                    "byval" => {
-                        saw_byval = true;
-                        mode = ParamMode::ByVal;
-                    }
-                    "optional" => saw_optional = true,
-                    "paramarray" => is_param_array = true,
-                    _ => {}
+            Rule::param_modifier => match item.as_str().to_lowercase().as_str() {
+                "byref" => {
+                    saw_byref = true;
+                    mode = ParamMode::ByRef;
                 }
-            }
+                "byval" => {
+                    saw_byval = true;
+                    mode = ParamMode::ByVal;
+                }
+                "optional" => saw_optional = true,
+                "paramarray" => is_param_array = true,
+                _ => {}
+            },
             Rule::ident => {
                 name = Some(item.as_str().to_string());
             }
