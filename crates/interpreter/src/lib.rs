@@ -11,6 +11,7 @@
 
 mod builtins;
 mod converters;
+mod formula;
 pub mod io;
 mod sheet_conversions;
 mod sql_builder;
@@ -1608,6 +1609,12 @@ impl Interpreter {
 
     /// Call a function (built-in or user-defined).
     async fn call_function(&mut self, name: &str, args: &[Expr], line: usize) -> PipResult<Value> {
+        // Prefer formula functions when caller uses Excel-style casing (e.g., SUM, CONCAT).
+        if formula::is_formula_function(name) && name.chars().any(|c| c.is_ascii_uppercase()) {
+            let arg_vals = self.eval_args(args, line).await?;
+            return formula::call_formula_function(name, &arg_vals, line);
+        }
+
         // Check built-in functions first (evaluate args only if needed)
         if builtins::is_builtin(name) {
             let arg_vals = self.eval_args(args, line).await?;
@@ -2175,6 +2182,11 @@ impl Interpreter {
                             let arg_vals = self.eval_args(args, line).await?;
                             return runtime.call(name, arg_vals).await;
                         }
+                    }
+
+                    if formula::is_formula_function(name) {
+                        let arg_vals = self.eval_args(args, line).await?;
+                        return formula::call_formula_function(name, &arg_vals, line);
                     }
 
                     Err(PipError::runtime(line, format!("Unknown function: {name}")))

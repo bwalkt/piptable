@@ -56,6 +56,18 @@ sales = sheet_remove_columns(sales, ["TempCol", "DebugInfo"])
 sales = sheet_remove_empty_rows(sales)
 ```
 
+### Formula Evaluation
+
+Evaluate formulas against sheet data when needed:
+
+```piptable
+// Evaluate a formula stored in a cell (e.g., "=SUM(A1:A2)")
+dim computed = sheet_get_cell_value(sales, "B2")
+
+// Evaluate a formula string directly against the sheet
+dim total = sheet_eval_formula(sales, "SUM(A1:A10)")
+```
+
 ### SQL Integration
 
 Sheets automatically convert to tables for SQL queries:
@@ -138,6 +150,43 @@ dim customer_totals = query(
 )
 
 print("Analysis complete! Top customers and monthly trends exported.")
+```
+
+## DSL Recipes
+
+Short, copy-pasteable patterns for common sheet + formula tasks.
+
+### Read Formula Text vs Computed Value
+
+```piptable
+// Raw cell value (formula text if stored)
+dim raw = sheet_get_cell(sales, "B2")
+
+// Computed value if formula, otherwise raw value
+dim value = sheet_get_cell_value(sales, "B2")
+
+// Check if a cell holds a formula string
+dim is_formula = is_sheet_cell_formula(sales, "B2")
+```
+
+### Compute a Column With Formulas
+
+```piptable
+sales = sheet_name_columns_by_row(sales, 0)
+
+dim rows = sheet_row_count(sales)
+for i in 1 to rows - 1 {
+    dim qty = sheet_get_by_name(sales, i, "Quantity")
+    dim price = sheet_get_by_name(sales, i, "Price")
+    dim total = qty * price
+    sales = sheet_set_by_name(sales, i, "Total", total)
+}
+```
+
+### Evaluate a Formula Against a Sheet
+
+```piptable
+dim total = sheet_eval_formula(sales, "SUM(A1:A10)")
 ```
 
 ## A1-Style Cell Access

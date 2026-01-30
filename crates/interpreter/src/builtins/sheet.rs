@@ -1,6 +1,6 @@
 //! Sheet manipulation built-in functions.
 
-use crate::Interpreter;
+use crate::{formula, Interpreter};
 use piptable_core::{PipError, PipResult, Value};
 use piptable_sheet::CellValue;
 
@@ -219,6 +219,108 @@ pub async fn call_sheet_builtin(
                         format!("Invalid cell notation '{}': {}", notation, e),
                     ))),
                 },
+                _ => Some(Err(PipError::runtime(
+                    line,
+                    "Arguments must be (sheet, string)",
+                ))),
+            }
+        }
+
+        "sheet_get_cell" => {
+            if args.len() != 2 {
+                return Some(Err(PipError::runtime(
+                    line,
+                    "sheet_get_cell() takes exactly 2 arguments (sheet, notation)",
+                )));
+            }
+            match (&args[0], &args[1]) {
+                (Value::Sheet(sheet), Value::String(notation)) => match sheet.get_a1(notation) {
+                    Ok(cell) => Some(Ok(cell_to_value(cell))),
+                    Err(e) => Some(Err(PipError::runtime(
+                        line,
+                        format!("Invalid cell notation '{}': {}", notation, e),
+                    ))),
+                },
+                _ => Some(Err(PipError::runtime(
+                    line,
+                    "Arguments must be (sheet, string)",
+                ))),
+            }
+        }
+
+        "sheet_get_cell_value" => {
+            if args.len() != 2 {
+                return Some(Err(PipError::runtime(
+                    line,
+                    "sheet_get_cell_value() takes exactly 2 arguments (sheet, notation)",
+                )));
+            }
+            match (&args[0], &args[1]) {
+                (Value::Sheet(sheet), Value::String(notation)) => {
+                    Some(formula::eval_sheet_cell(sheet, notation, line))
+                }
+                _ => Some(Err(PipError::runtime(
+                    line,
+                    "Arguments must be (sheet, string)",
+                ))),
+            }
+        }
+
+        "is_sheet_cell_formula" => {
+            if args.len() != 2 {
+                return Some(Err(PipError::runtime(
+                    line,
+                    "is_sheet_cell_formula() takes exactly 2 arguments (sheet, notation)",
+                )));
+            }
+            match (&args[0], &args[1]) {
+                (Value::Sheet(sheet), Value::String(notation)) => match sheet.get_a1(notation) {
+                    Ok(cell) => {
+                        let is_formula =
+                            matches!(cell, CellValue::String(s) if s.trim_start().starts_with('='));
+                        Some(Ok(Value::Bool(is_formula)))
+                    }
+                    Err(e) => Some(Err(PipError::runtime(
+                        line,
+                        format!("Invalid cell notation '{}': {}", notation, e),
+                    ))),
+                },
+                _ => Some(Err(PipError::runtime(
+                    line,
+                    "Arguments must be (sheet, string)",
+                ))),
+            }
+        }
+
+        "sheet_get_a1_eval" => {
+            if args.len() != 2 {
+                return Some(Err(PipError::runtime(
+                    line,
+                    "sheet_get_a1_eval() takes exactly 2 arguments (sheet, notation)",
+                )));
+            }
+            match (&args[0], &args[1]) {
+                (Value::Sheet(sheet), Value::String(notation)) => {
+                    Some(formula::eval_sheet_cell(sheet, notation, line))
+                }
+                _ => Some(Err(PipError::runtime(
+                    line,
+                    "Arguments must be (sheet, string)",
+                ))),
+            }
+        }
+
+        "sheet_eval_formula" => {
+            if args.len() != 2 {
+                return Some(Err(PipError::runtime(
+                    line,
+                    "sheet_eval_formula() takes exactly 2 arguments (sheet, formula)",
+                )));
+            }
+            match (&args[0], &args[1]) {
+                (Value::Sheet(sheet), Value::String(formula_text)) => {
+                    Some(formula::eval_sheet_formula(sheet, formula_text, line))
+                }
                 _ => Some(Err(PipError::runtime(
                     line,
                     "Arguments must be (sheet, string)",

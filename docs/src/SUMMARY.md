@@ -51,6 +51,7 @@
   - [Join Operations](cookbook/joins.md)
   - [TOON Processing](cookbook/toon.md)
   - [Sheet Rust API](cookbook/sheet-rust-api.md)
+  - [Formulas](cookbook/formulas.md)
   
 - [ETL Pipelines](cookbook/etl.md)
   - [Data Import](cookbook/import.md)
