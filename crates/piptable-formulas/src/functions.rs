@@ -194,47 +194,51 @@ pub fn and_fn(values: &[Value]) -> Value {
 
 pub fn or_fn(values: &[Value]) -> Value {
     let mut has_coercible = false;
-    let mut result = Value::Bool(false);
+    let mut any_true = false;
+    let mut first_error: Option<ErrorValue> = None;
 
     walk_values(values, &mut |value| match value {
         Value::Empty => {}
         Value::Bool(b) => {
             has_coercible = true;
             if *b {
-                result = Value::Bool(true);
+                any_true = true;
             }
         }
         Value::Int(n) => {
             has_coercible = true;
             if *n != 0 {
-                result = Value::Bool(true);
+                any_true = true;
             }
         }
         Value::Float(f) => {
+            if f.is_nan() {
+                return;
+            }
             has_coercible = true;
-            if *f != 0.0 && !f.is_nan() {
-                result = Value::Bool(true);
+            if *f != 0.0 {
+                any_true = true;
             }
         }
         Value::Error(err) => {
-            result = Value::Error(err.clone());
+            if first_error.is_none() {
+                first_error = Some(err.clone());
+            }
         }
         _ => {
-            result = Value::Error(ErrorValue::Value);
+            if first_error.is_none() {
+                first_error = Some(ErrorValue::Value);
+            }
         }
     });
 
-    if matches!(result, Value::Bool(true)) {
-        return result;
+    if let Some(err) = first_error {
+        return Value::Error(err);
     }
-    if matches!(result, Value::Error(_)) {
-        return result;
+    if !has_coercible {
+        return Value::Error(ErrorValue::Value);
     }
-    if has_coercible {
-        Value::Bool(false)
-    } else {
-        Value::Error(ErrorValue::Value)
-    }
+    Value::Bool(any_true)
 }
 
 pub fn not_fn(values: &[Value]) -> Value {
