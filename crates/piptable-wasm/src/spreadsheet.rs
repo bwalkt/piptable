@@ -244,8 +244,17 @@ pub fn apply_range_bytes(toon_bytes: &[u8]) -> Result<Vec<u8>, String> {
     encode_response(&response, toon_bytes)
 }
 
+fn is_json_bytes(bytes: &[u8]) -> bool {
+    let first = bytes
+        .iter()
+        .copied()
+        .skip_while(|b| b.is_ascii_whitespace())
+        .next();
+    matches!(first, Some(b'{') | Some(b'['))
+}
+
 fn decode_request<T: serde::de::DeserializeOwned>(toon_bytes: &[u8]) -> Result<T, String> {
-    if toon_bytes.starts_with(b"{") {
+    if is_json_bytes(toon_bytes) {
         serde_json::from_slice(toon_bytes).map_err(|e| format!("JSON parse error: {}", e))
     } else {
         rmp_serde::from_slice(toon_bytes).map_err(|e| format!("TOON parse error: {}", e))
@@ -256,7 +265,7 @@ fn encode_response<T: serde::Serialize>(
     response: &T,
     toon_bytes: &[u8],
 ) -> Result<Vec<u8>, String> {
-    if toon_bytes.starts_with(b"{") {
+    if is_json_bytes(toon_bytes) {
         serde_json::to_vec(response).map_err(|e| format!("JSON serialize error: {}", e))
     } else {
         rmp_serde::to_vec(response).map_err(|e| format!("TOON serialize error: {}", e))
