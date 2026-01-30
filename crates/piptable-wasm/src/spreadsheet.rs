@@ -2,7 +2,7 @@
 //!
 //! Minimal, batch-oriented APIs using TOON for efficient data exchange
 
-use piptable_formulas::{CompiledFormula, FormulaEngine};
+use piptable_formulas::FormulaEngine;
 use piptable_primitives::toon::{
     CellUpdate, CompileError, CompileRequest, CompileResponse, EvalError, EvalRequest,
     EvalResponse, FormulaBytecode, FormulaText, RangeUpdateRequest, RangeUpdateResponse,
@@ -200,6 +200,7 @@ pub fn validate_formula(toon_bytes: &[u8]) -> Result<Vec<u8>, JsValue> {
 fn compile_formula(engine: &mut FormulaEngine, formula: &str) -> Result<Vec<u8>, String> {
     // TODO: Implement actual compilation
     // For now, just store the formula text as "bytecode"
+    let _ = engine;
     Ok(formula.as_bytes().to_vec())
 }
 
@@ -240,6 +241,8 @@ fn apply_cell_update(sheet: &mut SheetPayload, update: CellUpdate) -> Result<(),
 }
 
 struct EvalContext {
+    #[allow(dead_code)]
     sheet: SheetPayload,
+    #[allow(dead_code)]
     globals: HashMap<String, ToonValue>,
 }
