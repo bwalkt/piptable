@@ -265,11 +265,7 @@ mod tests {
 
     #[test]
     fn test_if_truthiness() {
-        let result = if_fn(&[
-            Value::Bool(true),
-            Value::Int(1),
-            Value::Int(2),
-        ]);
+        let result = if_fn(&[Value::Bool(true), Value::Int(1), Value::Int(2)]);
         assert_eq!(result, Value::Int(1));
 
         let result = if_fn(&[Value::Int(0), Value::Int(1), Value::Int(2)]);
@@ -278,11 +274,7 @@ mod tests {
         let result = if_fn(&[Value::Empty, Value::Int(1), Value::Int(2)]);
         assert_eq!(result, Value::Int(2));
 
-        let result = if_fn(&[
-            Value::String("x".to_string()),
-            Value::Int(1),
-            Value::Int(2),
-        ]);
+        let result = if_fn(&[Value::String("x".to_string()), Value::Int(1), Value::Int(2)]);
         assert_eq!(result, Value::Error(ErrorValue::Value));
     }
 
@@ -332,6 +324,57 @@ mod tests {
 
         let result = now(&[]);
         assert!(matches!(result, Value::Float(_)));
+    }
+
+    #[test]
+    fn test_average_no_numbers() {
+        let result = average(&[Value::String("x".to_string()), Value::Empty]);
+        assert_eq!(result, Value::Error(ErrorValue::Div0));
+    }
+
+    #[test]
+    fn test_max_min_no_numbers() {
+        let result = max(&[Value::String("x".to_string()), Value::Empty]);
+        assert_eq!(result, Value::Error(ErrorValue::Value));
+
+        let result = min(&[Value::String("x".to_string()), Value::Empty]);
+        assert_eq!(result, Value::Error(ErrorValue::Value));
+    }
+
+    #[test]
+    fn test_left_right_errors() {
+        let result = left(&[Value::String("hello".to_string()), Value::Int(-1)]);
+        assert_eq!(result, Value::Error(ErrorValue::Value));
+
+        let result = right(&[Value::String("hello".to_string()), Value::Int(-2)]);
+        assert_eq!(result, Value::Error(ErrorValue::Value));
+
+        let result = left(&[Value::Error(ErrorValue::Ref)]);
+        assert_eq!(result, Value::Error(ErrorValue::Ref));
+    }
+
+    #[test]
+    fn test_len_error_and_array_coercion() {
+        let result = len(&[Value::Error(ErrorValue::Num)]);
+        assert_eq!(result, Value::Error(ErrorValue::Num));
+
+        let result = len(&[Value::Array(vec![Value::String("abc".to_string())])]);
+        assert_eq!(result, Value::Int(3));
+    }
+
+    #[test]
+    fn test_date_invalid_inputs() {
+        let result = date(&[Value::Int(2024), Value::Int(13), Value::Int(1)]);
+        assert_eq!(result, Value::Error(ErrorValue::Value));
+
+        let result = date(&[Value::Int(2024), Value::Int(1)]);
+        assert_eq!(result, Value::Error(ErrorValue::Value));
+    }
+
+    #[test]
+    fn test_not_implemented_returns_na() {
+        let result = not_implemented(&[]);
+        assert_eq!(result, Value::Error(ErrorValue::NA));
     }
 }
 

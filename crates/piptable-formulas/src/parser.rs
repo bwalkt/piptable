@@ -753,7 +753,10 @@ mod tests {
         assert!(matches!(expr, FormulaExpr::Literal(Value::Bool(true))));
 
         let expr = parse_formula("#VALUE!").unwrap();
-        assert!(matches!(expr, FormulaExpr::Literal(Value::Error(ErrorValue::Value))));
+        assert!(matches!(
+            expr,
+            FormulaExpr::Literal(Value::Error(ErrorValue::Value))
+        ));
 
         let expr = parse_formula("\"a\"&\"b\"").unwrap();
         match expr {
@@ -787,5 +790,105 @@ mod tests {
             FormulaExpr::BinaryOp { op, .. } => assert_eq!(op, BinaryOperator::Add),
             _ => panic!("expected binary op"),
         }
+    }
+
+    #[test]
+    fn test_parse_string_escapes() {
+        let expr = parse_formula("\"a\"\"b\"").unwrap();
+        assert!(matches!(expr, FormulaExpr::Literal(Value::String(s)) if s == "a\"b"));
+    }
+
+    #[test]
+    fn test_parse_sheet_name_escape() {
+        let expr = parse_formula("'My''Sheet'!A1").unwrap();
+        assert!(matches!(expr, FormulaExpr::SheetCellRef { sheet, .. } if sheet == "My'Sheet"));
+    }
+
+    #[test]
+    fn test_parse_error_literals() {
+        assert!(matches!(
+            parse_formula("#VALUE!").unwrap(),
+            FormulaExpr::Literal(Value::Error(ErrorValue::Value))
+        ));
+
+        assert!(matches!(
+            parse_error_literal("#DIV/0!"),
+            Ok(ErrorValue::Div0)
+        ));
+        assert!(matches!(
+            parse_error_literal("#NAME?"),
+            Ok(ErrorValue::Name)
+        ));
+        assert!(matches!(parse_error_literal("#REF!"), Ok(ErrorValue::Ref)));
+        assert!(matches!(
+            parse_error_literal("#NULL!"),
+            Ok(ErrorValue::Null)
+        ));
+        assert!(matches!(parse_error_literal("#NUM!"), Ok(ErrorValue::Num)));
+        assert!(matches!(parse_error_literal("#N/A"), Ok(ErrorValue::NA)));
+    }
+
+    #[test]
+    fn test_parse_comparisons() {
+        let expr = parse_formula("1=2").unwrap();
+        assert!(matches!(
+            expr,
+            FormulaExpr::BinaryOp {
+                op: BinaryOperator::Equal,
+                ..
+            }
+        ));
+
+        let expr = parse_formula("1<>2").unwrap();
+        assert!(matches!(
+            expr,
+            FormulaExpr::BinaryOp {
+                op: BinaryOperator::NotEqual,
+                ..
+            }
+        ));
+
+        let expr = parse_formula("1<2").unwrap();
+        assert!(matches!(
+            expr,
+            FormulaExpr::BinaryOp {
+                op: BinaryOperator::LessThan,
+                ..
+            }
+        ));
+
+        let expr = parse_formula("1<=2").unwrap();
+        assert!(matches!(
+            expr,
+            FormulaExpr::BinaryOp {
+                op: BinaryOperator::LessThanOrEqual,
+                ..
+            }
+        ));
+
+        let expr = parse_formula("1>2").unwrap();
+        assert!(matches!(
+            expr,
+            FormulaExpr::BinaryOp {
+                op: BinaryOperator::GreaterThan,
+                ..
+            }
+        ));
+
+        let expr = parse_formula("1>=2").unwrap();
+        assert!(matches!(
+            expr,
+            FormulaExpr::BinaryOp {
+                op: BinaryOperator::GreaterThanOrEqual,
+                ..
+            }
+        ));
+    }
+
+    #[test]
+    fn test_parse_errors() {
+        assert!(parse_formula("FOO").is_err());
+        assert!(parse_formula("\"unterminated").is_err());
+        assert!(parse_formula("'Sheet").is_err());
     }
 }
