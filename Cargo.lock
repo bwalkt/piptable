@@ -3547,10 +3547,12 @@ dependencies = [
 name = "piptable-formulas"
 version = "0.1.0"
 dependencies = [
+ "chrono",
  "pest",
  "pest_derive",
  "piptable-core",
  "piptable-primitives",
+ "piptable-utils",
  "serde",
  "thiserror 2.0.18",
 ]
