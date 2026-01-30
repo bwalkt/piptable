@@ -53,11 +53,34 @@ pub fn average(values: &[Value]) -> Value {
 pub fn count(values: &[Value]) -> Value {
     let mut count = 0usize;
     walk_values(values, &mut |value| {
-        if !matches!(value, Value::Empty) {
+        if to_number(value).is_some() {
             count += 1;
         }
     });
     Value::Int(count as i64)
+}
+
+pub fn counta(values: &[Value]) -> Value {
+    let mut count = 0usize;
+    let mut error: Option<ErrorValue> = None;
+
+    walk_values(values, &mut |value| match value {
+        Value::Empty => {}
+        Value::Error(err) => {
+            if error.is_none() {
+                error = Some(err.clone());
+            }
+        }
+        _ => {
+            count += 1;
+        }
+    });
+
+    if let Some(err) = error {
+        Value::Error(err)
+    } else {
+        Value::Int(count as i64)
+    }
 }
 
 /// Max function - finds maximum value
@@ -102,8 +125,8 @@ pub fn min(values: &[Value]) -> Value {
 
 pub fn if_fn(values: &[Value]) -> Value {
     let condition = values.first().unwrap_or(&Value::Empty);
-    let then_value = values.get(1).cloned().unwrap_or(Value::Empty);
-    let else_value = values.get(2).cloned().unwrap_or(Value::Empty);
+    let then_value = values.get(1).cloned().unwrap_or(Value::Bool(true));
+    let else_value = values.get(2).cloned().unwrap_or(Value::Bool(false));
 
     let truthy = match condition {
         Value::Bool(b) => *b,
@@ -121,51 +144,101 @@ pub fn if_fn(values: &[Value]) -> Value {
 }
 
 pub fn and_fn(values: &[Value]) -> Value {
-    for value in values {
-        match value {
-            Value::Bool(b) => {
-                if !b {
-                    return Value::Bool(false);
-                }
+    let mut has_coercible = false;
+    let mut any_false = false;
+    let mut first_error: Option<ErrorValue> = None;
+
+    walk_values(values, &mut |value| match value {
+        Value::Empty => {}
+        Value::Bool(b) => {
+            has_coercible = true;
+            if !b {
+                any_false = true;
             }
-            Value::Int(n) => {
-                if *n == 0 {
-                    return Value::Bool(false);
-                }
-            }
-            Value::Float(f) => {
-                if *f == 0.0 {
-                    return Value::Bool(false);
-                }
-            }
-            _ => return Value::Error(ErrorValue::Value),
         }
+        Value::Int(n) => {
+            has_coercible = true;
+            if *n == 0 {
+                any_false = true;
+            }
+        }
+        Value::Float(f) => {
+            if f.is_nan() {
+                return;
+            }
+            has_coercible = true;
+            if *f == 0.0 {
+                any_false = true;
+            }
+        }
+        Value::Error(err) => {
+            if first_error.is_none() {
+                first_error = Some(err.clone());
+            }
+        }
+        _ => {
+            if first_error.is_none() {
+                first_error = Some(ErrorValue::Value);
+            }
+        }
+    });
+
+    if let Some(err) = first_error {
+        return Value::Error(err);
     }
-    Value::Bool(true)
+    if !has_coercible {
+        return Value::Error(ErrorValue::Value);
+    }
+    Value::Bool(!any_false)
 }
 
 pub fn or_fn(values: &[Value]) -> Value {
-    for value in values {
-        match value {
-            Value::Bool(b) => {
-                if *b {
-                    return Value::Bool(true);
-                }
+    let mut has_coercible = false;
+    let mut any_true = false;
+    let mut first_error: Option<ErrorValue> = None;
+
+    walk_values(values, &mut |value| match value {
+        Value::Empty => {}
+        Value::Bool(b) => {
+            has_coercible = true;
+            if *b {
+                any_true = true;
             }
-            Value::Int(n) => {
-                if *n != 0 {
-                    return Value::Bool(true);
-                }
-            }
-            Value::Float(f) => {
-                if *f != 0.0 {
-                    return Value::Bool(true);
-                }
-            }
-            _ => return Value::Error(ErrorValue::Value),
         }
+        Value::Int(n) => {
+            has_coercible = true;
+            if *n != 0 {
+                any_true = true;
+            }
+        }
+        Value::Float(f) => {
+            if f.is_nan() {
+                return;
+            }
+            has_coercible = true;
+            if *f != 0.0 {
+                any_true = true;
+            }
+        }
+        Value::Error(err) => {
+            if first_error.is_none() {
+                first_error = Some(err.clone());
+            }
+        }
+        _ => {
+            if first_error.is_none() {
+                first_error = Some(ErrorValue::Value);
+            }
+        }
+    });
+
+    if let Some(err) = first_error {
+        return Value::Error(err);
     }
-    Value::Bool(false)
+    if !has_coercible {
+        return Value::Error(ErrorValue::Value);
+    }
+    Value::Bool(any_true)
 }
 
 pub fn not_fn(values: &[Value]) -> Value {

@@ -230,7 +230,16 @@ impl FunctionRegistry {
         );
         self.register(
             "COUNT",
-            FunctionDefinition::variadic(1, ParamType::Any, ReturnType::Number, functions::count),
+            FunctionDefinition::variadic(
+                1,
+                ParamType::Number,
+                ReturnType::Number,
+                functions::count,
+            ),
+        );
+        self.register(
+            "COUNTA",
+            FunctionDefinition::variadic(1, ParamType::Any, ReturnType::Number, functions::counta),
         );
         self.register(
             "MAX",
@@ -244,7 +253,9 @@ impl FunctionRegistry {
         // Logical functions
         self.register(
             "IF",
-            FunctionDefinition::fixed(
+            FunctionDefinition::range(
+                2,
+                3,
                 vec![ParamType::Logical, ParamType::Any, ParamType::Any],
                 ReturnType::Any,
                 functions::if_fn,
@@ -621,8 +632,23 @@ fn compare_numbers(left: &Value, right: &Value, cmp: fn(f64, f64) -> bool) -> bo
 }
 
 fn logical_op(left: Value, right: Value, op: fn(bool, bool) -> bool) -> Value {
-    match (left, right) {
-        (Value::Bool(l), Value::Bool(r)) => Value::Bool(op(l, r)),
+    let to_bool = |value: &Value| -> Option<bool> {
+        match value {
+            Value::Bool(b) => Some(*b),
+            Value::Int(n) => Some(*n != 0),
+            Value::Float(f) => {
+                if f.is_nan() {
+                    None
+                } else {
+                    Some(*f != 0.0)
+                }
+            }
+            _ => None,
+        }
+    };
+
+    match (to_bool(&left), to_bool(&right)) {
+        (Some(l), Some(r)) => Value::Bool(op(l, r)),
         _ => Value::Error(ErrorValue::Value),
     }
 }
