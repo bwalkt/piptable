@@ -57,7 +57,6 @@ pub struct FunctionDef {
     pub params: Vec<Param>,
     pub body: Vec<Statement>,
     pub is_async: bool,
-    pub is_sub: bool, // true for sub, false for function
 }
 
 #[derive(Debug, Clone)]
@@ -322,12 +321,6 @@ impl Interpreter {
                     return Err(PipError::runtime(
                         line,
                         "Exit Function cannot be used outside of a function",
-                    ));
-                }
-                Err(PipError::ExitSub(line)) => {
-                    return Err(PipError::runtime(
-                        line,
-                        "Exit Sub cannot be used outside of a subroutine",
                     ));
                 }
                 Err(PipError::ExitFor(line)) => {
@@ -596,26 +589,6 @@ impl Interpreter {
                     params,
                     body,
                     is_async,
-                    is_sub: false, // this is a function
-                };
-                let mut funcs = self.functions.write().await;
-                funcs.insert(name, func);
-                Ok(Value::Null)
-            }
-
-            Statement::Sub {
-                name,
-                params,
-                body,
-                is_async,
-                ..
-            } => {
-                let func = FunctionDef {
-                    name: name.clone(),
-                    params,
-                    body,
-                    is_async,
-                    is_sub: true, // this is a sub
                 };
                 let mut funcs = self.functions.write().await;
                 funcs.insert(name, func);
@@ -634,11 +607,6 @@ impl Interpreter {
             Statement::ExitFunction { line } => {
                 // Exit Function is handled by propagating up the call stack
                 Err(PipError::ExitFunction(line))
-            }
-
-            Statement::ExitSub { line } => {
-                // Exit Sub is handled by propagating up the call stack
-                Err(PipError::ExitSub(line))
             }
 
             Statement::ExitFor { line } => {
@@ -2161,29 +2129,8 @@ impl Interpreter {
                                 self.pop_scope().await;
                                 return Ok(*val);
                             }
-                            Err(PipError::ExitFunction(exit_line)) => {
-                                // Validate that this is actually a function
-                                if func.is_sub {
-                                    self.pop_scope().await;
-                                    return Err(PipError::runtime(
-                                        exit_line,
-                                        "Exit Function cannot be used in a subroutine",
-                                    ));
-                                }
+                            Err(PipError::ExitFunction(_exit_line)) => {
                                 // Exit Function - return Null explicitly
-                                self.pop_scope().await;
-                                return Ok(Value::Null);
-                            }
-                            Err(PipError::ExitSub(exit_line)) => {
-                                // Validate that this is actually a sub
-                                if !func.is_sub {
-                                    self.pop_scope().await;
-                                    return Err(PipError::runtime(
-                                        exit_line,
-                                        "Exit Sub cannot be used in a function",
-                                    ));
-                                }
-                                // Exit Sub - return Null explicitly
                                 self.pop_scope().await;
                                 return Ok(Value::Null);
                             }

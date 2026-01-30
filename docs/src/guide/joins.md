@@ -480,7 +480,7 @@ dim enrichedCustomers = localCustomers left join apiData on "customer_id" = "id"
 
 ```vba
 ' Complete ETL pipeline with multiple joins
-sub processMonthlyReport()
+function processMonthlyReport()
     ' Extract
     dim rawSales = import "sales/" + getCurrentMonth() + ".csv" into sheet
     dim customers = import "master_data/customers.csv" into sheet
@@ -505,7 +505,7 @@ sub processMonthlyReport()
     export cleanData to "reports/monthly_sales_" + getCurrentMonth() + ".xlsx"
     
     print "Monthly report generated with " + str(sheet_row_count(cleanData)) + " records"
-end sub
+end function
 ```
 
 This guide should give you a solid foundation for using joins effectively in PipTable. Remember that joins are powerful but can be complex - always test with small datasets first and validate your results.

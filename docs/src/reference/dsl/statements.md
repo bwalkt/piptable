@@ -135,7 +135,7 @@ while count < 10
 wend
 ```
 
-## Functions and Subroutines
+## Functions
 
 ### function
 
@@ -189,43 +189,6 @@ async function fetchData(url)
 end function
 ```
 
-### sub
-
-Define a subroutine (no return value).
-
-Parameters can be annotated with `ByVal`, `ByRef`, `Optional`, or `ParamArray`. `ByVal` is the default.
-
-```piptable
-[async] sub name(parameters)
-    ' statements
-end sub
-```
-
-**Examples:**
-```piptable
-sub printHeader(title)
-    print("========================================")
-    print(title)
-    print("========================================")
-end sub
-
-sub increment(ByRef x)
-    x = x + 1
-end sub
-
-sub log_items(ParamArray items)
-    for each item in items
-        print(item)
-    next
-end sub
-
-sub logError(message)
-    ' Note: now() is a planned function
-    ' For now, use a counter or manual timestamp
-    print("[ERROR]: " + message)
-end sub
-```
-
 ### return
 
 Exit function with optional return value.
@@ -246,11 +209,11 @@ end function
 
 ### call
 
-Invoke a subroutine (optional keyword).
+Invoke a function (optional keyword).
 
 ```piptable
-call subroutine(arguments)
-subroutine(arguments)  ' call is optional
+call myFunc(arguments)
+myFunc(arguments)  ' call is optional
 ```
 
 **Examples:**

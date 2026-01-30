@@ -202,7 +202,7 @@ function createGistReadme(title?: string, description?: string, code?: string): 
     if (code.includes('query(')) features.push('- SQL queries');
     if (code.includes('join')) features.push('- Data joins');
     if (code.includes('for ') || code.includes('while ')) features.push('- Control flow');
-    if (code.includes('function ') || code.includes('sub ')) features.push('- Custom functions');
+    if (code.includes('function ')) features.push('- Custom functions');
     
     if (features.length > 0) {
       lines.push(...features, '');

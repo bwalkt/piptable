@@ -32,9 +32,9 @@ dim result = double_value(original)
 ### ByRef Example - Reference Modification
 
 ```vb
-sub increment(ByRef counter)
+function increment(ByRef counter)
     counter = counter + 1
-end sub
+end function
 
 ' Usage  
 dim count = 5
@@ -72,11 +72,11 @@ dim return_value = process_data(factor, output, data)
 ### Multiple ByRef Parameters
 
 ```vb
-sub swap(ByRef a, ByRef b)
+function swap(ByRef a, ByRef b)
     dim temp = a
     a = b
     b = temp
-end sub
+end function
 
 ' Usage
 dim x = 10
@@ -90,9 +90,9 @@ call swap(x, y)
 ### ByRef with Array Elements
 
 ```vb
-sub update_array_element(ByRef element)
+function update_array_element(ByRef element)
     element = element * 10
-end sub
+end function
 
 ' Usage
 dim numbers = [1, 2, 3, 4, 5]
@@ -103,9 +103,9 @@ call update_array_element(numbers[2])  ' Update index 2
 ### ByRef with Object Fields
 
 ```vb
-sub update_score(ByRef score_field)
+function update_score(ByRef score_field)
     score_field = score_field + 100
-end sub
+end function
 
 ' Usage
 dim player = { name: "Alice", score: 150 }
@@ -151,9 +151,9 @@ dim avg = calculate_stats(scores, stats)
 ### ByRef Parameter Validation Errors
 
 ```vb
-sub modify_value(ByRef x)
+function modify_value(ByRef x)
     x = x * 2
-end sub
+end function
 
 ' Valid calls
 dim variable = 10
@@ -216,9 +216,9 @@ function double_number(ByVal x)
 end function
 
 ' Less preferred: ByRef for single modification
-sub double_number_byref(ByRef x)
+function double_number_byref(ByRef x)
     x = x * 2
-end sub
+end function
 
 ' Good use of ByRef: Multiple outputs
 function divide_with_remainder(ByVal dividend, ByVal divisor, ByRef remainder)
@@ -244,14 +244,14 @@ end function
 ### 4. Validate ByRef Arguments at Runtime
 
 ```vb
-sub update_config(ByRef config_object)
+function update_config(ByRef config_object)
     ' The interpreter automatically validates that config_object
     ' is a valid lvalue (variable, array element, or object field)
     ' No manual validation needed
     
     config_object->last_updated = now()
     config_object->version = config_object->version + 1
-end sub
+end function
 ```
 
 ### 5. Complex Nested Scenarios
@@ -282,10 +282,10 @@ function validate_item(ByVal item)
     return item != null and item->data != null
 end function
 
-sub update_item(ByRef data)
+function update_item(ByRef data)
     data->processed = true
     data->timestamp = now()
-end sub
+end function
 
 ' Usage
 dim item_list = [

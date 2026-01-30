@@ -2,7 +2,7 @@
 
 Note: This document describes planned validation rules. The syntax and behavior may change.
 
-This document describes the validation rules for function and subroutine parameters in PipTable DSL.
+This document describes the validation rules for function parameters in PipTable DSL.
 
 ## Parameter Syntax
 
@@ -35,9 +35,9 @@ function process(ByVal input, ByRef result)
 end function
 
 ' Mixed parameter modes
-sub update_data(ByVal multiplier, ByRef data)
+function update_data(ByVal multiplier, ByRef data)
     data = data * multiplier
-end sub
+end function
 ```
 
 ## Validation Rules
@@ -45,7 +45,7 @@ end sub
 ### 1. Parameter Names
 
 - Must be valid identifiers (start with letter or underscore, followed by letters, digits, or underscores)
-- Cannot be language keywords (e.g., `if`, `then`, `end`, `function`, `sub`)
+- Cannot be language keywords (e.g., `if`, `then`, `end`, `function`)
 - Must be unique within the function parameter list
 
 **Valid Examples:**
@@ -142,9 +142,9 @@ These errors are detected when the function is called:
 
 1. **ByRef argument must be lvalue**
    ```vb
-   sub increment(ByRef x)
+   function increment(ByRef x)
        x = x + 1
-   end sub
+   end function
    call increment(5)       ' Error: ByRef parameter expects variable
    ```
 
