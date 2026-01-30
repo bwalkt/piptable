@@ -101,11 +101,7 @@ impl FormulaEngine {
     }
 
     /// Set a formula for a cell
-    pub fn set_formula(
-        &mut self,
-        cell: CellAddress,
-        formula: &str,
-    ) -> Result<(), FormulaError> {
+    pub fn set_formula(&mut self, cell: CellAddress, formula: &str) -> Result<(), FormulaError> {
         let compiled = self.compile(formula)?;
         self.cache.insert(cell, compiled);
         Ok(())
@@ -132,7 +128,7 @@ impl Default for FunctionRegistry {
         let mut registry = Self {
             functions: HashMap::new(),
         };
-        
+
         // Register standard functions
         registry.register_standard_functions();
         registry
@@ -148,13 +144,13 @@ impl FunctionRegistry {
         self.register("COUNT", FunctionDefinition::variadic(1));
         self.register("MAX", FunctionDefinition::variadic(1));
         self.register("MIN", FunctionDefinition::variadic(1));
-        
+
         // Logical functions
         self.register("IF", FunctionDefinition::fixed(3));
         self.register("AND", FunctionDefinition::variadic(1));
         self.register("OR", FunctionDefinition::variadic(1));
         self.register("NOT", FunctionDefinition::fixed(1));
-        
+
         // Lookup functions
         self.register("VLOOKUP", FunctionDefinition::range(3, 4));
         self.register("HLOOKUP", FunctionDefinition::range(3, 4));

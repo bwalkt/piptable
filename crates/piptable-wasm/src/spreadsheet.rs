@@ -2,15 +2,14 @@
 //!
 //! Minimal, batch-oriented APIs using TOON for efficient data exchange
 
-use wasm_bindgen::prelude::*;
+use piptable_formulas::{CompiledFormula, FormulaEngine};
 use piptable_primitives::toon::{
-    CompileRequest, CompileResponse, CompileError,
-    EvalRequest, EvalResponse, EvalError,
-    RangeUpdateRequest, RangeUpdateResponse, CellUpdate,
-    ToonValue, SheetPayload, FormulaBytecode, FormulaText
+    CellUpdate, CompileError, CompileRequest, CompileResponse, EvalError, EvalRequest,
+    EvalResponse, FormulaBytecode, FormulaText, RangeUpdateRequest, RangeUpdateResponse,
+    SheetPayload, ToonValue,
 };
-use piptable_formulas::{FormulaEngine, CompiledFormula};
 use std::collections::HashMap;
+use wasm_bindgen::prelude::*;
 
 /// Compile multiple formulas in batch
 ///
@@ -87,7 +86,7 @@ pub fn eval_many(toon_bytes: &[u8]) -> Result<Vec<u8>, JsValue> {
 
     // Create evaluation context with sheet data
     let context = create_eval_context(&request.sheet, request.globals);
-    
+
     let mut results = Vec::new();
     let mut errors = Vec::new();
 
@@ -208,13 +207,16 @@ fn evaluate_bytecode(bytecode: &[u8], _context: &EvalContext) -> Result<ToonValu
     // TODO: Implement actual evaluation
     // For now, return a placeholder
     Ok(ToonValue::Str {
-        v: format!("=TODO({})", std::str::from_utf8(bytecode).unwrap_or("invalid"))
+        v: format!(
+            "=TODO({})",
+            std::str::from_utf8(bytecode).unwrap_or("invalid")
+        ),
     })
 }
 
 fn create_eval_context(
     sheet: &SheetPayload,
-    globals: Option<HashMap<String, ToonValue>>
+    globals: Option<HashMap<String, ToonValue>>,
 ) -> EvalContext {
     EvalContext {
         sheet: sheet.clone(),
@@ -226,9 +228,9 @@ fn apply_cell_update(sheet: &mut SheetPayload, update: CellUpdate) -> Result<(),
     let row_offset = (update.addr.r - sheet.range.s.r) as usize;
     let col_offset = (update.addr.c - sheet.range.s.c) as usize;
     let cols = (sheet.range.e.c - sheet.range.s.c + 1) as usize;
-    
+
     let index = row_offset * cols + col_offset;
-    
+
     if index < sheet.values.len() {
         sheet.values[index] = update.value;
         Ok(())

@@ -6,8 +6,8 @@
 use serde::{Deserialize, Serialize};
 use std::fmt;
 
-pub mod toon;
 pub mod boundary;
+pub mod toon;
 
 /// A cell address in the spreadsheet (e.g., A1, B2, etc.)
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -167,7 +167,11 @@ pub enum CellRef {
     /// Relative reference (e.g., A1)
     Relative(CellAddress),
     /// Mixed reference (e.g., $A1 or A$1)
-    Mixed { row_abs: bool, col_abs: bool, addr: CellAddress },
+    Mixed {
+        row_abs: bool,
+        col_abs: bool,
+        addr: CellAddress,
+    },
 }
 
 impl CellRef {
@@ -267,13 +271,13 @@ pub enum Value {
 /// Error types for cell values
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum ErrorValue {
-    Div0,       // #DIV/0!
-    Name,       // #NAME?
-    Value,      // #VALUE!
-    Ref,        // #REF!
-    Null,       // #NULL!
-    Num,        // #NUM!
-    NA,         // #N/A
+    Div0,  // #DIV/0!
+    Name,  // #NAME?
+    Value, // #VALUE!
+    Ref,   // #REF!
+    Null,  // #NULL!
+    Num,   // #NUM!
+    NA,    // #N/A
 }
 
 impl ErrorValue {
@@ -383,11 +387,11 @@ mod tests {
     #[test]
     fn test_cell_range_contains() {
         let range = CellRange::new(
-            CellAddress::new(1, 1),  // B2
-            CellAddress::new(3, 3),  // D4
+            CellAddress::new(1, 1), // B2
+            CellAddress::new(3, 3), // D4
         );
-        
-        assert!(range.contains(&CellAddress::new(2, 2)));  // C3
+
+        assert!(range.contains(&CellAddress::new(2, 2))); // C3
         assert!(!range.contains(&CellAddress::new(0, 0))); // A1
         assert!(!range.contains(&CellAddress::new(4, 4))); // E5
     }
@@ -395,18 +399,15 @@ mod tests {
     #[test]
     fn test_range_size() {
         let range = CellRange::new(
-            CellAddress::new(0, 0),  // A1
-            CellAddress::new(2, 3),  // D3
+            CellAddress::new(0, 0), // A1
+            CellAddress::new(2, 3), // D3
         );
         assert_eq!(range.size(), 12); // 3 rows * 4 cols
     }
 
     #[test]
     fn test_range_normalized_contains() {
-        let range = CellRange::new(
-            CellAddress::new(3, 3),
-            CellAddress::new(1, 1),
-        );
+        let range = CellRange::new(CellAddress::new(3, 3), CellAddress::new(1, 1));
         assert!(range.contains(&CellAddress::new(2, 2)));
         assert_eq!(range.rows(), 3);
         assert_eq!(range.cols(), 3);
@@ -414,10 +415,7 @@ mod tests {
 
     #[test]
     fn test_range_iter() {
-        let range = CellRange::new(
-            CellAddress::new(0, 0),
-            CellAddress::new(1, 1),
-        );
+        let range = CellRange::new(CellAddress::new(0, 0), CellAddress::new(1, 1));
         let collected: Vec<_> = range.iter().collect();
         assert_eq!(
             collected,
@@ -503,29 +501,43 @@ mod tests {
         assert!(matches!(cref, CellRef::Relative(_)));
         if let CellRef::Relative(addr) = cref {
             assert_eq!(addr.row, 0);
-            assert_eq!(addr.col, 0); }
+            assert_eq!(addr.col, 0);
+        }
 
         let cref = CellRef::from_a1("$A$1").unwrap();
         assert!(matches!(cref, CellRef::Absolute(_)));
         if let CellRef::Absolute(addr) = cref {
             assert_eq!(addr.row, 0);
-            assert_eq!(addr.col, 0); }
+            assert_eq!(addr.col, 0);
+        }
 
         let cref = CellRef::from_a1("$A1").unwrap();
         assert!(matches!(cref, CellRef::Mixed { .. }));
-        if let CellRef::Mixed { row_abs, col_abs, addr } = cref {
+        if let CellRef::Mixed {
+            row_abs,
+            col_abs,
+            addr,
+        } = cref
+        {
             assert!(!row_abs);
             assert!(col_abs);
             assert_eq!(addr.row, 0);
-            assert_eq!(addr.col, 0); }
+            assert_eq!(addr.col, 0);
+        }
 
         let cref = CellRef::from_a1("A$1").unwrap();
         assert!(matches!(cref, CellRef::Mixed { .. }));
-        if let CellRef::Mixed { row_abs, col_abs, addr } = cref {
+        if let CellRef::Mixed {
+            row_abs,
+            col_abs,
+            addr,
+        } = cref
+        {
             assert!(row_abs);
             assert!(!col_abs);
             assert_eq!(addr.row, 0);
-            assert_eq!(addr.col, 0); }
+            assert_eq!(addr.col, 0);
+        }
     }
 
     #[test]

@@ -19,7 +19,7 @@ pub fn sum(values: &[Value]) -> Value {
 pub fn average(values: &[Value]) -> Value {
     let mut total = 0.0;
     let mut count = 0;
-    
+
     for value in values {
         match value {
             Value::Int(n) => {
@@ -33,7 +33,7 @@ pub fn average(values: &[Value]) -> Value {
             _ => {} // Skip non-numeric values
         }
     }
-    
+
     if count == 0 {
         Value::Error(piptable_primitives::ErrorValue::Div0)
     } else {
@@ -50,20 +50,20 @@ pub fn count(values: &[Value]) -> Value {
 /// Max function - finds maximum value
 pub fn max(values: &[Value]) -> Value {
     let mut max_val: Option<f64> = None;
-    
+
     for value in values {
         let num = match value {
             Value::Int(n) => *n as f64,
             Value::Float(f) => *f,
             _ => continue,
         };
-        
+
         max_val = Some(match max_val {
             None => num,
             Some(m) => m.max(num),
         });
     }
-    
+
     match max_val {
         Some(v) => Value::Float(v),
         None => Value::Error(piptable_primitives::ErrorValue::Value),
@@ -73,20 +73,20 @@ pub fn max(values: &[Value]) -> Value {
 /// Min function - finds minimum value  
 pub fn min(values: &[Value]) -> Value {
     let mut min_val: Option<f64> = None;
-    
+
     for value in values {
         let num = match value {
             Value::Int(n) => *n as f64,
             Value::Float(f) => *f,
             _ => continue,
         };
-        
+
         min_val = Some(match min_val {
             None => num,
             Some(m) => m.min(num),
         });
     }
-    
+
     match min_val {
         Some(v) => Value::Float(v),
         None => Value::Error(piptable_primitives::ErrorValue::Value),

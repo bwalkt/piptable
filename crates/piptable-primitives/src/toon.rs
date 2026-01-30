@@ -2,8 +2,8 @@
 //!
 //! Compact, efficient binary format for WASM boundary crossing
 
+use crate::{CellAddress, CellRange, ErrorValue, Value as CellValue};
 use serde::{Deserialize, Serialize};
-use crate::{CellAddress, CellRange, Value as CellValue, ErrorValue};
 
 /// TOON Value representation - compact tagged union
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -11,31 +11,33 @@ use crate::{CellAddress, CellRange, Value as CellValue, ErrorValue};
 pub enum ToonValue {
     #[serde(rename = "null")]
     Null,
-    
+
     #[serde(rename = "bool")]
     Bool { v: u8 }, // 0 or 1 for compactness
-    
+
     #[serde(rename = "int")]
     Int { v: i64 },
-    
+
     #[serde(rename = "float")]
     Float { v: f64 },
-    
+
     #[serde(rename = "str")]
     Str { v: String },
-    
+
     #[serde(rename = "arr")]
     Array { v: Vec<ToonValue> },
-    
+
     #[serde(rename = "obj")]
-    Object { v: std::collections::HashMap<String, ToonValue> },
-    
+    Object {
+        v: std::collections::HashMap<String, ToonValue>,
+    },
+
     #[serde(rename = "date")]
     Date { v: i64 }, // Unix timestamp in ms
-    
+
     #[serde(rename = "duration")]
     Duration { v: i64 }, // Duration in ms
-    
+
     #[serde(rename = "error")]
     Error { code: String, msg: String },
 }
@@ -72,8 +74,8 @@ pub struct FormulaText {
 /// Compiled formula bytecode (opaque)
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct FormulaBytecode {
-    pub kind: String,  // "bc"
-    pub b: Vec<u8>,    // bytecode bytes
+    pub kind: String, // "bc"
+    pub b: Vec<u8>,   // bytecode bytes
 }
 
 /// Formula compile request
@@ -194,7 +196,9 @@ impl From<CellValue> for ToonValue {
     fn from(value: CellValue) -> Self {
         match value {
             CellValue::Empty => ToonValue::Null,
-            CellValue::Bool(b) => ToonValue::Bool { v: if b { 1 } else { 0 } },
+            CellValue::Bool(b) => ToonValue::Bool {
+                v: if b { 1 } else { 0 },
+            },
             CellValue::Int(i) => ToonValue::Int { v: i },
             CellValue::Float(f) => ToonValue::Float { v: f },
             CellValue::String(s) => ToonValue::Str { v: s },
@@ -218,9 +222,7 @@ impl From<ToonValue> for CellValue {
             ToonValue::Float { v } => CellValue::Float(v),
             ToonValue::Str { v } => CellValue::String(v),
             ToonValue::Error { code, .. } => CellValue::Error(parse_error_code(&code)),
-            ToonValue::Array { v } => CellValue::Array(
-                v.into_iter().map(Into::into).collect()
-            ),
+            ToonValue::Array { v } => CellValue::Array(v.into_iter().map(Into::into).collect()),
             ToonValue::Date { v } => {
                 // Convert Unix timestamp to Excel date serial
                 let excel_date = unix_to_excel_date(v);

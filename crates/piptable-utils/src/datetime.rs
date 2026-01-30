@@ -12,11 +12,11 @@ pub fn excel_date_to_datetime(serial: f64) -> Option<DateTime<Utc>> {
     // Need to adjust for the 1900 leap year bug
     let days = serial.floor() as i64;
     let time_fraction = serial - serial.floor();
-    
+
     // Convert to Unix timestamp
     let unix_days = days - EXCEL_EPOCH as i64;
     let unix_seconds = unix_days * 86400 + (time_fraction * 86400.0) as i64;
-    
+
     DateTime::from_timestamp(unix_seconds, 0)
 }
 
@@ -25,7 +25,7 @@ pub fn datetime_to_excel_date(dt: DateTime<Utc>) -> f64 {
     let unix_seconds = dt.timestamp();
     let unix_days = unix_seconds / 86400;
     let time_fraction = (unix_seconds % 86400) as f64 / 86400.0;
-    
+
     (unix_days + EXCEL_EPOCH as i64) as f64 + time_fraction
 }
 
@@ -51,7 +51,7 @@ mod tests {
         let serial = 44562.0; // January 1, 2022
         let dt = excel_date_to_datetime(serial);
         assert!(dt.is_some());
-        
+
         // Round trip
         if let Some(dt) = dt {
             let serial2 = datetime_to_excel_date(dt);

@@ -6,7 +6,7 @@ use piptable_core::Value;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
-use crate::toon::{ToonValue, ToonCellAddr};
+use crate::toon::{ToonCellAddr, ToonValue};
 use crate::CellAddress;
 
 /// Sheet payload with automatic sparse/dense encoding selection
@@ -42,11 +42,7 @@ pub struct SparseCell {
 
 impl SheetPayload {
     /// Create a sheet payload, automatically choosing encoding
-    pub fn from_values(
-        start: CellAddress,
-        end: CellAddress,
-        values: Vec<Vec<Value>>,
-    ) -> Self {
+    pub fn from_values(start: CellAddress, end: CellAddress, values: Vec<Vec<Value>>) -> Self {
         let rows = (end.row - start.row + 1) as usize;
         let cols = (end.col - start.col + 1) as usize;
         let total_cells = rows * cols;
@@ -137,13 +133,13 @@ impl SheetPayload {
 /// Determine if sparse encoding should be used
 pub fn should_use_sparse(rows: u32, cols: u32, non_empty_count: usize) -> bool {
     let total_cells = (rows * cols) as usize;
-    
+
     if total_cells == 0 {
         return false;
     }
-    
+
     let density = non_empty_count as f64 / total_cells as f64;
-    
+
     // Use sparse if:
     // 1. Density < 20%
     // 2. Large grid (>10k cells) with < 50% density
@@ -154,7 +150,9 @@ pub fn should_use_sparse(rows: u32, cols: u32, non_empty_count: usize) -> bool {
 pub fn value_to_toon(value: &Value) -> ToonValue {
     match value {
         Value::Null => ToonValue::Null,
-        Value::Bool(b) => ToonValue::Bool { v: if *b { 1 } else { 0 } },
+        Value::Bool(b) => ToonValue::Bool {
+            v: if *b { 1 } else { 0 },
+        },
         Value::Int(i) => ToonValue::Int { v: *i },
         Value::Float(f) => ToonValue::Float { v: *f },
         Value::String(s) => ToonValue::Str { v: s.clone() },
@@ -178,8 +176,11 @@ pub fn value_to_toon(value: &Value) -> ToonValue {
             // For now, return error - could implement sheet serialization
             ToonValue::Error {
                 code: "SHEET_UNSUPPORTED".to_string(),
-                msg: format!("Sheet {}x{} cannot cross boundary directly", 
-                    sheet.row_count(), sheet.col_count()),
+                msg: format!(
+                    "Sheet {}x{} cannot cross boundary directly",
+                    sheet.row_count(),
+                    sheet.col_count()
+                ),
             }
         }
         Value::Function { name, .. } => ToonValue::Error {
@@ -201,9 +202,7 @@ pub fn toon_to_value(toon: &ToonValue) -> Value {
         ToonValue::Int { v } => Value::Int(*v),
         ToonValue::Float { v } => Value::Float(*v),
         ToonValue::Str { v } => Value::String(v.clone()),
-        ToonValue::Array { v } => Value::Array(
-            v.iter().map(toon_to_value).collect()
-        ),
+        ToonValue::Array { v } => Value::Array(v.iter().map(toon_to_value).collect()),
         ToonValue::Object { v } => {
             let mut map = HashMap::new();
             for (k, val) in v {
@@ -237,13 +236,13 @@ mod tests {
 
         // Zero-sized grid should be dense (false)
         assert!(!should_use_sparse(0, 0, 0));
-        
+
         // Large sparse grid should use sparse
         assert!(should_use_sparse(100, 100, 500)); // 5% density
-        
+
         // Large grid with medium density should use sparse
         assert!(should_use_sparse(200, 200, 10000)); // 25% density
-        
+
         // Small sparse grid should use sparse
         assert!(should_use_sparse(10, 10, 10)); // 10% density
     }
@@ -252,9 +251,15 @@ mod tests {
     fn test_value_to_toon_mapping() {
         // Basic types
         assert!(matches!(value_to_toon(&Value::Null), ToonValue::Null));
-        assert!(matches!(value_to_toon(&Value::Bool(true)), ToonValue::Bool { v: 1 }));
-        assert!(matches!(value_to_toon(&Value::Int(42)), ToonValue::Int { v: 42 }));
-        
+        assert!(matches!(
+            value_to_toon(&Value::Bool(true)),
+            ToonValue::Bool { v: 1 }
+        ));
+        assert!(matches!(
+            value_to_toon(&Value::Int(42)),
+            ToonValue::Int { v: 42 }
+        ));
+
         // Unsupported types become errors
         let table_val = Value::Table(vec![]);
         let toon = value_to_toon(&table_val);
@@ -327,7 +332,10 @@ mod tests {
         assert!(matches!(toon_to_value(&toon), Value::String(s) if s == "s"));
 
         let toon = ToonValue::Array {
-            v: vec![ToonValue::Int { v: 1 }, ToonValue::Str { v: "a".to_string() }],
+            v: vec![
+                ToonValue::Int { v: 1 },
+                ToonValue::Str { v: "a".to_string() },
+            ],
         };
         assert!(matches!(toon_to_value(&toon), Value::Array(v) if v.len() == 2));
 
@@ -342,7 +350,10 @@ mod tests {
         let toon = ToonValue::Duration { v: 42 };
         assert!(matches!(toon_to_value(&toon), Value::Int(42)));
 
-        let toon = ToonValue::Error { code: "X".to_string(), msg: "bad".to_string() };
+        let toon = ToonValue::Error {
+            code: "X".to_string(),
+            msg: "bad".to_string(),
+        };
         assert!(matches!(toon_to_value(&toon), Value::String(s) if s == "ERROR: bad"));
     }
 
@@ -359,10 +370,14 @@ mod tests {
         if let SheetPayload::Dense { range, values } = &payload {
             assert_eq!(range.s.r, 0);
             assert_eq!(range.e.c, 1);
-            assert_eq!(values.len(), 4); }
+            assert_eq!(values.len(), 4);
+        }
         assert_eq!(payload.dimensions(), (2, 2));
 
-        assert!(matches!(payload.get_cell(0, 1), Some(ToonValue::Int { v: 1 })));
+        assert!(matches!(
+            payload.get_cell(0, 1),
+            Some(ToonValue::Int { v: 1 })
+        ));
         assert!(matches!(payload.get_cell(0, 0), Some(ToonValue::Null)));
         assert!(payload.get_cell(2, 2).is_none());
     }
@@ -377,10 +392,14 @@ mod tests {
         let payload = SheetPayload::from_values(start, end, values);
         assert!(matches!(&payload, SheetPayload::Sparse { .. }));
         if let SheetPayload::Sparse { items, .. } = &payload {
-            assert_eq!(items.len(), 1); }
+            assert_eq!(items.len(), 1);
+        }
         assert_eq!(payload.dimensions(), (10, 10));
 
-        assert!(matches!(payload.get_cell(3, 4), Some(ToonValue::Int { v: 7 })));
+        assert!(matches!(
+            payload.get_cell(3, 4),
+            Some(ToonValue::Int { v: 7 })
+        ));
         assert!(matches!(payload.get_cell(0, 0), Some(ToonValue::Null)));
         assert!(payload.get_cell(20, 20).is_none());
     }

@@ -5,8 +5,8 @@
 
 use piptable_primitives::Value;
 
-pub mod formatting;
 pub mod datetime;
+pub mod formatting;
 
 /// Format a value for display
 pub fn format_value(value: &Value, format: Option<&str>) -> String {
@@ -53,18 +53,18 @@ fn format_number_float(f: f64, format: Option<&str>) -> String {
 fn format_with_thousands_separator(n: i64) -> String {
     let s = n.abs().to_string();
     let mut result = String::new();
-    
+
     for (i, c) in s.chars().rev().enumerate() {
         if i > 0 && i % 3 == 0 {
             result.push(',');
         }
         result.push(c);
     }
-    
+
     if n < 0 {
         result.push('-');
     }
-    
+
     result.chars().rev().collect()
 }
 
@@ -74,9 +74,15 @@ fn format_float_with_thousands(f: f64, decimals: usize) -> String {
     let abs_f = f.abs();
     let int_part = abs_f.floor() as i64;
     let frac_part = ((abs_f - int_part as f64) * 10_f64.powi(decimals as i32)) as u64;
-    
+
     let int_formatted = format_with_thousands_separator(int_part);
-    format!("{}{}.{:0width$}", sign, int_formatted, frac_part, width = decimals)
+    format!(
+        "{}{}.{:0width$}",
+        sign,
+        int_formatted,
+        frac_part,
+        width = decimals
+    )
 }
 
 /// Parse a value from a string
@@ -85,7 +91,7 @@ pub fn parse_value(s: &str) -> Value {
     if s.is_empty() {
         return Value::Empty;
     }
-    
+
     // Boolean
     if s.eq_ignore_ascii_case("true") {
         return Value::Bool(true);
@@ -93,7 +99,7 @@ pub fn parse_value(s: &str) -> Value {
     if s.eq_ignore_ascii_case("false") {
         return Value::Bool(false);
     }
-    
+
     // Try parsing as number
     if let Ok(n) = s.parse::<i64>() {
         return Value::Int(n);
@@ -101,14 +107,14 @@ pub fn parse_value(s: &str) -> Value {
     if let Ok(f) = s.parse::<f64>() {
         return Value::Float(f);
     }
-    
+
     // Formula (starts with =)
     if s.starts_with('=') {
         // This would be handled by formula parser
         // For now, treat as string
         return Value::String(s.to_string());
     }
-    
+
     // Default to string
     Value::String(s.to_string())
 }
@@ -117,18 +123,18 @@ pub fn parse_value(s: &str) -> Value {
 pub fn column_index_to_letter(index: u32) -> String {
     let mut result = String::new();
     let mut n = index;
-    
+
     loop {
         let remainder = n % 26;
         result.push((b'A' + remainder as u8) as char);
         n = n / 26;
-        
+
         if n == 0 {
             break;
         }
         n -= 1; // Adjust for 1-based indexing
     }
-    
+
     result.chars().rev().collect()
 }
 
@@ -137,7 +143,7 @@ pub fn column_letter_to_index(s: &str) -> Result<u32, String> {
     if s.is_empty() {
         return Err("Empty column".to_string());
     }
-    
+
     let mut result = 0u32;
     for c in s.chars() {
         if !c.is_ascii_uppercase() {
@@ -145,7 +151,7 @@ pub fn column_letter_to_index(s: &str) -> Result<u32, String> {
         }
         result = result * 26 + (c as u32 - 'A' as u32 + 1);
     }
-    
+
     Ok(result - 1) // Convert to 0-based
 }
 
@@ -170,7 +176,7 @@ mod tests {
         assert_eq!(column_index_to_letter(27), "AB");
         assert_eq!(column_index_to_letter(701), "ZZ");
         assert_eq!(column_index_to_letter(702), "AAA");
-        
+
         assert_eq!(column_letter_to_index("A").unwrap(), 0);
         assert_eq!(column_letter_to_index("B").unwrap(), 1);
         assert_eq!(column_letter_to_index("Z").unwrap(), 25);
