@@ -34,6 +34,10 @@ pub enum FormulaExpr {
     CellRef(CellAddress),
     /// Range reference
     RangeRef(CellRange),
+    /// Sheet-qualified cell reference (e.g., Sheet1!A1)
+    SheetCellRef { sheet: String, addr: CellAddress },
+    /// Sheet-qualified range reference (e.g., Sheet1!A1:B2)
+    SheetRangeRef { sheet: String, range: CellRange },
     /// Function call
     FunctionCall {
         name: String,
@@ -151,6 +155,10 @@ impl FormulaEngine {
             FormulaExpr::Literal(value) => Ok(value.clone()),
             FormulaExpr::CellRef(addr) => Ok(context.get_cell(addr)),
             FormulaExpr::RangeRef(range) => Ok(Value::Array(context.get_range(range))),
+            FormulaExpr::SheetCellRef { sheet, addr } => Ok(context.get_sheet_cell(sheet, addr)),
+            FormulaExpr::SheetRangeRef { sheet, range } => {
+                Ok(Value::Array(context.get_sheet_range(sheet, range)))
+            }
             FormulaExpr::UnaryOp { op, expr } => {
                 let value = self.eval_expr(expr, context)?;
                 if let Value::Error(err) = value {
@@ -479,6 +487,12 @@ pub struct FunctionMetadata {
 pub trait ValueResolver {
     fn get_cell(&self, addr: &CellAddress) -> Value;
     fn get_range(&self, range: &CellRange) -> Vec<Value>;
+    fn get_sheet_cell(&self, _sheet: &str, addr: &CellAddress) -> Value {
+        self.get_cell(addr)
+    }
+    fn get_sheet_range(&self, _sheet: &str, range: &CellRange) -> Vec<Value> {
+        self.get_range(range)
+    }
 }
 
 #[derive(Default)]
@@ -527,6 +541,8 @@ fn collect_dependencies(expr: &FormulaExpr, deps: &mut HashSet<CellAddress>) {
                 deps.insert(addr);
             }
         }
+        FormulaExpr::SheetCellRef { .. } => {}
+        FormulaExpr::SheetRangeRef { .. } => {}
         FormulaExpr::FunctionCall { args, .. } => {
             for arg in args {
                 collect_dependencies(arg, deps);
