@@ -700,10 +700,14 @@ mod tests {
     #[test]
     fn test_parse_exponent_precedence() {
         let expr = parse_formula("-2^2").unwrap();
-        assert!(matches!(expr, FormulaExpr::UnaryOp { op: UnaryOperator::Negate, expr } if matches!(*expr, FormulaExpr::BinaryOp { op: BinaryOperator::Power, .. })));
+        assert!(
+            matches!(expr, FormulaExpr::UnaryOp { op: UnaryOperator::Negate, expr } if matches!(*expr, FormulaExpr::BinaryOp { op: BinaryOperator::Power, .. }))
+        );
 
         let expr = parse_formula("2^-3").unwrap();
-        assert!(matches!(expr, FormulaExpr::BinaryOp { op: BinaryOperator::Power, right, .. } if matches!(*right, FormulaExpr::UnaryOp { op: UnaryOperator::Negate, .. })));
+        assert!(
+            matches!(expr, FormulaExpr::BinaryOp { op: BinaryOperator::Power, right, .. } if matches!(*right, FormulaExpr::UnaryOp { op: UnaryOperator::Negate, .. }))
+        );
     }
 
     #[test]
@@ -780,7 +784,13 @@ mod tests {
         ));
 
         let expr = parse_formula("10%%").unwrap();
-        assert!(matches!(expr, FormulaExpr::UnaryOp { op: UnaryOperator::Percent, .. }));
+        assert!(matches!(
+            expr,
+            FormulaExpr::UnaryOp {
+                op: UnaryOperator::Percent,
+                ..
+            }
+        ));
     }
 
     #[test]
