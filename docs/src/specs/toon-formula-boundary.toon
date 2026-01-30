@@ -1,0 +1,12 @@
+schema[11]{name,version,kind,definition}:
+  Value,0.1,enum,"null|bool|int|float|str|arr|obj|error"
+  CellAddr,0.1,struct,"{r:u32,c:u32}"
+  Range,0.1,struct,"{s:CellAddr,e:CellAddr}"
+  SheetPayloadDense,0.1,struct,"{range:Range,values:[Value]}"
+  SheetPayloadSparse,0.1,struct,"{range:Range,items:[{r:u32,c:u32,v:Value}]}"
+  FormulaText,0.1,struct,"{kind:'text',f:string}"
+  FormulaBytecode,0.1,struct,"{kind:'bc',b:bytes}"
+  CompileRequest,0.1,struct,"{formulas:[FormulaText],options?:{locale?:string,decimal?:string}}"
+  CompileResponse,0.1,struct,"{compiled:[FormulaBytecode],errors:[{idx:u32,msg:string}]}"
+  EvalRequest,0.1,struct,"{compiled:[FormulaBytecode],sheet:(SheetPayloadDense|SheetPayloadSparse),globals?:{string:Value}}"
+  EvalResponse,0.1,struct,"{results:[Value],errors:[{idx:u32,msg:string}]}"

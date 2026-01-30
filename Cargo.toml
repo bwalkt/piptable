@@ -13,6 +13,9 @@ members = [
     "crates/python",
     "crates/piptable-wasm",
     "crates/pdf",
+    "crates/piptable-primitives",
+    "crates/piptable-formulas",
+    "crates/piptable-utils",
 ]
 
 [workspace.package]

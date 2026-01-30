@@ -1,0 +1,14 @@
+[package]
+name = "piptable-formulas"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+piptable-primitives = { path = "../piptable-primitives" }
+piptable-core = { path = "../core" }
+serde = { workspace = true }
+thiserror = { workspace = true }
+pest = { workspace = true }
+pest_derive = { workspace = true }
+
+[dev-dependencies]
