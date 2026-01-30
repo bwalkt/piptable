@@ -175,10 +175,9 @@ impl FormulaEngine {
                     .get(name)
                     .ok_or_else(|| FormulaError::UnknownFunction(name.clone()))?;
 
-                def.validate_arg_count(args.len())
-                    .map_err(|expected| {
-                        FormulaError::InvalidArgCount(name.clone(), expected, args.len())
-                    })?;
+                def.validate_arg_count(args.len()).map_err(|expected| {
+                    FormulaError::InvalidArgCount(name.clone(), expected, args.len())
+                })?;
 
                 let mut evaled_args = Vec::with_capacity(args.len());
                 for arg in args {
@@ -218,12 +217,7 @@ impl FunctionRegistry {
         // Math functions
         self.register(
             "SUM",
-            FunctionDefinition::variadic(
-                1,
-                ParamType::Number,
-                ReturnType::Number,
-                functions::sum,
-            ),
+            FunctionDefinition::variadic(1, ParamType::Number, ReturnType::Number, functions::sum),
         );
         self.register(
             "AVERAGE",
@@ -240,21 +234,11 @@ impl FunctionRegistry {
         );
         self.register(
             "MAX",
-            FunctionDefinition::variadic(
-                1,
-                ParamType::Number,
-                ReturnType::Number,
-                functions::max,
-            ),
+            FunctionDefinition::variadic(1, ParamType::Number, ReturnType::Number, functions::max),
         );
         self.register(
             "MIN",
-            FunctionDefinition::variadic(
-                1,
-                ParamType::Number,
-                ReturnType::Number,
-                functions::min,
-            ),
+            FunctionDefinition::variadic(1, ParamType::Number, ReturnType::Number, functions::min),
         );
 
         // Logical functions
@@ -600,7 +584,11 @@ fn eval_binary(op: BinaryOperator, left: Value, right: Value) -> Value {
         }
         BinaryOperator::And => logical_op(left, right, |l, r| l && r),
         BinaryOperator::Or => logical_op(left, right, |l, r| l || r),
-        BinaryOperator::Concat => Value::String(format!("{}{}", value_to_string(left), value_to_string(right))),
+        BinaryOperator::Concat => Value::String(format!(
+            "{}{}",
+            value_to_string(left),
+            value_to_string(right)
+        )),
     }
 }
 
