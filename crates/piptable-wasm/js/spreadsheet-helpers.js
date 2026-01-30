@@ -226,14 +226,15 @@ export function createSheetPayloadWithOptions(data, startRow = 0, startCol = 0, 
 
 function shouldUseSparse(data) {
   const rows = data.length;
-  const cols = data[0]?.length || 0;
+  const cols = Math.max(0, ...data.map((row) => (row ? row.length : 0)));
   const total = rows * cols;
   if (total === 0) return false;
 
   let nonEmpty = 0;
   for (let r = 0; r < rows; r++) {
+    const rowData = data[r] || [];
     for (let c = 0; c < cols; c++) {
-      const cellValue = data[r][c];
+      const cellValue = rowData[c];
       if (cellValue !== null && cellValue !== undefined && cellValue !== "") {
         nonEmpty += 1;
       }
