@@ -239,7 +239,7 @@ impl<'a> Lexer<'a> {
             }
             if !row_digits.is_empty() && is_boundary(self.peek()) && self.peek() != Some('!') {
                 let text = &self.input[start..self.pos];
-                if has_dollar || col_letters.len() >= 1 {
+                if has_dollar || !col_letters.is_empty() {
                     return Ok(TokenKind::CellRef(text.to_string()));
                 }
             }
