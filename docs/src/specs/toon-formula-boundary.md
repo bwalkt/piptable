@@ -15,7 +15,7 @@ Supported value envelope:
 - `str` -> `{ t: "str", v: string }`
 - `arr` -> `{ t: "arr", v: [Value] }`
 - `obj` -> `{ t: "obj", v: {string: Value} }`
-- `error` -> `{ t: "error", v: {code: string, msg: string} }`
+- `error` -> `{ t: "error", code: string, msg: string }`
 
 ### CellAddr
 Zero-based coordinates:
@@ -54,7 +54,7 @@ Use when most cells are empty/null.
 ```
 
 ### Heuristic
-- Use sparse if `(non_null / total) < 0.2` or `rows*cols > 10_000` with many empty cells.
+- Use sparse if `(non_null / total) < 0.2` or `rows*cols > 10_000` with density `< 0.5`.
 - Otherwise use dense.
 
 ## 3) Compile + Eval Requests

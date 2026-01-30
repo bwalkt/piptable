@@ -56,12 +56,29 @@ pub struct ToonRange {
     pub e: ToonCellAddr, // end (inclusive)
 }
 
-/// Sheet data payload
+/// Sheet data payload (dense or sparse)
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct SheetPayload {
-    pub range: ToonRange,
-    /// Row-major values, length = (rows * cols)
-    pub values: Vec<ToonValue>,
+#[serde(untagged)]
+pub enum SheetPayload {
+    /// Dense encoding (row-major values array)
+    Dense {
+        range: ToonRange,
+        /// Row-major values, length = (rows * cols)
+        values: Vec<ToonValue>,
+    },
+    /// Sparse encoding (only non-empty cells)
+    Sparse {
+        range: ToonRange,
+        items: Vec<SparseCell>,
+    },
+}
+
+/// Single cell in sparse encoding
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SparseCell {
+    pub r: u32,
+    pub c: u32,
+    pub v: ToonValue,
 }
 
 /// Formula as text
@@ -152,6 +169,34 @@ pub struct CellUpdate {
 pub enum RangeUpdateResponse {
     Updated(SheetPayload),
     Success { ok: bool },
+}
+
+impl SheetPayload {
+    /// Get value at specific cell (returns Null if missing in sparse)
+    pub fn get_cell(&self, row: u32, col: u32) -> Option<ToonValue> {
+        match self {
+            SheetPayload::Dense { range, values } => {
+                if row < range.s.r || row > range.e.r || col < range.s.c || col > range.e.c {
+                    return None;
+                }
+                let row_offset = (row - range.s.r) as usize;
+                let col_offset = (col - range.s.c) as usize;
+                let cols = (range.e.c - range.s.c + 1) as usize;
+                let index = row_offset * cols + col_offset;
+                values.get(index).cloned()
+            }
+            SheetPayload::Sparse { range, items } => {
+                if row < range.s.r || row > range.e.r || col < range.s.c || col > range.e.c {
+                    return None;
+                }
+                items
+                    .iter()
+                    .find(|item| item.r == row && item.c == col)
+                    .map(|item| item.v.clone())
+                    .or(Some(ToonValue::Null))
+            }
+        }
+    }
 }
 
 // Conversion implementations
@@ -373,6 +418,49 @@ mod tests {
         let duration = ToonValue::Duration { v: 60000 };
         let value: CellValue = duration.into();
         assert!(matches!(value, CellValue::Int(60000)));
+    }
+
+    #[test]
+    fn test_sheet_payload_dense_get_cell() {
+        let payload = SheetPayload::Dense {
+            range: ToonRange {
+                s: ToonCellAddr { r: 0, c: 0 },
+                e: ToonCellAddr { r: 0, c: 1 },
+            },
+            values: vec![ToonValue::Int { v: 1 }, ToonValue::Int { v: 2 }],
+        };
+
+        assert!(matches!(
+            payload.get_cell(0, 0),
+            Some(ToonValue::Int { v: 1 })
+        ));
+        assert!(matches!(
+            payload.get_cell(0, 1),
+            Some(ToonValue::Int { v: 2 })
+        ));
+        assert!(payload.get_cell(1, 0).is_none());
+    }
+
+    #[test]
+    fn test_sheet_payload_sparse_get_cell() {
+        let payload = SheetPayload::Sparse {
+            range: ToonRange {
+                s: ToonCellAddr { r: 0, c: 0 },
+                e: ToonCellAddr { r: 1, c: 1 },
+            },
+            items: vec![SparseCell {
+                r: 1,
+                c: 0,
+                v: ToonValue::Int { v: 7 },
+            }],
+        };
+
+        assert!(matches!(
+            payload.get_cell(1, 0),
+            Some(ToonValue::Int { v: 7 })
+        ));
+        assert!(matches!(payload.get_cell(0, 0), Some(ToonValue::Null)));
+        assert!(payload.get_cell(2, 2).is_none());
     }
 
     #[test]
