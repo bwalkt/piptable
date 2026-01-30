@@ -132,7 +132,14 @@ fn apply_cell_update(sheet: &mut SheetPayload, update: CellUpdate) -> Result<(),
 
             let row_offset = (update.addr.r - range.s.r) as usize;
             let col_offset = (update.addr.c - range.s.c) as usize;
+            let rows = (range.e.r - range.s.r + 1) as usize;
             let cols = (range.e.c - range.s.c + 1) as usize;
+            let expected_len = rows
+                .checked_mul(cols)
+                .ok_or_else(|| JsValue::from_str("Range too large"))?;
+            if values.len() < expected_len {
+                return Err(JsValue::from_str("Dense payload length mismatch"));
+            }
             let index = row_offset * cols + col_offset;
 
             values[index] = update.value;
