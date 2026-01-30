@@ -85,8 +85,9 @@ sub_def = {
 }
 
 param_list = { param ~ ("," ~ param)* }
-param = { param_modifier? ~ ident }
-param_modifier = { ^"byval" | ^"byref" }
+param = { param_modifier* ~ ident ~ default_value? }
+default_value = { "=" ~ expr }
+param_modifier = { ^"byval" | ^"byref" | ^"optional" | ^"paramarray" }
 
 return_stmt = { "return" ~ expr? }
 
@@ -288,7 +289,7 @@ sql_keyword = _{
      ^"and" | ^"or" | ^"not" | ^"null" | ^"is" |
      ^"asc" | ^"desc" | ^"distinct" | ^"with" | ^"recursive" |
      ^"trigger" | ^"counting" | ^"watermark" | ^"stream" | ^"stdin" |
-     ^"true" | ^"false" | ^"by" | ^"outer" | ^"byval" | ^"byref") ~ !(ASCII_ALPHANUMERIC | "_")
+     ^"true" | ^"false" | ^"by" | ^"outer" | ^"byval" | ^"byref" | ^"optional" | ^"paramarray") ~ !(ASCII_ALPHANUMERIC | "_")
 }
 
 // Regular identifier (can match keywords - used in most contexts)

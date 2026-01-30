@@ -155,10 +155,12 @@ pub enum ParamMode {
 }
 
 /// Function/sub parameter definition.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Param {
     pub name: String,
     pub mode: ParamMode,
+    pub default: Option<Expr>,
+    pub is_param_array: bool,
 }
 
 /// Elseif clause in an if statement.

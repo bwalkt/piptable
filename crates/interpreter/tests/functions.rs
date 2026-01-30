@@ -140,6 +140,38 @@ async fn test_byref_object_field() {
     ));
 }
 
+#[tokio::test]
+async fn test_optional_param_default() {
+    let (interp, _) = run_script(
+        r#"
+        function add(a, optional b = 1)
+            return a + b
+        end function
+        dim x = add(3)
+        dim y = add(3, 4)
+    "#,
+    )
+    .await;
+    assert!(matches!(interp.get_var("x").await, Some(Value::Int(4))));
+    assert!(matches!(interp.get_var("y").await, Some(Value::Int(7))));
+}
+
+#[tokio::test]
+async fn test_paramarray_collects_args() {
+    let (interp, _) = run_script(
+        r#"
+        function sum_all(paramarray nums)
+            return sum(nums)
+        end function
+        dim a = sum_all(1, 2, 3)
+        dim b = sum_all()
+    "#,
+    )
+    .await;
+    assert!(matches!(interp.get_var("a").await, Some(Value::Int(6))));
+    assert!(matches!(interp.get_var("b").await, Some(Value::Int(0))));
+}
+
 /// Verifies that a parameterless function returns its declared value when invoked.
 ///
 /// # Examples

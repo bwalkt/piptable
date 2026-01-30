@@ -98,7 +98,7 @@ fn build_statement(pair: Pair<Rule>) -> BuildResult<Statement> {
 }
 
 fn build_dim_stmt(pair: Pair<Rule>, line: usize) -> BuildResult<Statement> {
-    let mut inner = pair.into_inner();
+    let mut inner = pair.clone().into_inner();
     let name = inner.next().unwrap().as_str().to_string();
 
     // Check for type hint
@@ -122,7 +122,7 @@ fn build_dim_stmt(pair: Pair<Rule>, line: usize) -> BuildResult<Statement> {
 }
 
 fn build_assignment_stmt(pair: Pair<Rule>, line: usize) -> BuildResult<Statement> {
-    let mut inner = pair.into_inner();
+    let mut inner = pair.clone().into_inner();
     let lvalue_pair = inner.next().unwrap();
     let value_pair = inner.next().unwrap();
 
@@ -256,7 +256,7 @@ fn build_while_stmt(pair: Pair<Rule>, line: usize) -> BuildResult<Statement> {
 }
 
 fn build_function_def(pair: Pair<Rule>, line: usize) -> BuildResult<Statement> {
-    let mut inner = pair.into_inner();
+    let mut inner = pair.clone().into_inner();
     let mut is_async = false;
 
     let mut next = inner.next().unwrap();
@@ -282,6 +282,8 @@ fn build_function_def(pair: Pair<Rule>, line: usize) -> BuildResult<Statement> {
             _ => {}
         }
     }
+
+    validate_param_list(&params, &pair)?;
 
     Ok(Statement::Function {
         name,
@@ -293,7 +295,7 @@ fn build_function_def(pair: Pair<Rule>, line: usize) -> BuildResult<Statement> {
 }
 
 fn build_sub_def(pair: Pair<Rule>, line: usize) -> BuildResult<Statement> {
-    let mut inner = pair.into_inner();
+    let mut inner = pair.clone().into_inner();
     let mut is_async = false;
 
     let mut next = inner.next().unwrap();
@@ -319,6 +321,8 @@ fn build_sub_def(pair: Pair<Rule>, line: usize) -> BuildResult<Statement> {
             _ => {}
         }
     }
+
+    validate_param_list(&params, &pair)?;
 
     Ok(Statement::Sub {
         name,
@@ -332,17 +336,35 @@ fn build_sub_def(pair: Pair<Rule>, line: usize) -> BuildResult<Statement> {
 fn build_param(pair: Pair<Rule>) -> BuildResult<Param> {
     let mut mode = ParamMode::ByVal;
     let mut name: Option<String> = None;
+    let mut default: Option<Expr> = None;
+    let mut saw_optional = false;
+    let mut is_param_array = false;
+    let mut saw_byval = false;
+    let mut saw_byref = false;
 
     for item in pair.clone().into_inner() {
         match item.as_rule() {
             Rule::param_modifier => {
-                mode = match item.as_str().to_lowercase().as_str() {
-                    "byref" => ParamMode::ByRef,
-                    _ => ParamMode::ByVal,
-                };
+                match item.as_str().to_lowercase().as_str() {
+                    "byref" => {
+                        saw_byref = true;
+                        mode = ParamMode::ByRef;
+                    }
+                    "byval" => {
+                        saw_byval = true;
+                        mode = ParamMode::ByVal;
+                    }
+                    "optional" => saw_optional = true,
+                    "paramarray" => is_param_array = true,
+                    _ => {}
+                }
             }
             Rule::ident => {
                 name = Some(item.as_str().to_string());
+            }
+            Rule::default_value => {
+                let expr_pair = item.into_inner().next().unwrap();
+                default = Some(build_expr(expr_pair)?);
             }
             _ => {}
         }
@@ -352,7 +374,82 @@ fn build_param(pair: Pair<Rule>) -> BuildResult<Param> {
         return Err(BuildError::from_pair(&pair, "Expected parameter name"));
     };
 
-    Ok(Param { name, mode })
+    if saw_byval && saw_byref {
+        return Err(BuildError::from_pair(
+            &pair,
+            "Parameter cannot be both ByVal and ByRef",
+        ));
+    }
+
+    if default.is_some() && !saw_optional {
+        return Err(BuildError::from_pair(
+            &pair,
+            "Default value requires Optional parameter",
+        ));
+    }
+
+    if saw_optional && default.is_none() {
+        return Err(BuildError::from_pair(
+            &pair,
+            "Optional parameters require a default value",
+        ));
+    }
+
+    if saw_optional && mode == ParamMode::ByRef {
+        return Err(BuildError::from_pair(
+            &pair,
+            "Optional parameters cannot be ByRef",
+        ));
+    }
+
+    if is_param_array && mode == ParamMode::ByRef {
+        return Err(BuildError::from_pair(
+            &pair,
+            "ParamArray cannot be passed ByRef",
+        ));
+    }
+
+    if is_param_array && default.is_some() {
+        return Err(BuildError::from_pair(
+            &pair,
+            "ParamArray cannot have a default value",
+        ));
+    }
+
+    if is_param_array && saw_optional {
+        return Err(BuildError::from_pair(
+            &pair,
+            "ParamArray cannot be Optional",
+        ));
+    }
+
+    Ok(Param {
+        name,
+        mode,
+        default,
+        is_param_array,
+    })
+}
+
+fn validate_param_list(params: &[Param], pair: &Pair<Rule>) -> BuildResult<()> {
+    let mut seen_optional = false;
+    for (idx, param) in params.iter().enumerate() {
+        if param.is_param_array && idx + 1 != params.len() {
+            return Err(BuildError::from_pair(
+                pair,
+                "ParamArray must be the last parameter",
+            ));
+        }
+        if param.default.is_some() {
+            seen_optional = true;
+        } else if seen_optional && !param.is_param_array {
+            return Err(BuildError::from_pair(
+                pair,
+                "Required parameters cannot follow optional parameters",
+            ));
+        }
+    }
+    Ok(())
 }
 
 fn build_return_stmt(pair: Pair<Rule>, line: usize) -> BuildResult<Statement> {

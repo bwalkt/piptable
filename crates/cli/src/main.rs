@@ -611,10 +611,14 @@ mod tests {
                 piptable_core::Param {
                     name: "a".to_string(),
                     mode: piptable_core::ParamMode::ByVal,
+                    default: None,
+                    is_param_array: false,
                 },
                 piptable_core::Param {
                     name: "b".to_string(),
                     mode: piptable_core::ParamMode::ByVal,
+                    default: None,
+                    is_param_array: false,
                 },
             ],
             is_async: false,
