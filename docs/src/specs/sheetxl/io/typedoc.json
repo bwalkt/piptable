@@ -1,6 +1,0 @@
-{
-  "entryPoints": ["src/index.ts"],
-  "readme": "README.md",
-  "name": "@sheetxl/io",
-  "extends": ["../../typedoc.base.json"]
-}

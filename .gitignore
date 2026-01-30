@@ -34,3 +34,6 @@ docs/decisions/
 
 # Session context
 session.md
+
+# Local SheetXL reference snapshot (not tracked)
+docs/src/specs/sheetxl/
