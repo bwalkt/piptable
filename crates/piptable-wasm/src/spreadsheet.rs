@@ -107,17 +107,21 @@ fn create_eval_context(
 fn apply_cell_update(sheet: &mut SheetPayload, update: CellUpdate) -> Result<(), JsValue> {
     match sheet {
         SheetPayload::Dense { range, values } => {
+            if update.addr.r < range.s.r
+                || update.addr.r > range.e.r
+                || update.addr.c < range.s.c
+                || update.addr.c > range.e.c
+            {
+                return Err(JsValue::from_str("Cell address out of range"));
+            }
+
             let row_offset = (update.addr.r - range.s.r) as usize;
             let col_offset = (update.addr.c - range.s.c) as usize;
             let cols = (range.e.c - range.s.c + 1) as usize;
             let index = row_offset * cols + col_offset;
 
-            if index < values.len() {
-                values[index] = update.value;
-                Ok(())
-            } else {
-                Err(JsValue::from_str("Cell address out of range"))
-            }
+            values[index] = update.value;
+            Ok(())
         }
         SheetPayload::Sparse { range, items } => {
             if update.addr.r < range.s.r
