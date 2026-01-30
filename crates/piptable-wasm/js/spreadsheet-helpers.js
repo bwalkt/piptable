@@ -182,6 +182,16 @@ export function createSheetPayloadWithOptions(data, startRow = 0, startCol = 0, 
   const rows = data.length;
   const cols = Math.max(0, ...data.map((row) => (row ? row.length : 0)));
 
+  if (rows === 0 || cols === 0) {
+    return {
+      range: {
+        s: { r: startRow, c: startCol },
+        e: { r: startRow, c: startCol },
+      },
+      values: [],
+    };
+  }
+
   if (options.sparse || (options.autoSparse && shouldUseSparse(data))) {
     const items = [];
     for (let r = 0; r < rows; r++) {
