@@ -179,17 +179,17 @@ dim message = greet("Alice")
 dim total = calculateTotal(19.99, 3, 0.08)
 ```
 
-### Subroutines
+### Functions without return values
 
-Procedures that don't return values:
+Functions can also be used as procedures that don't return values:
 
 ```vba
-sub logMessage(level, message)
+function logMessage(level, message)
     dim timestamp = now()
     print("[" + timestamp + "] " + level + ": " + message)
-end sub
+end function
 
-' Call subroutine
+' Call function
 call logMessage("INFO", "Process started")
 ```
 
