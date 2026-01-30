@@ -276,7 +276,8 @@ pub async fn call_sheet_builtin(
             match (&args[0], &args[1]) {
                 (Value::Sheet(sheet), Value::String(notation)) => match sheet.get_a1(notation) {
                     Ok(cell) => {
-                        let is_formula = matches!(cell, CellValue::String(s) if s.trim_start().starts_with('='));
+                        let is_formula =
+                            matches!(cell, CellValue::String(s) if s.trim_start().starts_with('='));
                         Some(Ok(Value::Bool(is_formula)))
                     }
                     Err(e) => Some(Err(PipError::runtime(

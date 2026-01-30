@@ -1,7 +1,7 @@
 //! Formula integration helpers for the DSL runtime.
 
 use piptable_core::{PipError, PipResult, Value};
-use piptable_formulas::{FunctionRegistry, FormulaEngine, ValueResolver};
+use piptable_formulas::{FormulaEngine, FunctionRegistry, ValueResolver};
 use piptable_primitives::{CellAddress, CellRange, ErrorValue, Value as FormulaValue};
 use piptable_sheet::{CellValue, Sheet};
 use std::sync::OnceLock;
@@ -46,13 +46,12 @@ pub fn eval_sheet_formula(sheet: &Sheet, formula: &str, line: usize) -> PipResul
 
 pub fn eval_sheet_cell(sheet: &Sheet, notation: &str, line: usize) -> PipResult<Value> {
     let cell = sheet.get_a1(notation).map_err(|e| {
-        PipError::runtime(
-            line,
-            format!("Invalid cell notation '{}': {}", notation, e),
-        )
+        PipError::runtime(line, format!("Invalid cell notation '{}': {}", notation, e))
     })?;
     match cell {
-        CellValue::String(s) if s.trim_start().starts_with('=') => eval_sheet_formula(sheet, s, line),
+        CellValue::String(s) if s.trim_start().starts_with('=') => {
+            eval_sheet_formula(sheet, s, line)
+        }
         _ => Ok(cell_to_core(cell)),
     }
 }
