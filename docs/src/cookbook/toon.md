@@ -128,6 +128,50 @@ export typed_data to "typed_data.toon"
 print "Converted CSV to typed TOON format"
 ```
 
+## WASM Formula Boundary
+
+### Compile + Evaluate Formulas (JS + TOON)
+```javascript
+import {
+  wasmCompileMany,
+  wasmEvalMany,
+  createSheetPayloadWithOptions,
+  convertFromToonValue
+} from "./spreadsheet-helpers.js";
+
+const compileReq = {
+  formulas: [
+    { kind: "text", f: "=A1+B1" },
+    { kind: "text", f: "=SUM(A1:B1)" }
+  ]
+};
+
+const compiled = await wasmCompileMany(compileReq);
+
+const sheet = createSheetPayloadWithOptions(
+  [[1, 2]],
+  0,
+  0,
+  { autoSparse: true }
+);
+
+const evalReq = { compiled: compiled.compiled, sheet };
+const evalResp = await wasmEvalMany(evalReq);
+
+const values = evalResp.results.map(convertFromToonValue);
+console.log(values); // [3, 3]
+```
+
+### Sparse Sheet Payload (Manual)
+```javascript
+const sparseSheet = {
+  range: { s: { r: 0, c: 0 }, e: { r: 0, c: 1 } },
+  items: [
+    { r: 0, c: 0, v: { t: "int", v: 10 } },
+    { r: 0, c: 1, v: { t: "int", v: 5 } }
+  ]
+};
+```
 ### TOON to JSON
 ```piptable
 ' @title Export TOON to JSON

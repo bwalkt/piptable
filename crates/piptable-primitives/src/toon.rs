@@ -421,6 +421,49 @@ mod tests {
     }
 
     #[test]
+    fn test_sheet_payload_dense_get_cell() {
+        let payload = SheetPayload::Dense {
+            range: ToonRange {
+                s: ToonCellAddr { r: 0, c: 0 },
+                e: ToonCellAddr { r: 0, c: 1 },
+            },
+            values: vec![ToonValue::Int { v: 1 }, ToonValue::Int { v: 2 }],
+        };
+
+        assert!(matches!(
+            payload.get_cell(0, 0),
+            Some(ToonValue::Int { v: 1 })
+        ));
+        assert!(matches!(
+            payload.get_cell(0, 1),
+            Some(ToonValue::Int { v: 2 })
+        ));
+        assert!(payload.get_cell(1, 0).is_none());
+    }
+
+    #[test]
+    fn test_sheet_payload_sparse_get_cell() {
+        let payload = SheetPayload::Sparse {
+            range: ToonRange {
+                s: ToonCellAddr { r: 0, c: 0 },
+                e: ToonCellAddr { r: 1, c: 1 },
+            },
+            items: vec![SparseCell {
+                r: 1,
+                c: 0,
+                v: ToonValue::Int { v: 7 },
+            }],
+        };
+
+        assert!(matches!(
+            payload.get_cell(1, 0),
+            Some(ToonValue::Int { v: 7 })
+        ));
+        assert!(matches!(payload.get_cell(0, 0), Some(ToonValue::Null)));
+        assert!(payload.get_cell(2, 2).is_none());
+    }
+
+    #[test]
     fn test_parse_error_code_unknown() {
         assert!(matches!(parse_error_code("Unknown"), ErrorValue::Value));
     }

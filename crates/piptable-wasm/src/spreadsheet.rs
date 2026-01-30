@@ -18,56 +18,7 @@ use wasm_bindgen::prelude::*;
 /// Output: TOON-encoded CompileResponse
 #[wasm_bindgen]
 pub fn compile_many(toon_bytes: &[u8]) -> Result<Vec<u8>, JsValue> {
-    // Detect format by checking first byte
-    let request: CompileRequest = if toon_bytes.starts_with(b"{") {
-        // JSON format for debugging
-        serde_json::from_slice(toon_bytes)
-            .map_err(|e| JsValue::from_str(&format!("JSON parse error: {}", e)))?
-    } else {
-        // TOON binary format (using MessagePack for now as TOON implementation)
-        rmp_serde::from_slice(toon_bytes)
-            .map_err(|e| JsValue::from_str(&format!("TOON parse error: {}", e)))?
-    };
-
-    // Process compile request
-    let mut engine = FormulaEngine::new();
-    let mut compiled = Vec::new();
-    let mut errors = Vec::new();
-
-    for (idx, formula_text) in request.formulas.iter().enumerate() {
-        match compile_formula(&mut engine, &formula_text.f) {
-            Ok(bytecode) => {
-                compiled.push(FormulaBytecode {
-                    kind: "bc".to_string(),
-                    b: bytecode,
-                });
-            }
-            Err(e) => {
-                // Add placeholder for failed compilation
-                compiled.push(FormulaBytecode {
-                    kind: "bc".to_string(),
-                    b: vec![],
-                });
-                errors.push(CompileError {
-                    idx: idx as u32,
-                    msg: e.to_string(),
-                });
-            }
-        }
-    }
-
-    let response = CompileResponse { compiled, errors };
-
-    // Serialize response in same format as request
-    let response_bytes = if toon_bytes.starts_with(b"{") {
-        serde_json::to_vec(&response)
-            .map_err(|e| JsValue::from_str(&format!("JSON serialize error: {}", e)))?
-    } else {
-        rmp_serde::to_vec(&response)
-            .map_err(|e| JsValue::from_str(&format!("TOON serialize error: {}", e)))?
-    };
-
-    Ok(response_bytes)
+    compile_many_bytes(toon_bytes).map_err(|e| JsValue::from_str(&e))
 }
 
 /// Evaluate multiple compiled formulas in batch
@@ -76,50 +27,7 @@ pub fn compile_many(toon_bytes: &[u8]) -> Result<Vec<u8>, JsValue> {
 /// Output: TOON-encoded EvalResponse
 #[wasm_bindgen]
 pub fn eval_many(toon_bytes: &[u8]) -> Result<Vec<u8>, JsValue> {
-    // Detect format
-    let request: EvalRequest = if toon_bytes.starts_with(b"{") {
-        serde_json::from_slice(toon_bytes)
-            .map_err(|e| JsValue::from_str(&format!("JSON parse error: {}", e)))?
-    } else {
-        rmp_serde::from_slice(toon_bytes)
-            .map_err(|e| JsValue::from_str(&format!("TOON parse error: {}", e)))?
-    };
-
-    // Create evaluation context with sheet data
-    let context = create_eval_context(&request.sheet, request.globals);
-
-    let mut results = Vec::new();
-    let mut errors = Vec::new();
-
-    // Evaluate each compiled formula
-    for (idx, bytecode) in request.compiled.iter().enumerate() {
-        match evaluate_bytecode(&bytecode.b, &context) {
-            Ok(value) => results.push(value),
-            Err(e) => {
-                results.push(ToonValue::Error {
-                    code: "EVAL".to_string(),
-                    msg: e.to_string(),
-                });
-                errors.push(EvalError {
-                    idx: idx as u32,
-                    msg: e.to_string(),
-                });
-            }
-        }
-    }
-
-    let response = EvalResponse { results, errors };
-
-    // Serialize in same format
-    let response_bytes = if toon_bytes.starts_with(b"{") {
-        serde_json::to_vec(&response)
-            .map_err(|e| JsValue::from_str(&format!("JSON serialize error: {}", e)))?
-    } else {
-        rmp_serde::to_vec(&response)
-            .map_err(|e| JsValue::from_str(&format!("TOON serialize error: {}", e)))?
-    };
-
-    Ok(response_bytes)
+    eval_many_bytes(toon_bytes).map_err(|e| JsValue::from_str(&e))
 }
 
 /// Apply updates to a sheet range
@@ -128,33 +36,7 @@ pub fn eval_many(toon_bytes: &[u8]) -> Result<Vec<u8>, JsValue> {
 /// Output: TOON-encoded RangeUpdateResponse
 #[wasm_bindgen]
 pub fn apply_range(toon_bytes: &[u8]) -> Result<Vec<u8>, JsValue> {
-    // Detect format
-    let request: RangeUpdateRequest = if toon_bytes.starts_with(b"{") {
-        serde_json::from_slice(toon_bytes)
-            .map_err(|e| JsValue::from_str(&format!("JSON parse error: {}", e)))?
-    } else {
-        rmp_serde::from_slice(toon_bytes)
-            .map_err(|e| JsValue::from_str(&format!("TOON parse error: {}", e)))?
-    };
-
-    // Apply updates to sheet
-    let mut sheet = request.sheet;
-    for update in request.updates {
-        apply_cell_update(&mut sheet, update)?;
-    }
-
-    let response = RangeUpdateResponse::Updated(sheet);
-
-    // Serialize in same format
-    let response_bytes = if toon_bytes.starts_with(b"{") {
-        serde_json::to_vec(&response)
-            .map_err(|e| JsValue::from_str(&format!("JSON serialize error: {}", e)))?
-    } else {
-        rmp_serde::to_vec(&response)
-            .map_err(|e| JsValue::from_str(&format!("TOON serialize error: {}", e)))?
-    };
-
-    Ok(response_bytes)
+    apply_range_bytes(toon_bytes).map_err(|e| JsValue::from_str(&e))
 }
 
 /// Validate a formula for syntax highlighting
@@ -268,6 +150,96 @@ fn apply_cell_update(sheet: &mut SheetPayload, update: CellUpdate) -> Result<(),
             items.retain(|item| !matches!(item.v, ToonValue::Null));
             Ok(())
         }
+    }
+}
+
+pub fn compile_many_bytes(toon_bytes: &[u8]) -> Result<Vec<u8>, String> {
+    let request: CompileRequest = decode_request(toon_bytes)?;
+
+    let mut engine = FormulaEngine::new();
+    let mut compiled = Vec::new();
+    let mut errors = Vec::new();
+
+    for (idx, formula_text) in request.formulas.iter().enumerate() {
+        match compile_formula(&mut engine, &formula_text.f) {
+            Ok(bytecode) => {
+                compiled.push(FormulaBytecode {
+                    kind: "bc".to_string(),
+                    b: bytecode,
+                });
+            }
+            Err(e) => {
+                compiled.push(FormulaBytecode {
+                    kind: "bc".to_string(),
+                    b: vec![],
+                });
+                errors.push(CompileError {
+                    idx: idx as u32,
+                    msg: e.to_string(),
+                });
+            }
+        }
+    }
+
+    let response = CompileResponse { compiled, errors };
+    encode_response(&response, toon_bytes)
+}
+
+pub fn eval_many_bytes(toon_bytes: &[u8]) -> Result<Vec<u8>, String> {
+    let request: EvalRequest = decode_request(toon_bytes)?;
+    let context = create_eval_context(&request.sheet, request.globals);
+
+    let mut results = Vec::new();
+    let mut errors = Vec::new();
+
+    for (idx, bytecode) in request.compiled.iter().enumerate() {
+        match evaluate_bytecode(&bytecode.b, &context) {
+            Ok(value) => results.push(value),
+            Err(e) => {
+                results.push(ToonValue::Error {
+                    code: "EVAL".to_string(),
+                    msg: e.to_string(),
+                });
+                errors.push(EvalError {
+                    idx: idx as u32,
+                    msg: e.to_string(),
+                });
+            }
+        }
+    }
+
+    let response = EvalResponse { results, errors };
+    encode_response(&response, toon_bytes)
+}
+
+pub fn apply_range_bytes(toon_bytes: &[u8]) -> Result<Vec<u8>, String> {
+    let request: RangeUpdateRequest = decode_request(toon_bytes)?;
+
+    let mut sheet = request.sheet;
+    for update in request.updates {
+        apply_cell_update(&mut sheet, update).map_err(|e| e.as_string().unwrap_or_default())?;
+    }
+
+    let response = RangeUpdateResponse::Updated(sheet);
+    encode_response(&response, toon_bytes)
+}
+
+fn decode_request<T: serde::de::DeserializeOwned>(toon_bytes: &[u8]) -> Result<T, String> {
+    if toon_bytes.starts_with(b"{") {
+        serde_json::from_slice(toon_bytes).map_err(|e| format!("JSON parse error: {}", e))
+    } else {
+        rmp_serde::from_slice(toon_bytes).map_err(|e| format!("TOON parse error: {}", e))
+    }
+}
+
+fn encode_response<T: serde::Serialize>(
+    response: &T,
+    toon_bytes: &[u8],
+) -> Result<Vec<u8>, String> {
+    if toon_bytes.starts_with(b"{") {
+        serde_json::to_vec(response).map_err(|e| format!("JSON serialize error: {}", e))
+    } else {
+        rmp_serde::to_vec(response).map_err(|e| format!("TOON serialize error: {}", e))
     }
 }
 
