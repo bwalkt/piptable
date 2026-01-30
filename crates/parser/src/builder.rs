@@ -10,14 +10,36 @@ use piptable_core::{
 use crate::Rule;
 
 /// Error during AST building with location info.
+///
+/// Represents an error that occurred while converting a pest parse tree into
+/// an AST. Contains location information (line and column) to help identify
+/// where the error occurred in the source code.
 #[derive(Debug)]
 pub struct BuildError {
+    /// Line number where the error occurred (1-based)
     pub line: usize,
+    /// Column number where the error occurred (1-based)  
     pub column: usize,
+    /// Human-readable error message describing what went wrong
     pub message: String,
 }
 
 impl BuildError {
+    /// Create a new build error with location and message.
+    ///
+    /// # Arguments
+    ///
+    /// * `line` - Line number where error occurred (1-based)
+    /// * `column` - Column number where error occurred (1-based)
+    /// * `message` - Error description
+    ///
+    /// # Examples
+    ///
+    /// ```rust,ignore
+    /// let error = BuildError::new(5, 10, "Unexpected token");
+    /// assert_eq!(error.line, 5);
+    /// assert_eq!(error.column, 10);
+    /// ```
     pub fn new(line: usize, column: usize, message: impl Into<String>) -> Self {
         Self {
             line,
@@ -26,6 +48,22 @@ impl BuildError {
         }
     }
 
+    /// Create a build error from a pest parse pair.
+    ///
+    /// Extracts line and column information from the parse pair and creates
+    /// an error with the provided message. This is the preferred way to create
+    /// build errors since it automatically extracts location information.
+    ///
+    /// # Arguments
+    ///
+    /// * `pair` - The pest parse pair where the error occurred
+    /// * `message` - Error description
+    ///
+    /// # Examples
+    ///
+    /// ```rust,ignore
+    /// let error = BuildError::from_pair(&pair, "Invalid parameter syntax");
+    /// ```
     pub fn from_pair(pair: &Pair<Rule>, message: impl Into<String>) -> Self {
         let (line, column) = pair.line_col();
         Self::new(line, column, message)
@@ -35,6 +73,36 @@ impl BuildError {
 type BuildResult<T> = Result<T, BuildError>;
 
 /// Build a Program AST from pest pairs.
+///
+/// Converts a pest parse tree into a structured AST representation. This is the
+/// main entry point for AST construction after parsing the source code with pest.
+/// The function processes each statement in the parse tree and builds the
+/// corresponding AST nodes.
+///
+/// # Arguments
+///
+/// * `pairs` - Iterator over pest parse pairs representing the parsed program
+///
+/// # Returns
+///
+/// * `Ok(Program)` - Successfully built AST program
+/// * `Err(BuildError)` - If any statement fails to build, with location info
+///
+/// # Examples
+///
+/// ```rust,ignore
+/// use pest::Parser;
+/// let parse_result = PiptableParser::parse(Rule::program, source_code)?;
+/// let program = build_program(parse_result)?;
+/// ```
+///
+/// # Errors
+///
+/// Returns `BuildError` if:
+/// - Any statement contains invalid syntax
+/// - Function parameters are malformed
+/// - Type assertions reference unknown types
+/// - Join conditions are invalid
 pub fn build_program(pairs: Pairs<Rule>) -> BuildResult<Program> {
     let mut statements = Vec::new();
 
@@ -333,6 +401,31 @@ fn build_sub_def(pair: Pair<Rule>, line: usize) -> BuildResult<Statement> {
     })
 }
 
+/// Build a parameter definition from a pest parse pair.
+///
+/// Parses a function or subroutine parameter definition, extracting the parameter
+/// name and any modifiers (ByVal/ByRef). Parameters default to ByVal if no modifier
+/// is specified.
+///
+/// # Arguments
+///
+/// * `pair` - The pest parse pair containing the parameter definition
+///
+/// # Returns
+///
+/// * `Ok(Param)` - Successfully parsed parameter with name and mode
+/// * `Err(BuildError)` - If parameter name is missing or invalid
+///
+/// # Examples
+///
+/// Parses parameter definitions like:
+/// - `x` -> `Param { name: "x", mode: ByVal }`
+/// - `ByVal x` -> `Param { name: "x", mode: ByVal }`
+/// - `ByRef y` -> `Param { name: "y", mode: ByRef }`
+///
+/// # Errors
+///
+/// Returns `BuildError` if the parameter name is missing from the parse tree.
 fn build_param(pair: Pair<Rule>) -> BuildResult<Param> {
     let mut mode = ParamMode::ByVal;
     let mut name: Option<String> = None;

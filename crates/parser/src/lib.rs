@@ -478,6 +478,29 @@ mod tests {
     }
 
     #[test]
+    #[ignore = "planned optional/paramarray coverage"]
+    fn parse_function_optional_param() {
+        let code = "function add(a, optional b = 1) return a + b end function";
+        let result = PipParser::parse_str(code);
+        assert!(result.is_ok());
+        let program = result.unwrap();
+        match &program.statements[0] {
+            Statement::Function { name, params, .. } => {
+                assert_eq!(name, "add");
+                assert_eq!(params.len(), 2);
+                assert_eq!(params[1].name, "b");
+                assert!(matches!(
+                    &params[1].default,
+                    Some(Expr::Literal(Literal::Int(1)))
+                ));
+                assert_eq!(params[1].mode, ParamMode::ByVal);
+                assert!(!params[1].is_param_array);
+            }
+            _ => panic!("Expected Function statement"),
+        }
+    }
+
+    #[test]
     fn parse_if_statement() {
         let code = "if x > 10 then dim y = 1 else dim y = 2 end if";
         let result = PipParser::parse_str(code);

@@ -148,18 +148,87 @@ pub enum Statement {
 }
 
 /// Parameter passing mode for function/sub parameters.
+///
+/// This enum determines how arguments are passed to functions and subroutines:
+/// - `ByVal`: Parameters are passed by value (copied), modifications don't affect the original
+/// - `ByRef`: Parameters are passed by reference, modifications affect the original variable
+///
+/// # Examples
+///
+/// ```text
+/// // ByVal example - original variable unchanged
+/// function double_byval(ByVal x)
+///     x = x * 2
+///     return x
+/// end function
+/// dim original = 5
+/// dim result = double_byval(original)  // result = 10, original = 5
+///
+/// // ByRef example - original variable modified
+/// sub double_byref(ByRef x)
+///     x = x * 2
+/// end sub
+/// dim value = 5
+/// call double_byref(value)  // value = 10
+/// ```
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum ParamMode {
+    /// Pass by value - argument is copied, original unchanged
     ByVal,
+    /// Pass by reference - argument references original, modifications affect original
     ByRef,
 }
 
 /// Function/sub parameter definition.
+///
+/// Represents a single parameter in a function or subroutine definition, including
+/// its name, passing mode, default value, and special parameter attributes.
+/// This structure is used during parsing and execution to manage parameter
+/// binding and reference semantics.
+///
+/// # Fields
+///
+/// * `name` - The parameter name as it appears in the function signature
+/// * `mode` - How the parameter should be passed (ByVal or ByRef)
+/// * `default` - Optional default value for optional parameters
+/// * `is_param_array` - Whether this parameter accepts variable arguments (ParamArray)
+///
+/// # Examples
+///
+/// ```rust,ignore
+/// // Basic parameter: function example(ByVal a, ByRef b)
+/// let param_a = Param {
+///     name: "a".to_string(),
+///     mode: ParamMode::ByVal,
+///     default: None,
+///     is_param_array: false
+/// };
+///
+/// // Optional parameter: function example(Optional x = 10)
+/// let param_optional = Param {
+///     name: "x".to_string(),
+///     mode: ParamMode::ByVal,
+///     default: Some(Expr::Literal(Literal::Int(10))),
+///     is_param_array: false
+/// };
+///
+/// // ParamArray parameter: function example(ParamArray values)
+/// let param_array = Param {
+///     name: "values".to_string(),
+///     mode: ParamMode::ByVal,
+///     default: None,
+///     is_param_array: true
+/// };
+/// ```
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Param {
+    /// The parameter name as declared in the function signature
     pub name: String,
+    /// The parameter passing mode (ByVal or ByRef)
     pub mode: ParamMode,
+    /// Default value for optional parameters (None if parameter is required)
     pub default: Option<Expr>,
+    /// Whether this parameter accepts variable arguments (ParamArray)
     pub is_param_array: bool,
 }
 
@@ -378,12 +447,32 @@ pub struct ImportOptions {
 }
 
 impl ImportOptions {
-    /// Create new import options with headers enabled
+    /// Create new import options with headers enabled.
+    ///
+    /// This creates the default configuration where files are assumed to have headers.
+    /// Equivalent to calling `ImportOptions::default()`.
+    ///
+    /// # Examples
+    ///
+    /// ```rust,ignore
+    /// let options = ImportOptions::new();
+    /// assert_eq!(options.has_headers, None); // Uses default (true)
+    /// ```
     pub fn new() -> Self {
         Self::default()
     }
 
-    /// Create options without headers
+    /// Create options without headers.
+    ///
+    /// Use this when importing files that don't have a header row,
+    /// such as raw data files or CSV files without column names.
+    ///
+    /// # Examples
+    ///
+    /// ```rust,ignore
+    /// let options = ImportOptions::without_headers();
+    /// assert_eq!(options.has_headers, Some(false));
+    /// ```
     pub fn without_headers() -> Self {
         Self {
             has_headers: Some(false),
@@ -518,6 +607,16 @@ pub enum Trigger {
 
 impl Program {
     /// Create a new empty program.
+    ///
+    /// Returns a program with no statements. This is typically used as a starting
+    /// point for building programs programmatically or as a default value.
+    ///
+    /// # Examples
+    ///
+    /// ```rust,ignore
+    /// let program = Program::new();
+    /// assert!(program.statements.is_empty());
+    /// ```
     #[must_use]
     pub fn new() -> Self {
         Self {
@@ -526,6 +625,23 @@ impl Program {
     }
 
     /// Create a program from statements.
+    ///
+    /// Constructs a program containing the provided statements. This is useful
+    /// when you already have a collection of parsed or constructed statements.
+    ///
+    /// # Arguments
+    ///
+    /// * `statements` - A vector of statements that make up the program
+    ///
+    /// # Examples
+    ///
+    /// ```rust,ignore
+    /// let statements = vec![
+    ///     Statement::Expr { expr: Expr::Literal(Literal::Int(42)), line: 1 }
+    /// ];
+    /// let program = Program::from_statements(statements);
+    /// assert_eq!(program.statements.len(), 1);
+    /// ```
     #[must_use]
     pub fn from_statements(statements: Vec<Statement>) -> Self {
         Self { statements }

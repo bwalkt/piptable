@@ -343,3 +343,130 @@ async fn test_sub_procedure() {
         Some(Value::Int(3))
     ));
 }
+
+#[tokio::test]
+#[ignore = "planned parameter coverage"]
+async fn test_complex_param_combinations() {
+    let (interp, _) = run_script(
+        r#"
+        function complex(byval a, byref b, byval c)
+            b = b + a
+            return a + b + c
+        end function
+        dim x = 5
+        dim result = complex(2, x, 10)
+    "#,
+    )
+    .await;
+    assert!(matches!(interp.get_var("x").await, Some(Value::Int(7)))); // 5 + 2
+    assert!(matches!(
+        interp.get_var("result").await,
+        Some(Value::Int(19))
+    )); // 2 + 7 + 10
+}
+
+#[tokio::test]
+#[ignore = "planned parameter coverage"]
+async fn test_multiple_byref_params() {
+    let (interp, _) = run_script(
+        r#"
+        sub modify_both(byref a, byref b, byval multiplier)
+            a = a * multiplier
+            b = b + multiplier
+        end sub
+        dim x = 5
+        dim y = 10
+        call modify_both(x, y, 3)
+    "#,
+    )
+    .await;
+    assert!(matches!(interp.get_var("x").await, Some(Value::Int(15)))); // 5 * 3
+    assert!(matches!(interp.get_var("y").await, Some(Value::Int(13)))); // 10 + 3
+}
+
+#[tokio::test]
+#[ignore = "planned parameter coverage"]
+async fn test_invalid_byref_argument_error() {
+    let error_msg = run_script_err(
+        r#"
+        sub modify(byref x)
+            x = x + 1
+        end sub
+        call modify(42)
+    "#,
+    )
+    .await;
+    assert!(error_msg.contains("ByRef") || error_msg.contains("reference"));
+}
+
+#[tokio::test]
+#[ignore = "planned parameter coverage"]
+async fn test_mixed_byval_byref_semantics() {
+    let (interp, _) = run_script(
+        r#"
+        function mixed(byval a, byref b, byval c)
+            a = a + 10  ' Should not affect original
+            b = b + 20  ' Should affect original
+            return a + b + c
+        end function
+        dim x = 1
+        dim y = 2
+        dim result = mixed(x, y, 5)
+    "#,
+    )
+    .await;
+    assert!(matches!(interp.get_var("x").await, Some(Value::Int(1)))); // unchanged (ByVal)
+    assert!(matches!(interp.get_var("y").await, Some(Value::Int(22)))); // changed (ByRef)
+    assert!(matches!(
+        interp.get_var("result").await,
+        Some(Value::Int(38))
+    )); // 11 + 22 + 5
+}
+
+#[tokio::test]
+#[ignore = "planned parameter coverage"]
+async fn test_nested_function_calls_with_byref() {
+    let (interp, _) = run_script(
+        r#"
+        sub increment(byref x)
+            x = x + 1
+        end sub
+        
+        sub double_increment(byref y)
+            call increment(y)
+            call increment(y)
+        end sub
+        
+        dim value = 10
+        call double_increment(value)
+    "#,
+    )
+    .await;
+    assert!(matches!(
+        interp.get_var("value").await,
+        Some(Value::Int(12))
+    )); // 10 + 1 + 1
+}
+
+#[tokio::test]
+#[ignore = "planned parameter coverage"]
+async fn test_function_with_all_byref_params() {
+    let (interp, _) = run_script(
+        r#"
+        sub transform_values(byref a, byref b, byref c)
+            dim temp = a
+            a = b
+            b = c
+            c = temp
+        end sub
+        dim x = 1
+        dim y = 2
+        dim z = 3
+        call transform_values(x, y, z)
+    "#,
+    )
+    .await;
+    assert!(matches!(interp.get_var("x").await, Some(Value::Int(2)))); // x = original y
+    assert!(matches!(interp.get_var("y").await, Some(Value::Int(3)))); // y = original z
+    assert!(matches!(interp.get_var("z").await, Some(Value::Int(1)))); // z = original x
+}
