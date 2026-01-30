@@ -1,0 +1,88 @@
+//! Formula integration tests for the DSL runtime.
+
+mod common {
+    include!("common_impl.txt");
+}
+use common::*;
+
+use piptable_core::Value;
+use piptable_interpreter::Interpreter;
+use piptable_parser::PipParser;
+use piptable_sheet::{CellValue, Sheet};
+
+#[tokio::test]
+async fn test_formula_functions_in_dsl() {
+    let (interp, _) = run_script(
+        r#"
+        dim a = IF(1, "yes", "no")
+        dim b = CONCAT("a", "b", "c")
+        dim c = LEFT("hello", 2)
+        dim d = RIGHT("world", 3)
+        dim total = SUM(1, 2, 3)
+    "#,
+    )
+    .await;
+
+    assert!(matches!(
+        interp.get_var("a").await,
+        Some(Value::String(ref s)) if s == "yes"
+    ));
+    assert!(matches!(
+        interp.get_var("b").await,
+        Some(Value::String(ref s)) if s == "abc"
+    ));
+    assert!(matches!(
+        interp.get_var("c").await,
+        Some(Value::String(ref s)) if s == "he"
+    ));
+    assert!(matches!(
+        interp.get_var("d").await,
+        Some(Value::String(ref s)) if s == "rld"
+    ));
+    assert!(matches!(
+        interp.get_var("total").await,
+        Some(Value::Float(f)) if (f - 6.0).abs() < 1e-9
+    ));
+}
+
+#[tokio::test]
+async fn test_sheet_formula_eval_helpers() {
+    let mut interp = Interpreter::new();
+    let sheet = Sheet::from_data(vec![
+        vec![
+            CellValue::Int(1),
+            CellValue::String("=SUM(A1:A2)".to_string()),
+        ],
+        vec![CellValue::Int(2), CellValue::Null],
+    ]);
+    interp
+        .set_var("s", Value::Sheet(sheet))
+        .await
+        .expect("set sheet");
+
+    let script = r#"
+        dim total = sheet_get_cell_value(s, "B1")
+        dim direct = sheet_eval_formula(s, "SUM(A1:A2)")
+        dim is_formula = is_sheet_cell_formula(s, "B1")
+        dim is_not_formula = is_sheet_cell_formula(s, "A1")
+    "#;
+    let program = PipParser::parse_str(script).expect("parse script");
+    interp.eval(program).await.expect("eval script");
+
+    assert!(matches!(
+        interp.get_var("total").await,
+        Some(Value::Float(f)) if (f - 3.0).abs() < 1e-9
+    ));
+    assert!(matches!(
+        interp.get_var("direct").await,
+        Some(Value::Float(f)) if (f - 3.0).abs() < 1e-9
+    ));
+    assert!(matches!(
+        interp.get_var("is_formula").await,
+        Some(Value::Bool(true))
+    ));
+    assert!(matches!(
+        interp.get_var("is_not_formula").await,
+        Some(Value::Bool(false))
+    ));
+}

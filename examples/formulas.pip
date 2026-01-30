@@ -1,0 +1,12 @@
+@title "Formula Functions in DSL"
+@description "Call formula functions and evaluate formulas against sheets."
+
+dim yes = IF(1, "yes", "no")
+dim short = LEFT("piptable", 3)
+dim joined = CONCAT("a", "b", "c")
+dim total = SUM(1, 2, 3)
+
+print(yes)
+print(short)
+print(joined)
+print(total)

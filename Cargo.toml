@@ -99,6 +99,8 @@ piptable-viz = { path = "crates/viz" }
 piptable-sheet = { path = "crates/sheet" }
 piptable-python = { path = "crates/python" }
 piptable-pdf = { path = "crates/pdf" }
+piptable-primitives = { path = "crates/piptable-primitives" }
+piptable-formulas = { path = "crates/piptable-formulas" }
 
 [workspace.lints.rust]
 unsafe_code = "forbid"

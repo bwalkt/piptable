@@ -1,0 +1,206 @@
+//! Formula integration helpers for the DSL runtime.
+
+use piptable_core::{PipError, PipResult, Value};
+use piptable_formulas::{FunctionRegistry, FormulaEngine, ValueResolver};
+use piptable_primitives::{CellAddress, CellRange, ErrorValue, Value as FormulaValue};
+use piptable_sheet::{CellValue, Sheet};
+use std::sync::OnceLock;
+
+static FORMULA_REGISTRY: OnceLock<FunctionRegistry> = OnceLock::new();
+
+fn registry() -> &'static FunctionRegistry {
+    FORMULA_REGISTRY.get_or_init(FunctionRegistry::default)
+}
+
+pub fn is_formula_function(name: &str) -> bool {
+    registry().get(name).is_some()
+}
+
+pub fn call_formula_function(name: &str, args: &[Value], line: usize) -> PipResult<Value> {
+    let def = registry()
+        .get(name)
+        .ok_or_else(|| PipError::runtime(line, format!("Unknown function: {name}")))?;
+
+    let formula_args: Vec<FormulaValue> = args
+        .iter()
+        .map(|value| core_to_formula(value, line))
+        .collect::<PipResult<Vec<_>>>()?;
+
+    validate_arg_count(def.min_args, def.max_args, formula_args.len(), name, line)?;
+
+    let result = (def.eval)(&formula_args);
+    formula_to_core(result, line)
+}
+
+pub fn eval_sheet_formula(sheet: &Sheet, formula: &str, line: usize) -> PipResult<Value> {
+    let mut engine = FormulaEngine::new();
+    let compiled = engine
+        .compile(formula)
+        .map_err(|e| PipError::runtime(line, format!("Formula error: {}", e)))?;
+    let resolver = SheetResolver { sheet };
+    let result = engine
+        .evaluate(&compiled, &resolver)
+        .map_err(|e| PipError::runtime(line, format!("Formula error: {}", e)))?;
+    formula_to_core(result, line)
+}
+
+pub fn eval_sheet_cell(sheet: &Sheet, notation: &str, line: usize) -> PipResult<Value> {
+    let cell = sheet.get_a1(notation).map_err(|e| {
+        PipError::runtime(
+            line,
+            format!("Invalid cell notation '{}': {}", notation, e),
+        )
+    })?;
+    match cell {
+        CellValue::String(s) if s.trim_start().starts_with('=') => eval_sheet_formula(sheet, s, line),
+        _ => Ok(cell_to_core(cell)),
+    }
+}
+
+struct SheetResolver<'a> {
+    sheet: &'a Sheet,
+}
+
+impl<'a> ValueResolver for SheetResolver<'a> {
+    fn get_cell(&self, addr: &CellAddress) -> FormulaValue {
+        let row = addr.row as usize;
+        let col = addr.col as usize;
+        match self.sheet.get(row, col) {
+            Ok(cell) => cell_to_formula(cell),
+            Err(_) => FormulaValue::Error(ErrorValue::Ref),
+        }
+    }
+
+    fn get_range(&self, range: &CellRange) -> Vec<FormulaValue> {
+        let mut values = Vec::with_capacity(range.size());
+        for addr in range.iter() {
+            values.push(self.get_cell(&addr));
+        }
+        values
+    }
+}
+
+fn validate_arg_count(
+    min_args: usize,
+    max_args: Option<usize>,
+    provided: usize,
+    name: &str,
+    line: usize,
+) -> PipResult<()> {
+    if provided < min_args {
+        return Err(PipError::runtime(
+            line,
+            format!(
+                "Function '{}' expects {} arguments, got {}",
+                name,
+                format_expected_args(min_args, max_args),
+                provided
+            ),
+        ));
+    }
+    if let Some(max) = max_args {
+        if provided > max {
+            return Err(PipError::runtime(
+                line,
+                format!(
+                    "Function '{}' expects {} arguments, got {}",
+                    name,
+                    format_expected_args(min_args, max_args),
+                    provided
+                ),
+            ));
+        }
+    }
+    Ok(())
+}
+
+fn format_expected_args(min_args: usize, max_args: Option<usize>) -> String {
+    match max_args {
+        Some(max) if max == min_args => format!("{min_args}"),
+        Some(max) => format!("{min_args}..{max}"),
+        None => format!("{min_args}+"),
+    }
+}
+
+fn cell_to_formula(cell: &CellValue) -> FormulaValue {
+    match cell {
+        CellValue::Null => FormulaValue::Empty,
+        CellValue::Bool(b) => FormulaValue::Bool(*b),
+        CellValue::Int(i) => FormulaValue::Int(*i),
+        CellValue::Float(f) => FormulaValue::Float(*f),
+        CellValue::String(s) => FormulaValue::String(s.clone()),
+    }
+}
+
+fn cell_to_core(cell: &CellValue) -> Value {
+    match cell {
+        CellValue::Null => Value::Null,
+        CellValue::Bool(b) => Value::Bool(*b),
+        CellValue::Int(i) => Value::Int(*i),
+        CellValue::Float(f) => Value::Float(*f),
+        CellValue::String(s) => Value::String(s.clone()),
+    }
+}
+
+fn core_to_formula(value: &Value, line: usize) -> PipResult<FormulaValue> {
+    match value {
+        Value::Null => Ok(FormulaValue::Empty),
+        Value::Bool(b) => Ok(FormulaValue::Bool(*b)),
+        Value::Int(i) => Ok(FormulaValue::Int(*i)),
+        Value::Float(f) => Ok(FormulaValue::Float(*f)),
+        Value::String(s) => Ok(FormulaValue::String(s.clone())),
+        Value::Array(items) => {
+            let converted = items
+                .iter()
+                .map(|item| core_to_formula(item, line))
+                .collect::<PipResult<Vec<_>>>()?;
+            Ok(FormulaValue::Array(converted))
+        }
+        Value::Sheet(sheet) => {
+            let mut values = Vec::new();
+            for row in sheet.data() {
+                for cell in row {
+                    values.push(cell_to_formula(cell));
+                }
+            }
+            Ok(FormulaValue::Array(values))
+        }
+        Value::Object(_) => Err(PipError::runtime(
+            line,
+            "Formula arguments cannot be objects",
+        )),
+        Value::Table(_) => Err(PipError::runtime(
+            line,
+            "Formula arguments cannot be tables",
+        )),
+        Value::Function { .. } => Err(PipError::runtime(
+            line,
+            "Formula arguments cannot be functions",
+        )),
+        Value::Lambda { .. } => Err(PipError::runtime(
+            line,
+            "Formula arguments cannot be lambdas",
+        )),
+    }
+}
+
+fn formula_to_core(value: FormulaValue, line: usize) -> PipResult<Value> {
+    match value {
+        FormulaValue::Empty => Ok(Value::Null),
+        FormulaValue::Bool(b) => Ok(Value::Bool(b)),
+        FormulaValue::Int(i) => Ok(Value::Int(i)),
+        FormulaValue::Float(f) => Ok(Value::Float(f)),
+        FormulaValue::String(s) => Ok(Value::String(s)),
+        FormulaValue::Array(items) => {
+            let converted = items
+                .into_iter()
+                .map(|item| formula_to_core(item, line))
+                .collect::<PipResult<Vec<_>>>()?;
+            Ok(Value::Array(converted))
+        }
+        FormulaValue::Error(err) => Err(PipError::runtime(
+            line,
+            format!("Formula error: {}", err.label()),
+        )),
+    }
+}
