@@ -1,6 +1,8 @@
 //! Standard spreadsheet functions implementation
 
+use chrono::{Local, TimeZone, Utc};
 use piptable_primitives::{ErrorValue, Value};
+use piptable_utils::datetime::datetime_to_excel_date;
 
 fn walk_values(values: &[Value], f: &mut dyn FnMut(&Value)) {
     for value in values {
@@ -16,6 +18,21 @@ fn to_number(value: &Value) -> Option<f64> {
         Value::Int(n) => Some(*n as f64),
         Value::Float(f) => Some(*f),
         _ => None,
+    }
+}
+
+fn coerce_to_text(value: &Value) -> Result<String, ErrorValue> {
+    match value {
+        Value::Empty => Ok(String::new()),
+        Value::String(s) => Ok(s.clone()),
+        Value::Int(n) => Ok(n.to_string()),
+        Value::Float(f) => Ok(f.to_string()),
+        Value::Bool(b) => Ok(b.to_string()),
+        Value::Error(err) => Err(err.clone()),
+        Value::Array(values) => {
+            let first = values.first().unwrap_or(&Value::Empty);
+            coerce_to_text(first)
+        }
     }
 }
 
@@ -80,6 +97,152 @@ pub fn counta(values: &[Value]) -> Value {
         Value::Error(err)
     } else {
         Value::Int(count as i64)
+    }
+}
+
+pub fn concat(values: &[Value]) -> Value {
+    let mut first_error: Option<ErrorValue> = None;
+    let mut result = String::new();
+
+    walk_values(values, &mut |value| match value {
+        Value::Error(err) => {
+            if first_error.is_none() {
+                first_error = Some(err.clone());
+            }
+        }
+        _ => match coerce_to_text(value) {
+            Ok(text) => result.push_str(&text),
+            Err(err) => {
+                if first_error.is_none() {
+                    first_error = Some(err);
+                }
+            }
+        },
+    });
+
+    if let Some(err) = first_error {
+        Value::Error(err)
+    } else {
+        Value::String(result)
+    }
+}
+
+pub fn len(values: &[Value]) -> Value {
+    let value = values.first().unwrap_or(&Value::Empty);
+    match coerce_to_text(value) {
+        Ok(text) => Value::Int(text.chars().count() as i64),
+        Err(err) => Value::Error(err),
+    }
+}
+
+pub fn left(values: &[Value]) -> Value {
+    let text = values.first().unwrap_or(&Value::Empty);
+    let count = values.get(1).and_then(to_number).unwrap_or(1.0);
+    if count < 0.0 {
+        return Value::Error(ErrorValue::Value);
+    }
+    let count = count.floor() as usize;
+    match coerce_to_text(text) {
+        Ok(text) => {
+            let result: String = text.chars().take(count).collect();
+            Value::String(result)
+        }
+        Err(err) => Value::Error(err),
+    }
+}
+
+pub fn right(values: &[Value]) -> Value {
+    let text = values.first().unwrap_or(&Value::Empty);
+    let count = values.get(1).and_then(to_number).unwrap_or(1.0);
+    if count < 0.0 {
+        return Value::Error(ErrorValue::Value);
+    }
+    let count = count.floor() as usize;
+    match coerce_to_text(text) {
+        Ok(text) => {
+            let len = text.chars().count();
+            let skip = len.saturating_sub(count);
+            let result: String = text.chars().skip(skip).collect();
+            Value::String(result)
+        }
+        Err(err) => Value::Error(err),
+    }
+}
+
+pub fn today(_: &[Value]) -> Value {
+    let local = Local::now();
+    let date = local.date_naive();
+    let Some(naive) = date.and_hms_opt(0, 0, 0) else {
+        return Value::Error(ErrorValue::Value);
+    };
+    let local_dt = Local.from_local_datetime(&naive).single();
+    match local_dt {
+        Some(dt) => Value::Float(datetime_to_excel_date(dt.with_timezone(&Utc))),
+        None => Value::Error(ErrorValue::Value),
+    }
+}
+
+pub fn now(_: &[Value]) -> Value {
+    let local = Local::now();
+    Value::Float(datetime_to_excel_date(local.with_timezone(&Utc)))
+}
+
+pub fn date(values: &[Value]) -> Value {
+    let year = values.first().and_then(to_number);
+    let month = values.get(1).and_then(to_number);
+    let day = values.get(2).and_then(to_number);
+
+    let (Some(year), Some(month), Some(day)) = (year, month, day) else {
+        return Value::Error(ErrorValue::Value);
+    };
+
+    let year = year.floor() as i32;
+    let month = month.floor() as u32;
+    let day = day.floor() as u32;
+
+    let Some(date) = chrono::NaiveDate::from_ymd_opt(year, month, day) else {
+        return Value::Error(ErrorValue::Value);
+    };
+    let Some(naive) = date.and_hms_opt(0, 0, 0) else {
+        return Value::Error(ErrorValue::Value);
+    };
+    let local_dt = Local.from_local_datetime(&naive).single();
+    match local_dt {
+        Some(dt) => Value::Float(datetime_to_excel_date(dt.with_timezone(&Utc))),
+        None => Value::Error(ErrorValue::Value),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_concat_and_len() {
+        let values = vec![
+            Value::String("ab".to_string()),
+            Value::Array(vec![Value::Int(3), Value::Empty]),
+        ];
+        let result = concat(&values);
+        assert_eq!(result, Value::String("ab3".to_string()));
+
+        let result = len(&[Value::String("hello".to_string())]);
+        assert_eq!(result, Value::Int(5));
+    }
+
+    #[test]
+    fn test_left_right_defaults() {
+        let result = left(&[Value::String("hello".to_string())]);
+        assert_eq!(result, Value::String("h".to_string()));
+
+        let result = right(&[Value::String("hello".to_string())]);
+        assert_eq!(result, Value::String("o".to_string()));
+    }
+
+    #[test]
+    fn test_date_returns_number() {
+        let result = date(&[Value::Int(2024), Value::Int(1), Value::Int(1)]);
+        assert!(matches!(result, Value::Float(_)));
     }
 }
 

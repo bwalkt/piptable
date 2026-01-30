@@ -296,6 +296,58 @@ impl FunctionRegistry {
             ),
         );
 
+        // Text functions
+        self.register(
+            "CONCAT",
+            FunctionDefinition::variadic(1, ParamType::Any, ReturnType::Text, functions::concat),
+        );
+        self.register(
+            "CONCATENATE",
+            FunctionDefinition::variadic(1, ParamType::Any, ReturnType::Text, functions::concat),
+        );
+        self.register(
+            "LEN",
+            FunctionDefinition::fixed(vec![ParamType::Text], ReturnType::Number, functions::len),
+        );
+        self.register(
+            "LEFT",
+            FunctionDefinition::range(
+                1,
+                2,
+                vec![ParamType::Text, ParamType::Number],
+                ReturnType::Text,
+                functions::left,
+            ),
+        );
+        self.register(
+            "RIGHT",
+            FunctionDefinition::range(
+                1,
+                2,
+                vec![ParamType::Text, ParamType::Number],
+                ReturnType::Text,
+                functions::right,
+            ),
+        );
+
+        // Date functions
+        self.register(
+            "TODAY",
+            FunctionDefinition::fixed(vec![], ReturnType::Number, functions::today),
+        );
+        self.register(
+            "NOW",
+            FunctionDefinition::fixed(vec![], ReturnType::Number, functions::now),
+        );
+        self.register(
+            "DATE",
+            FunctionDefinition::fixed(
+                vec![ParamType::Number, ParamType::Number, ParamType::Number],
+                ReturnType::Number,
+                functions::date,
+            ),
+        );
+
         // Lookup functions
         self.register(
             "VLOOKUP",
