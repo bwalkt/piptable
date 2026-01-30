@@ -102,8 +102,9 @@ async fn test_int_conversion() {
 #[tokio::test]
 async fn test_float_conversion() {
     let (interp, _) = run_script(r#"dim x = float("3.14")"#).await;
+    let expected: f64 = "3.14".parse().unwrap();
     match interp.get_var("x").await {
-        Some(Value::Float(f)) => assert!((f - 3.14).abs() < 0.001),
+        Some(Value::Float(f)) => assert!((f - expected).abs() < 0.001),
         _ => panic!("Expected float"),
     }
 }

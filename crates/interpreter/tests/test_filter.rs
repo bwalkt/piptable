@@ -10,11 +10,11 @@ use piptable_core::Value;
 #[tokio::test]
 async fn test_filter_basic_dsl() {
     let (interp, _) = run_script(
-        r#"
+        r"
         dim data = [10, 20, 30, 40, 50]
         dim criteria = [true, false, true, false, true]
         dim result = filter(data, criteria)
-    "#,
+    ",
     )
     .await;
 
@@ -126,7 +126,7 @@ async fn test_filter_with_numeric_criteria() {
 #[tokio::test]
 async fn test_filter_chained_operations() {
     let (interp, _) = run_script(
-        r#"
+        r"
         dim data = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
         dim criteria1 = [true, false, true, false, true, false, true, false, true, false]
         dim intermediate = filter(data, criteria1)
@@ -135,7 +135,7 @@ async fn test_filter_chained_operations() {
         dim criteria2 = [false, true, false, true, false]
         dim final_result = filter(intermediate, criteria2)
         ' final should be [3, 7]
-    "#,
+    ",
     )
     .await;
 

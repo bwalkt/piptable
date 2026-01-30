@@ -10,7 +10,7 @@ async fn test_import_html_file() {
     let temp_dir = tempdir().unwrap();
     let html_path = temp_dir.path().join("test.html");
 
-    let html_content = r#"<!DOCTYPE html>
+    let html_content = r"<!DOCTYPE html>
 <html>
 <body>
     <table>
@@ -31,7 +31,7 @@ async fn test_import_html_file() {
         </tr>
     </table>
 </body>
-</html>"#;
+</html>";
     fs::write(&html_path, html_content).unwrap();
 
     let script = format!(
@@ -61,7 +61,7 @@ async fn test_import_html_with_headers() {
     let temp_dir = tempdir().unwrap();
     let html_path = temp_dir.path().join("test_headers.html");
 
-    let html_content = r#"<!DOCTYPE html>
+    let html_content = r"<!DOCTYPE html>
 <html>
 <body>
     <table>
@@ -82,7 +82,7 @@ async fn test_import_html_with_headers() {
         </tr>
     </table>
 </body>
-</html>"#;
+</html>";
     fs::write(&html_path, html_content).unwrap();
 
     let script = format!(
@@ -127,7 +127,7 @@ async fn test_import_html_mixed_data_types() {
     let temp_dir = tempdir().unwrap();
     let html_path = temp_dir.path().join("test_mixed.html");
 
-    let html_content = r#"<!DOCTYPE html>
+    let html_content = r"<!DOCTYPE html>
 <html>
 <body>
     <table>
@@ -145,7 +145,7 @@ async fn test_import_html_mixed_data_types() {
         </tr>
     </table>
 </body>
-</html>"#;
+</html>";
 
     fs::write(&html_path, html_content).unwrap();
 
@@ -215,7 +215,7 @@ async fn test_import_html_with_td_headers() {
     let temp_dir = tempdir().unwrap();
     let html_path = temp_dir.path().join("test_td_headers.html");
 
-    let html_content = r#"<!DOCTYPE html>
+    let html_content = r"<!DOCTYPE html>
 <html>
 <body>
     <table>
@@ -236,7 +236,7 @@ async fn test_import_html_with_td_headers() {
         </tr>
     </table>
 </body>
-</html>"#;
+</html>";
     fs::write(&html_path, html_content).unwrap();
 
     // Test with headers=true to verify td headers are treated as strings
@@ -345,12 +345,12 @@ async fn test_import_html_no_table() {
     let temp_dir = tempdir().unwrap();
     let html_path = temp_dir.path().join("no_table.html");
 
-    let html_content = r#"<!DOCTYPE html>
+    let html_content = r"<!DOCTYPE html>
 <html>
 <body>
     <div>No table here, just some text</div>
 </body>
-</html>"#;
+</html>";
 
     fs::write(&html_path, html_content).unwrap();
 
@@ -384,7 +384,7 @@ async fn test_import_htm_extension() {
     let temp_dir = tempdir().unwrap();
     let htm_path = temp_dir.path().join("test.htm"); // Note: .htm extension
 
-    let html_content = r#"<!DOCTYPE html>
+    let html_content = r"<!DOCTYPE html>
 <html>
 <body>
     <table>
@@ -398,7 +398,7 @@ async fn test_import_htm_extension() {
         </tr>
     </table>
 </body>
-</html>"#;
+</html>";
     fs::write(&htm_path, html_content).unwrap();
 
     let script = format!(
@@ -438,7 +438,7 @@ async fn test_import_html_uneven_header_row() {
     let temp_dir = tempdir().unwrap();
     let html_path = temp_dir.path().join("test_uneven_header.html");
 
-    let html_content = r#"<!DOCTYPE html>
+    let html_content = r"<!DOCTYPE html>
 <html>
 <body>
     <table>
@@ -460,7 +460,7 @@ async fn test_import_html_uneven_header_row() {
         </tr>
     </table>
 </body>
-</html>"#;
+</html>";
     fs::write(&html_path, html_content).unwrap();
 
     let script = format!(

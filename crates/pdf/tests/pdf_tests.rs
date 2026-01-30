@@ -29,7 +29,7 @@ fn test_extract_tables_with_options() {
 fn test_pdf_options_default() {
     let options = PdfOptions::default();
     assert_eq!(options.page_range, None);
-    assert_eq!(options.ocr_enabled, false);
+    assert!(!options.ocr_enabled);
     assert_eq!(options.ocr_language, "eng");
     assert_eq!(options.min_table_rows, 2);
     assert_eq!(options.min_table_cols, 2);
