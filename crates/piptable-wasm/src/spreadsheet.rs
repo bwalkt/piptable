@@ -45,7 +45,7 @@ pub fn apply_range(toon_bytes: &[u8]) -> Result<Vec<u8>, JsValue> {
 /// Output: TOON-encoded validation result
 #[wasm_bindgen]
 pub fn validate_formula(toon_bytes: &[u8]) -> Result<Vec<u8>, JsValue> {
-    let formula: FormulaText = if toon_bytes.starts_with(b"{") {
+    let formula: FormulaText = if is_json_bytes(toon_bytes) {
         serde_json::from_slice(toon_bytes)
             .map_err(|e| JsValue::from_str(&format!("JSON parse error: {}", e)))?
     } else {
@@ -67,7 +67,7 @@ pub fn validate_formula(toon_bytes: &[u8]) -> Result<Vec<u8>, JsValue> {
     };
 
     // Return validation result
-    let response_bytes = if toon_bytes.starts_with(b"{") {
+    let response_bytes = if is_json_bytes(toon_bytes) {
         serde_json::to_vec(&validation)
             .map_err(|e| JsValue::from_str(&format!("JSON serialize error: {}", e)))?
     } else {
