@@ -2,7 +2,6 @@
 
 mod array;
 mod core;
-mod lookup;
 mod math;
 mod sheet;
 mod string;
@@ -47,12 +46,6 @@ pub async fn call_builtin(
         return Some(result);
     }
 
-    if let Some(result) =
-        lookup::call_lookup_builtin(interpreter, &builtin_name, args.clone(), line).await
-    {
-        return Some(result);
-    }
-
     if let Some(result) = array::call_array_builtin(interpreter, &builtin_name, args, line).await {
         return Some(result);
     }
@@ -90,8 +83,6 @@ pub fn is_builtin(name: &str) -> bool {
             | "sheet_set_by_name"
             | "sheet_map"
             | "sheet_filter_rows"
-            // lookup
-            | "vlookup" | "hlookup" | "index" | "match" | "xlookup"
             // array
             | "filter"
     )

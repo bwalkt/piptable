@@ -15,11 +15,37 @@ dim joined = CONCAT("a", "b", "c")
 ```
 
 Formula function names are case-insensitive (`sum`, `Sum`, and `SUM` all work).
-When a DSL function name matches a formula function, the formula implementation
-is used.
+Use the formula function names consistently in scripts; there is no separate
+DSL implementation for lookup formulas.
 
 Aggregate functions like `SUM`, `AVERAGE`, `MIN`, and `MAX` accept arrays or
 ranges.
+
+## Lookup and Reference Formulas
+
+Lookup formulas operate on arrays or sheet ranges:
+
+```piptable
+dim products = [
+  ["Apple", 1.50, 100],
+  ["Banana", 0.75, 200],
+  ["Cherry", 2.00, 150]
+]
+
+dim price = vlookup("Banana", products, 2, false)
+dim row = match("Cherry", products, 0)
+dim qty = index(products, row, 3)
+
+dim names = ["Apple", "Banana", "Cherry"]
+dim prices = [1.50, 0.75, 2.00]
+dim safe_price = xlookup("Date", names, prices, 0.0)
+```
+
+`OFFSET` builds a subrange from a range or 2D array:
+
+```piptable
+dim block = offset(products, 1, 0, 1, 2)  ' returns [["Banana", 0.75]]
+```
 
 ## Evaluate Formulas Against Sheets
 
@@ -51,3 +77,4 @@ Notes:
 - `sheet_get_cell_value` evaluates formulas stored as strings in cells (e.g., `"=SUM(A1:A2)"`).
 - When a formula references a cell that contains another formula string, it is treated as a string value (no recursive evaluation yet).
 - Formula errors include context and the original formula text (e.g., `Formula error in sheet_eval_formula: ... (formula: "...")`).
+  For lookups, a not-found result is a formula error (e.g., `#N/A`) unless you pass `if_not_found` to `xlookup`.

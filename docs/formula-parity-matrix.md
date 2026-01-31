@@ -5,7 +5,7 @@ This document tracks formula function parity between Piptable's implementation a
 
 ## Implementation Status
 
-### ✅ Implemented (16 functions)
+### ✅ Implemented (23 functions)
 
 | Category | Function | Piptable | SheetXL | Notes |
 | -------- | -------- | -------- | ------- | ----- |
@@ -30,17 +30,20 @@ This document tracks formula function parity between Piptable's implementation a
 | | TODAY | ✅ | ✅ | Current date |
 | | NOW | ✅ | ✅ | Current date/time |
 | | DATE | ✅ | ✅ | Create date |
+| **Lookup & Reference** | | | | |
+| | VLOOKUP | ✅ | ✅ | Vertical lookup |
+| | HLOOKUP | ✅ | ✅ | Horizontal lookup |
+| | INDEX | ✅ | ✅ | Array indexing |
+| | MATCH | ✅ | ✅ | Position matching |
+| | XLOOKUP | ✅ | ✅ | Modern lookup |
+| | OFFSET | ✅ | ✅ | Dynamic range reference |
 
 ### 🔄 Planned for Next Phase
 
 | Category | Function | Priority | Notes |
 | -------- | -------- | -------- | ----- |
 | **Lookup & Reference** | | | |
-| | VLOOKUP | High | Essential for spreadsheets |
-| | HLOOKUP | High | Horizontal lookup |
-| | INDEX | High | Array indexing |
-| | MATCH | High | Position matching |
-| | XLOOKUP | Medium | Modern lookup |
+| | XMATCH | Medium | XLOOKUP companion |
 | **Math** | | | |
 | | ROUND | High | Rounding |
 | | FLOOR | Medium | Round down |
@@ -73,9 +76,9 @@ This document tracks formula function parity between Piptable's implementation a
 
 ## Coverage Metrics
 
-- **Current Coverage**: 17/400+ (~4%)
-- **Core Functions**: 17/50 (34%)
-- **Categories Covered**: 4/12 (33%)
+- **Current Coverage**: 23/400+ (~6%)
+- **Core Functions**: 23/50 (46%)
+- **Categories Covered**: 5/12 (41%)
 
 ## Performance Baselines
 
@@ -97,7 +100,6 @@ This document tracks formula function parity between Piptable's implementation a
 
 ## Next Steps
 
-1. Implement VLOOKUP and other lookup functions (High priority)
-2. Add ROUND, ABS, and other essential math functions
+1. Add ROUND, ABS, and other essential math functions
 3. Implement IS* information functions for type checking
 4. Create comprehensive benchmarks for all implemented functions

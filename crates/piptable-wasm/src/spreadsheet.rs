@@ -315,7 +315,22 @@ impl ValueResolver for WasmEvalContext {
     }
 
     fn get_range(&self, range: &CellRange) -> Vec<Value> {
-        range.iter().map(|addr| self.get_cell(&addr)).collect()
+        let normalized = range.normalized();
+        let rows = normalized.rows() as usize;
+        let cols = normalized.cols() as usize;
+        let mut values = Vec::with_capacity(rows);
+        for r in 0..rows {
+            let mut row = Vec::with_capacity(cols);
+            for c in 0..cols {
+                let addr = CellAddress::new(
+                    normalized.start.row + r as u32,
+                    normalized.start.col + c as u32,
+                );
+                row.push(self.get_cell(&addr));
+            }
+            values.push(Value::Array(row));
+        }
+        values
     }
 
     fn get_sheet_cell(&self, _sheet: &str, addr: &CellAddress) -> Value {

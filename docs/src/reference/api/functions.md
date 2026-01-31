@@ -79,7 +79,7 @@ Note: `len()` is formula-backed. For objects, use `len(keys(obj))` to count fiel
 - Preserves the header row
 - Returns a new sheet with only matching rows
 
-### Lookup Functions
+### Lookup Functions (Formula-backed)
 
 | Function | Description | Example | Status |
 | ---------- | ------------- | --------- | -------- |
@@ -88,6 +88,7 @@ Note: `len()` is formula-backed. For objects, use `len(keys(obj))` to count fiel
 | `index(array, row_num, [col_num])` | Return value at position | `index(data, 2, 3)` | ✅ Implemented |
 | `match(lookup_value, array, [match_type])` | Find position of value | `match("Apple", fruits, 0)` | ✅ Implemented |
 | `xlookup(lookup, array, return_array, [if_not_found], [match_mode], [search_mode])` | Extended lookup | `xlookup("Apple", names, prices)` | ✅ Implemented |
+| `offset(range, rows, cols, [height], [width])` | Offset subrange | `offset(table, 1, 0, 1, 2)` | ✅ Implemented |
 
 #### Excel/PipTable Parity Matrix
 
@@ -97,8 +98,8 @@ Note: `len()` is formula-backed. For objects, use `len(keys(obj))` to count fiel
 | Exact match (FALSE/0) | ✅ | ✅ | Identical behavior |
 | Approximate match (TRUE/1) | ✅ | ✅ | Requires sorted data |
 | Default range_lookup | TRUE | TRUE | Approximate match by default |
-| #N/A on not found | ✅ | ✅ | Returns "#N/A" string |
-| Type coercion | Partial | ✅ | PipTable coerces numeric strings |
+| #N/A on not found | ✅ | ✅ | Returned as a formula error |
+| Type coercion | Partial | ❌ | No string/number coercion yet |
 | **HLOOKUP** | | | |
 | Exact match | ✅ | ✅ | Identical to VLOOKUP logic |
 | Approximate match | ✅ | ✅ | Requires sorted data |
@@ -124,7 +125,7 @@ Note: `len()` is formula-backed. For objects, use `len(keys(obj))` to count fiel
 PipTable follows these rules for type comparisons in lookups:
 
 1. **Numeric equality**: `1` (int) equals `1.0` (float)
-2. **String to number**: `"123"` matches `123` when appropriate
+2. **String to number**: Not coerced yet
 3. **Case sensitivity**: String matches are case-sensitive
 4. **Null handling**: Null values never match anything except explicit null checks
 
@@ -165,15 +166,23 @@ dim price = index(prices, position)  # Returns 0.75
 
 # XLOOKUP (modern replacement for VLOOKUP)
 dim result = xlookup("Cherry", fruits, prices, "Not found", 0, 1)  # Returns 2.00
+
+# OFFSET (subrange from a 2D array)
+dim table = [
+    ["Apple", 1.50, 100],
+    ["Banana", 0.75, 200],
+    ["Cherry", 2.00, 150]
+]
+dim block = offset(table, 1, 0, 1, 2)  # Returns [["Banana", 0.75]]
 ```
 
 #### Error Handling
 
-All lookup functions return `"#N/A"` when a lookup value is not found (matching Excel behavior). For custom error handling, use XLOOKUP with the `if_not_found` parameter:
+Lookup functions return a formula error (`#N/A`) when a lookup value is not found (matching Excel behavior). For custom error handling, use XLOOKUP with the `if_not_found` parameter:
 
 ```piptable
-# Standard VLOOKUP returns #N/A
-dim result1 = vlookup("Grape", products, 2, false)  # Returns "#N/A"
+# Standard VLOOKUP raises a formula error (#N/A)
+dim result1 = vlookup("Grape", products, 2, false)
 
 # XLOOKUP with custom not-found value
 dim result2 = xlookup("Grape", fruits, prices, 0.00)  # Returns 0.00

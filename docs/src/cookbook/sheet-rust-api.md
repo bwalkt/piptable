@@ -68,6 +68,50 @@ dim computed = sheet_get_cell_value(sales, "B2")
 dim total = sheet_eval_formula(sales, "SUM(A1:A10)")
 ```
 
+## Formula Engine (Rust)
+
+Use the `piptable-formulas` crate directly for programmatic formula evaluation.
+Lookup functions (VLOOKUP/HLOOKUP/INDEX/MATCH/XLOOKUP/OFFSET) are formula-backed and
+use the same implementation as the DSL.
+
+```rust
+use piptable_formulas::{EvalContext, FormulaEngine};
+use piptable_primitives::{CellAddress, CellRange, ErrorValue, Value};
+use std::collections::HashMap;
+
+fn eval_lookup() -> Result<(), Box<dyn std::error::Error>> {
+    let mut engine = FormulaEngine::new();
+
+    // Provide a 2x2 range for A1:B2 (row-major).
+    let range = CellRange::new(CellAddress::new(0, 0), CellAddress::new(1, 1));
+    let values = vec![
+        Value::String("Apple".to_string()),
+        Value::Float(1.5),
+        Value::String("Banana".to_string()),
+        Value::Float(0.75),
+    ];
+
+    let mut ranges = HashMap::new();
+    ranges.insert(range, values);
+    let ctx = EvalContext::with_ranges(ranges);
+
+    let compiled = engine.compile(r#"VLOOKUP("Banana", A1:B2, 2, FALSE)"#)?;
+    let result = engine.evaluate(&compiled, &ctx)?;
+    assert!(matches!(result, Value::Float(f) if (f - 0.75).abs() < 1e-9));
+
+    let compiled = engine.compile("OFFSET(A1:B2, 1, 0, 1, 2)")?;
+    let result = engine.evaluate(&compiled, &ctx)?;
+    assert!(matches!(result, Value::Array(_)));
+
+    // Not-found returns a formula error (#N/A).
+    let compiled = engine.compile(r#"VLOOKUP("Pear", A1:B2, 2, FALSE)"#)?;
+    let result = engine.evaluate(&compiled, &ctx)?;
+    assert!(matches!(result, Value::Error(ErrorValue::NA)));
+
+    Ok(())
+}
+```
+
 ### SQL Integration
 
 Sheets automatically convert to tables for SQL queries:
