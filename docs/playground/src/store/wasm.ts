@@ -88,6 +88,20 @@ export async function getSampleData(): Promise<any> {
   }
 }
 
+/**
+ * Execute PipTable source code through the WASM-based parser/interpreter, returning either execution results or a structured parse error.
+ *
+ * The function validates the code with the parser first; if validation fails it returns a parse error object and does not run the interpreter. On success it returns the interpreter's result shape.
+ *
+ * @param code - PipTable source code to validate and execute
+ * @returns An object with the execution outcome:
+ * - `success`: `true` if execution succeeded, `false` otherwise.
+ * - `output`: an array of output lines (empty on failure).
+ * - `result`: the interpreter result on success, or `null` on failure.
+ * - `error`: a human-readable error message when `success` is `false`. For validation failures this is formatted as `Parse error at {line}:{column} - {message}`.
+ *
+ * @throws Error if the internal parser is not initialized
+ */
 export async function executeCode(code: string): Promise<any> {
   await initializeWasm();
   try {
