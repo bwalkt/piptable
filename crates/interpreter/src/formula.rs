@@ -1,12 +1,14 @@
 //! Formula integration helpers for the DSL runtime.
 
 use piptable_core::{PipError, PipResult, Value};
-use piptable_formulas::{FormulaEngine, FunctionRegistry, ValueResolver};
+use piptable_formulas::{CompiledFormula, FormulaEngine, FunctionRegistry, ValueResolver};
 use piptable_primitives::{CellAddress, CellRange, ErrorValue, Value as FormulaValue};
 use piptable_sheet::{CellValue, Sheet};
 use std::sync::OnceLock;
+use std::{collections::HashMap, fmt::Display};
 
 static FORMULA_REGISTRY: OnceLock<FunctionRegistry> = OnceLock::new();
+const MAX_FORMULA_CACHE_ENTRIES: usize = 1024;
 
 fn registry() -> &'static FunctionRegistry {
     FORMULA_REGISTRY.get_or_init(FunctionRegistry::default)
@@ -57,16 +59,78 @@ pub fn call_formula_function(name: &str, args: &[Value], line: usize) -> PipResu
 
 pub fn eval_sheet_formula(sheet: &Sheet, formula: &str, line: usize) -> PipResult<Value> {
     let mut engine = FormulaEngine::new();
-    let compiled = engine
-        .compile(formula)
-        .map_err(|e| PipError::runtime(line, format!("Formula error: {}", e)))?;
+    let compiled = engine.compile(formula).map_err(|e| {
+        PipError::runtime(line, format_formula_error("sheet_eval_formula", formula, e))
+    })?;
     let resolver = SheetResolver { sheet };
-    let result = engine
-        .evaluate(&compiled, &resolver)
-        .map_err(|e| PipError::runtime(line, format!("Formula error: {}", e)))?;
-    formula_to_core(result, line)
+    let result = engine.evaluate(&compiled, &resolver).map_err(|e| {
+        PipError::runtime(line, format_formula_error("sheet_eval_formula", formula, e))
+    })?;
+    formula_to_core_with_context(result, line, "sheet_eval_formula", formula)
 }
 
+pub struct CachedFormulaEngine {
+    engine: FormulaEngine,
+    cache: HashMap<String, CompiledFormula>,
+}
+
+impl CachedFormulaEngine {
+    pub fn new() -> Self {
+        Self {
+            engine: FormulaEngine::new(),
+            cache: HashMap::new(),
+        }
+    }
+
+    pub fn compile_cached(
+        &mut self,
+        formula: &str,
+        line: usize,
+        context: &str,
+    ) -> PipResult<CompiledFormula> {
+        if self.cache.len() >= MAX_FORMULA_CACHE_ENTRIES {
+            self.cache.clear();
+        }
+        if let Some(compiled) = self.cache.get(formula) {
+            return Ok(compiled.clone());
+        }
+        let compiled = self
+            .engine
+            .compile(formula)
+            .map_err(|e| PipError::runtime(line, format_formula_error(context, formula, e)))?;
+        self.cache.insert(formula.to_string(), compiled.clone());
+        Ok(compiled)
+    }
+
+    pub fn evaluate(
+        &mut self,
+        compiled: &CompiledFormula,
+        sheet: &Sheet,
+        line: usize,
+        context: &str,
+        formula: &str,
+    ) -> PipResult<Value> {
+        let resolver = SheetResolver { sheet };
+        let result = self
+            .engine
+            .evaluate(compiled, &resolver)
+            .map_err(|e| PipError::runtime(line, format_formula_error(context, formula, e)))?;
+        formula_to_core_with_context(result, line, context, formula)
+    }
+}
+
+pub fn eval_sheet_formula_cached(
+    engine: &mut CachedFormulaEngine,
+    sheet: &Sheet,
+    formula: &str,
+    line: usize,
+    context: &str,
+) -> PipResult<Value> {
+    let compiled = engine.compile_cached(formula, line, context)?;
+    engine.evaluate(&compiled, sheet, line, context, formula)
+}
+
+#[allow(dead_code)]
 pub fn eval_sheet_range_function(
     sheet: &Sheet,
     function: &str,
@@ -75,6 +139,17 @@ pub fn eval_sheet_range_function(
 ) -> PipResult<Value> {
     let formula = format!("{}({})", function, range);
     eval_sheet_formula(sheet, &formula, line)
+}
+
+pub fn eval_sheet_range_function_cached(
+    engine: &mut CachedFormulaEngine,
+    sheet: &Sheet,
+    function: &str,
+    range: &str,
+    line: usize,
+) -> PipResult<Value> {
+    let formula = format!("{}({})", function, range);
+    eval_sheet_formula_cached(engine, sheet, &formula, line, "sheet_eval_formula")
 }
 
 pub fn range_function_name(name: &str) -> Option<&'static str> {
@@ -89,6 +164,7 @@ pub fn range_function_name(name: &str) -> Option<&'static str> {
     }
 }
 
+#[allow(dead_code)]
 pub fn eval_sheet_cell(sheet: &Sheet, notation: &str, line: usize) -> PipResult<Value> {
     let cell = sheet.get_a1(notation).map_err(|e| {
         PipError::runtime(line, format!("Invalid cell notation '{}': {}", notation, e))
@@ -96,6 +172,24 @@ pub fn eval_sheet_cell(sheet: &Sheet, notation: &str, line: usize) -> PipResult<
     match cell {
         CellValue::String(s) if s.trim_start().starts_with('=') => {
             eval_sheet_formula(sheet, s, line)
+        }
+        _ => Ok(cell_to_core(cell)),
+    }
+}
+
+pub fn eval_sheet_cell_cached(
+    engine: &mut CachedFormulaEngine,
+    sheet: &Sheet,
+    notation: &str,
+    line: usize,
+) -> PipResult<Value> {
+    let cell = sheet.get_a1(notation).map_err(|e| {
+        PipError::runtime(line, format!("Invalid cell notation '{}': {}", notation, e))
+    })?;
+    match cell {
+        CellValue::String(s) if s.trim_start().starts_with('=') => {
+            let context = format!("cell {}", notation);
+            eval_sheet_formula_cached(engine, sheet, s, line, &context)
         }
         _ => Ok(cell_to_core(cell)),
     }
@@ -277,4 +371,26 @@ fn formula_to_core(value: FormulaValue, line: usize) -> PipResult<Value> {
             format!("Formula error: {}", err.label()),
         )),
     }
+}
+
+fn formula_to_core_with_context(
+    value: FormulaValue,
+    line: usize,
+    context: &str,
+    formula: &str,
+) -> PipResult<Value> {
+    match value {
+        FormulaValue::Error(err) => Err(PipError::runtime(
+            line,
+            format_formula_error(context, formula, err.label()),
+        )),
+        other => formula_to_core(other, line),
+    }
+}
+
+fn format_formula_error(context: &str, formula: &str, err: impl Display) -> String {
+    format!(
+        "Formula error in {}: {} (formula: \"{}\")",
+        context, err, formula
+    )
 }
