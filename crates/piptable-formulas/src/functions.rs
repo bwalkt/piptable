@@ -217,7 +217,7 @@ fn lower_bound_asc(values: &[Value], lookup: &Value) -> Result<usize, ErrorValue
     let mut lo = 0;
     let mut hi = values.len();
     while lo < hi {
-        let mid = (lo + hi) / 2;
+        let mid = lo + (hi - lo) / 2;
         let cmp = compare_values(&values[mid], lookup)?;
         if cmp < 0 {
             lo = mid + 1;
@@ -232,7 +232,7 @@ fn lower_bound_desc(values: &[Value], lookup: &Value) -> Result<usize, ErrorValu
     let mut lo = 0;
     let mut hi = values.len();
     while lo < hi {
-        let mid = (lo + hi) / 2;
+        let mid = lo + (hi - lo) / 2;
         let cmp = compare_values(&values[mid], lookup)?;
         if cmp > 0 {
             lo = mid + 1;
@@ -1297,7 +1297,10 @@ pub fn xlookup(values: &[Value]) -> Value {
                     Err(err) => return Value::Error(err),
                 }
             } else {
-                None
+                match match_mode {
+                    1 => flat_lookup.len().checked_sub(1),
+                    _ => None,
+                }
             }
         };
 

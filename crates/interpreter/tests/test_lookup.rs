@@ -423,6 +423,7 @@ async fn test_xlookup_binary_search_modes() {
         exact_desc = xlookup(5, values_desc, results_desc, "N/A", 0, -2)
         next_small_desc = xlookup(6, values_desc, results_desc, "N/A", -1, -2)
         next_large_desc = xlookup(6, values_desc, results_desc, "N/A", 1, -2)
+        next_large_desc_small = xlookup(0, values_desc, results_desc, "N/A", 1, -2)
     "#,
     )
     .await;
@@ -451,6 +452,10 @@ async fn test_xlookup_binary_search_modes() {
     assert!(matches!(
         interp.get_var("next_large_desc").await,
         Some(Value::String(s)) if s == "D"
+    ));
+    assert!(matches!(
+        interp.get_var("next_large_desc_small").await,
+        Some(Value::String(s)) if s == "A"
     ));
 }
 
