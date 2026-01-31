@@ -33,34 +33,6 @@ print("Count: " + str(count))
 print("Price: $" + str(price))
 print("Active: " + str(active))`
   },
-  sql: {
-    description: "SQL queries on sheet data",
-    code: `' SQL Query on Data
-dim users = import "users.csv" into sheet
-
-' Query the data
-dim adults = query("
-  SELECT name, age, city
-  FROM users
-  WHERE age >= 18
-")
-
-' Export results
-export adults to "adult_users.csv"
-print("Query results exported")`
-  },
-  join: {
-    description: "Join operations between sheets",
-    code: `' Join Operations
-dim customers = import "customers.csv" into sheet
-dim orders = import "orders.csv" into sheet
-
-' Inner join
-dim result = customers join orders on "id" = "customer_id"
-
-export result to "customer_orders.csv"
-print("Join complete!")`
-  },
   loops: {
     description: "Loops and control flow",
     code: `' Loops and Control Flow
@@ -81,7 +53,7 @@ else
 end if`
   },
   formulas: {
-    description: "Formula functions and sheet ranges",
+    description: "Formula functions and lookups",
     code: `' Formula Functions
 dim total = sum(1, 2, 3)
 dim label = if(1, "yes", "no")
@@ -94,48 +66,7 @@ dim products = [
   ["Cherry", 2.00, 150]
 ]
 dim price = vlookup("Banana", products, 2, false)
-
-' Sheet range helpers
-dim sales = import "sales.csv" into sheet
-dim range_total = sum(sales, "A1:A10")
-dim range_avg = avg(sales, "A1:A10")
 print("Total: " + str(total))`
-  },
-  sheet_helpers: {
-    description: "Sheet helpers and A1 access",
-    code: `' Sheet Helpers
-dim people = import "people.csv" into sheet
-
-dim rows = sheet_row_count(people)
-dim cols = sheet_col_count(people)
-print("Rows: " + str(rows) + ", Cols: " + str(cols))
-
-' Read + write by A1 notation
-dim name = sheet_get_cell_value(people, "B2")
-dim updated = sheet_set_a1(people, "C2", "active")
-print("Name: " + str(name))`
-  },
-  sheet_range: {
-    description: "Sheet ranges and filtering",
-    code: `' Sheet Ranges
-dim sales = import "sales.csv" into sheet
-
-' Range extract
-dim first_block = sheet_get_range(sales, "A1:C5")
-
-' Filter rows by column value
-dim high_value = sheet_filter_rows(sales, "status", "paid")
-print("Filtered rows: " + str(len(high_value)))
-`
-  },
-  sheet_map: {
-    description: "Sheet map transformation",
-    code: `' Sheet Map
-dim data = import "people.csv" into sheet
-
-' Uppercase all string cells
-dim upper = sheet_map(data, "upper")
-print("Mapped sheet rows: " + str(len(upper)))`
   },
   array_filter: {
     description: "Array filter built-in",
@@ -174,7 +105,7 @@ users upsert updates on "id"
 print(users)`
   },
   formulas_extended: {
-    description: "Formula functions and ranges",
+    description: "Formula functions and lookups",
     code: `' Formulas
 dim total = sum(1, 2, 3)
 dim average = avg(10, 20, 30)
@@ -190,12 +121,6 @@ dim products = [
 ]
 dim banana_qty = index(products, match("Banana", products, 0), 3)
 dim block = offset(products, 1, 0, 1, 2)
-
-' Range formulas
-dim sheet = import "sales.csv" into sheet
-dim range_total = sum(sheet, "A1:A10")
-dim range_avg = avg(sheet, "A1:A10")
-
 print("Total: " + str(total) + ", Avg: " + str(average))`
   }
 };
