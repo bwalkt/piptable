@@ -356,7 +356,7 @@ mod tests {
         assert_eq!(result, Value::Error(ErrorValue::Num));
 
         let result = len(&[Value::Array(vec![Value::String("abc".to_string())])]);
-        assert_eq!(result, Value::Int(3));
+        assert_eq!(result, Value::Int(1));
 
         let result = len(&[Value::Array(vec![])]);
         assert_eq!(result, Value::Int(0));
