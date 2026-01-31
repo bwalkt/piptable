@@ -91,6 +91,22 @@ export async function getSampleData(): Promise<any> {
 export async function executeCode(code: string): Promise<any> {
   await initializeWasm();
   try {
+    if (!parser) throw new Error('Parser not initialized');
+    const validation = parser.validate(code) as {
+      valid: boolean;
+      errors: { line: number; column: number; message: string }[];
+    };
+
+    if (validation && validation.valid === false && validation.errors?.length > 0) {
+      const { line, column, message } = validation.errors[0];
+      return {
+        success: false,
+        output: [],
+        result: null,
+        error: `Parse error at ${line}:${column} - ${message}`
+      };
+    }
+
     return await run_code(code);
   } catch (error) {
     console.error('Execution error:', error);

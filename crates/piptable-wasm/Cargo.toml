@@ -32,6 +32,9 @@ features = [
     "console",
 ]
 
+[dev-dependencies]
+futures = { workspace = true }
+
 [profile.release]
 opt-level = "z"
 lto = true
