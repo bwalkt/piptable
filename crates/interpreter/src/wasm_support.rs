@@ -10,19 +10,27 @@ impl SqlEngine {
     }
 
     pub async fn register_table(&self, _name: &str, _batches: Vec<RecordBatch>) -> PipResult<()> {
-        Err(PipError::Sql("SQL is not supported in the playground".into()))
+        Err(PipError::Sql(
+            "SQL is not supported in the playground".into(),
+        ))
     }
 
     pub async fn register_csv(&self, _name: &str, _path: &str) -> PipResult<()> {
-        Err(PipError::Sql("SQL is not supported in the playground".into()))
+        Err(PipError::Sql(
+            "SQL is not supported in the playground".into(),
+        ))
     }
 
     pub async fn register_json(&self, _name: &str, _path: &str) -> PipResult<()> {
-        Err(PipError::Sql("SQL is not supported in the playground".into()))
+        Err(PipError::Sql(
+            "SQL is not supported in the playground".into(),
+        ))
     }
 
     pub async fn register_parquet(&self, _name: &str, _path: &str) -> PipResult<()> {
-        Err(PipError::Sql("SQL is not supported in the playground".into()))
+        Err(PipError::Sql(
+            "SQL is not supported in the playground".into(),
+        ))
     }
 
     pub async fn deregister_table(&self, _name: &str) -> PipResult<()> {
@@ -30,7 +38,9 @@ impl SqlEngine {
     }
 
     pub async fn query(&self, _sql: &str) -> PipResult<Vec<RecordBatch>> {
-        Err(PipError::Sql("SQL is not supported in the playground".into()))
+        Err(PipError::Sql(
+            "SQL is not supported in the playground".into(),
+        ))
     }
 }
 

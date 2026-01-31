@@ -489,9 +489,15 @@ fn load_sheet_by_extension(path: &Path, options: &FileLoadOptions) -> Result<She
         "csv" => Sheet::from_csv(path)?,
         "tsv" => Sheet::from_csv_with_options(path, CsvOptions::tsv())?,
         #[cfg(not(target_arch = "wasm32"))]
-        "xlsx" => Sheet::from_xlsx_with_options(path, XlsxReadOptions::default().with_headers(options.has_headers))?,
+        "xlsx" => Sheet::from_xlsx_with_options(
+            path,
+            XlsxReadOptions::default().with_headers(options.has_headers),
+        )?,
         #[cfg(not(target_arch = "wasm32"))]
-        "xls" => Sheet::from_xls_with_options(path, XlsxReadOptions::default().with_headers(options.has_headers))?,
+        "xls" => Sheet::from_xls_with_options(
+            path,
+            XlsxReadOptions::default().with_headers(options.has_headers),
+        )?,
         "json" => Sheet::from_json(path)?,
         "jsonl" | "ndjson" => Sheet::from_jsonl(path)?,
         "toon" => Sheet::from_toon(path)?,
