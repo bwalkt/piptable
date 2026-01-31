@@ -1,8 +1,10 @@
+use arrow::record_batch::RecordBatch;
 use piptable_core::{Expr, PipError, Program, Statement, Value};
 use piptable_interpreter::Interpreter;
 use piptable_parser::PipParser;
 use piptable_sheet::{CellValue, Sheet};
 use serde::{Deserialize, Serialize};
+use std::sync::Arc;
 use wasm_bindgen::prelude::*;
 
 pub mod spreadsheet;
@@ -237,6 +239,37 @@ fn sheet_to_json(sheet: &Sheet) -> serde_json::Value {
     serde_json::Value::Array(rows)
 }
 
+fn table_to_json(batches: &[Arc<RecordBatch>]) -> serde_json::Value {
+    let mut total_rows: usize = 0;
+    for batch in batches {
+        total_rows = total_rows.saturating_add(batch.num_rows());
+    }
+
+    let columns: Vec<serde_json::Value> = batches
+        .first()
+        .map(|batch| {
+            batch
+                .schema()
+                .fields()
+                .iter()
+                .map(|field| serde_json::Value::String(field.name().clone()))
+                .collect()
+        })
+        .unwrap_or_default();
+
+    let mut out = serde_json::Map::new();
+    out.insert(
+        "type".to_string(),
+        serde_json::Value::String("table".to_string()),
+    );
+    out.insert(
+        "rows".to_string(),
+        serde_json::Value::Number(total_rows.into()),
+    );
+    out.insert("columns".to_string(), serde_json::Value::Array(columns));
+    serde_json::Value::Object(out)
+}
+
 fn value_to_json(value: &Value) -> serde_json::Value {
     match value {
         Value::Null => serde_json::Value::Null,
@@ -258,7 +291,7 @@ fn value_to_json(value: &Value) -> serde_json::Value {
             serde_json::Value::Object(out)
         }
         Value::Sheet(sheet) => sheet_to_json(sheet),
-        Value::Table(_) => serde_json::Value::String("<table>".to_string()),
+        Value::Table(batches) => table_to_json(batches),
         Value::Function { name, .. } => serde_json::Value::String(format!("<function {}>", name)),
         Value::Lambda { .. } => serde_json::Value::String("<lambda>".to_string()),
     }

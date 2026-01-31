@@ -1,6 +1,7 @@
 use arrow::array::RecordBatch;
 use piptable_core::{PipError, PipResult, Value};
 
+#[derive(Default)]
 pub struct SqlEngine;
 
 impl SqlEngine {

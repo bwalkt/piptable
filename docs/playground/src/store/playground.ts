@@ -1,6 +1,6 @@
 import { signal } from '@preact/signals';
 import DOMPurify from 'dompurify';
-import { initializeWasm, executeCode } from './wasm';
+import { executeCode } from './wasm';
 import { loadSharedState, type ShareableState } from '../lib/share';
 
 // Example metadata
@@ -185,9 +185,6 @@ export async function runCode() {
   error.value = null;
   
   try {
-    // Initialize WASM if needed
-    await initializeWasm();
-
     let result = '';
     const execResult = await executeCode(code.value);
 

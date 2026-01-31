@@ -510,10 +510,16 @@ fn load_sheet_by_extension(path: &Path, options: &FileLoadOptions) -> Result<She
             ))
         }
         _ => {
+            #[cfg(not(target_arch = "wasm32"))]
+            return Err(SheetError::Parse(format!(
+                "Unsupported file format: '{}'. Supported: csv, tsv, xlsx, xls, json, jsonl, toon, parquet",
+                ext
+            )));
+            #[cfg(target_arch = "wasm32")]
             return Err(SheetError::Parse(format!(
                 "Unsupported file format: '{}'. Supported: csv, tsv, json, jsonl, toon",
                 ext
-            )))
+            )));
         }
     };
 
