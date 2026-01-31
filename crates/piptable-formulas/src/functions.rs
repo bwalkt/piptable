@@ -131,7 +131,7 @@ fn table_rows(value: &Value) -> Result<Vec<Vec<Value>>, ErrorValue> {
             .iter()
             .map(|row| match row {
                 Value::Array(values) => values.clone(),
-                _ => vec![row.clone()],
+                _ => unreachable!(),
             })
             .collect())
     } else {
@@ -877,7 +877,7 @@ pub fn vlookup(values: &[Value]) -> Value {
                 continue;
             }
             if values_equal(&row[0], lookup_value) {
-                if col_index == 0 || col_index > row.len() {
+                if col_index > row.len() {
                     return Value::Error(ErrorValue::Ref);
                 }
                 return row[col_index - 1].clone();
@@ -896,9 +896,9 @@ pub fn vlookup(values: &[Value]) -> Value {
             }
         }
         if let Some(row) = best_match {
-            if col_index == 0 || col_index > row.len() {
-                return Value::Error(ErrorValue::Ref);
-            }
+        if col_index > row.len() {
+            return Value::Error(ErrorValue::Ref);
+        }
             return row[col_index - 1].clone();
         }
     }
@@ -934,7 +934,7 @@ pub fn hlookup(values: &[Value]) -> Value {
     if rows.is_empty() {
         return Value::Error(ErrorValue::NA);
     }
-    if row_index == 0 || row_index > rows.len() {
+    if row_index > rows.len() {
         return Value::Error(ErrorValue::Ref);
     }
 
@@ -985,7 +985,7 @@ pub fn index(values: &[Value]) -> Value {
         Err(err) => return Value::Error(err),
     };
 
-    if row_num == 0 || row_num > rows.len() {
+    if row_num > rows.len() {
         return Value::Error(ErrorValue::Ref);
     }
 
@@ -1003,7 +1003,7 @@ pub fn index(values: &[Value]) -> Value {
         None => return Value::Error(ErrorValue::Value),
     };
 
-    if col_num == 0 || col_num > row_data.len() {
+    if col_num > row_data.len() {
         return Value::Error(ErrorValue::Ref);
     }
     row_data[col_num - 1].clone()
@@ -1202,10 +1202,6 @@ pub fn offset(values: &[Value]) -> Value {
     } else {
         1
     };
-
-    if height < 1 || width < 1 {
-        return Value::Error(ErrorValue::Value);
-    }
 
     let start_row = rows_offset;
     let start_col = cols_offset;
