@@ -486,12 +486,40 @@ fn validate_program(program: &Program) -> Result<(), String> {
     Ok(())
 }
 
+/// Execute PipTable source code (parse, validate, and run) and return a JSON-serializable execution result.
+///
+/// The returned value encodes the execution outcome and any runtime output or error. On success the payload contains
+/// `success: true`, an `output` array of log lines, and an optional `result` value; on failure it contains
+/// `success: false` and an `error` message describing the problem (parse, validation, or runtime).
+///
+/// # Examples
+///
+/// ```no_run
+/// # async fn example() {
+/// let js: wasm_bindgen::JsValue = run_code("dim x = 1".into()).await.unwrap();
+/// // `js` is a JsValue holding the ExecResult JSON object described above.
+/// # }
+/// ```
 #[wasm_bindgen]
 pub async fn run_code(code: String) -> Result<JsValue, JsValue> {
     let result = run_code_inner(&code).await;
     serde_wasm_bindgen::to_value(&result).map_err(|e| JsValue::from_str(&e.to_string()))
 }
 
+/// Executes PipTable code end-to-end: parses, validates, interprets, and collects output.
+///
+/// On parse failure or validation failure returns an `ExecResult` with `success = false` and an `error` describing the problem. On successful execution returns `success = true`, `output` containing captured interpreter logs, and `result` containing the evaluated value converted to JSON.
+///
+/// # Examples
+///
+/// ```
+/// use futures::executor::block_on;
+///
+/// // Example usage: run a simple program and inspect success flag.
+/// let code = "dim x = 1\nx";
+/// let res = block_on(crate::run_code_inner(code));
+/// assert!(res.success || res.error.is_some());
+/// ```
 async fn run_code_inner(code: &str) -> ExecResult {
     let program = match PipParser::parse_str(code) {
         Ok(program) => program,
