@@ -12,8 +12,31 @@ fn registry() -> &'static FunctionRegistry {
     FORMULA_REGISTRY.get_or_init(FunctionRegistry::default)
 }
 
-pub fn is_formula_function(name: &str) -> bool {
-    registry().get(name).is_some()
+const DSL_FORMULA_FUNCTIONS: &[&str] = &[
+    "SUM",
+    "AVERAGE",
+    "AVG",
+    "COUNT",
+    "COUNTA",
+    "MAX",
+    "MIN",
+    "IF",
+    "AND",
+    "OR",
+    "NOT",
+    "CONCAT",
+    "CONCATENATE",
+    "LEN",
+    "LEFT",
+    "RIGHT",
+    "TODAY",
+    "NOW",
+    "DATE",
+];
+
+pub fn is_dsl_formula_function(name: &str) -> bool {
+    let upper = name.to_uppercase();
+    DSL_FORMULA_FUNCTIONS.contains(&upper.as_str())
 }
 
 pub fn call_formula_function(name: &str, args: &[Value], line: usize) -> PipResult<Value> {
@@ -42,6 +65,16 @@ pub fn eval_sheet_formula(sheet: &Sheet, formula: &str, line: usize) -> PipResul
         .evaluate(&compiled, &resolver)
         .map_err(|e| PipError::runtime(line, format!("Formula error: {}", e)))?;
     formula_to_core(result, line)
+}
+
+pub fn eval_sheet_range_function(
+    sheet: &Sheet,
+    function: &str,
+    range: &str,
+    line: usize,
+) -> PipResult<Value> {
+    let formula = format!("{}({})", function, range);
+    eval_sheet_formula(sheet, &formula, line)
 }
 
 pub fn eval_sheet_cell(sheet: &Sheet, notation: &str, line: usize) -> PipResult<Value> {
@@ -162,13 +195,37 @@ fn core_to_formula(value: &Value, line: usize) -> PipResult<FormulaValue> {
             Ok(FormulaValue::Array(converted))
         }
         Value::Sheet(sheet) => {
-            let mut values = Vec::new();
-            for row in sheet.data() {
+            let header_offset = match sheet.column_names() {
+                Some(names) => {
+                    if sheet
+                        .data()
+                        .first()
+                        .map(|row| {
+                            names.iter().enumerate().all(|(idx, name)| {
+                                row.get(idx)
+                                    .map(|cell| cell.as_str() == name.as_str())
+                                    .unwrap_or(false)
+                            })
+                        })
+                        .unwrap_or(false)
+                    {
+                        1
+                    } else {
+                        0
+                    }
+                }
+                None => 0,
+            };
+
+            let mut rows = Vec::new();
+            for row in sheet.data().iter().skip(header_offset) {
+                let mut values = Vec::new();
                 for cell in row {
                     values.push(cell_to_formula(cell));
                 }
+                rows.push(FormulaValue::Array(values));
             }
-            Ok(FormulaValue::Array(values))
+            Ok(FormulaValue::Array(rows))
         }
         Value::Object(_) => Err(PipError::runtime(
             line,

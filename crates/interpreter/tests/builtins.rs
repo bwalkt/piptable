@@ -142,19 +142,28 @@ async fn test_abs_negative() {
 #[tokio::test]
 async fn test_min() {
     let (interp, _) = run_script("dim x = min(5, 3, 8, 1, 9)").await;
-    assert!(matches!(interp.get_var("x").await, Some(Value::Int(1))));
+    assert!(matches!(
+        interp.get_var("x").await,
+        Some(Value::Float(f)) if (f - 1.0).abs() < 1e-9
+    ));
 }
 
 #[tokio::test]
 async fn test_max() {
     let (interp, _) = run_script("dim x = max(5, 3, 8, 1, 9)").await;
-    assert!(matches!(interp.get_var("x").await, Some(Value::Int(9))));
+    assert!(matches!(
+        interp.get_var("x").await,
+        Some(Value::Float(f)) if (f - 9.0).abs() < 1e-9
+    ));
 }
 
 #[tokio::test]
 async fn test_sum() {
     let (interp, _) = run_script("dim x = sum([1, 2, 3, 4, 5])").await;
-    assert!(matches!(interp.get_var("x").await, Some(Value::Int(15))));
+    assert!(matches!(
+        interp.get_var("x").await,
+        Some(Value::Float(f)) if (f - 15.0).abs() < 1e-9
+    ));
 }
 
 #[tokio::test]

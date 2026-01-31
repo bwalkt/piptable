@@ -4,7 +4,8 @@ This page shows how to call spreadsheet-style formula functions from the piptabl
 
 ## Call Formula Functions
 
-The DSL exposes the formula registry, so you can call formula functions directly:
+Formula functions are callable directly from the DSL. Names are case-insensitive
+and resolve to the same implementation:
 
 ```piptable
 dim total = SUM(1, 2, 3)
@@ -13,8 +14,12 @@ dim left = LEFT("hello", 2)
 dim joined = CONCAT("a", "b", "c")
 ```
 
-Formula functions follow Excel-style casing. Use uppercase names to avoid collisions
-with DSL built-ins like `sum`, `avg/average`, `min`, `max`, and `len`.
+Formula function names are case-insensitive (`sum`, `Sum`, and `SUM` all work).
+When a DSL function name matches a formula function, the formula implementation
+is used.
+
+Aggregate functions like `SUM`, `AVERAGE`, `MIN`, and `MAX` accept arrays or
+ranges.
 
 ## Evaluate Formulas Against Sheets
 
@@ -33,6 +38,7 @@ import sales from "sales.csv"
 
 dim a1 = sheet_get_cell_value(sales, "B1")
 dim total = sheet_eval_formula(sales, "SUM(A1:A10)")
+dim total_short = sum(sales, "A1:A10")
 dim cached = sheet_get_a1_eval(sales, "B1")
 ```
 

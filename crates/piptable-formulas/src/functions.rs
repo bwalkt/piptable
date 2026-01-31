@@ -137,6 +137,9 @@ pub fn concat(values: &[Value]) -> Value {
 
 pub fn len(values: &[Value]) -> Value {
     let value = values.first().unwrap_or(&Value::Empty);
+    if let Value::Array(items) = value {
+        return Value::Int(items.len() as i64);
+    }
     match coerce_to_text(value) {
         Ok(text) => Value::Int(text.chars().count() as i64),
         Err(err) => Value::Error(err),
