@@ -488,29 +488,30 @@ fn validate_program(program: &Program) -> Result<(), String> {
 
 #[wasm_bindgen]
 pub async fn run_code(code: String) -> Result<JsValue, JsValue> {
-    let program = match PipParser::parse_str(&code) {
+    let result = run_code_inner(&code).await;
+    serde_wasm_bindgen::to_value(&result).map_err(|e| JsValue::from_str(&e.to_string()))
+}
+
+async fn run_code_inner(code: &str) -> ExecResult {
+    let program = match PipParser::parse_str(code) {
         Ok(program) => program,
         Err(e) => {
-            let result = ExecResult {
+            return ExecResult {
                 success: false,
                 output: Vec::new(),
                 result: None,
                 error: Some(format!("Parse error: {}", e)),
             };
-            return serde_wasm_bindgen::to_value(&result)
-                .map_err(|e| JsValue::from_str(&e.to_string()));
         }
     };
 
     if let Err(err) = validate_program(&program) {
-        let result = ExecResult {
+        return ExecResult {
             success: false,
             output: Vec::new(),
             result: None,
             error: Some(err),
         };
-        return serde_wasm_bindgen::to_value(&result)
-            .map_err(|e| JsValue::from_str(&e.to_string()));
     }
 
     let mut interp = Interpreter::new();
@@ -518,23 +519,33 @@ pub async fn run_code(code: String) -> Result<JsValue, JsValue> {
     let output = interp.output().await;
 
     match eval_result {
-        Ok(value) => {
-            let result = ExecResult {
-                success: true,
-                output,
-                result: Some(value_to_json(&value)),
-                error: None,
-            };
-            serde_wasm_bindgen::to_value(&result).map_err(|e| JsValue::from_str(&e.to_string()))
-        }
-        Err(e) => {
-            let result = ExecResult {
-                success: false,
-                output,
-                result: None,
-                error: Some(e.to_string()),
-            };
-            serde_wasm_bindgen::to_value(&result).map_err(|e| JsValue::from_str(&e.to_string()))
-        }
+        Ok(value) => ExecResult {
+            success: true,
+            output,
+            result: Some(value_to_json(&value)),
+            error: None,
+        },
+        Err(e) => ExecResult {
+            success: false,
+            output,
+            result: None,
+            error: Some(e.to_string()),
+        },
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::run_code_inner;
+    use futures::executor::block_on;
+
+    #[test]
+    fn run_code_reports_parse_errors() {
+        let result = block_on(run_code_inner("dim x ="));
+        assert!(!result.success);
+        assert!(result.output.is_empty());
+        assert!(result.result.is_none());
+        let error = result.error.expect("error should be present");
+        assert!(error.contains("Parse error"));
     }
 }

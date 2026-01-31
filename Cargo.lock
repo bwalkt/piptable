@@ -3824,6 +3824,7 @@ version = "0.1.0"
 dependencies = [
  "arrow",
  "console_error_panic_hook",
+ "futures",
  "getrandom 0.3.4",
  "piptable-core",
  "piptable-formulas",
