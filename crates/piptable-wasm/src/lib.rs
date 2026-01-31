@@ -259,9 +259,7 @@ fn value_to_json(value: &Value) -> serde_json::Value {
         }
         Value::Sheet(sheet) => sheet_to_json(sheet),
         Value::Table(_) => serde_json::Value::String("<table>".to_string()),
-        Value::Function { name, .. } => {
-            serde_json::Value::String(format!("<function {}>", name))
-        }
+        Value::Function { name, .. } => serde_json::Value::String(format!("<function {}>", name)),
         Value::Lambda { .. } => serde_json::Value::String("<lambda>".to_string()),
     }
 }
@@ -310,7 +308,11 @@ fn validate_statement(stmt: &Statement) -> Result<(), String> {
             Ok(())
         }
         Statement::For {
-            start, end, step, body, ..
+            start,
+            end,
+            step,
+            body,
+            ..
         } => {
             validate_expr(start)?;
             validate_expr(end)?;
@@ -322,7 +324,9 @@ fn validate_statement(stmt: &Statement) -> Result<(), String> {
             }
             Ok(())
         }
-        Statement::While { condition, body, .. } => {
+        Statement::While {
+            condition, body, ..
+        } => {
             validate_expr(condition)?;
             for stmt in body {
                 validate_statement(stmt)?;

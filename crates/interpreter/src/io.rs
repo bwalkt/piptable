@@ -1,9 +1,9 @@
 //! Import and export operations for files.
 
 use piptable_core::{ImportOptions, Value};
-use piptable_sheet::{CellValue, CsvOptions, Sheet};
 #[cfg(not(target_arch = "wasm32"))]
 use piptable_sheet::XlsxReadOptions;
+use piptable_sheet::{CellValue, CsvOptions, Sheet};
 use std::collections::HashMap;
 use std::path::Path;
 
@@ -670,10 +670,10 @@ pub fn import_sheet(
         {
             let options = XlsxReadOptions::default().with_headers(has_headers);
 
-        if let Some(name) = sheet_name {
-            // Load specific sheet by name
-            if path_lower.ends_with(".xlsx") {
-                Sheet::from_xlsx_sheet_with_options(path, name, options)
+            if let Some(name) = sheet_name {
+                // Load specific sheet by name
+                if path_lower.ends_with(".xlsx") {
+                    Sheet::from_xlsx_sheet_with_options(path, name, options)
                         .map_err(|e| format!("Failed to import Excel sheet '{}': {}", name, e))
                 } else {
                     Sheet::from_xls_sheet_with_options(path, name, options)
