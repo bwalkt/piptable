@@ -253,7 +253,7 @@ fn table_to_json(batches: &[Arc<RecordBatch>]) -> serde_json::Value {
                 .fields()
                 .iter()
                 .map(|field| serde_json::Value::String(field.name().clone()))
-                .collect()
+                .collect::<Vec<serde_json::Value>>()
         })
         .unwrap_or_default();
 
@@ -264,7 +264,7 @@ fn table_to_json(batches: &[Arc<RecordBatch>]) -> serde_json::Value {
     );
     out.insert(
         "rows".to_string(),
-        serde_json::Value::Number(total_rows.into()),
+        serde_json::Value::Number(serde_json::Number::from(total_rows as u64)),
     );
     out.insert("columns".to_string(), serde_json::Value::Array(columns));
     serde_json::Value::Object(out)
