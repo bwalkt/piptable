@@ -1128,59 +1128,31 @@ pub fn xlookup(values: &[Value]) -> Value {
             }
         }
         -1 => {
-            let mut best_match: Option<usize> = None;
-            let mut exact_match: Option<usize> = None;
-
-            for (i, val) in flat_lookup.iter().enumerate() {
-                if values_equal(val, lookup_value) {
-                    match search_mode {
-                        -1 | -2 => exact_match = Some(i),
-                        _ => return flat_return[i].clone(),
-                    }
-                } else {
-                    match compare_values(val, lookup_value) {
-                        Ok(cmp) if cmp < 0 => best_match = Some(i),
-                        Ok(_) => {}
-                        Err(err) => return Value::Error(err),
-                    }
+            for i in &indices {
+                if values_equal(&flat_lookup[*i], lookup_value) {
+                    return flat_return[*i].clone();
                 }
             }
-
-            if let Some(i) = exact_match {
-                return flat_return[i].clone();
-            }
-            if let Some(i) = best_match {
-                return flat_return[i].clone();
+            for i in &indices {
+                match compare_values(&flat_lookup[*i], lookup_value) {
+                    Ok(cmp) if cmp < 0 => return flat_return[*i].clone(),
+                    Ok(_) => {}
+                    Err(err) => return Value::Error(err),
+                }
             }
         }
         1 => {
-            let mut best_match: Option<usize> = None;
-            let mut exact_match: Option<usize> = None;
-
-            for (i, val) in flat_lookup.iter().enumerate() {
-                if values_equal(val, lookup_value) {
-                    match search_mode {
-                        -1 | -2 => exact_match = Some(i),
-                        _ => return flat_return[i].clone(),
-                    }
-                } else {
-                    match compare_values(val, lookup_value) {
-                        Ok(cmp) if cmp > 0 => {
-                            if best_match.is_none() {
-                                best_match = Some(i);
-                            }
-                        }
-                        Ok(_) => {}
-                        Err(err) => return Value::Error(err),
-                    }
+            for i in &indices {
+                if values_equal(&flat_lookup[*i], lookup_value) {
+                    return flat_return[*i].clone();
                 }
             }
-
-            if let Some(i) = exact_match {
-                return flat_return[i].clone();
-            }
-            if let Some(i) = best_match {
-                return flat_return[i].clone();
+            for i in &indices {
+                match compare_values(&flat_lookup[*i], lookup_value) {
+                    Ok(cmp) if cmp > 0 => return flat_return[*i].clone(),
+                    Ok(_) => {}
+                    Err(err) => return Value::Error(err),
+                }
             }
         }
         2 => return Value::Error(ErrorValue::Value),
