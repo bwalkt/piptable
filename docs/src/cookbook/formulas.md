@@ -50,3 +50,4 @@ dim cached = sheet_get_a1_eval(sales, "B1")
 Notes:
 - `sheet_get_cell_value` evaluates formulas stored as strings in cells (e.g., `"=SUM(A1:A2)"`).
 - When a formula references a cell that contains another formula string, it is treated as a string value (no recursive evaluation yet).
+- Formula errors include context and the original formula text (e.g., `Formula error in sheet_eval_formula: ... (formula: "...")`).

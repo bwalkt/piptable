@@ -29,7 +29,7 @@ fn value_to_cell(value: &Value) -> Option<CellValue> {
 
 /// Handle sheet manipulation built-in functions.
 pub async fn call_sheet_builtin(
-    _interpreter: &Interpreter,
+    interpreter: &Interpreter,
     name: &str,
     args: Vec<Value>,
     line: usize,
@@ -257,7 +257,13 @@ pub async fn call_sheet_builtin(
             }
             match (&args[0], &args[1]) {
                 (Value::Sheet(sheet), Value::String(notation)) => {
-                    Some(formula::eval_sheet_cell(sheet, notation, line))
+                    let mut engine = interpreter.formula_engine.lock().await;
+                    Some(formula::eval_sheet_cell_cached(
+                        &mut engine,
+                        sheet,
+                        notation,
+                        line,
+                    ))
                 }
                 _ => Some(Err(PipError::runtime(
                     line,
@@ -301,7 +307,13 @@ pub async fn call_sheet_builtin(
             }
             match (&args[0], &args[1]) {
                 (Value::Sheet(sheet), Value::String(notation)) => {
-                    Some(formula::eval_sheet_cell(sheet, notation, line))
+                    let mut engine = interpreter.formula_engine.lock().await;
+                    Some(formula::eval_sheet_cell_cached(
+                        &mut engine,
+                        sheet,
+                        notation,
+                        line,
+                    ))
                 }
                 _ => Some(Err(PipError::runtime(
                     line,
@@ -319,7 +331,14 @@ pub async fn call_sheet_builtin(
             }
             match (&args[0], &args[1]) {
                 (Value::Sheet(sheet), Value::String(formula_text)) => {
-                    Some(formula::eval_sheet_formula(sheet, formula_text, line))
+                    let mut engine = interpreter.formula_engine.lock().await;
+                    Some(formula::eval_sheet_formula_cached(
+                        &mut engine,
+                        sheet,
+                        formula_text,
+                        line,
+                        "sheet_eval_formula",
+                    ))
                 }
                 _ => Some(Err(PipError::runtime(
                     line,

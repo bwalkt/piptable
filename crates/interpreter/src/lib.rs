@@ -19,6 +19,7 @@ mod sql_builder;
 #[cfg(feature = "python")]
 mod python;
 
+use crate::formula::CachedFormulaEngine;
 use crate::sheet_conversions::{build_sheet_arrow_array, cell_to_value, infer_sheet_column_type};
 use async_recursion::async_recursion;
 use piptable_core::{
@@ -30,6 +31,7 @@ use piptable_sheet::{CellValue, Sheet};
 use piptable_sql::SqlEngine;
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
+use tokio::sync::Mutex;
 use tokio::sync::RwLock;
 
 /// Interpreter for piptable scripts.
@@ -46,6 +48,8 @@ pub struct Interpreter {
     functions: Arc<RwLock<HashMap<String, FunctionDef>>>,
     /// Registered sheet tables (maps variable name to table name)
     sheet_tables: Arc<RwLock<HashMap<String, String>>>,
+    /// Cached formula engine for sheet evaluation
+    pub(crate) formula_engine: Arc<Mutex<CachedFormulaEngine>>,
     /// Python runtime (optional, with `python` feature)
     #[cfg(feature = "python")]
     python_runtime: Option<python::PythonRuntime>,
@@ -296,6 +300,7 @@ impl Interpreter {
             output: Arc::new(RwLock::new(Vec::new())),
             functions: Arc::new(RwLock::new(HashMap::new())),
             sheet_tables: Arc::new(RwLock::new(HashMap::new())),
+            formula_engine: Arc::new(Mutex::new(CachedFormulaEngine::new())),
             #[cfg(feature = "python")]
             python_runtime: match python::PythonRuntime::new() {
                 Ok(rt) => Some(rt),
@@ -1614,7 +1619,9 @@ impl Interpreter {
             if arg_vals.len() == 2 {
                 if let (Value::Sheet(sheet), Value::String(range)) = (&arg_vals[0], &arg_vals[1]) {
                     if let Some(formula_name) = formula::range_function_name(name) {
-                        return formula::eval_sheet_range_function(
+                        let mut engine = self.formula_engine.lock().await;
+                        return formula::eval_sheet_range_function_cached(
+                            &mut engine,
                             sheet,
                             formula_name,
                             range,

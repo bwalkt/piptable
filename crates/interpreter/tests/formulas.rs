@@ -126,3 +126,84 @@ async fn test_sheet_formula_eval_helpers() {
         Some(Value::Bool(false))
     ));
 }
+
+#[tokio::test]
+async fn test_sheet_formula_edge_cases() {
+    let mut interp = Interpreter::new();
+    let sheet = Sheet::from_data(vec![vec![
+        CellValue::Int(1),
+        CellValue::String("=SUM(A1:A2)".to_string()),
+    ]]);
+    interp
+        .set_var("s", Value::Sheet(sheet))
+        .await
+        .expect("set sheet");
+
+    let err = {
+        let program =
+            PipParser::parse_str(r#"dim x = sheet_eval_formula(s, "SUM(")"#).expect("parse");
+        interp
+            .eval(program)
+            .await
+            .expect_err("expected error")
+            .to_string()
+    };
+    assert!(err.contains("Formula error in sheet_eval_formula"));
+    assert!(err.contains("formula: \"SUM(\""));
+
+    let err = {
+        let program = PipParser::parse_str(r#"dim x = sheet_eval_formula(s, "AVERAGE(\"x\")")"#)
+            .expect("parse");
+        interp
+            .eval(program)
+            .await
+            .expect_err("expected error")
+            .to_string()
+    };
+    assert!(err.contains("Formula error in sheet_eval_formula"));
+
+    let err = {
+        let program =
+            PipParser::parse_str(r#"dim x = sheet_eval_formula(s, "Z1")"#).expect("parse");
+        interp
+            .eval(program)
+            .await
+            .expect_err("expected error")
+            .to_string()
+    };
+    assert!(err.contains("Formula error in sheet_eval_formula"));
+    assert!(err.contains("#REF"));
+
+    let sheet2 = Sheet::from_data(vec![vec![
+        CellValue::String("=1+1".to_string()),
+        CellValue::String("=SUM(A1,1)".to_string()),
+    ]]);
+    interp
+        .set_var("s2", Value::Sheet(sheet2))
+        .await
+        .expect("set sheet2");
+    let program = PipParser::parse_str(
+        r#"
+        dim y = sheet_get_cell_value(s2, "B1")
+        dim z = sheet_eval_formula(s2, "SUM(A1,1)")
+    "#,
+    )
+    .expect("parse");
+    interp.eval(program).await.expect("eval");
+    assert!(matches!(
+        interp.get_var("y").await,
+        Some(Value::Float(f)) if (f - 1.0).abs() < 1e-9
+    ));
+    assert!(matches!(
+        interp.get_var("z").await,
+        Some(Value::Float(f)) if (f - 1.0).abs() < 1e-9
+    ));
+
+    let program =
+        PipParser::parse_str(r#"dim w = sheet_eval_formula(s2, "SUM(B1,1)")"#).expect("parse");
+    interp.eval(program).await.expect("eval");
+    assert!(matches!(
+        interp.get_var("w").await,
+        Some(Value::Float(f)) if (f - 1.0).abs() < 1e-9
+    ));
+}
