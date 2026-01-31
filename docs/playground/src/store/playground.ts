@@ -13,70 +13,145 @@ export interface Example {
 export const examples: Record<string, Example> = {
   hello: {
     description: "Simple hello world example",
-    code: `// Hello World in PipTable
-PRINT "Hello, World!"
+    code: `' Hello World in PipTable
+print("Hello, World!")
 
-DIM name AS STRING = "PipTable"
-PRINT "Welcome to " + name + " Playground!"`
+dim name = "PipTable"
+print("Welcome to " + name + " Playground!")`
   },
   variables: {
     description: "Variable declarations and basic types",
-    code: `// Variables and Types
-DIM message AS STRING = "Hello"
-DIM count AS INT = 42
-DIM price AS FLOAT = 19.99
-DIM active AS BOOL = true
+    code: `' Variables and Types
+dim message = "Hello"
+dim count = 42
+dim price = 19.99
+dim active = true
 
-// Display values using string conversion
-PRINT "Message: " + message
-PRINT "Count: " + STR(count)
-PRINT "Price: $" + STR(price)
-PRINT "Active: " + STR(active)`
+' Display values using string conversion
+print("Message: " + message)
+print("Count: " + str(count))
+print("Price: $" + str(price))
+print("Active: " + str(active))`
   },
   sql: {
     description: "SQL queries on sheet data",
-    code: `// SQL Query on Data
-DIM users AS SHEET = READ("users.csv")
+    code: `' SQL Query on Data
+dim users = import "users.csv" into sheet
 
-// Query the data
-DIM adults AS SHEET = QUERY(users, 
-  "SELECT name, age, city FROM users WHERE age >= 18")
+' Query the data
+dim adults = query("
+  SELECT name, age, city
+  FROM users
+  WHERE age >= 18
+")
 
-// Export results
-WRITE(adults, "adult_users.csv")
-PRINT "Query results exported"`
+' Export results
+export adults to "adult_users.csv"
+print("Query results exported")`
   },
   join: {
     description: "Join operations between sheets",
-    code: `// Join Operations
-DIM customers AS SHEET = READ("customers.csv")
-DIM orders AS SHEET = READ("orders.csv")
+    code: `' Join Operations
+dim customers = import "customers.csv" into sheet
+dim orders = import "orders.csv" into sheet
 
-// Inner join
-DIM result AS SHEET = JOIN INNER customers, orders 
-  ON customers.id = orders.customer_id
+' Inner join
+dim result = customers join orders on "id" = "customer_id"
 
-WRITE(result, "customer_orders.csv")
-PRINT "Join complete!"`
+export result to "customer_orders.csv"
+print("Join complete!")`
   },
   loops: {
     description: "Loops and control flow",
-    code: `// Loops and Control Flow
-DIM sum AS INT = 0
-FOR i = 1 TO 10
-  sum = sum + i
-  PRINT "i = " + STR(i) + ", sum = " + STR(sum)
-NEXT
+    code: `' Loops and Control Flow
+dim total = 0
+for i = 1 to 10
+  total = total + i
+  print("i = " + str(i) + ", total = " + str(total))
+next
 
-// Conditional
-DIM score AS INT = 85
-IF score >= 90 THEN
-  PRINT "Grade: A"
-ELSEIF score >= 80 THEN
-  PRINT "Grade: B"
-ELSE
-  PRINT "Grade: C"
-END IF`
+' Conditional
+dim score = 85
+if score >= 90 then
+  print("Grade: A")
+elseif score >= 80 then
+  print("Grade: B")
+else
+  print("Grade: C")
+end if`
+  },
+  formulas: {
+    description: "Formula functions and sheet ranges",
+    code: `' Formula Functions
+dim total = sum(1, 2, 3)
+dim label = if(1, "yes", "no")
+dim joined = concat("a", "b", "c")
+
+' Sheet range helpers
+dim sales = import "sales.csv" into sheet
+dim range_total = sum(sales, "A1:A10")
+dim range_avg = avg(sales, "A1:A10")
+print("Total: " + str(total))`
+  },
+  sheet_helpers: {
+    description: "Sheet helpers and A1 access",
+    code: `' Sheet Helpers
+dim people = import "people.csv" into sheet
+
+dim rows = sheet_row_count(people)
+dim cols = sheet_col_count(people)
+print("Rows: " + str(rows) + ", Cols: " + str(cols))
+
+' Read + write by A1 notation
+dim name = sheet_get_cell_value(people, "B2")
+dim updated = sheet_set_a1(people, "C2", "active")
+print("Name: " + str(name))`
+  },
+  sheet_range: {
+    description: "Sheet ranges and filtering",
+    code: `' Sheet Ranges
+dim sales = import "sales.csv" into sheet
+
+' Range extract
+dim first_block = sheet_get_range(sales, "A1:C5")
+
+' Filter rows by column value
+dim high_value = sheet_filter_rows(sales, "status", "paid")
+print("Filtered rows: " + str(len(high_value)))
+`
+  },
+  sheet_map: {
+    description: "Sheet map transformation",
+    code: `' Sheet Map
+dim data = import "people.csv" into sheet
+
+' Uppercase all string cells
+dim upper = sheet_map(data, "upper")
+print("Mapped sheet rows: " + str(len(upper)))`
+  },
+  array_filter: {
+    description: "Array filter built-in",
+    code: `' Array FILTER
+dim names = ["Alice", "Bob", "Charlie", "Dana"]
+dim scores = [88, 0, 92, 75]
+dim passing = filter(names, scores)
+print(passing)`
+  },
+  formulas_extended: {
+    description: "Formula functions and ranges",
+    code: `' Formulas
+dim total = sum(1, 2, 3)
+dim average = avg(10, 20, 30)
+dim min_val = min(5, 3, 9)
+dim max_val = max(5, 3, 9)
+dim label = if(1, "yes", "no")
+
+' Range formulas
+dim sheet = import "sales.csv" into sheet
+dim range_total = sum(sheet, "A1:A10")
+dim range_avg = avg(sheet, "A1:A10")
+
+print("Total: " + str(total) + ", Avg: " + str(average))`
   }
 };
 
