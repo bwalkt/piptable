@@ -34,6 +34,12 @@ const DSL_FORMULA_FUNCTIONS: &[&str] = &[
     "TODAY",
     "NOW",
     "DATE",
+    "VLOOKUP",
+    "HLOOKUP",
+    "INDEX",
+    "MATCH",
+    "XLOOKUP",
+    "OFFSET",
 ];
 
 pub fn is_dsl_formula_function(name: &str) -> bool {
@@ -210,9 +216,20 @@ impl ValueResolver for SheetResolver<'_> {
     }
 
     fn get_range(&self, range: &CellRange) -> Vec<FormulaValue> {
-        let mut values = Vec::with_capacity(range.size());
-        for addr in range.iter() {
-            values.push(self.get_cell(&addr));
+        let normalized = range.normalized();
+        let rows = normalized.rows() as usize;
+        let cols = normalized.cols() as usize;
+        let mut values = Vec::with_capacity(rows);
+        for r in 0..rows {
+            let mut row = Vec::with_capacity(cols);
+            for c in 0..cols {
+                let addr = CellAddress::new(
+                    normalized.start.row + r as u32,
+                    normalized.start.col + c as u32,
+                );
+                row.push(self.get_cell(&addr));
+            }
+            values.push(FormulaValue::Array(row));
         }
         values
     }

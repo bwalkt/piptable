@@ -365,7 +365,7 @@ impl FunctionRegistry {
                 4,
                 vec![ParamType::Any, ParamType::Range, ParamType::Number],
                 ReturnType::Any,
-                functions::not_implemented,
+                functions::vlookup,
             ),
         );
         self.register(
@@ -375,7 +375,7 @@ impl FunctionRegistry {
                 4,
                 vec![ParamType::Any, ParamType::Range, ParamType::Number],
                 ReturnType::Any,
-                functions::not_implemented,
+                functions::hlookup,
             ),
         );
         self.register(
@@ -385,7 +385,7 @@ impl FunctionRegistry {
                 3,
                 vec![ParamType::Range, ParamType::Number],
                 ReturnType::Any,
-                functions::not_implemented,
+                functions::index,
             ),
         );
         self.register(
@@ -395,7 +395,27 @@ impl FunctionRegistry {
                 3,
                 vec![ParamType::Any, ParamType::Range],
                 ReturnType::Number,
-                functions::not_implemented,
+                functions::match_fn,
+            ),
+        );
+        self.register(
+            "XLOOKUP",
+            FunctionDefinition::range(
+                3,
+                6,
+                vec![ParamType::Any, ParamType::Range, ParamType::Range],
+                ReturnType::Any,
+                functions::xlookup,
+            ),
+        );
+        self.register(
+            "OFFSET",
+            FunctionDefinition::range(
+                3,
+                5,
+                vec![ParamType::Range, ParamType::Number, ParamType::Number],
+                ReturnType::Range,
+                functions::offset,
             ),
         );
     }
@@ -584,10 +604,29 @@ impl ValueResolver for EvalContext {
     }
 
     fn get_range(&self, range: &CellRange) -> Vec<Value> {
-        self.ranges
-            .get(range)
-            .cloned()
-            .unwrap_or_else(|| Vec::with_capacity(0))
+        let Some(values) = self.ranges.get(range) else {
+            return Vec::with_capacity(0);
+        };
+        if values.iter().all(|v| matches!(v, Value::Array(_))) {
+            return values.clone();
+        }
+
+        let rows = range.rows() as usize;
+        let cols = range.cols() as usize;
+        if rows.saturating_mul(cols) == values.len() && rows > 0 && cols > 0 {
+            let mut out = Vec::with_capacity(rows);
+            for r in 0..rows {
+                let mut row = Vec::with_capacity(cols);
+                for c in 0..cols {
+                    let idx = r * cols + c;
+                    row.push(values[idx].clone());
+                }
+                out.push(Value::Array(row));
+            }
+            return out;
+        }
+
+        values.clone()
     }
 }
 
@@ -970,7 +1009,10 @@ mod tests {
         let range = CellRange::new(CellAddress::new(0, 0), CellAddress::new(0, 1));
         ranges.insert(range, vec![Value::Int(1), Value::Int(2)]);
         let ctx = EvalContext::with_ranges(ranges);
-        assert_eq!(ctx.get_range(&range), vec![Value::Int(1), Value::Int(2)]);
+        assert_eq!(
+            ctx.get_range(&range),
+            vec![Value::Array(vec![Value::Int(1), Value::Int(2)])]
+        );
         let missing = CellRange::new(CellAddress::new(9, 9), CellAddress::new(9, 9));
         assert!(ctx.get_range(&missing).is_empty());
     }

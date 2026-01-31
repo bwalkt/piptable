@@ -19,7 +19,6 @@ async fn test_vlookup_exact_match() {
         ]
         price = vlookup("Banana", products, 2, false)
         quantity = vlookup("Cherry", products, 3, false)
-        not_found = vlookup("Grape", products, 2, false)
     "#,
     )
     .await;
@@ -33,11 +32,17 @@ async fn test_vlookup_exact_match() {
         interp.get_var("quantity").await,
         Some(Value::Int(150))
     ));
-
-    assert!(matches!(
-        interp.get_var("not_found").await,
-        Some(Value::String(s)) if s == "#N/A"
-    ));
+    let err = run_script_err(
+        r#"
+        products = [
+            ["Apple", 1.50, 100],
+            ["Banana", 0.75, 200]
+        ]
+        missing = vlookup("Grape", products, 2, false)
+    "#,
+    )
+    .await;
+    assert!(err.contains("Formula error: #N/A"));
 }
 
 #[tokio::test]
@@ -51,7 +56,6 @@ async fn test_hlookup_exact_match() {
         ]
         q2_sales = hlookup("Q2", quarterly, 2, false)
         q4_costs = hlookup("Q4", quarterly, 3, false)
-        not_found = hlookup("Q5", quarterly, 2, false)
     "#,
     )
     .await;
@@ -65,11 +69,17 @@ async fn test_hlookup_exact_match() {
         interp.get_var("q4_costs").await,
         Some(Value::Int(120))
     ));
-
-    assert!(matches!(
-        interp.get_var("not_found").await,
-        Some(Value::String(s)) if s == "#N/A"
-    ));
+    let err = run_script_err(
+        r#"
+        quarterly = [
+            ["Product", "Q1", "Q2", "Q3", "Q4"],
+            ["Sales", 100, 150, 120, 180]
+        ]
+        missing = hlookup("Q5", quarterly, 2, false)
+    "#,
+    )
+    .await;
+    assert!(err.contains("Formula error: #N/A"));
 }
 
 #[tokio::test]
@@ -149,7 +159,6 @@ async fn test_match_exact() {
         pos1 = match("Banana", fruits, 0)
         pos2 = match("Date", fruits, 0)
         pos3 = match(30, numbers, 0)
-        not_found = match("Grape", fruits, 0)
     "#,
     )
     .await;
@@ -159,11 +168,14 @@ async fn test_match_exact() {
     assert!(matches!(interp.get_var("pos2").await, Some(Value::Int(4))));
 
     assert!(matches!(interp.get_var("pos3").await, Some(Value::Int(3))));
-
-    assert!(matches!(
-        interp.get_var("not_found").await,
-        Some(Value::String(s)) if s == "#N/A"
-    ));
+    let err = run_script_err(
+        r#"
+        fruits = ["Apple", "Banana", "Cherry", "Date"]
+        missing = match("Grape", fruits, 0)
+    "#,
+    )
+    .await;
+    assert!(err.contains("Formula error: #N/A"));
 }
 
 #[tokio::test]
@@ -174,7 +186,6 @@ async fn test_match_less_than_or_equal() {
         pos1 = match(25, sorted_nums, 1)
         pos2 = match(30, sorted_nums, 1)
         pos3 = match(55, sorted_nums, 1)
-        pos4 = match(5, sorted_nums, 1)
     ",
     )
     .await;
@@ -184,11 +195,14 @@ async fn test_match_less_than_or_equal() {
     assert!(matches!(interp.get_var("pos2").await, Some(Value::Int(3))));
 
     assert!(matches!(interp.get_var("pos3").await, Some(Value::Int(5))));
-
-    assert!(matches!(
-        interp.get_var("pos4").await,
-        Some(Value::String(s)) if s == "#N/A"
-    ));
+    let err = run_script_err(
+        r#"
+        sorted_nums = [10, 20, 30, 40, 50]
+        missing = match(5, sorted_nums, 1)
+    "#,
+    )
+    .await;
+    assert!(err.contains("Formula error: #N/A"));
 }
 
 #[tokio::test]
@@ -198,17 +212,20 @@ async fn test_match_greater_than_or_equal() {
         descending = [50, 40, 30, 20, 10]
         pos1 = match(35, descending, -1)
         pos2 = match(50, descending, -1)
-        pos3 = match(60, descending, -1)
     ",
     )
     .await;
 
     assert!(matches!(interp.get_var("pos1").await, Some(Value::Int(2))));
     assert!(matches!(interp.get_var("pos2").await, Some(Value::Int(1))));
-    assert!(matches!(
-        interp.get_var("pos3").await,
-        Some(Value::String(s)) if s == "#N/A"
-    ));
+    let err = run_script_err(
+        r#"
+        descending = [50, 40, 30, 20, 10]
+        missing = match(60, descending, -1)
+    "#,
+    )
+    .await;
+    assert!(err.contains("Formula error: #N/A"));
 }
 
 #[tokio::test]
@@ -278,8 +295,6 @@ async fn test_index_match_combination() {
 async fn test_vlookup_edge_cases() {
     let (interp, _) = run_script(
         r#"
-        empty = []
-        result1 = vlookup("test", empty, 1, false)
         single = [["Apple", 1.50]]
         result2 = vlookup("Apple", single, 2, false)
         data = [["Apple", 1.50], ["Banana", 0.75]]
@@ -288,14 +303,18 @@ async fn test_vlookup_edge_cases() {
     .await;
 
     assert!(matches!(
-        interp.get_var("result1").await,
-        Some(Value::String(s)) if s == "#N/A"
-    ));
-
-    assert!(matches!(
         interp.get_var("result2").await,
         Some(Value::Float(f)) if (f - 1.5).abs() < 0.001
     ));
+
+    let err = run_script_err(
+        r#"
+        empty = []
+        result1 = vlookup("test", empty, 1, false)
+    "#,
+    )
+    .await;
+    assert!(err.contains("Formula error: #N/A"));
 }
 
 #[tokio::test]

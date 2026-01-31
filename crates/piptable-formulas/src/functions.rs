@@ -36,6 +36,124 @@ fn to_number(value: &Value) -> Option<f64> {
     }
 }
 
+fn to_index(value: &Value) -> Result<usize, ErrorValue> {
+    match value {
+        Value::Int(n) => {
+            if *n < 1 {
+                Err(ErrorValue::Value)
+            } else {
+                Ok(*n as usize)
+            }
+        }
+        Value::Float(f) => {
+            if f.is_nan() || f.is_infinite() || *f < 1.0 || *f > (usize::MAX as f64) {
+                Err(ErrorValue::Value)
+            } else {
+                Ok(*f as usize)
+            }
+        }
+        _ => Err(ErrorValue::Value),
+    }
+}
+
+fn to_offset(value: &Value) -> Result<i64, ErrorValue> {
+    match value {
+        Value::Int(n) => Ok(*n),
+        Value::Float(f) => {
+            if f.is_nan() || f.is_infinite() || *f > (i64::MAX as f64) || *f < (i64::MIN as f64)
+            {
+                Err(ErrorValue::Value)
+            } else {
+                Ok(*f as i64)
+            }
+        }
+        _ => Err(ErrorValue::Value),
+    }
+}
+
+fn values_equal(left: &Value, right: &Value) -> bool {
+    match (left, right) {
+        (Value::Empty, Value::Empty) => true,
+        (Value::Bool(a), Value::Bool(b)) => a == b,
+        (Value::Int(a), Value::Int(b)) => a == b,
+        (Value::Float(a), Value::Float(b)) => (a - b).abs() < f64::EPSILON,
+        (Value::Int(a), Value::Float(b)) | (Value::Float(b), Value::Int(a)) => {
+            (*a as f64 - b).abs() < f64::EPSILON
+        }
+        (Value::String(a), Value::String(b)) => a == b,
+        _ => false,
+    }
+}
+
+fn compare_values(left: &Value, right: &Value) -> Result<i32, ErrorValue> {
+    match (left, right) {
+        (Value::Empty, Value::Empty) => Ok(0),
+        (Value::Empty, _) => Ok(-1),
+        (_, Value::Empty) => Ok(1),
+        (Value::Int(a), Value::Int(b)) => Ok(a.cmp(b) as i32),
+        (Value::Float(a), Value::Float(b)) => Ok(if (a - b).abs() < f64::EPSILON {
+            0
+        } else if a < b {
+            -1
+        } else {
+            1
+        }),
+        (Value::Int(a), Value::Float(b)) => {
+            let a_f = *a as f64;
+            Ok(if (a_f - b).abs() < f64::EPSILON {
+                0
+            } else if a_f < *b {
+                -1
+            } else {
+                1
+            })
+        }
+        (Value::Float(a), Value::Int(b)) => {
+            let b_f = *b as f64;
+            Ok(if (a - b_f).abs() < f64::EPSILON {
+                0
+            } else if *a < b_f {
+                -1
+            } else {
+                1
+            })
+        }
+        (Value::String(a), Value::String(b)) => Ok(a.cmp(b) as i32),
+        _ => Err(ErrorValue::Value),
+    }
+}
+
+fn table_rows(value: &Value) -> Result<Vec<Vec<Value>>, ErrorValue> {
+    let Value::Array(items) = value else {
+        return Err(ErrorValue::Value);
+    };
+    if items.iter().all(|v| matches!(v, Value::Array(_))) {
+        Ok(items
+            .iter()
+            .map(|row| match row {
+                Value::Array(values) => values.clone(),
+                _ => vec![row.clone()],
+            })
+            .collect())
+    } else {
+        Ok(items.iter().map(|v| vec![v.clone()]).collect())
+    }
+}
+
+fn flatten_array(value: &Value) -> Result<Vec<Value>, ErrorValue> {
+    let Value::Array(items) = value else {
+        return Err(ErrorValue::Value);
+    };
+    let mut flat = Vec::new();
+    for item in items {
+        match item {
+            Value::Array(values) => flat.extend(values.clone()),
+            _ => flat.push(item.clone()),
+        }
+    }
+    Ok(flat)
+}
+
 fn coerce_to_text(value: &Value) -> Result<String, ErrorValue> {
     match value {
         Value::Empty => Ok(String::new()),
@@ -475,6 +593,90 @@ mod tests {
         let result = not_fn(&[Value::Float(0.0)]);
         assert_eq!(result, Value::Bool(true));
     }
+
+    #[test]
+    fn test_vlookup_and_hlookup() {
+        let table = Value::Array(vec![
+            Value::Array(vec![Value::String("A".to_string()), Value::Int(10)]),
+            Value::Array(vec![Value::String("B".to_string()), Value::Int(20)]),
+        ]);
+        let result = vlookup(&[
+            Value::String("B".to_string()),
+            table.clone(),
+            Value::Int(2),
+            Value::Bool(false),
+        ]);
+        assert_eq!(result, Value::Int(20));
+
+        let headers = Value::Array(vec![
+            Value::Array(vec![Value::String("Q1".to_string()), Value::String("Q2".to_string())]),
+            Value::Array(vec![Value::Int(100), Value::Int(150)]),
+        ]);
+        let result = hlookup(&[
+            Value::String("Q2".to_string()),
+            headers,
+            Value::Int(2),
+            Value::Bool(false),
+        ]);
+        assert_eq!(result, Value::Int(150));
+    }
+
+    #[test]
+    fn test_index_and_match() {
+        let data = Value::Array(vec![
+            Value::Array(vec![Value::Int(10), Value::Int(20)]),
+            Value::Array(vec![Value::Int(30), Value::Int(40)]),
+        ]);
+        let result = index(&[data.clone(), Value::Int(2), Value::Int(1)]);
+        assert_eq!(result, Value::Int(30));
+
+        let list = Value::Array(vec![
+            Value::String("Apple".to_string()),
+            Value::String("Banana".to_string()),
+            Value::String("Cherry".to_string()),
+        ]);
+        let result = match_fn(&[
+            Value::String("Banana".to_string()),
+            list,
+            Value::Int(0),
+        ]);
+        assert_eq!(result, Value::Int(2));
+    }
+
+    #[test]
+    fn test_xlookup_basic() {
+        let names = Value::Array(vec![
+            Value::String("Apple".to_string()),
+            Value::String("Banana".to_string()),
+        ]);
+        let prices = Value::Array(vec![Value::Int(2), Value::Int(3)]);
+        let result = xlookup(&[
+            Value::String("Banana".to_string()),
+            names,
+            prices,
+            Value::String("N/A".to_string()),
+        ]);
+        assert_eq!(result, Value::Int(3));
+    }
+
+    #[test]
+    fn test_offset_matrix() {
+        let matrix = Value::Array(vec![
+            Value::Array(vec![Value::Int(1), Value::Int(2)]),
+            Value::Array(vec![Value::Int(3), Value::Int(4)]),
+        ]);
+        let result = offset(&[
+            matrix,
+            Value::Int(1),
+            Value::Int(0),
+            Value::Int(1),
+            Value::Int(2),
+        ]);
+        assert_eq!(
+            result,
+            Value::Array(vec![Value::Array(vec![Value::Int(3), Value::Int(4)])])
+        );
+    }
 }
 
 /// Max function - finds maximum value
@@ -644,6 +846,429 @@ pub fn not_fn(values: &[Value]) -> Value {
         Value::Empty => Value::Bool(true),
         _ => Value::Error(ErrorValue::Value),
     }
+}
+
+/// VLOOKUP(lookup_value, table_array, col_index_num, [range_lookup])
+pub fn vlookup(values: &[Value]) -> Value {
+    let lookup_value = values.get(0).unwrap_or(&Value::Empty);
+    let table_value = values.get(1).unwrap_or(&Value::Empty);
+    let col_index = match values.get(2).and_then(|v| to_index(v).ok()) {
+        Some(idx) => idx,
+        None => return Value::Error(ErrorValue::Value),
+    };
+
+    let exact_match = if let Some(range_lookup) = values.get(3) {
+        match range_lookup {
+            Value::Bool(b) => !*b,
+            Value::Int(0) => true,
+            Value::Float(f) if *f == 0.0 => true,
+            _ => false,
+        }
+    } else {
+        false
+    };
+
+    let rows = match table_rows(table_value) {
+        Ok(rows) => rows,
+        Err(err) => return Value::Error(err),
+    };
+
+    if exact_match {
+        for row in &rows {
+            if row.is_empty() {
+                continue;
+            }
+            if values_equal(&row[0], lookup_value) {
+                if col_index == 0 || col_index > row.len() {
+                    return Value::Error(ErrorValue::Ref);
+                }
+                return row[col_index - 1].clone();
+            }
+        }
+    } else {
+        let mut best_match: Option<&Vec<Value>> = None;
+        for row in &rows {
+            if row.is_empty() {
+                continue;
+            }
+            match compare_values(&row[0], lookup_value) {
+                Ok(cmp) if cmp <= 0 => best_match = Some(row),
+                Ok(_) => break,
+                Err(err) => return Value::Error(err),
+            }
+        }
+        if let Some(row) = best_match {
+            if col_index == 0 || col_index > row.len() {
+                return Value::Error(ErrorValue::Ref);
+            }
+            return row[col_index - 1].clone();
+        }
+    }
+
+    Value::Error(ErrorValue::NA)
+}
+
+/// HLOOKUP(lookup_value, table_array, row_index_num, [range_lookup])
+pub fn hlookup(values: &[Value]) -> Value {
+    let lookup_value = values.get(0).unwrap_or(&Value::Empty);
+    let table_value = values.get(1).unwrap_or(&Value::Empty);
+    let row_index = match values.get(2).and_then(|v| to_index(v).ok()) {
+        Some(idx) => idx,
+        None => return Value::Error(ErrorValue::Value),
+    };
+
+    let exact_match = if let Some(range_lookup) = values.get(3) {
+        match range_lookup {
+            Value::Bool(b) => !*b,
+            Value::Int(0) => true,
+            Value::Float(f) if *f == 0.0 => true,
+            _ => false,
+        }
+    } else {
+        false
+    };
+
+    let rows = match table_rows(table_value) {
+        Ok(rows) => rows,
+        Err(err) => return Value::Error(err),
+    };
+
+    if rows.is_empty() {
+        return Value::Error(ErrorValue::NA);
+    }
+    if row_index == 0 || row_index > rows.len() {
+        return Value::Error(ErrorValue::Ref);
+    }
+
+    let first_row = &rows[0];
+
+    if exact_match {
+        for (col_index, cell) in first_row.iter().enumerate() {
+            if values_equal(cell, lookup_value) {
+                let target_row = &rows[row_index - 1];
+                if col_index < target_row.len() {
+                    return target_row[col_index].clone();
+                }
+                return Value::Empty;
+            }
+        }
+    } else {
+        let mut best_match_index: Option<usize> = None;
+        for (col_index, cell) in first_row.iter().enumerate() {
+            match compare_values(cell, lookup_value) {
+                Ok(cmp) if cmp <= 0 => best_match_index = Some(col_index),
+                Ok(_) => break,
+                Err(err) => return Value::Error(err),
+            }
+        }
+
+        if let Some(col_index) = best_match_index {
+            let target_row = &rows[row_index - 1];
+            if col_index < target_row.len() {
+                return target_row[col_index].clone();
+            }
+            return Value::Empty;
+        }
+    }
+
+    Value::Error(ErrorValue::NA)
+}
+
+/// INDEX(array, row_num, [column_num])
+pub fn index(values: &[Value]) -> Value {
+    let array_value = values.get(0).unwrap_or(&Value::Empty);
+    let row_num = match values.get(1).and_then(|v| to_index(v).ok()) {
+        Some(idx) => idx,
+        None => return Value::Error(ErrorValue::Value),
+    };
+
+    let rows = match table_rows(array_value) {
+        Ok(rows) => rows,
+        Err(err) => return Value::Error(err),
+    };
+
+    if row_num == 0 || row_num > rows.len() {
+        return Value::Error(ErrorValue::Ref);
+    }
+
+    let row_data = &rows[row_num - 1];
+
+    if values.len() == 2 {
+        if rows.len() == 1 && row_data.len() == 1 {
+            return row_data[0].clone();
+        }
+        return Value::Array(row_data.clone());
+    }
+
+    let col_num = match values.get(2).and_then(|v| to_index(v).ok()) {
+        Some(idx) => idx,
+        None => return Value::Error(ErrorValue::Value),
+    };
+
+    if col_num == 0 || col_num > row_data.len() {
+        return Value::Error(ErrorValue::Ref);
+    }
+    row_data[col_num - 1].clone()
+}
+
+/// MATCH(lookup_value, lookup_array, [match_type])
+pub fn match_fn(values: &[Value]) -> Value {
+    let lookup_value = values.get(0).unwrap_or(&Value::Empty);
+    let lookup_array = values.get(1).unwrap_or(&Value::Empty);
+
+    let match_type = if let Some(value) = values.get(2) {
+        match value {
+            Value::Int(n) => *n,
+            Value::Float(f) => *f as i64,
+            _ => 1,
+        }
+    } else {
+        1
+    };
+
+    let flat_array = match flatten_array(lookup_array) {
+        Ok(values) => values,
+        Err(err) => return Value::Error(err),
+    };
+
+    match match_type {
+        0 => {
+            for (i, val) in flat_array.iter().enumerate() {
+                if values_equal(val, lookup_value) {
+                    return Value::Int((i + 1) as i64);
+                }
+            }
+            Value::Error(ErrorValue::NA)
+        }
+        1 => {
+            let mut last_valid_index = None;
+            for (i, val) in flat_array.iter().enumerate() {
+                match compare_values(val, lookup_value) {
+                    Ok(cmp) if cmp <= 0 => last_valid_index = Some(i + 1),
+                    Ok(_) => break,
+                    Err(err) => return Value::Error(err),
+                }
+            }
+            match last_valid_index {
+                Some(idx) => Value::Int(idx as i64),
+                None => Value::Error(ErrorValue::NA),
+            }
+        }
+        -1 => {
+            let mut last_valid_index = None;
+            for (i, val) in flat_array.iter().enumerate() {
+                match compare_values(val, lookup_value) {
+                    Ok(cmp) if cmp >= 0 => last_valid_index = Some(i + 1),
+                    Ok(_) => break,
+                    Err(err) => return Value::Error(err),
+                }
+            }
+            match last_valid_index {
+                Some(idx) => Value::Int(idx as i64),
+                None => Value::Error(ErrorValue::NA),
+            }
+        }
+        _ => Value::Error(ErrorValue::Value),
+    }
+}
+
+/// XLOOKUP(lookup_value, lookup_array, return_array, [if_not_found], [match_mode], [search_mode])
+pub fn xlookup(values: &[Value]) -> Value {
+    let lookup_value = values.get(0).unwrap_or(&Value::Empty);
+    let lookup_array = values.get(1).unwrap_or(&Value::Empty);
+    let return_array = values.get(2).unwrap_or(&Value::Empty);
+
+    let flat_lookup = match flatten_array(lookup_array) {
+        Ok(values) => values,
+        Err(err) => return Value::Error(err),
+    };
+    let flat_return = match flatten_array(return_array) {
+        Ok(values) => values,
+        Err(err) => return Value::Error(err),
+    };
+
+    if flat_lookup.len() != flat_return.len() {
+        return Value::Error(ErrorValue::Value);
+    }
+
+    let if_not_found = values
+        .get(3)
+        .cloned()
+        .unwrap_or(Value::Error(ErrorValue::NA));
+
+    let match_mode = if let Some(value) = values.get(4) {
+        match value {
+            Value::Int(n) => *n,
+            Value::Float(f) => *f as i64,
+            _ => 0,
+        }
+    } else {
+        0
+    };
+
+    let search_mode = if let Some(value) = values.get(5) {
+        match value {
+            Value::Int(n) => *n,
+            Value::Float(f) => *f as i64,
+            _ => 1,
+        }
+    } else {
+        1
+    };
+
+    let indices: Vec<usize> = match search_mode {
+        -1 | -2 => (0..flat_lookup.len()).rev().collect(),
+        _ => (0..flat_lookup.len()).collect(),
+    };
+
+    match match_mode {
+        0 => {
+            for i in indices {
+                if values_equal(&flat_lookup[i], lookup_value) {
+                    return flat_return[i].clone();
+                }
+            }
+        }
+        -1 => {
+            let mut best_match: Option<usize> = None;
+            let mut exact_match: Option<usize> = None;
+
+            for (i, val) in flat_lookup.iter().enumerate() {
+                if values_equal(val, lookup_value) {
+                    match search_mode {
+                        -1 | -2 => exact_match = Some(i),
+                        _ => return flat_return[i].clone(),
+                    }
+                } else {
+                    match compare_values(val, lookup_value) {
+                        Ok(cmp) if cmp < 0 => best_match = Some(i),
+                        Ok(_) => {}
+                        Err(err) => return Value::Error(err),
+                    }
+                }
+            }
+
+            if let Some(i) = exact_match {
+                return flat_return[i].clone();
+            }
+            if let Some(i) = best_match {
+                return flat_return[i].clone();
+            }
+        }
+        1 => {
+            let mut best_match: Option<usize> = None;
+            let mut exact_match: Option<usize> = None;
+
+            for (i, val) in flat_lookup.iter().enumerate() {
+                if values_equal(val, lookup_value) {
+                    match search_mode {
+                        -1 | -2 => exact_match = Some(i),
+                        _ => return flat_return[i].clone(),
+                    }
+                } else {
+                    match compare_values(val, lookup_value) {
+                        Ok(cmp) if cmp > 0 => {
+                            if best_match.is_none() {
+                                best_match = Some(i);
+                            }
+                        }
+                        Ok(_) => {}
+                        Err(err) => return Value::Error(err),
+                    }
+                }
+            }
+
+            if let Some(i) = exact_match {
+                return flat_return[i].clone();
+            }
+            if let Some(i) = best_match {
+                return flat_return[i].clone();
+            }
+        }
+        2 => return Value::Error(ErrorValue::Value),
+        _ => return Value::Error(ErrorValue::Value),
+    }
+
+    if_not_found
+}
+
+/// OFFSET(reference, rows, cols, [height], [width])
+pub fn offset(values: &[Value]) -> Value {
+    let reference = values.get(0).unwrap_or(&Value::Empty);
+    let rows_offset = match values.get(1).and_then(|v| to_offset(v).ok()) {
+        Some(v) => v,
+        None => return Value::Error(ErrorValue::Value),
+    };
+    let cols_offset = match values.get(2).and_then(|v| to_offset(v).ok()) {
+        Some(v) => v,
+        None => return Value::Error(ErrorValue::Value),
+    };
+
+    let matrix = match reference {
+        Value::Array(_) => match table_rows(reference) {
+            Ok(rows) => rows,
+            Err(err) => return Value::Error(err),
+        },
+        _ => vec![vec![reference.clone()]],
+    };
+
+    let ref_rows = matrix.len() as i64;
+    let ref_cols = matrix
+        .first()
+        .map(|row| row.len() as i64)
+        .unwrap_or(0);
+
+    let height = if let Some(value) = values.get(3) {
+        match to_index(value) {
+            Ok(v) => v as i64,
+            Err(err) => return Value::Error(err),
+        }
+    } else {
+        1
+    };
+
+    let width = if let Some(value) = values.get(4) {
+        match to_index(value) {
+            Ok(v) => v as i64,
+            Err(err) => return Value::Error(err),
+        }
+    } else {
+        1
+    };
+
+    if height < 1 || width < 1 {
+        return Value::Error(ErrorValue::Value);
+    }
+
+    let start_row = rows_offset;
+    let start_col = cols_offset;
+    let end_row = start_row + height - 1;
+    let end_col = start_col + width - 1;
+
+    if start_row < 0
+        || start_col < 0
+        || end_row >= ref_rows
+        || end_col >= ref_cols
+        || ref_rows == 0
+        || ref_cols == 0
+    {
+        return Value::Error(ErrorValue::Ref);
+    }
+
+    if height == 1 && width == 1 {
+        return matrix[start_row as usize][start_col as usize].clone();
+    }
+
+    let mut out = Vec::new();
+    for r in start_row..=end_row {
+        let mut row = Vec::new();
+        for c in start_col..=end_col {
+            row.push(matrix[r as usize][c as usize].clone());
+        }
+        out.push(Value::Array(row));
+    }
+
+    Value::Array(out)
 }
 
 pub fn not_implemented(_: &[Value]) -> Value {
