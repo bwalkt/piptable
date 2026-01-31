@@ -5,8 +5,7 @@
   "files": [
     "piptable_wasm_bg.wasm",
     "piptable_wasm.js",
-    "piptable_wasm.d.ts",
-    "piptable_wasm_bg.wasm.d.ts"
+    "piptable_wasm.d.ts"
   ],
   "main": "piptable_wasm.js",
   "types": "piptable_wasm.d.ts",

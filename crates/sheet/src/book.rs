@@ -476,6 +476,7 @@ impl FileLoadOptions {
 /// Load a sheet by auto-detecting format from file extension
 fn load_sheet_by_extension(path: &Path, options: &FileLoadOptions) -> Result<Sheet> {
     use crate::csv::CsvOptions;
+    #[cfg(not(target_arch = "wasm32"))]
     use crate::xlsx::XlsxReadOptions;
 
     let ext = path
@@ -487,15 +488,24 @@ fn load_sheet_by_extension(path: &Path, options: &FileLoadOptions) -> Result<She
     let mut sheet = match ext.as_str() {
         "csv" => Sheet::from_csv(path)?,
         "tsv" => Sheet::from_csv_with_options(path, CsvOptions::tsv())?,
+        #[cfg(not(target_arch = "wasm32"))]
         "xlsx" => Sheet::from_xlsx_with_options(path, XlsxReadOptions::default().with_headers(options.has_headers))?,
+        #[cfg(not(target_arch = "wasm32"))]
         "xls" => Sheet::from_xls_with_options(path, XlsxReadOptions::default().with_headers(options.has_headers))?,
         "json" => Sheet::from_json(path)?,
         "jsonl" | "ndjson" => Sheet::from_jsonl(path)?,
         "toon" => Sheet::from_toon(path)?,
+        #[cfg(not(target_arch = "wasm32"))]
         "parquet" => Sheet::from_parquet(path)?,
+        #[cfg(target_arch = "wasm32")]
+        "xlsx" | "xls" | "parquet" => {
+            return Err(SheetError::Parse(
+                "Format not supported in WASM builds".to_string(),
+            ))
+        }
         _ => {
             return Err(SheetError::Parse(format!(
-                "Unsupported file format: '{}'. Supported: csv, tsv, xlsx, xls, json, jsonl, toon, parquet",
+                "Unsupported file format: '{}'. Supported: csv, tsv, json, jsonl, toon",
                 ext
             )))
         }

@@ -9,13 +9,15 @@ authors.workspace = true
 
 [dependencies]
 csv = { workspace = true }
-calamine = { workspace = true }
-rust_xlsxwriter = { workspace = true }
 thiserror = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 indexmap = { workspace = true }
 arrow = { workspace = true }
+
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+calamine = { workspace = true }
+rust_xlsxwriter = { workspace = true }
 parquet = { workspace = true }
 scraper = { workspace = true }
 

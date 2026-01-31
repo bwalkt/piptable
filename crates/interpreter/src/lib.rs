@@ -26,13 +26,21 @@ use piptable_core::{
     BinaryOp, Expr, LValue, Literal, Param, ParamMode, PipError, PipResult, Program, Statement,
     UnaryOp, Value,
 };
-use piptable_http::HttpClient;
 use piptable_sheet::{CellValue, Sheet};
-use piptable_sql::SqlEngine;
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 use tokio::sync::Mutex;
 use tokio::sync::RwLock;
+
+#[cfg(not(target_arch = "wasm32"))]
+use piptable_http::HttpClient;
+#[cfg(not(target_arch = "wasm32"))]
+use piptable_sql::SqlEngine;
+
+#[cfg(target_arch = "wasm32")]
+mod wasm_support;
+#[cfg(target_arch = "wasm32")]
+use wasm_support::{HttpClient, SqlEngine};
 
 /// Interpreter for piptable scripts.
 pub struct Interpreter {
@@ -1149,6 +1157,7 @@ impl Interpreter {
 
                 // TODO: Implement proper conversion from Value to FetchOptions
                 // For now, options are not fully supported
+                #[cfg(not(target_arch = "wasm32"))]
                 let fetch_opts = match options {
                     Some(o) => {
                         // Evaluate to catch any errors, but warn that options aren't fully implemented
@@ -1157,6 +1166,12 @@ impl Interpreter {
                         Some(piptable_http::FetchOptions::default())
                     }
                     None => None,
+                };
+
+                #[cfg(target_arch = "wasm32")]
+                let fetch_opts = {
+                    let _ = options;
+                    None
                 };
 
                 self.http.fetch(url_str, fetch_opts).await

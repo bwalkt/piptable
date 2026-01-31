@@ -1,6 +1,6 @@
 import { signal } from '@preact/signals';
 import DOMPurify from 'dompurify';
-import { parseCode, validateCode, getExamples, initializeWasm } from './wasm';
+import { initializeWasm, executeCode } from './wasm';
 import { loadSharedState, type ShareableState } from '../lib/share';
 
 // Example metadata
@@ -262,30 +262,34 @@ export async function runCode() {
   try {
     // Initialize WASM if needed
     await initializeWasm();
-    
-    // Parse the code with real parser
-    const parseResult = await parseCode(code.value);
-    
+
     let result = '';
-    
-    if (parseResult.success) {
-      result += '<div class="text-green-600 dark:text-green-400 mb-2">✓ Code parsed successfully!</div>\n';
-      
-      // Show AST in collapsible section
-      result += '<details class="mt-4">';
-      result += '<summary class="cursor-pointer text-sm font-medium">View Abstract Syntax Tree</summary>';
-      result += '<pre class="mt-2 p-3 bg-gray-100 dark:bg-gray-800 rounded-md overflow-x-auto text-xs">';
-      result += escapeHtml(parseResult.ast || 'No AST available');
-      result += '</pre>';
-      result += '</details>';
-      
-      result += '<div class="mt-4 text-gray-500 dark:text-gray-400 text-sm">';
-      result += 'Note: Full execution coming soon. Currently showing parsing validation only.';
-      result += '</div>';
+    const execResult = await executeCode(code.value);
+
+    if (execResult.success) {
+      result += '<div class="text-green-600 dark:text-green-400 mb-2">✓ Execution succeeded</div>\n';
+      if (execResult.output && execResult.output.length > 0) {
+        const outputLines = execResult.output
+          .map((line: string) => escapeHtml(line))
+          .join('\n');
+        result += '<div class="mt-2 text-sm font-medium">Output</div>';
+        result += '<pre class="mt-1 p-3 bg-gray-100 dark:bg-gray-800 rounded-md overflow-x-auto text-xs">';
+        result += outputLines;
+        result += '</pre>';
+      } else {
+        result += '<div class="mt-2 text-gray-500 dark:text-gray-400 text-sm">No output.</div>';
+      }
+
+      if (execResult.result !== undefined && execResult.result !== null) {
+        result += '<div class="mt-3 text-sm font-medium">Result</div>';
+        result += '<pre class="mt-1 p-3 bg-gray-100 dark:bg-gray-800 rounded-md overflow-x-auto text-xs">';
+        result += escapeHtml(JSON.stringify(execResult.result, null, 2));
+        result += '</pre>';
+      }
     } else {
-      result += '<div class="text-red-600 dark:text-red-400 mb-2">❌ Parse error:</div>\n';
+      result += '<div class="text-red-600 dark:text-red-400 mb-2">❌ Execution error:</div>\n';
       result += '<pre class="mt-2 p-3 bg-red-50 dark:bg-red-900/20 rounded-md overflow-x-auto">';
-      result += escapeHtml(parseResult.error || 'Unknown parse error');
+      result += escapeHtml(execResult.error || 'Unknown error');
       result += '</pre>';
     }
     
