@@ -87,6 +87,14 @@ dim total = sum(1, 2, 3)
 dim label = if(1, "yes", "no")
 dim joined = concat("a", "b", "c")
 
+' Lookup formulas
+dim products = [
+  ["Apple", 1.50, 100],
+  ["Banana", 0.75, 200],
+  ["Cherry", 2.00, 150]
+]
+dim price = vlookup("Banana", products, 2, false)
+
 ' Sheet range helpers
 dim sales = import "sales.csv" into sheet
 dim range_total = sum(sales, "A1:A10")
@@ -145,6 +153,15 @@ dim average = avg(10, 20, 30)
 dim min_val = min(5, 3, 9)
 dim max_val = max(5, 3, 9)
 dim label = if(1, "yes", "no")
+
+' Lookup + offset
+dim products = [
+  ["Apple", 1.50, 100],
+  ["Banana", 0.75, 200],
+  ["Cherry", 2.00, 150]
+]
+dim banana_qty = index(products, match("Banana", products, 0), 3)
+dim block = offset(products, 1, 0, 1, 2)
 
 ' Range formulas
 dim sheet = import "sales.csv" into sheet
