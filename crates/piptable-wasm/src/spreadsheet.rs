@@ -322,8 +322,10 @@ impl ValueResolver for WasmEvalContext {
         for r in 0..rows {
             let mut row = Vec::with_capacity(cols);
             for c in 0..cols {
-                let addr =
-                    CellAddress::new(normalized.start.row + r as u32, normalized.start.col + c as u32);
+                let addr = CellAddress::new(
+                    normalized.start.row + r as u32,
+                    normalized.start.col + c as u32,
+                );
                 row.push(self.get_cell(&addr));
             }
             values.push(Value::Array(row));

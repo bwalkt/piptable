@@ -60,8 +60,7 @@ fn to_offset(value: &Value) -> Result<i64, ErrorValue> {
     match value {
         Value::Int(n) => Ok(*n),
         Value::Float(f) => {
-            if f.is_nan() || f.is_infinite() || *f > (i64::MAX as f64) || *f < (i64::MIN as f64)
-            {
+            if f.is_nan() || f.is_infinite() || *f > (i64::MAX as f64) || *f < (i64::MIN as f64) {
                 Err(ErrorValue::Value)
             } else {
                 Ok(*f as i64)
@@ -609,7 +608,10 @@ mod tests {
         assert_eq!(result, Value::Int(20));
 
         let headers = Value::Array(vec![
-            Value::Array(vec![Value::String("Q1".to_string()), Value::String("Q2".to_string())]),
+            Value::Array(vec![
+                Value::String("Q1".to_string()),
+                Value::String("Q2".to_string()),
+            ]),
             Value::Array(vec![Value::Int(100), Value::Int(150)]),
         ]);
         let result = hlookup(&[
@@ -635,11 +637,7 @@ mod tests {
             Value::String("Banana".to_string()),
             Value::String("Cherry".to_string()),
         ]);
-        let result = match_fn(&[
-            Value::String("Banana".to_string()),
-            list,
-            Value::Int(0),
-        ]);
+        let result = match_fn(&[Value::String("Banana".to_string()), list, Value::Int(0)]);
         assert_eq!(result, Value::Int(2));
     }
 
@@ -1213,10 +1211,7 @@ pub fn offset(values: &[Value]) -> Value {
     };
 
     let ref_rows = matrix.len() as i64;
-    let ref_cols = matrix
-        .first()
-        .map(|row| row.len() as i64)
-        .unwrap_or(0);
+    let ref_cols = matrix.first().map(|row| row.len() as i64).unwrap_or(0);
 
     let height = if let Some(value) = values.get(3) {
         match to_index(value) {
