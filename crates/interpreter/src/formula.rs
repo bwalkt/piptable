@@ -8,6 +8,7 @@ use std::sync::OnceLock;
 use std::{collections::HashMap, fmt::Display};
 
 static FORMULA_REGISTRY: OnceLock<FunctionRegistry> = OnceLock::new();
+const MAX_FORMULA_CACHE_ENTRIES: usize = 1024;
 
 fn registry() -> &'static FunctionRegistry {
     FORMULA_REGISTRY.get_or_init(FunctionRegistry::default)
@@ -87,6 +88,9 @@ impl CachedFormulaEngine {
         line: usize,
         context: &str,
     ) -> PipResult<CompiledFormula> {
+        if self.cache.len() >= MAX_FORMULA_CACHE_ENTRIES {
+            self.cache.clear();
+        }
         if let Some(compiled) = self.cache.get(formula) {
             return Ok(compiled.clone());
         }
