@@ -402,7 +402,7 @@ impl FunctionRegistry {
             "XLOOKUP",
             FunctionDefinition::range(
                 3,
-                6,
+                7,
                 vec![ParamType::Any, ParamType::Range, ParamType::Range],
                 ReturnType::Any,
                 functions::xlookup,

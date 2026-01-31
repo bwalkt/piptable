@@ -377,6 +377,98 @@ async fn test_xlookup_search_mode_with_duplicates() {
 }
 
 #[tokio::test]
+async fn test_xlookup_wildcard_matching() {
+    let (interp, _) = run_script(
+        r#"
+        names = ["Apple", "Application", "Cat", "Bat", "Data*"]
+        prices = [1, 2, 3, 4, 5]
+        result1 = xlookup("App*", names, prices, "N/A", 2)
+        result2 = xlookup("?at", names, prices, "N/A", 2)
+        result3 = xlookup("Data\\*", names, prices, "N/A", 2)
+        result4 = xlookup("app*", names, prices, "N/A", 2, 1, true)
+    "#,
+    )
+    .await;
+
+    assert!(matches!(
+        interp.get_var("result1").await,
+        Some(Value::Int(1))
+    ));
+    assert!(matches!(
+        interp.get_var("result2").await,
+        Some(Value::Int(3))
+    ));
+    assert!(matches!(
+        interp.get_var("result3").await,
+        Some(Value::Int(5))
+    ));
+    assert!(matches!(
+        interp.get_var("result4").await,
+        Some(Value::Int(1))
+    ));
+}
+
+#[tokio::test]
+async fn test_xlookup_binary_search_modes() {
+    let (interp, _) = run_script(
+        r#"
+        values_asc = [1, 3, 5, 7, 9]
+        results_asc = ["A", "B", "C", "D", "E"]
+        exact_asc = xlookup(5, values_asc, results_asc, "N/A", 0, 2)
+        next_small_asc = xlookup(6, values_asc, results_asc, "N/A", -1, 2)
+        next_large_asc = xlookup(6, values_asc, results_asc, "N/A", 1, 2)
+
+        values_desc = [9, 7, 5, 3, 1]
+        results_desc = ["E", "D", "C", "B", "A"]
+        exact_desc = xlookup(5, values_desc, results_desc, "N/A", 0, -2)
+        next_small_desc = xlookup(6, values_desc, results_desc, "N/A", -1, -2)
+        next_large_desc = xlookup(6, values_desc, results_desc, "N/A", 1, -2)
+    "#,
+    )
+    .await;
+
+    assert!(matches!(
+        interp.get_var("exact_asc").await,
+        Some(Value::String(s)) if s == "C"
+    ));
+    assert!(matches!(
+        interp.get_var("next_small_asc").await,
+        Some(Value::String(s)) if s == "C"
+    ));
+    assert!(matches!(
+        interp.get_var("next_large_asc").await,
+        Some(Value::String(s)) if s == "D"
+    ));
+
+    assert!(matches!(
+        interp.get_var("exact_desc").await,
+        Some(Value::String(s)) if s == "C"
+    ));
+    assert!(matches!(
+        interp.get_var("next_small_desc").await,
+        Some(Value::String(s)) if s == "C"
+    ));
+    assert!(matches!(
+        interp.get_var("next_large_desc").await,
+        Some(Value::String(s)) if s == "D"
+    ));
+}
+
+#[tokio::test]
+async fn test_xlookup_binary_search_requires_sorted() {
+    let err = run_script_err(
+        r#"
+        values = [1, 3, 2]
+        results = ["A", "B", "C"]
+        result = xlookup(2, values, results, "N/A", 0, 2)
+    "#,
+    )
+    .await;
+
+    assert!(err.contains("Formula error: #VALUE"));
+}
+
+#[tokio::test]
 async fn test_vlookup_approximate_match() {
     let (interp, _) = run_script(
         r"
