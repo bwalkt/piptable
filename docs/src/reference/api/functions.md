@@ -87,7 +87,7 @@ Note: `len()` is formula-backed. For objects, use `len(keys(obj))` to count fiel
 | `hlookup(lookup_value, table, row_index, [exact])` | Horizontal lookup | `hlookup("Q1", data, 2, false)` | ✅ Implemented |
 | `index(array, row_num, [col_num])` | Return value at position | `index(data, 2, 3)` | ✅ Implemented |
 | `match(lookup_value, array, [match_type])` | Find position of value | `match("Apple", fruits, 0)` | ✅ Implemented |
-| `xlookup(lookup, array, return_array, [if_not_found], [match_mode], [search_mode])` | Extended lookup | `xlookup("Apple", names, prices)` | ✅ Implemented |
+| `xlookup(lookup, array, return_array, [if_not_found], [match_mode], [search_mode], [case_insensitive])` | Extended lookup | `xlookup("Apple", names, prices)` | ✅ Implemented |
 | `offset(range, rows, cols, [height], [width])` | Offset subrange | `offset(table, 1, 0, 1, 2)` | ✅ Implemented |
 
 #### Excel/PipTable Parity Matrix
@@ -116,9 +116,9 @@ Note: `len()` is formula-backed. For objects, use `len(keys(obj))` to count fiel
 | Basic lookup | ✅ | ✅ | Core functionality identical |
 | if_not_found parameter | ✅ | ✅ | Custom default value |
 | Match modes (0-2) | ✅ | ✅ | Exact, next smaller, next larger |
-| Wildcard match mode | ✅ | ❌ | Not yet implemented |
-| Search modes | ✅ | Partial | First-to-last, last-to-first |
-| Binary search modes | ✅ | ❌ | Not yet implemented |
+| Wildcard match mode | ✅ | ✅ | `*` and `?`, supports escapes |
+| Search modes | ✅ | ✅ | First-to-last, last-to-first |
+| Binary search modes | ✅ | ✅ | Asc/desc (`search_mode = ±2`) |
 
 #### Type Coercion Rules
 
@@ -126,7 +126,7 @@ PipTable follows these rules for type comparisons in lookups:
 
 1. **Numeric equality**: `1` (int) equals `1.0` (float)
 2. **String to number**: Not coerced yet
-3. **Case sensitivity**: String matches are case-sensitive
+3. **Case sensitivity**: String matches are case-sensitive (XLOOKUP wildcard can be case-insensitive via the 7th argument)
 4. **Null handling**: Null values never match anything except explicit null checks
 
 #### Common Examples
@@ -166,6 +166,14 @@ dim price = index(prices, position)  # Returns 0.75
 
 # XLOOKUP (modern replacement for VLOOKUP)
 dim result = xlookup("Cherry", fruits, prices, "Not found", 0, 1)  # Returns 2.00
+dim last_match = xlookup("Apple", fruits, prices, "Not found", 0, -1)  # Last match
+dim wildcard = xlookup("App*", fruits, prices, "Not found", 2)  # Wildcard match
+dim ci_wildcard = xlookup("app*", fruits, prices, "Not found", 2, 1, true)  # Case-insensitive
+dim bin_next = xlookup(75, sorted_data, ["Low", "Medium", "High"], "Not found", 1, 2)
+
+# Match/search modes
+# match_mode: 0 exact, 1 next larger, -1 next smaller, 2 wildcard
+# search_mode: 1 first-to-last, -1 last-to-first, 2 binary (asc), -2 binary (desc)
 
 # OFFSET (subrange from a 2D array)
 dim table = [

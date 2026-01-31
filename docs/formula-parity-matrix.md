@@ -35,7 +35,7 @@ This document tracks formula function parity between Piptable's implementation a
 | | HLOOKUP | ✅ | ✅ | Horizontal lookup |
 | | INDEX | ✅ | ✅ | Array indexing |
 | | MATCH | ✅ | ✅ | Position matching |
-| | XLOOKUP | ✅ | ✅ | Modern lookup |
+| | XLOOKUP | ✅ | ✅ | Modern lookup (wildcard/binary search) |
 | | OFFSET | ✅ | ✅ | Dynamic range reference |
 
 ### 🔄 Planned for Next Phase
