@@ -275,7 +275,10 @@ fn validate_statement(stmt: &Statement) -> Result<(), String> {
             line
         )),
         Statement::Dim { value, .. } => validate_expr(value),
-        Statement::Assignment { value, .. } => validate_expr(value),
+        Statement::Assignment { target, value, .. } => {
+            validate_lvalue(target)?;
+            validate_expr(value)
+        }
         Statement::If {
             condition,
             then_body,
@@ -429,6 +432,17 @@ fn validate_expr(expr: &Expr) -> Result<(), String> {
         }
         Expr::Lambda { body, .. } => validate_expr(body),
         Expr::Literal(_) | Expr::Variable(_) => Ok(()),
+    }
+}
+
+fn validate_lvalue(target: &piptable_core::LValue) -> Result<(), String> {
+    match target {
+        piptable_core::LValue::Variable(_) => Ok(()),
+        piptable_core::LValue::Field { object, .. } => validate_lvalue(object),
+        piptable_core::LValue::Index { array, index } => {
+            validate_lvalue(array)?;
+            validate_expr(index)
+        }
     }
 }
 
