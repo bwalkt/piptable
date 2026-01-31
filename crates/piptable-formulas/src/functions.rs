@@ -1223,7 +1223,7 @@ pub fn offset(values: &[Value]) -> Value {
             Err(err) => return Value::Error(err),
         }
     } else {
-        1
+        ref_rows
     };
 
     let width = if let Some(value) = values.get(4) {
@@ -1232,7 +1232,7 @@ pub fn offset(values: &[Value]) -> Value {
             Err(err) => return Value::Error(err),
         }
     } else {
-        1
+        ref_cols
     };
 
     let start_row = rows_offset;
