@@ -168,8 +168,14 @@ async fn test_paramarray_collects_args() {
     "#,
     )
     .await;
-    assert!(matches!(interp.get_var("a").await, Some(Value::Int(6))));
-    assert!(matches!(interp.get_var("b").await, Some(Value::Int(0))));
+    assert!(matches!(
+        interp.get_var("a").await,
+        Some(Value::Float(f)) if (f - 6.0).abs() < 1e-9
+    ));
+    assert!(matches!(
+        interp.get_var("b").await,
+        Some(Value::Float(f)) if f.abs() < 1e-9
+    ));
 }
 
 /// Verifies that a parameterless function returns its declared value when invoked.

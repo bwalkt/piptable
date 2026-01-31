@@ -135,8 +135,13 @@ pub fn concat(values: &[Value]) -> Value {
     }
 }
 
+/// Returns element count for arrays, or character count for text values.
+/// Arrays are not coerced to their first element; instead, their length is returned.
 pub fn len(values: &[Value]) -> Value {
     let value = values.first().unwrap_or(&Value::Empty);
+    if let Value::Array(items) = value {
+        return Value::Int(items.len() as i64);
+    }
     match coerce_to_text(value) {
         Ok(text) => Value::Int(text.chars().count() as i64),
         Err(err) => Value::Error(err),
@@ -348,12 +353,12 @@ mod tests {
     }
 
     #[test]
-    fn test_len_error_and_array_coercion() {
+    fn test_len_error_and_array_length() {
         let result = len(&[Value::Error(ErrorValue::Num)]);
         assert_eq!(result, Value::Error(ErrorValue::Num));
 
         let result = len(&[Value::Array(vec![Value::String("abc".to_string())])]);
-        assert_eq!(result, Value::Int(3));
+        assert_eq!(result, Value::Int(1));
 
         let result = len(&[Value::Array(vec![])]);
         assert_eq!(result, Value::Int(0));

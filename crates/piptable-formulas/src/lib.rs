@@ -237,6 +237,15 @@ impl FunctionRegistry {
             ),
         );
         self.register(
+            "AVG",
+            FunctionDefinition::variadic(
+                1,
+                ParamType::Number,
+                ReturnType::Number,
+                functions::average,
+            ),
+        );
+        self.register(
             "COUNT",
             FunctionDefinition::variadic(
                 1,

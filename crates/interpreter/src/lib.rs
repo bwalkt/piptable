@@ -1609,9 +1609,20 @@ impl Interpreter {
 
     /// Call a function (built-in or user-defined).
     async fn call_function(&mut self, name: &str, args: &[Expr], line: usize) -> PipResult<Value> {
-        // Prefer formula functions when caller uses Excel-style casing (e.g., SUM, CONCAT).
-        if formula::is_formula_function(name) && name.chars().any(|c| c.is_ascii_uppercase()) {
+        if formula::is_dsl_formula_function(name) {
             let arg_vals = self.eval_args(args, line).await?;
+            if arg_vals.len() == 2 {
+                if let (Value::Sheet(sheet), Value::String(range)) = (&arg_vals[0], &arg_vals[1]) {
+                    if let Some(formula_name) = formula::range_function_name(name) {
+                        return formula::eval_sheet_range_function(
+                            sheet,
+                            formula_name,
+                            range,
+                            line,
+                        );
+                    }
+                }
+            }
             return formula::call_formula_function(name, &arg_vals, line);
         }
 
@@ -2182,11 +2193,6 @@ impl Interpreter {
                             let arg_vals = self.eval_args(args, line).await?;
                             return runtime.call(name, arg_vals).await;
                         }
-                    }
-
-                    if formula::is_formula_function(name) {
-                        let arg_vals = self.eval_args(args, line).await?;
-                        return formula::call_formula_function(name, &arg_vals, line);
                     }
 
                     Err(PipError::runtime(line, format!("Unknown function: {name}")))
