@@ -62,6 +62,7 @@ pub enum SheetError {
     #[error("IO error: {0}")]
     Io(#[from] std::io::Error),
 
+    #[cfg(not(target_arch = "wasm32"))]
     #[error("Parquet error: {0}")]
     Parquet(#[from] parquet::errors::ParquetError),
 

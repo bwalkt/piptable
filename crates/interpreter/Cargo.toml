@@ -14,14 +14,10 @@ python = ["pyo3"]
 [dependencies]
 piptable-core = { workspace = true }
 piptable-parser = { workspace = true }
-piptable-sql = { workspace = true }
-piptable-http = { workspace = true }
 piptable-sheet = { workspace = true }
 piptable-formulas = { workspace = true }
 piptable-primitives = { workspace = true }
-piptable-pdf = { workspace = true }
 indexmap = { workspace = true }
-tokio = { workspace = true }
 async-trait = { workspace = true }
 thiserror = { workspace = true }
 tracing = { workspace = true }
@@ -37,6 +33,15 @@ tempfile = { workspace = true }
 wiremock = { workspace = true }
 tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
 rust_xlsxwriter = { workspace = true }
+
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+piptable-sql = { workspace = true }
+piptable-http = { workspace = true }
+piptable-pdf = { workspace = true }
+tokio = { workspace = true }
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+tokio = { version = "1", default-features = false, features = ["rt", "sync", "macros"] }
 
 [lints]
 workspace = true

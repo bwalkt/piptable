@@ -1,5 +1,7 @@
-use piptable_core::PipError;
+use piptable_core::{Expr, PipError, Program, Statement, Value};
+use piptable_interpreter::Interpreter;
 use piptable_parser::PipParser;
+use piptable_sheet::{CellValue, Sheet};
 use serde::{Deserialize, Serialize};
 use wasm_bindgen::prelude::*;
 
@@ -33,6 +35,14 @@ pub struct ValidationError {
     pub line: usize,
     pub column: usize,
     pub message: String,
+}
+
+#[derive(Serialize)]
+pub struct ExecResult {
+    pub success: bool,
+    pub output: Vec<String>,
+    pub result: Option<serde_json::Value>,
+    pub error: Option<String>,
 }
 
 #[wasm_bindgen]
@@ -201,4 +211,279 @@ Eve,32,Seattle,Marketing"#,
     });
 
     serde_wasm_bindgen::to_value(&data).map_err(|e| JsValue::from_str(&e.to_string()))
+}
+
+fn cell_to_json(cell: &CellValue) -> serde_json::Value {
+    match cell {
+        CellValue::Null => serde_json::Value::Null,
+        CellValue::Bool(b) => serde_json::Value::Bool(*b),
+        CellValue::Int(i) => serde_json::Value::Number((*i).into()),
+        CellValue::Float(f) => serde_json::Number::from_f64(*f)
+            .map(serde_json::Value::Number)
+            .unwrap_or(serde_json::Value::Null),
+        CellValue::String(s) => serde_json::Value::String(s.clone()),
+    }
+}
+
+fn sheet_to_json(sheet: &Sheet) -> serde_json::Value {
+    let rows: Vec<serde_json::Value> = sheet
+        .data()
+        .iter()
+        .map(|row: &Vec<CellValue>| {
+            let cells: Vec<serde_json::Value> = row.iter().map(cell_to_json).collect();
+            serde_json::Value::Array(cells)
+        })
+        .collect();
+    serde_json::Value::Array(rows)
+}
+
+fn value_to_json(value: &Value) -> serde_json::Value {
+    match value {
+        Value::Null => serde_json::Value::Null,
+        Value::Bool(b) => serde_json::Value::Bool(*b),
+        Value::Int(i) => serde_json::Value::Number((*i).into()),
+        Value::Float(f) => serde_json::Number::from_f64(*f)
+            .map(serde_json::Value::Number)
+            .unwrap_or(serde_json::Value::Null),
+        Value::String(s) => serde_json::Value::String(s.clone()),
+        Value::Array(items) => {
+            let values = items.iter().map(value_to_json).collect();
+            serde_json::Value::Array(values)
+        }
+        Value::Object(map) => {
+            let mut out = serde_json::Map::new();
+            for (k, v) in map {
+                out.insert(k.clone(), value_to_json(v));
+            }
+            serde_json::Value::Object(out)
+        }
+        Value::Sheet(sheet) => sheet_to_json(sheet),
+        Value::Table(_) => serde_json::Value::String("<table>".to_string()),
+        Value::Function { name, .. } => {
+            serde_json::Value::String(format!("<function {}>", name))
+        }
+        Value::Lambda { .. } => serde_json::Value::String("<lambda>".to_string()),
+    }
+}
+
+fn validate_statement(stmt: &Statement) -> Result<(), String> {
+    match stmt {
+        Statement::Import { line, .. } => Err(format!(
+            "Line {}: import is not supported in the playground",
+            line
+        )),
+        Statement::Export { line, .. } => Err(format!(
+            "Line {}: export is not supported in the playground",
+            line
+        )),
+        Statement::Dim { value, .. } => validate_expr(value),
+        Statement::Assignment { value, .. } => validate_expr(value),
+        Statement::If {
+            condition,
+            then_body,
+            elseif_clauses,
+            else_body,
+            ..
+        } => {
+            validate_expr(condition)?;
+            for stmt in then_body {
+                validate_statement(stmt)?;
+            }
+            for clause in elseif_clauses {
+                validate_expr(&clause.condition)?;
+                for stmt in &clause.body {
+                    validate_statement(stmt)?;
+                }
+            }
+            if let Some(body) = else_body {
+                for stmt in body {
+                    validate_statement(stmt)?;
+                }
+            }
+            Ok(())
+        }
+        Statement::ForEach { iterable, body, .. } => {
+            validate_expr(iterable)?;
+            for stmt in body {
+                validate_statement(stmt)?;
+            }
+            Ok(())
+        }
+        Statement::For {
+            start, end, step, body, ..
+        } => {
+            validate_expr(start)?;
+            validate_expr(end)?;
+            if let Some(step) = step {
+                validate_expr(step)?;
+            }
+            for stmt in body {
+                validate_statement(stmt)?;
+            }
+            Ok(())
+        }
+        Statement::While { condition, body, .. } => {
+            validate_expr(condition)?;
+            for stmt in body {
+                validate_statement(stmt)?;
+            }
+            Ok(())
+        }
+        Statement::Function { body, .. } => {
+            for stmt in body {
+                validate_statement(stmt)?;
+            }
+            Ok(())
+        }
+        Statement::Return { value, .. } => {
+            if let Some(value) = value {
+                validate_expr(value)?;
+            }
+            Ok(())
+        }
+        Statement::Call { args, .. } => {
+            for arg in args {
+                validate_expr(arg)?;
+            }
+            Ok(())
+        }
+        Statement::Chart { .. } => Ok(()),
+        Statement::Append { source, .. } => validate_expr(source),
+        Statement::Upsert { source, .. } => validate_expr(source),
+        Statement::Expr { expr, .. } => validate_expr(expr),
+        Statement::ExitFunction { .. }
+        | Statement::ExitFor { .. }
+        | Statement::ExitWhile { .. } => Ok(()),
+    }
+}
+
+fn validate_expr(expr: &Expr) -> Result<(), String> {
+    match expr {
+        Expr::Fetch { .. } => Err("fetch is not supported in the playground".to_string()),
+        Expr::Ask { .. } => Err("ask is not supported in the playground".to_string()),
+        Expr::Binary { left, right, .. } => {
+            validate_expr(left)?;
+            validate_expr(right)
+        }
+        Expr::Unary { operand, .. } => validate_expr(operand),
+        Expr::FieldAccess { object, .. } => validate_expr(object),
+        Expr::ArrayIndex { array, index, .. } => {
+            validate_expr(array)?;
+            validate_expr(index)
+        }
+        Expr::TypeAssertion { expr, .. } => validate_expr(expr),
+        Expr::Call { args, .. } => {
+            for arg in args {
+                validate_expr(arg)?;
+            }
+            Ok(())
+        }
+        Expr::CallExpr { callee, args } => {
+            validate_expr(callee)?;
+            for arg in args {
+                validate_expr(arg)?;
+            }
+            Ok(())
+        }
+        Expr::Query(_) => Ok(()),
+        Expr::AsyncForEach { iterable, body, .. } => {
+            validate_expr(iterable)?;
+            for stmt in body {
+                validate_statement(stmt)?;
+            }
+            Ok(())
+        }
+        Expr::Parallel { expressions } => {
+            for expr in expressions {
+                validate_expr(expr)?;
+            }
+            Ok(())
+        }
+        Expr::Await(expr) => validate_expr(expr),
+        Expr::Array(items) => {
+            for item in items {
+                validate_expr(item)?;
+            }
+            Ok(())
+        }
+        Expr::Object(items) => {
+            for (_, value) in items {
+                validate_expr(value)?;
+            }
+            Ok(())
+        }
+        Expr::Join { left, right, .. } => {
+            validate_expr(left)?;
+            validate_expr(right)
+        }
+        Expr::MethodCall { object, args, .. } => {
+            validate_expr(object)?;
+            for arg in args {
+                validate_expr(arg)?;
+            }
+            Ok(())
+        }
+        Expr::Lambda { body, .. } => validate_expr(body),
+        Expr::Literal(_) | Expr::Variable(_) => Ok(()),
+    }
+}
+
+fn validate_program(program: &Program) -> Result<(), String> {
+    for stmt in &program.statements {
+        validate_statement(stmt)?;
+    }
+    Ok(())
+}
+
+#[wasm_bindgen]
+pub async fn run_code(code: String) -> Result<JsValue, JsValue> {
+    let program = match PipParser::parse_str(&code) {
+        Ok(program) => program,
+        Err(e) => {
+            let result = ExecResult {
+                success: false,
+                output: Vec::new(),
+                result: None,
+                error: Some(e.to_string()),
+            };
+            return serde_wasm_bindgen::to_value(&result)
+                .map_err(|e| JsValue::from_str(&e.to_string()));
+        }
+    };
+
+    if let Err(err) = validate_program(&program) {
+        let result = ExecResult {
+            success: false,
+            output: Vec::new(),
+            result: None,
+            error: Some(err),
+        };
+        return serde_wasm_bindgen::to_value(&result)
+            .map_err(|e| JsValue::from_str(&e.to_string()));
+    }
+
+    let mut interp = Interpreter::new();
+    let eval_result = interp.eval(program).await;
+    let output = interp.output().await;
+
+    match eval_result {
+        Ok(value) => {
+            let result = ExecResult {
+                success: true,
+                output,
+                result: Some(value_to_json(&value)),
+                error: None,
+            };
+            serde_wasm_bindgen::to_value(&result).map_err(|e| JsValue::from_str(&e.to_string()))
+        }
+        Err(e) => {
+            let result = ExecResult {
+                success: false,
+                output,
+                result: None,
+                error: Some(e.to_string()),
+            };
+            serde_wasm_bindgen::to_value(&result).map_err(|e| JsValue::from_str(&e.to_string()))
+        }
+    }
 }

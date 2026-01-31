@@ -8,7 +8,7 @@ The PipTable Playground lets you experiment with the DSL directly in your browse
 
 - **Live Editing**: Write and modify PipTable code with syntax highlighting
 - **Example Gallery**: Learn from pre-built examples
-- **Instant Feedback**: See results immediately (WASM execution coming soon)
+- **Instant Feedback**: Run scripts in-browser via WASM
 - **Mobile Friendly**: Works on all devices
 
 ## Keyboard Shortcuts
@@ -18,6 +18,6 @@ The PipTable Playground lets you experiment with the DSL directly in your browse
 
 ## Note
 
-Full execution capabilities will be available once the WASM module is integrated (Issue #126). Currently, the playground provides syntax checking and basic validation.
+The playground runs scripts in-browser. File and network operations (import/export/fetch) are disabled in the browser environment.
 
 [Open Playground in Full Screen →](../playground/dist/index.html){target="_blank"}

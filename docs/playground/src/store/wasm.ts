@@ -1,7 +1,8 @@
-import init, { 
-  PipTableParser, 
-  get_examples, 
-  get_sample_data 
+import init, {
+  PipTableParser,
+  get_examples,
+  get_sample_data,
+  run_code
 } from '../wasm/piptable_wasm';
 
 let wasmInitialized = false;
@@ -84,5 +85,20 @@ export async function getSampleData(): Promise<any> {
   } catch (error) {
     console.error('Failed to get sample data:', error);
     return { csv: '', json: [] };
+  }
+}
+
+export async function executeCode(code: string): Promise<any> {
+  await initializeWasm();
+  try {
+    return await run_code(code);
+  } catch (error) {
+    console.error('Execution error:', error);
+    return {
+      success: false,
+      output: [],
+      result: null,
+      error: error instanceof Error ? error.message : String(error)
+    };
   }
 }
