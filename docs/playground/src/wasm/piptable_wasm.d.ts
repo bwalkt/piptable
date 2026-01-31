@@ -40,7 +40,14 @@ export function get_sample_data(): any;
 
 export function init(): void;
 
-export function run_code(code: string): Promise<any>;
+export interface ExecResult {
+    success: boolean;
+    output: string[];
+    result: unknown | null;
+    error: string | null;
+}
+
+export function run_code(code: string): Promise<ExecResult>;
 
 /**
  * Validate a formula for syntax highlighting

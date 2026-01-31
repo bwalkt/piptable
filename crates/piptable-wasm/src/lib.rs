@@ -425,7 +425,7 @@ fn validate_expr(expr: &Expr) -> Result<(), String> {
             }
             Ok(())
         }
-        Expr::Query(_) => Ok(()),
+        Expr::Query(_) => Err("SQL is not supported in the playground".to_string()),
         Expr::AsyncForEach { iterable, body, .. } => {
             validate_expr(iterable)?;
             for stmt in body {

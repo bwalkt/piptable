@@ -209,9 +209,11 @@ export async function runCode() {
         result += '</pre>';
       }
     } else {
+      const errMsg = execResult.error || 'Unknown error';
+      error.value = errMsg;
       result += '<div class="text-red-600 dark:text-red-400 mb-2">❌ Execution error:</div>\n';
       result += '<pre class="mt-2 p-3 bg-red-50 dark:bg-red-900/20 rounded-md overflow-x-auto">';
-      result += escapeHtml(execResult.error || 'Unknown error');
+      result += escapeHtml(errMsg);
       result += '</pre>';
     }
     
