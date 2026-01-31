@@ -145,6 +145,34 @@ dim scores = [88, 0, 92, 75]
 dim passing = filter(names, scores)
 print(passing)`
   },
+  append_upsert: {
+    description: "Append and upsert operations",
+    code: `' Append + Upsert
+dim users = [
+  ["id", "name", "email"],
+  [1, "Alice", "alice@example.com"],
+  [2, "Bob", "bob@example.com"]
+]
+
+dim new_users = [
+  ["id", "name", "email"],
+  [2, "Bobby", "bob@example.com"],
+  [3, "Cara", "cara@example.com"]
+]
+
+' Append distinct rows (by id)
+users append distinct new_users on "id"
+
+' Upsert rows by id
+dim updates = [
+  ["id", "name", "email"],
+  [1, "Alice Smith", "alice@example.com"],
+  [4, "Dan", "dan@example.com"]
+]
+users upsert updates on "id"
+
+print(users)`
+  },
   formulas_extended: {
     description: "Formula functions and ranges",
     code: `' Formulas
