@@ -74,6 +74,11 @@ async fn test_sheet_formula_eval_helpers() {
         dim total = sheet_get_cell_value(s, "B1")
         dim direct = sheet_eval_formula(s, "SUM(A1:A2)")
         dim direct_short = sum(s, "A1:A2")
+        dim avg_short = avg(s, "A1:A2")
+        dim min_short = min(s, "A1:A2")
+        dim max_short = max(s, "A1:A2")
+        dim count_short = count(s, "A1:A2")
+        dim counta_short = counta(s, "A1:A2")
         dim is_formula = is_sheet_cell_formula(s, "B1")
         dim is_not_formula = is_sheet_cell_formula(s, "A1")
     "#;
@@ -91,6 +96,26 @@ async fn test_sheet_formula_eval_helpers() {
     assert!(matches!(
         interp.get_var("direct_short").await,
         Some(Value::Float(f)) if (f - 3.0).abs() < 1e-9
+    ));
+    assert!(matches!(
+        interp.get_var("avg_short").await,
+        Some(Value::Float(f)) if (f - 1.5).abs() < 1e-9
+    ));
+    assert!(matches!(
+        interp.get_var("min_short").await,
+        Some(Value::Float(f)) if (f - 1.0).abs() < 1e-9
+    ));
+    assert!(matches!(
+        interp.get_var("max_short").await,
+        Some(Value::Float(f)) if (f - 2.0).abs() < 1e-9
+    ));
+    assert!(matches!(
+        interp.get_var("count_short").await,
+        Some(Value::Int(2))
+    ));
+    assert!(matches!(
+        interp.get_var("counta_short").await,
+        Some(Value::Int(2))
     ));
     assert!(matches!(
         interp.get_var("is_formula").await,

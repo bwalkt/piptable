@@ -44,10 +44,12 @@ Note: `len()` is formula-backed. For objects, use `len(keys(obj))` to count fiel
 | Function | Description | Example | Status |
 |----------|-------------|---------|--------|
 | `abs(n)` | Absolute value | `abs(-5)` → `5` | ✅ Implemented |
-| `min(a, b, ...)` | Minimum value (formula-backed) | `min(3, 1, 5)` → `1.0` | ✅ Implemented |
-| `max(a, b, ...)` | Maximum value (formula-backed) | `max(3, 1, 5)` → `5.0` | ✅ Implemented |
-| `sum(values...)` | Sum of values/arrays or a sheet range | `sum([1, 2, 3])` → `6.0` | ✅ Implemented |
-| `avg(values...)` | Average of values/arrays (formula-backed) | `avg([1, 2, 3])` → `2.0` | ✅ Implemented |
+| `min(values...)` | Minimum value or sheet range | `min(3, 1, 5)` → `1.0` | ✅ Implemented |
+| `max(values...)` | Maximum value or sheet range | `max(3, 1, 5)` → `5.0` | ✅ Implemented |
+| `sum(values...)` | Sum of values/arrays or sheet range | `sum([1, 2, 3])` → `6.0` | ✅ Implemented |
+| `avg(values...)` | Average of values/arrays or sheet range | `avg([1, 2, 3])` → `2.0` | ✅ Implemented |
+| `count(values...)` | Count numeric values or sheet range | `count([1, 2, 3])` → `3` | ✅ Implemented |
+| `counta(values...)` | Count non-empty values or sheet range | `counta([1, null, "x"])` → `2` | ✅ Implemented |
 | `round(n, decimals)` | Round number | `round(3.14159, 2)` → `3.14` | 📋 Planned |
 | `floor(n)` | Round down | `floor(3.9)` → `3` | 📋 Planned |
 | `ceil(n)` | Round up | `ceil(3.1)` → `4` | 📋 Planned |

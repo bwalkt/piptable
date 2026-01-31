@@ -1611,9 +1611,16 @@ impl Interpreter {
     async fn call_function(&mut self, name: &str, args: &[Expr], line: usize) -> PipResult<Value> {
         if formula::is_dsl_formula_function(name) {
             let arg_vals = self.eval_args(args, line).await?;
-            if name.eq_ignore_ascii_case("sum") && arg_vals.len() == 2 {
+            if arg_vals.len() == 2 {
                 if let (Value::Sheet(sheet), Value::String(range)) = (&arg_vals[0], &arg_vals[1]) {
-                    return formula::eval_sheet_range_function(sheet, "SUM", range, line);
+                    if let Some(formula_name) = formula::range_function_name(name) {
+                        return formula::eval_sheet_range_function(
+                            sheet,
+                            formula_name,
+                            range,
+                            line,
+                        );
+                    }
                 }
             }
             return formula::call_formula_function(name, &arg_vals, line);

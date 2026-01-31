@@ -39,6 +39,11 @@ import sales from "sales.csv"
 dim a1 = sheet_get_cell_value(sales, "B1")
 dim total = sheet_eval_formula(sales, "SUM(A1:A10)")
 dim total_short = sum(sales, "A1:A10")
+dim average_short = avg(sales, "A1:A10")
+dim min_short = min(sales, "A1:A10")
+dim max_short = max(sales, "A1:A10")
+dim count_short = count(sales, "A1:A10")
+dim counta_short = counta(sales, "A1:A10")
 dim cached = sheet_get_a1_eval(sales, "B1")
 ```
 

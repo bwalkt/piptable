@@ -77,6 +77,18 @@ pub fn eval_sheet_range_function(
     eval_sheet_formula(sheet, &formula, line)
 }
 
+pub fn range_function_name(name: &str) -> Option<&'static str> {
+    match name.to_uppercase().as_str() {
+        "SUM" => Some("SUM"),
+        "AVG" | "AVERAGE" => Some("AVERAGE"),
+        "MIN" => Some("MIN"),
+        "MAX" => Some("MAX"),
+        "COUNT" => Some("COUNT"),
+        "COUNTA" => Some("COUNTA"),
+        _ => None,
+    }
+}
+
 pub fn eval_sheet_cell(sheet: &Sheet, notation: &str, line: usize) -> PipResult<Value> {
     let cell = sheet.get_a1(notation).map_err(|e| {
         PipError::runtime(line, format!("Invalid cell notation '{}': {}", notation, e))
