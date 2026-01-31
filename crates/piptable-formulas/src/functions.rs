@@ -896,9 +896,9 @@ pub fn vlookup(values: &[Value]) -> Value {
             }
         }
         if let Some(row) = best_match {
-        if col_index > row.len() {
-            return Value::Error(ErrorValue::Ref);
-        }
+            if col_index > row.len() {
+                return Value::Error(ErrorValue::Ref);
+            }
             return row[col_index - 1].clone();
         }
     }
