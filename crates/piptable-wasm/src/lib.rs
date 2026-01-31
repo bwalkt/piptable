@@ -495,7 +495,7 @@ pub async fn run_code(code: String) -> Result<JsValue, JsValue> {
                 success: false,
                 output: Vec::new(),
                 result: None,
-                error: Some(e.to_string()),
+                error: Some(format!("Parse error: {}", e)),
             };
             return serde_wasm_bindgen::to_value(&result)
                 .map_err(|e| JsValue::from_str(&e.to_string()));
