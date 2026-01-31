@@ -39,6 +39,8 @@ dim qty = index(products, row, 3)
 dim names = ["Apple", "Banana", "Cherry"]
 dim prices = [1.50, 0.75, 2.00]
 dim safe_price = xlookup("Date", names, prices, 0.0)
+dim wildcard_price = xlookup("App*", names, prices, 0.0, 2)
+dim ci_wildcard = xlookup("app*", names, prices, 0.0, 2, 1, true)
 ```
 
 `OFFSET` builds a subrange from a range or 2D array:
@@ -46,6 +48,8 @@ dim safe_price = xlookup("Date", names, prices, 0.0)
 ```piptable
 dim block = offset(products, 1, 0, 1, 2)  ' returns [["Banana", 0.75]]
 ```
+
+`XLOOKUP` supports binary search for sorted arrays with `search_mode = 2` (ascending) or `-2` (descending).
 
 ## Evaluate Formulas Against Sheets
 

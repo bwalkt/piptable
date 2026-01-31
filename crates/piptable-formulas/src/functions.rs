@@ -122,6 +122,127 @@ fn compare_values(left: &Value, right: &Value) -> Result<i32, ErrorValue> {
     }
 }
 
+#[derive(Clone, Copy)]
+enum WildcardToken {
+    AnySeq,
+    AnyChar,
+    Literal(char),
+}
+
+fn tokenize_wildcard(pattern: &str) -> Vec<WildcardToken> {
+    let mut tokens = Vec::new();
+    let mut chars = pattern.chars().peekable();
+    while let Some(ch) = chars.next() {
+        match ch {
+            '\\' => {
+                if let Some(next) = chars.next() {
+                    tokens.push(WildcardToken::Literal(next));
+                } else {
+                    tokens.push(WildcardToken::Literal('\\'));
+                }
+            }
+            '*' => tokens.push(WildcardToken::AnySeq),
+            '?' => tokens.push(WildcardToken::AnyChar),
+            _ => tokens.push(WildcardToken::Literal(ch)),
+        }
+    }
+    tokens
+}
+
+fn wildcard_match(pattern: &str, text: &str, case_insensitive: bool) -> bool {
+    let (pattern, text) = if case_insensitive {
+        (pattern.to_lowercase(), text.to_lowercase())
+    } else {
+        (pattern.to_string(), text.to_string())
+    };
+
+    let tokens = tokenize_wildcard(&pattern);
+    let text_chars: Vec<char> = text.chars().collect();
+    let mut dp = vec![false; text_chars.len() + 1];
+    dp[0] = true;
+
+    for token in tokens {
+        match token {
+            WildcardToken::AnySeq => {
+                let mut next = vec![false; text_chars.len() + 1];
+                let mut seen = false;
+                for i in 0..=text_chars.len() {
+                    if dp[i] {
+                        seen = true;
+                    }
+                    if seen {
+                        next[i] = true;
+                    }
+                }
+                dp = next;
+            }
+            WildcardToken::AnyChar => {
+                let mut next = vec![false; text_chars.len() + 1];
+                for i in 0..text_chars.len() {
+                    if dp[i] {
+                        next[i + 1] = true;
+                    }
+                }
+                dp = next;
+            }
+            WildcardToken::Literal(ch) => {
+                let mut next = vec![false; text_chars.len() + 1];
+                for i in 0..text_chars.len() {
+                    if dp[i] && text_chars[i] == ch {
+                        next[i + 1] = true;
+                    }
+                }
+                dp = next;
+            }
+        }
+    }
+
+    dp[text_chars.len()]
+}
+
+fn validate_sorted(values: &[Value], ascending: bool) -> Result<(), ErrorValue> {
+    for i in 1..values.len() {
+        let cmp = compare_values(&values[i - 1], &values[i])?;
+        if ascending && cmp > 0 {
+            return Err(ErrorValue::Value);
+        }
+        if !ascending && cmp < 0 {
+            return Err(ErrorValue::Value);
+        }
+    }
+    Ok(())
+}
+
+fn lower_bound_asc(values: &[Value], lookup: &Value) -> Result<usize, ErrorValue> {
+    let mut lo = 0;
+    let mut hi = values.len();
+    while lo < hi {
+        let mid = lo + (hi - lo) / 2;
+        let cmp = compare_values(&values[mid], lookup)?;
+        if cmp < 0 {
+            lo = mid + 1;
+        } else {
+            hi = mid;
+        }
+    }
+    Ok(lo)
+}
+
+fn lower_bound_desc(values: &[Value], lookup: &Value) -> Result<usize, ErrorValue> {
+    let mut lo = 0;
+    let mut hi = values.len();
+    while lo < hi {
+        let mid = lo + (hi - lo) / 2;
+        let cmp = compare_values(&values[mid], lookup)?;
+        if cmp > 0 {
+            lo = mid + 1;
+        } else {
+            hi = mid;
+        }
+    }
+    Ok(lo)
+}
+
 fn table_rows(value: &Value) -> Result<Vec<Vec<Value>>, ErrorValue> {
     let Value::Array(items) = value else {
         return Err(ErrorValue::Value);
@@ -1114,8 +1235,83 @@ pub fn xlookup(values: &[Value]) -> Value {
         1
     };
 
+    let case_insensitive = if let Some(value) = values.get(6) {
+        match value {
+            Value::Bool(b) => *b,
+            Value::Int(n) => *n != 0,
+            Value::Float(f) => *f != 0.0,
+            _ => false,
+        }
+    } else {
+        false
+    };
+
+    if search_mode == 2 || search_mode == -2 {
+        if match_mode == 2 {
+            return Value::Error(ErrorValue::Value);
+        }
+
+        let ascending = search_mode == 2;
+        if let Err(err) = validate_sorted(&flat_lookup, ascending) {
+            return Value::Error(err);
+        }
+
+        if flat_lookup.is_empty() {
+            return if_not_found;
+        }
+
+        let index_result = if ascending {
+            let lb = match lower_bound_asc(&flat_lookup, lookup_value) {
+                Ok(idx) => idx,
+                Err(err) => return Value::Error(err),
+            };
+            if lb < flat_lookup.len() {
+                match compare_values(&flat_lookup[lb], lookup_value) {
+                    Ok(0) => Some(lb),
+                    Ok(_) => match match_mode {
+                        -1 => lb.checked_sub(1),
+                        1 => Some(lb),
+                        _ => None,
+                    },
+                    Err(err) => return Value::Error(err),
+                }
+            } else {
+                match match_mode {
+                    -1 => lb.checked_sub(1),
+                    _ => None,
+                }
+            }
+        } else {
+            let lb = match lower_bound_desc(&flat_lookup, lookup_value) {
+                Ok(idx) => idx,
+                Err(err) => return Value::Error(err),
+            };
+            if lb < flat_lookup.len() {
+                match compare_values(&flat_lookup[lb], lookup_value) {
+                    Ok(0) => Some(lb),
+                    Ok(_) => match match_mode {
+                        -1 => Some(lb),
+                        1 => lb.checked_sub(1),
+                        _ => None,
+                    },
+                    Err(err) => return Value::Error(err),
+                }
+            } else {
+                match match_mode {
+                    1 => flat_lookup.len().checked_sub(1),
+                    _ => None,
+                }
+            }
+        };
+
+        if let Some(idx) = index_result {
+            return flat_return[idx].clone();
+        }
+        return if_not_found;
+    }
+
     let indices: Vec<usize> = match search_mode {
-        -1 | -2 => (0..flat_lookup.len()).rev().collect(),
+        -1 => (0..flat_lookup.len()).rev().collect(),
         _ => (0..flat_lookup.len()).collect(),
     };
 
@@ -1187,7 +1383,19 @@ pub fn xlookup(values: &[Value]) -> Value {
                 return flat_return[best].clone();
             }
         }
-        2 => return Value::Error(ErrorValue::Value),
+        2 => {
+            let pattern = match lookup_value {
+                Value::String(text) => text,
+                _ => return Value::Error(ErrorValue::Value),
+            };
+            for i in indices {
+                if let Value::String(candidate) = &flat_lookup[i] {
+                    if wildcard_match(pattern, candidate, case_insensitive) {
+                        return flat_return[i].clone();
+                    }
+                }
+            }
+        }
         _ => return Value::Error(ErrorValue::Value),
     }
 

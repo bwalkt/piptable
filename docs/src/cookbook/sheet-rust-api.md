@@ -99,6 +99,14 @@ fn eval_lookup() -> Result<(), Box<dyn std::error::Error>> {
     let result = engine.evaluate(&compiled, &ctx)?;
     assert!(matches!(result, Value::Float(f) if (f - 0.75).abs() < 1e-9));
 
+    let compiled = engine.compile(r#"XLOOKUP("App*", A1:A2, B1:B2, "N/A", 2)"#)?;
+    let result = engine.evaluate(&compiled, &ctx)?;
+    assert!(matches!(result, Value::Float(_)));
+
+    let compiled = engine.compile(r#"XLOOKUP(0.8, B1:B2, A1:A2, "N/A", 1, 2)"#)?;
+    let result = engine.evaluate(&compiled, &ctx)?;
+    assert!(matches!(result, Value::String(_)));
+
     let compiled = engine.compile("OFFSET(A1:B2, 1, 0, 1, 2)")?;
     let result = engine.evaluate(&compiled, &ctx)?;
     assert!(matches!(result, Value::Array(_)));
