@@ -848,7 +848,7 @@ pub fn not_fn(values: &[Value]) -> Value {
 
 /// VLOOKUP(lookup_value, table_array, col_index_num, [range_lookup])
 pub fn vlookup(values: &[Value]) -> Value {
-    let lookup_value = values.get(0).unwrap_or(&Value::Empty);
+    let lookup_value = values.first().unwrap_or(&Value::Empty);
     let table_value = values.get(1).unwrap_or(&Value::Empty);
     let col_index = match values.get(2).and_then(|v| to_index(v).ok()) {
         Some(idx) => idx,
@@ -908,7 +908,7 @@ pub fn vlookup(values: &[Value]) -> Value {
 
 /// HLOOKUP(lookup_value, table_array, row_index_num, [range_lookup])
 pub fn hlookup(values: &[Value]) -> Value {
-    let lookup_value = values.get(0).unwrap_or(&Value::Empty);
+    let lookup_value = values.first().unwrap_or(&Value::Empty);
     let table_value = values.get(1).unwrap_or(&Value::Empty);
     let row_index = match values.get(2).and_then(|v| to_index(v).ok()) {
         Some(idx) => idx,
@@ -974,7 +974,7 @@ pub fn hlookup(values: &[Value]) -> Value {
 
 /// INDEX(array, row_num, [column_num])
 pub fn index(values: &[Value]) -> Value {
-    let array_value = values.get(0).unwrap_or(&Value::Empty);
+    let array_value = values.first().unwrap_or(&Value::Empty);
     let row_num = match values.get(1).and_then(|v| to_index(v).ok()) {
         Some(idx) => idx,
         None => return Value::Error(ErrorValue::Value),
@@ -1011,7 +1011,7 @@ pub fn index(values: &[Value]) -> Value {
 
 /// MATCH(lookup_value, lookup_array, [match_type])
 pub fn match_fn(values: &[Value]) -> Value {
-    let lookup_value = values.get(0).unwrap_or(&Value::Empty);
+    let lookup_value = values.first().unwrap_or(&Value::Empty);
     let lookup_array = values.get(1).unwrap_or(&Value::Empty);
 
     let match_type = if let Some(value) = values.get(2) {
@@ -1072,7 +1072,7 @@ pub fn match_fn(values: &[Value]) -> Value {
 
 /// XLOOKUP(lookup_value, lookup_array, return_array, [if_not_found], [match_mode], [search_mode])
 pub fn xlookup(values: &[Value]) -> Value {
-    let lookup_value = values.get(0).unwrap_or(&Value::Empty);
+    let lookup_value = values.first().unwrap_or(&Value::Empty);
     let lookup_array = values.get(1).unwrap_or(&Value::Empty);
     let return_array = values.get(2).unwrap_or(&Value::Empty);
 
@@ -1192,7 +1192,7 @@ pub fn xlookup(values: &[Value]) -> Value {
 
 /// OFFSET(reference, rows, cols, [height], [width])
 pub fn offset(values: &[Value]) -> Value {
-    let reference = values.get(0).unwrap_or(&Value::Empty);
+    let reference = values.first().unwrap_or(&Value::Empty);
     let rows_offset = match values.get(1).and_then(|v| to_offset(v).ok()) {
         Some(v) => v,
         None => return Value::Error(ErrorValue::Value),
