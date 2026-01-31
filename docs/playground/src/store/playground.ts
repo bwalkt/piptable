@@ -66,6 +66,8 @@ dim products = [
   ["Cherry", 2.00, 150]
 ]
 dim price = vlookup("Banana", products, 2, false)
+dim wildcard_price = xlookup("App*", ["Apple", "Apricot"], [1, 2], "N/A", 2)
+dim ci_wildcard = xlookup("app*", ["Apple", "Apricot"], [1, 2], "N/A", 2, 1, true)
 print("Total: " + str(total))`
   },
   array_filter: {
@@ -121,6 +123,7 @@ dim products = [
 ]
 dim banana_qty = index(products, match("Banana", products, 0), 3)
 dim block = offset(products, 1, 0, 1, 2)
+dim bin_next = xlookup(6, [1, 3, 5, 7], ["A", "B", "C", "D"], "N/A", 1, 2)
 print("Total: " + str(total) + ", Avg: " + str(average))`
   }
 };
