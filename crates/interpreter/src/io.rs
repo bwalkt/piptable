@@ -1,7 +1,9 @@
 //! Import and export operations for files.
 
 use piptable_core::{ImportOptions, Value};
-use piptable_sheet::{CellValue, CsvOptions, Sheet, XlsxReadOptions};
+#[cfg(not(target_arch = "wasm32"))]
+use piptable_sheet::XlsxReadOptions;
+use piptable_sheet::{CellValue, CsvOptions, Sheet};
 use std::collections::HashMap;
 use std::path::Path;
 
@@ -317,13 +319,27 @@ fn export_sheet_with_mode_impl(sheet: &Sheet, path: &str, mode: ExportMode) -> R
                 .save_as_jsonl(path)
                 .map_err(|e| format!("Failed to export JSONL: {}", e))
         } else if path_lower.ends_with(".xlsx") {
-            sheet
-                .save_as_xlsx(path)
-                .map_err(|e| format!("Failed to export Excel: {}", e))
+            #[cfg(not(target_arch = "wasm32"))]
+            {
+                sheet
+                    .save_as_xlsx(path)
+                    .map_err(|e| format!("Failed to export Excel: {}", e))
+            }
+            #[cfg(target_arch = "wasm32")]
+            {
+                Err("Excel export is not supported in the playground".to_string())
+            }
         } else if path_lower.ends_with(".parquet") {
-            sheet
-                .save_as_parquet(path)
-                .map_err(|e| format!("Failed to export Parquet: {}", e))
+            #[cfg(not(target_arch = "wasm32"))]
+            {
+                sheet
+                    .save_as_parquet(path)
+                    .map_err(|e| format!("Failed to export Parquet: {}", e))
+            }
+            #[cfg(target_arch = "wasm32")]
+            {
+                Err("Parquet export is not supported in the playground".to_string())
+            }
         } else if path_lower.ends_with(".toon") {
             sheet
                 .save_as_toon(path)
@@ -624,6 +640,8 @@ pub fn import_sheet(
     sheet_name: Option<&str>,
     has_headers: bool,
 ) -> Result<Sheet, String> {
+    #[cfg(target_arch = "wasm32")]
+    let _ = sheet_name;
     // URL support would go here in the future
     // if path.starts_with("http://") || path.starts_with("https://") {
     //     return import_sheet_from_url(path, sheet_name, has_headers);
@@ -648,39 +666,67 @@ pub fn import_sheet(
     } else if path_lower.ends_with(".jsonl") {
         Sheet::from_jsonl(path).map_err(|e| format!("Failed to import JSONL: {}", e))
     } else if path_lower.ends_with(".xlsx") || path_lower.ends_with(".xls") {
-        let options = XlsxReadOptions::default().with_headers(has_headers);
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            let options = XlsxReadOptions::default().with_headers(has_headers);
 
-        if let Some(name) = sheet_name {
-            // Load specific sheet by name
-            if path_lower.ends_with(".xlsx") {
-                Sheet::from_xlsx_sheet_with_options(path, name, options)
-                    .map_err(|e| format!("Failed to import Excel sheet '{}': {}", name, e))
+            if let Some(name) = sheet_name {
+                // Load specific sheet by name
+                if path_lower.ends_with(".xlsx") {
+                    Sheet::from_xlsx_sheet_with_options(path, name, options)
+                        .map_err(|e| format!("Failed to import Excel sheet '{}': {}", name, e))
+                } else {
+                    Sheet::from_xls_sheet_with_options(path, name, options)
+                        .map_err(|e| format!("Failed to import Excel sheet '{}': {}", name, e))
+                }
             } else {
-                Sheet::from_xls_sheet_with_options(path, name, options)
-                    .map_err(|e| format!("Failed to import Excel sheet '{}': {}", name, e))
+                // Load the first sheet (default behavior)
+                Sheet::from_excel_with_options(path, options)
+                    .map_err(|e| format!("Failed to import Excel: {}", e))
             }
-        } else {
-            // Load the first sheet (default behavior)
-            Sheet::from_excel_with_options(path, options)
-                .map_err(|e| format!("Failed to import Excel: {}", e))
+        }
+        #[cfg(target_arch = "wasm32")]
+        {
+            Err("Excel import is not supported in the playground".to_string())
         }
     } else if path_lower.ends_with(".parquet") {
-        Sheet::from_parquet(path).map_err(|e| format!("Failed to import Parquet: {}", e))
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            Sheet::from_parquet(path).map_err(|e| format!("Failed to import Parquet: {}", e))
+        }
+        #[cfg(target_arch = "wasm32")]
+        {
+            Err("Parquet import is not supported in the playground".to_string())
+        }
     } else if path_lower.ends_with(".toon") {
         Sheet::from_toon(path).map_err(|e| format!("Failed to import TOON: {}", e))
     } else if path_lower.ends_with(".pdf") {
-        let tables = piptable_pdf::extract_tables_from_pdf(path)
-            .map_err(|e| format!("Failed to import PDF: {}", e))?;
-        let first = tables
-            .into_iter()
-            .next()
-            .ok_or_else(|| format!("No tables found in PDF '{}'", path))?;
-        // For Phase 1, return the first table found
-        Ok(first)
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            let tables = piptable_pdf::extract_tables_from_pdf(path)
+                .map_err(|e| format!("Failed to import PDF: {}", e))?;
+            let first = tables
+                .into_iter()
+                .next()
+                .ok_or_else(|| format!("No tables found in PDF '{}'", path))?;
+            // For Phase 1, return the first table found
+            Ok(first)
+        }
+        #[cfg(target_arch = "wasm32")]
+        {
+            Err("PDF import is not supported in the playground".to_string())
+        }
     } else if path_lower.ends_with(".html") || path_lower.ends_with(".htm") {
-        let sheet = Sheet::from_html_with_headers(path, has_headers)
-            .map_err(|e| format!("Failed to import HTML: {}", e))?;
-        Ok(sheet)
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            let sheet = Sheet::from_html_with_headers(path, has_headers)
+                .map_err(|e| format!("Failed to import HTML: {}", e))?;
+            Ok(sheet)
+        }
+        #[cfg(target_arch = "wasm32")]
+        {
+            Err("HTML import is not supported in the playground".to_string())
+        }
     } else {
         Err(format!("Unsupported import format for '{}'", path))
     }

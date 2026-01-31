@@ -1133,12 +1133,28 @@ pub fn xlookup(values: &[Value]) -> Value {
                     return flat_return[*i].clone();
                 }
             }
+
+            let mut best_index: Option<usize> = None;
             for i in &indices {
                 match compare_values(&flat_lookup[*i], lookup_value) {
-                    Ok(cmp) if cmp < 0 => return flat_return[*i].clone(),
+                    Ok(cmp) if cmp < 0 => {
+                        if let Some(best) = best_index {
+                            match compare_values(&flat_lookup[*i], &flat_lookup[best]) {
+                                Ok(cmp_best) if cmp_best > 0 => best_index = Some(*i),
+                                Ok(_) => {}
+                                Err(err) => return Value::Error(err),
+                            }
+                        } else {
+                            best_index = Some(*i);
+                        }
+                    }
                     Ok(_) => {}
                     Err(err) => return Value::Error(err),
                 }
+            }
+
+            if let Some(best) = best_index {
+                return flat_return[best].clone();
             }
         }
         1 => {
@@ -1147,12 +1163,28 @@ pub fn xlookup(values: &[Value]) -> Value {
                     return flat_return[*i].clone();
                 }
             }
+
+            let mut best_index: Option<usize> = None;
             for i in &indices {
                 match compare_values(&flat_lookup[*i], lookup_value) {
-                    Ok(cmp) if cmp > 0 => return flat_return[*i].clone(),
+                    Ok(cmp) if cmp > 0 => {
+                        if let Some(best) = best_index {
+                            match compare_values(&flat_lookup[*i], &flat_lookup[best]) {
+                                Ok(cmp_best) if cmp_best < 0 => best_index = Some(*i),
+                                Ok(_) => {}
+                                Err(err) => return Value::Error(err),
+                            }
+                        } else {
+                            best_index = Some(*i);
+                        }
+                    }
                     Ok(_) => {}
                     Err(err) => return Value::Error(err),
                 }
+            }
+
+            if let Some(best) = best_index {
+                return flat_return[best].clone();
             }
         }
         2 => return Value::Error(ErrorValue::Value),
@@ -1191,7 +1223,7 @@ pub fn offset(values: &[Value]) -> Value {
             Err(err) => return Value::Error(err),
         }
     } else {
-        1
+        ref_rows
     };
 
     let width = if let Some(value) = values.get(4) {
@@ -1200,7 +1232,7 @@ pub fn offset(values: &[Value]) -> Value {
             Err(err) => return Value::Error(err),
         }
     } else {
-        1
+        ref_cols
     };
 
     let start_row = rows_offset;

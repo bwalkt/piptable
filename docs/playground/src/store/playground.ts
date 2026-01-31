@@ -1,6 +1,6 @@
 import { signal } from '@preact/signals';
 import DOMPurify from 'dompurify';
-import { parseCode, validateCode, getExamples, initializeWasm } from './wasm';
+import { executeCode } from './wasm';
 import { loadSharedState, type ShareableState } from '../lib/share';
 
 // Example metadata
@@ -33,34 +33,6 @@ print("Count: " + str(count))
 print("Price: $" + str(price))
 print("Active: " + str(active))`
   },
-  sql: {
-    description: "SQL queries on sheet data",
-    code: `' SQL Query on Data
-dim users = import "users.csv" into sheet
-
-' Query the data
-dim adults = query("
-  SELECT name, age, city
-  FROM users
-  WHERE age >= 18
-")
-
-' Export results
-export adults to "adult_users.csv"
-print("Query results exported")`
-  },
-  join: {
-    description: "Join operations between sheets",
-    code: `' Join Operations
-dim customers = import "customers.csv" into sheet
-dim orders = import "orders.csv" into sheet
-
-' Inner join
-dim result = customers join orders on "id" = "customer_id"
-
-export result to "customer_orders.csv"
-print("Join complete!")`
-  },
   loops: {
     description: "Loops and control flow",
     code: `' Loops and Control Flow
@@ -81,7 +53,7 @@ else
 end if`
   },
   formulas: {
-    description: "Formula functions and sheet ranges",
+    description: "Formula functions and lookups",
     code: `' Formula Functions
 dim total = sum(1, 2, 3)
 dim label = if(1, "yes", "no")
@@ -94,48 +66,7 @@ dim products = [
   ["Cherry", 2.00, 150]
 ]
 dim price = vlookup("Banana", products, 2, false)
-
-' Sheet range helpers
-dim sales = import "sales.csv" into sheet
-dim range_total = sum(sales, "A1:A10")
-dim range_avg = avg(sales, "A1:A10")
 print("Total: " + str(total))`
-  },
-  sheet_helpers: {
-    description: "Sheet helpers and A1 access",
-    code: `' Sheet Helpers
-dim people = import "people.csv" into sheet
-
-dim rows = sheet_row_count(people)
-dim cols = sheet_col_count(people)
-print("Rows: " + str(rows) + ", Cols: " + str(cols))
-
-' Read + write by A1 notation
-dim name = sheet_get_cell_value(people, "B2")
-dim updated = sheet_set_a1(people, "C2", "active")
-print("Name: " + str(name))`
-  },
-  sheet_range: {
-    description: "Sheet ranges and filtering",
-    code: `' Sheet Ranges
-dim sales = import "sales.csv" into sheet
-
-' Range extract
-dim first_block = sheet_get_range(sales, "A1:C5")
-
-' Filter rows by column value
-dim high_value = sheet_filter_rows(sales, "status", "paid")
-print("Filtered rows: " + str(len(high_value)))
-`
-  },
-  sheet_map: {
-    description: "Sheet map transformation",
-    code: `' Sheet Map
-dim data = import "people.csv" into sheet
-
-' Uppercase all string cells
-dim upper = sheet_map(data, "upper")
-print("Mapped sheet rows: " + str(len(upper)))`
   },
   array_filter: {
     description: "Array filter built-in",
@@ -145,8 +76,36 @@ dim scores = [88, 0, 92, 75]
 dim passing = filter(names, scores)
 print(passing)`
   },
+  append_upsert: {
+    description: "Append and upsert operations",
+    code: `' Append + Upsert
+dim users = [
+  ["id", "name", "email"],
+  [1, "Alice", "alice@example.com"],
+  [2, "Bob", "bob@example.com"]
+]
+
+dim new_users = [
+  ["id", "name", "email"],
+  [2, "Bobby", "bob@example.com"],
+  [3, "Cara", "cara@example.com"]
+]
+
+' Append distinct rows (by id)
+users append distinct new_users on "id"
+
+' Upsert rows by id
+dim updates = [
+  ["id", "name", "email"],
+  [1, "Alice Smith", "alice@example.com"],
+  [4, "Dan", "dan@example.com"]
+]
+users upsert updates on "id"
+
+print(users)`
+  },
   formulas_extended: {
-    description: "Formula functions and ranges",
+    description: "Formula functions and lookups",
     code: `' Formulas
 dim total = sum(1, 2, 3)
 dim average = avg(10, 20, 30)
@@ -162,12 +121,6 @@ dim products = [
 ]
 dim banana_qty = index(products, match("Banana", products, 0), 3)
 dim block = offset(products, 1, 0, 1, 2)
-
-' Range formulas
-dim sheet = import "sales.csv" into sheet
-dim range_total = sum(sheet, "A1:A10")
-dim range_avg = avg(sheet, "A1:A10")
-
 print("Total: " + str(total) + ", Avg: " + str(average))`
   }
 };
@@ -232,32 +185,35 @@ export async function runCode() {
   error.value = null;
   
   try {
-    // Initialize WASM if needed
-    await initializeWasm();
-    
-    // Parse the code with real parser
-    const parseResult = await parseCode(code.value);
-    
     let result = '';
-    
-    if (parseResult.success) {
-      result += '<div class="text-green-600 dark:text-green-400 mb-2">✓ Code parsed successfully!</div>\n';
-      
-      // Show AST in collapsible section
-      result += '<details class="mt-4">';
-      result += '<summary class="cursor-pointer text-sm font-medium">View Abstract Syntax Tree</summary>';
-      result += '<pre class="mt-2 p-3 bg-gray-100 dark:bg-gray-800 rounded-md overflow-x-auto text-xs">';
-      result += escapeHtml(parseResult.ast || 'No AST available');
-      result += '</pre>';
-      result += '</details>';
-      
-      result += '<div class="mt-4 text-gray-500 dark:text-gray-400 text-sm">';
-      result += 'Note: Full execution coming soon. Currently showing parsing validation only.';
-      result += '</div>';
+    const execResult = await executeCode(code.value);
+
+    if (execResult.success) {
+      result += '<div class="text-green-600 dark:text-green-400 mb-2">✓ Execution succeeded</div>\n';
+      if (execResult.output && execResult.output.length > 0) {
+        const outputLines = execResult.output
+          .map((line: string) => escapeHtml(line))
+          .join('\n');
+        result += '<div class="mt-2 text-sm font-medium">Output</div>';
+        result += '<pre class="mt-1 p-3 bg-gray-100 dark:bg-gray-800 rounded-md overflow-x-auto text-xs">';
+        result += outputLines;
+        result += '</pre>';
+      } else {
+        result += '<div class="mt-2 text-gray-500 dark:text-gray-400 text-sm">No output.</div>';
+      }
+
+      if (execResult.result !== undefined && execResult.result !== null) {
+        result += '<div class="mt-3 text-sm font-medium">Result</div>';
+        result += '<pre class="mt-1 p-3 bg-gray-100 dark:bg-gray-800 rounded-md overflow-x-auto text-xs">';
+        result += escapeHtml(JSON.stringify(execResult.result, null, 2));
+        result += '</pre>';
+      }
     } else {
-      result += '<div class="text-red-600 dark:text-red-400 mb-2">❌ Parse error:</div>\n';
+      const errMsg = execResult.error || 'Unknown error';
+      error.value = errMsg;
+      result += '<div class="text-red-600 dark:text-red-400 mb-2">❌ Execution error:</div>\n';
       result += '<pre class="mt-2 p-3 bg-red-50 dark:bg-red-900/20 rounded-md overflow-x-auto">';
-      result += escapeHtml(parseResult.error || 'Unknown parse error');
+      result += escapeHtml(errMsg);
       result += '</pre>';
     }
     

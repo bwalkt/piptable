@@ -2112,9 +2112,11 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "899def5c37c4fd7b2664648c28120ecec138e4d395b459e5ca34f9cce2dd77fd"
 dependencies = [
  "cfg-if",
+ "js-sys",
  "libc",
  "r-efi",
  "wasip2",
+ "wasm-bindgen",
 ]
 
 [[package]]
@@ -3820,17 +3822,22 @@ dependencies = [
 name = "piptable-wasm"
 version = "0.1.0"
 dependencies = [
+ "arrow",
  "console_error_panic_hook",
+ "getrandom 0.3.4",
  "piptable-core",
  "piptable-formulas",
+ "piptable-interpreter",
  "piptable-parser",
  "piptable-primitives",
+ "piptable-sheet",
  "piptable-utils",
  "rmp-serde",
  "serde",
  "serde-wasm-bindgen",
  "serde_json",
  "wasm-bindgen",
+ "wasm-bindgen-futures",
  "web-sys",
 ]
 

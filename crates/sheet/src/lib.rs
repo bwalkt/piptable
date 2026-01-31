@@ -58,11 +58,14 @@ mod book;
 mod cell;
 mod csv;
 mod error;
+#[cfg(not(target_arch = "wasm32"))]
 mod html;
 mod json;
+#[cfg(not(target_arch = "wasm32"))]
 mod parquet;
 mod sheet;
 mod toon;
+#[cfg(not(target_arch = "wasm32"))]
 mod xlsx;
 
 pub use book::{Book, ConsolidateOptions, FileLoadOptions};
@@ -70,4 +73,5 @@ pub use cell::CellValue;
 pub use csv::CsvOptions;
 pub use error::{Result, SheetError};
 pub use sheet::Sheet;
+#[cfg(not(target_arch = "wasm32"))]
 pub use xlsx::XlsxReadOptions;

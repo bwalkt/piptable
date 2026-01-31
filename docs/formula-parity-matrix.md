@@ -101,5 +101,5 @@ This document tracks formula function parity between Piptable's implementation a
 ## Next Steps
 
 1. Add ROUND, ABS, and other essential math functions
-3. Implement IS* information functions for type checking
-4. Create comprehensive benchmarks for all implemented functions
+2. Implement IS* information functions for type checking
+3. Create comprehensive benchmarks for all implemented functions
