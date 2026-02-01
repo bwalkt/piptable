@@ -3536,6 +3536,16 @@ export data to "{}""#,
         assert!(err.to_string().to_lowercase().contains("no tables found"));
     }
 
+    #[cfg(not(target_arch = "wasm32"))]
+    #[tokio::test]
+    async fn test_import_pdf_invalid_page_range_option() {
+        let mut interp = Interpreter::new();
+        let script = r#"import "missing.pdf" into tables with { "page_range": "0-2" }"#;
+        let program = PipParser::parse_str(script).unwrap();
+        let err = interp.eval(program).await.unwrap_err();
+        assert!(err.to_string().contains("Invalid page_range"));
+    }
+
     #[tokio::test]
     async fn test_multi_file_import() {
         let dir = tempfile::tempdir().unwrap();
