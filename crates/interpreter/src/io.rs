@@ -712,7 +712,7 @@ pub fn import_sheet(
     } else if path_lower.ends_with(".pdf") {
         #[cfg(not(target_arch = "wasm32"))]
         {
-            let tables = import_pdf_tables(path, &options)?;
+            let tables = import_pdf_tables(path, options)?;
             if tables.len() > 1 {
                 return Err(format!(
                     "PDF '{}' contains {} tables; import into a book to access all tables",
