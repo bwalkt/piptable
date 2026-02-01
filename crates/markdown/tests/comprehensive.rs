@@ -57,6 +57,9 @@ fn test_type_inference() {
     assert!(matches!(first_row[2], CellValue::Float(f) if (f - 3.14).abs() < 0.001));
     assert!(matches!(first_row[3], CellValue::Bool(true)));
     assert!(matches!(first_row[4], CellValue::Null));
+
+    let second_row = &data[2];
+    assert!(matches!(second_row[4], CellValue::Null));
 }
 
 #[test]

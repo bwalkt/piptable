@@ -113,7 +113,7 @@ export sheet to "output.parquet" with {
 File format is automatically detected from extension:
 
 | Extension | Format | Target |
-|-----------|--------|--------|
+| ----------- | -------- | -------- |
 | .csv, .tsv | CSV/TSV | sheet |
 | .xlsx, .xls | Excel | sheet/book |
 | .json, .jsonl | JSON | sheet |

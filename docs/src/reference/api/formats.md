@@ -186,7 +186,7 @@ export sheet to "compressed.parquet" with {
 
 ## Markdown Format
 
-Extract tables from markdown documents and documentation files.
+Extract tables from Markdown documents and documentation files.
 
 ### Import Options (Rust API)
 
@@ -205,7 +205,7 @@ mirror other import formats once wired.
 ### Markdown Features
 - **Table extraction**: Find all tables in document
 - **Type inference**: Auto-detect Int, Float, Bool, String, Null
-- **Inline formatting**: Strip markdown syntax (bold, italic, code)
+- **Inline formatting**: Strip Markdown syntax (bold, italic, code)
 - **Multiple tables**: Extract all tables as Vec<Sheet>
 - **Header detection**: First row becomes column names
 
