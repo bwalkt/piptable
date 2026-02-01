@@ -2,12 +2,11 @@
 //!
 //! Maps between piptable_core::Value and TOON for safe WASM crossing
 
-use piptable_core::Value;
+use crate::Value;
+use piptable_primitives::toon::{ToonCellAddr, ToonValue};
+use piptable_primitives::CellAddress;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-
-use crate::toon::{ToonCellAddr, ToonValue};
-use crate::CellAddress;
 
 /// Sheet payload with automatic sparse/dense encoding selection
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -225,8 +224,8 @@ pub fn toon_to_value(toon: &ToonValue) -> Value {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use piptable_core::ast::{Expr, Literal, Param, ParamMode};
     use piptable_sheet::Sheet;
+    use piptable_types::{Expr, Literal, Param, ParamMode};
     use std::collections::HashMap;
 
     #[test]

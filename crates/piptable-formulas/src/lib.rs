@@ -3,7 +3,7 @@
 //! Formula parsing, compilation, and evaluation engine.
 //! Includes formula registry for standard functions (SUM, VLOOKUP, etc.)
 
-use piptable_primitives::{CellAddress, CellRange, ErrorValue, Value};
+use piptable_primitives::{CellAddress, CellRange, ErrorValue, R1C1Ref, Value};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::collections::HashSet;
@@ -32,12 +32,24 @@ pub enum FormulaExpr {
     Literal(Value),
     /// Cell reference
     CellRef(CellAddress),
+    /// R1C1-style cell reference
+    R1C1Ref(R1C1Ref),
     /// Range reference
     RangeRef(CellRange),
+    /// R1C1-style range reference
+    R1C1RangeRef { start: R1C1Ref, end: R1C1Ref },
     /// Sheet-qualified cell reference (e.g., Sheet1!A1)
     SheetCellRef { sheet: String, addr: CellAddress },
+    /// Sheet-qualified R1C1-style cell reference
+    SheetR1C1Ref { sheet: String, addr: R1C1Ref },
     /// Sheet-qualified range reference (e.g., Sheet1!A1:B2)
     SheetRangeRef { sheet: String, range: CellRange },
+    /// Sheet-qualified R1C1-style range reference
+    SheetR1C1RangeRef {
+        sheet: String,
+        start: R1C1Ref,
+        end: R1C1Ref,
+    },
     /// Function call
     FunctionCall {
         name: String,
@@ -154,10 +166,56 @@ impl FormulaEngine {
         match expr {
             FormulaExpr::Literal(value) => Ok(value.clone()),
             FormulaExpr::CellRef(addr) => Ok(context.get_cell(addr)),
+            FormulaExpr::R1C1Ref(r1c1) => {
+                let Some(base) = context.current_cell() else {
+                    return Ok(Value::Error(ErrorValue::Ref));
+                };
+                match r1c1.resolve(Some(base)) {
+                    Ok(addr) => Ok(context.get_cell(&addr)),
+                    Err(_) => Ok(Value::Error(ErrorValue::Ref)),
+                }
+            }
             FormulaExpr::RangeRef(range) => Ok(Value::Array(context.get_range(range))),
+            FormulaExpr::R1C1RangeRef { start, end } => {
+                let Some(base) = context.current_cell() else {
+                    return Ok(Value::Error(ErrorValue::Ref));
+                };
+                let start = start.resolve(Some(base));
+                let end = end.resolve(Some(base));
+                match (start, end) {
+                    (Ok(start), Ok(end)) => {
+                        let range = CellRange::new(start, end);
+                        Ok(Value::Array(context.get_range(&range)))
+                    }
+                    _ => Ok(Value::Error(ErrorValue::Ref)),
+                }
+            }
             FormulaExpr::SheetCellRef { sheet, addr } => Ok(context.get_sheet_cell(sheet, addr)),
+            FormulaExpr::SheetR1C1Ref { sheet, addr } => {
+                let Some(base) = context.current_cell() else {
+                    return Ok(Value::Error(ErrorValue::Ref));
+                };
+                match addr.resolve(Some(base)) {
+                    Ok(resolved) => Ok(context.get_sheet_cell(sheet, &resolved)),
+                    Err(_) => Ok(Value::Error(ErrorValue::Ref)),
+                }
+            }
             FormulaExpr::SheetRangeRef { sheet, range } => {
                 Ok(Value::Array(context.get_sheet_range(sheet, range)))
+            }
+            FormulaExpr::SheetR1C1RangeRef { sheet, start, end } => {
+                let Some(base) = context.current_cell() else {
+                    return Ok(Value::Error(ErrorValue::Ref));
+                };
+                let start = start.resolve(Some(base));
+                let end = end.resolve(Some(base));
+                match (start, end) {
+                    (Ok(start), Ok(end)) => {
+                        let range = CellRange::new(start, end);
+                        Ok(Value::Array(context.get_sheet_range(sheet, &range)))
+                    }
+                    _ => Ok(Value::Error(ErrorValue::Ref)),
+                }
             }
             FormulaExpr::UnaryOp { op, expr } => {
                 let value = self.eval_expr(expr, context)?;
@@ -568,6 +626,9 @@ pub struct FunctionMetadata {
 pub trait ValueResolver {
     fn get_cell(&self, addr: &CellAddress) -> Value;
     fn get_range(&self, range: &CellRange) -> Vec<Value>;
+    fn current_cell(&self) -> Option<CellAddress> {
+        None
+    }
     fn get_sheet_cell(&self, _sheet: &str, addr: &CellAddress) -> Value {
         self.get_cell(addr)
     }
@@ -636,13 +697,17 @@ fn collect_dependencies(expr: &FormulaExpr, deps: &mut HashSet<CellAddress>) {
         FormulaExpr::CellRef(addr) => {
             deps.insert(*addr);
         }
+        FormulaExpr::R1C1Ref(_) => {}
         FormulaExpr::RangeRef(range) => {
             for addr in range.iter() {
                 deps.insert(addr);
             }
         }
+        FormulaExpr::R1C1RangeRef { .. } => {}
         FormulaExpr::SheetCellRef { .. } => {}
+        FormulaExpr::SheetR1C1Ref { .. } => {}
         FormulaExpr::SheetRangeRef { .. } => {}
+        FormulaExpr::SheetR1C1RangeRef { .. } => {}
         FormulaExpr::FunctionCall { args, .. } => {
             for arg in args {
                 collect_dependencies(arg, deps);

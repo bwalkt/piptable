@@ -1,4 +1,5 @@
 use crate::error::{Result, SheetError};
+use piptable_primitives::R1C1Ref;
 
 /// Parse A1-style cell notation (e.g., "A1", "Z99", "AA1")
 /// Returns (row, column) as 0-based indices
@@ -46,6 +47,7 @@ pub fn parse_a1(notation: &str) -> Result<(usize, usize)> {
 
 /// Parse A1-style range notation (e.g., "A1:C3")
 /// Returns ((start_row, start_col), (end_row, end_col)) as 0-based indices
+#[allow(dead_code)]
 pub fn parse_a1_range(notation: &str) -> Result<((usize, usize), (usize, usize))> {
     let parts: Vec<&str> = notation.split(':').collect();
 
@@ -59,6 +61,43 @@ pub fn parse_a1_range(notation: &str) -> Result<((usize, usize), (usize, usize))
     let end = parse_a1(parts[1])?;
 
     // Ensure start <= end
+    let (start_row, start_col) = start;
+    let (end_row, end_col) = end;
+
+    let actual_start = (start_row.min(end_row), start_col.min(end_col));
+    let actual_end = (start_row.max(end_row), start_col.max(end_col));
+
+    Ok((actual_start, actual_end))
+}
+
+/// Parse cell notation supporting A1 or absolute R1C1 (e.g., "A1" or "R1C1").
+pub fn parse_cell_notation(notation: &str) -> Result<(usize, usize)> {
+    if let Ok(cell) = parse_a1(notation) {
+        return Ok(cell);
+    }
+
+    let r1c1 = R1C1Ref::from_r1c1(notation)
+        .map_err(|_| SheetError::InvalidCellNotation(notation.to_string()))?;
+    if !r1c1.is_absolute() {
+        return Err(SheetError::InvalidCellNotation(notation.to_string()));
+    }
+    let addr = r1c1
+        .resolve(None)
+        .map_err(|_| SheetError::InvalidCellNotation(notation.to_string()))?;
+    Ok((addr.row as usize, addr.col as usize))
+}
+
+/// Parse range notation supporting A1 or absolute R1C1 (e.g., "A1:C3" or "R1C1:R3C3").
+pub fn parse_range_notation(notation: &str) -> Result<((usize, usize), (usize, usize))> {
+    let parts: Vec<&str> = notation.split(':').collect();
+    if parts.len() != 2 {
+        let cell = parse_cell_notation(notation)?;
+        return Ok((cell, cell));
+    }
+
+    let start = parse_cell_notation(parts[0])?;
+    let end = parse_cell_notation(parts[1])?;
+
     let (start_row, start_col) = start;
     let (end_row, end_col) = end;
 
@@ -157,6 +196,20 @@ mod tests {
         let ((sr, sc), (er, ec)) = parse_a1_range("B2").unwrap();
         assert_eq!((sr, sc), (1, 1));
         assert_eq!((er, ec), (1, 1));
+    }
+
+    #[test]
+    fn test_parse_cell_notation_r1c1() {
+        assert_eq!(parse_cell_notation("R1C1").unwrap(), (0, 0));
+        assert_eq!(parse_cell_notation("R5C3").unwrap(), (4, 2));
+        assert!(parse_cell_notation("R[1]C1").is_err());
+    }
+
+    #[test]
+    fn test_parse_range_notation_r1c1() {
+        let ((sr, sc), (er, ec)) = parse_range_notation("R1C1:R2C3").unwrap();
+        assert_eq!((sr, sc), (0, 0));
+        assert_eq!((er, ec), (1, 2));
     }
 
     #[test]

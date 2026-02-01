@@ -128,6 +128,38 @@ async fn test_sheet_formula_eval_helpers() {
 }
 
 #[tokio::test]
+async fn test_r1c1_formula_support() {
+    let mut interp = Interpreter::new();
+    let sheet = Sheet::from_data(vec![
+        vec![CellValue::Int(10), CellValue::Int(20)],
+        vec![
+            CellValue::Int(30),
+            CellValue::String("=R[-1]C[-1]".to_string()),
+        ],
+    ]);
+    interp
+        .set_var("s", Value::Sheet(sheet))
+        .await
+        .expect("set sheet");
+
+    let script = r#"
+        dim relative = sheet_get_cell_value(s, "B2")
+        dim absolute = sheet_eval_formula(s, "SUM(R1C1:R2C1)")
+    "#;
+    let program = PipParser::parse_str(script).expect("parse script");
+    interp.eval(program).await.expect("eval script");
+
+    assert!(matches!(
+        interp.get_var("relative").await,
+        Some(Value::Int(10))
+    ));
+    assert!(matches!(
+        interp.get_var("absolute").await,
+        Some(Value::Float(f)) if (f - 40.0).abs() < 1e-9
+    ));
+}
+
+#[tokio::test]
 async fn test_sheet_formula_edge_cases() {
     let mut interp = Interpreter::new();
     let sheet = Sheet::from_data(vec![vec![

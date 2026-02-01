@@ -136,26 +136,34 @@ impl Sheet {
 
     /// Get a cell value using A1-style notation (e.g., "A1", "B2")
     pub fn get_a1(&self, notation: &str) -> Result<&CellValue> {
-        let (row, col) = crate::a1_notation::parse_a1(notation)?;
+        let (row, col) = crate::a1_notation::parse_cell_notation(notation)?;
         self.get(row, col)
+    }
+
+    /// Get the resolved address for a cell notation string.
+    pub fn get_a1_addr(&self, notation: &str) -> Result<piptable_primitives::CellAddress> {
+        let (row, col) = crate::a1_notation::parse_cell_notation(notation)?;
+        Ok(piptable_primitives::CellAddress::new(
+            row as u32, col as u32,
+        ))
     }
 
     /// Get a mutable cell reference using A1-style notation
     pub fn get_a1_mut(&mut self, notation: &str) -> Result<&mut CellValue> {
-        let (row, col) = crate::a1_notation::parse_a1(notation)?;
+        let (row, col) = crate::a1_notation::parse_cell_notation(notation)?;
         self.get_mut(row, col)
     }
 
     /// Set a cell value using A1-style notation
     pub fn set_a1<T: Into<CellValue>>(&mut self, notation: &str, value: T) -> Result<()> {
-        let (row, col) = crate::a1_notation::parse_a1(notation)?;
+        let (row, col) = crate::a1_notation::parse_cell_notation(notation)?;
         self.set(row, col, value)
     }
 
     /// Get a sub-sheet using A1-style range notation (e.g., "A1:C3")
     pub fn get_range(&self, range: &str) -> Result<Sheet> {
         let ((start_row, start_col), (end_row, end_col)) =
-            crate::a1_notation::parse_a1_range(range)?;
+            crate::a1_notation::parse_range_notation(range)?;
 
         // Validate bounds
         if end_row >= self.row_count() {
