@@ -632,6 +632,9 @@ mod tests {
         let result = if_fn(&[Value::Bool(true)]);
         assert_eq!(result, Value::Error(ErrorValue::Value));
 
+        let result = if_fn(&[Value::Bool(false)]);
+        assert_eq!(result, Value::Error(ErrorValue::Value));
+
         let result = if_fn(&[Value::Bool(false), Value::Int(1)]);
         assert_eq!(result, Value::Bool(false));
 
@@ -996,11 +999,11 @@ pub fn min(values: &[Value]) -> Value {
 }
 
 pub fn if_fn(values: &[Value]) -> Value {
+    if values.len() < 2 {
+        return Value::Error(ErrorValue::Value);
+    }
     let condition = values.first().unwrap_or(&Value::Empty);
-    let then_value = values
-        .get(1)
-        .cloned()
-        .unwrap_or(Value::Error(ErrorValue::Value));
+    let then_value = values.get(1).cloned().unwrap();
     let else_value = values.get(2).cloned().unwrap_or(Value::Bool(false));
 
     let truthy = match coerce_to_bool(condition) {
