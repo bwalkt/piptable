@@ -893,9 +893,7 @@ impl Interpreter {
                             let tables = io::import_pdf_tables(&paths[0], has_headers)
                                 .map_err(|e| PipError::Import(format!("Line {}: {}", line, e)))?;
                             if tables.len() == 1 {
-                                Value::Sheet(
-                                    tables.into_iter().next().expect("table exists"),
-                                )
+                                Value::Sheet(tables.into_iter().next().expect("table exists"))
                             } else {
                                 let mut book = std::collections::HashMap::new();
                                 for (idx, sheet) in tables.into_iter().enumerate() {
