@@ -23,8 +23,8 @@ use crate::formula::CachedFormulaEngine;
 use crate::sheet_conversions::{build_sheet_arrow_array, cell_to_value, infer_sheet_column_type};
 use async_recursion::async_recursion;
 use piptable_core::{
-    BinaryOp, Expr, LValue, Literal, Param, ParamMode, PipError, PipResult, Program, Statement,
-    UnaryOp, Value,
+    BinaryOp, Expr, ImportOptions, LValue, Literal, Param, ParamMode, PipError, PipResult, Program,
+    Statement, UnaryOp, Value,
 };
 use piptable_sheet::{CellValue, Sheet};
 use std::collections::{HashMap, HashSet};
@@ -864,20 +864,44 @@ impl Interpreter {
                         .map_err(|e| PipError::Import(format!("Line {}: {}", line, e)))?
                 } else {
                     // Single file import
-                    let has_headers = options.has_headers.unwrap_or(true);
                     let path_lower = paths[0].to_lowercase();
-                    if path_lower.ends_with(".md") || path_lower.ends_with(".markdown") {
+                    if path_lower.ends_with(".md") {
                         if sheet_name_str.is_some() {
                             return Err(PipError::Import(format!(
                                 "Line {}: sheet clause is not supported for Markdown import",
                                 line
                             )));
                         }
-                        io::import_markdown_book(&paths[0], has_headers)
+                        io::import_markdown_book(&paths[0], &options)
                             .map_err(|e| PipError::Import(format!("Line {}: {}", line, e)))?
+                    } else if path_lower.ends_with(".pdf") {
+                        if sheet_name_str.is_some() {
+                            return Err(PipError::Import(format!(
+                                "Line {}: sheet clause is not supported for PDF import",
+                                line
+                            )));
+                        }
+                        #[cfg(target_arch = "wasm32")]
+                        {
+                            return Err(PipError::Import(format!(
+                                "Line {}: PDF import is not supported in the playground",
+                                line
+                            )));
+                        }
+                        #[cfg(not(target_arch = "wasm32"))]
+                        {
+                            let tables = io::import_pdf_tables(&paths[0], &options)
+                                .map_err(|e| PipError::Import(format!("Line {}: {}", line, e)))?;
+                            let mut book = std::collections::HashMap::new();
+                            for (idx, sheet) in tables.into_iter().enumerate() {
+                                let name = format!("table_{}", idx + 1);
+                                book.insert(name, Value::Sheet(sheet));
+                            }
+                            Value::Object(book)
+                        }
                     } else {
                         let sheet =
-                            io::import_sheet(&paths[0], sheet_name_str.as_deref(), has_headers)
+                            io::import_sheet(&paths[0], sheet_name_str.as_deref(), &options)
                                 .map_err(|e| PipError::Import(format!("Line {}: {}", line, e)))?;
                         // Return as Sheet value to enable SQL queries
                         Value::Sheet(sheet)
@@ -2347,7 +2371,11 @@ impl Interpreter {
         } else if path_lower.ends_with(".xlsx") || path_lower.ends_with(".xls") {
             // Load Excel file as Sheet and register it
             use crate::io::import_sheet;
-            let sheet = import_sheet(path, None, true) // Assume Excel files have headers by default
+            let import_options = ImportOptions {
+                has_headers: Some(true),
+                ..ImportOptions::default()
+            };
+            let sheet = import_sheet(path, None, &import_options) // Assume Excel files have headers by default
                 .map_err(|e| {
                     PipError::runtime(0, format!("Failed to load Excel file '{}': {}", path, e))
                 })?;
@@ -2358,7 +2386,11 @@ impl Interpreter {
         } else if path_lower.ends_with(".toon") {
             // Load TOON file as Sheet and register it
             use crate::io::import_sheet;
-            let sheet = import_sheet(path, None, true) // TOON files have structured format with headers
+            let import_options = ImportOptions {
+                has_headers: Some(true),
+                ..ImportOptions::default()
+            };
+            let sheet = import_sheet(path, None, &import_options) // TOON files have structured format with headers
                 .map_err(|e| {
                     PipError::runtime(0, format!("Failed to load TOON file '{}': {}", path, e))
                 })?;
@@ -3429,15 +3461,13 @@ export data to "{}""#,
         let dir = tempfile::tempdir().unwrap();
         let file_path = dir.path().join("tables.md");
 
-        let md = r#"
-| Name | Qty |
+        let md = r#"| Name | Qty |
 | ---- | --- |
 | Apple | 10 |
 
 | Product | Price |
 | ------- | ----- |
-| Banana | 0.75 |
-"#;
+| Banana | 0.75 |"#;
         std::fs::write(&file_path, md).unwrap();
 
         let mut interp = Interpreter::new();
@@ -3453,6 +3483,66 @@ export data to "{}""#,
         } else {
             panic!("Markdown import should return a book object");
         }
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    #[tokio::test]
+    async fn test_import_markdown_options() {
+        let dir = tempfile::tempdir().unwrap();
+        let file_path = dir.path().join("options.md");
+
+        let md = "| Name | Qty |\n| ---- | --- |\n| Apple | 10 |";
+        std::fs::write(&file_path, md).unwrap();
+
+        let mut interp = Interpreter::new();
+        let script = format!(
+            r#"import "{}" into tables with {{ "detect_headers": true, "min_table_rows": 1 }}"#,
+            file_path.display()
+        );
+        let program = PipParser::parse_str(&script).unwrap();
+        interp.eval(program).await.unwrap();
+
+        let data = interp.get_var("tables").await.unwrap();
+        if let Value::Object(book) = &data {
+            let sheet = match book.get("table_1") {
+                Some(Value::Sheet(sheet)) => sheet,
+                _ => panic!("Expected table_1 sheet"),
+            };
+            let names = sheet.column_names().unwrap();
+            assert_eq!(names[0], "Name");
+            assert_eq!(names[1], "Qty");
+        } else {
+            panic!("Markdown import should return a book object");
+        }
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    #[tokio::test]
+    async fn test_import_markdown_min_table_size_filters() {
+        let dir = tempfile::tempdir().unwrap();
+        let file_path = dir.path().join("min_size.md");
+
+        let md = "| A | B |\n|---|---|\n| 1 | 2 |";
+        std::fs::write(&file_path, md).unwrap();
+
+        let mut interp = Interpreter::new();
+        let script = format!(
+            r#"import "{}" into tables with {{ "min_table_size": 3 }}"#,
+            file_path.display()
+        );
+        let program = PipParser::parse_str(&script).unwrap();
+        let err = interp.eval(program).await.unwrap_err();
+        assert!(err.to_string().to_lowercase().contains("no tables found"));
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    #[tokio::test]
+    async fn test_import_pdf_invalid_page_range_option() {
+        let mut interp = Interpreter::new();
+        let script = r#"import "missing.pdf" into tables with { "page_range": "0-2" }"#;
+        let program = PipParser::parse_str(script).unwrap();
+        let err = interp.eval(program).await.unwrap_err();
+        assert!(err.to_string().contains("Invalid page_range"));
     }
 
     #[tokio::test]
@@ -3958,32 +4048,6 @@ combined = consolidate(stores, "_store")
         // Sheet without header should return 2 (all rows)
         let raw_len = interp.get_var("raw_len").await.unwrap();
         assert!(matches!(raw_len, Value::Int(2)));
-    }
-
-    #[tokio::test]
-    async fn test_backward_compat_with_clause() {
-        let dir = tempfile::tempdir().unwrap();
-        let file_path = dir.path().join("test.csv");
-
-        // Create a test CSV file
-        std::fs::write(&file_path, "name,age\nalice,30").unwrap();
-
-        let mut interp = Interpreter::new();
-        // Test that old "with {}" syntax still parses (even if ignored)
-        let script = format!(
-            r#"import "{}" into data with {{"delimiter": ","}}"#,
-            file_path.display()
-        );
-        let program = PipParser::parse_str(&script).unwrap();
-        let result = interp.eval(program).await;
-
-        // Should not error - backward compatibility maintained
-        assert!(result.is_ok());
-
-        // Data should still be imported
-        let data = interp.get_var("data").await.unwrap();
-        assert!(matches!(&data, Value::Sheet(sheet) if sheet.row_count() == 2));
-        // header + 1 data row
     }
 
     #[tokio::test]
@@ -5315,10 +5379,14 @@ combined = consolidate(stores, "_store")
         book.save_as_xlsx(&xlsx_path).unwrap();
 
         // Test that our io module can load specific sheets
-        let result1 = io::import_sheet(&xlsx_path, None, true).unwrap();
+        let import_options = ImportOptions {
+            has_headers: Some(true),
+            ..ImportOptions::default()
+        };
+        let result1 = io::import_sheet(&xlsx_path, None, &import_options).unwrap();
         assert_eq!(result1.row_count(), 2);
 
-        let result2 = io::import_sheet(&xlsx_path, Some("Data"), true).unwrap();
+        let result2 = io::import_sheet(&xlsx_path, Some("Data"), &import_options).unwrap();
         assert_eq!(result2.row_count(), 2);
         assert_eq!(
             result2.data()[1][0],

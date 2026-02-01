@@ -1,5 +1,6 @@
 use piptable_pdf::{extract_tables_from_pdf, extract_tables_with_options, PdfError, PdfOptions};
 use std::io::Write;
+use std::path::Path;
 use tempfile::NamedTempFile;
 
 #[test]
@@ -33,6 +34,32 @@ fn test_pdf_options_default() {
     assert_eq!(options.ocr_language, "eng");
     assert_eq!(options.min_table_rows, 2);
     assert_eq!(options.min_table_cols, 2);
+}
+
+#[test]
+fn test_pdf_options_page_range_and_headers() {
+    let file_path =
+        Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/test_data/pdf_options_headers.pdf");
+
+    let options = PdfOptions {
+        page_range: Some((1, 1)),
+        min_table_rows: 2,
+        min_table_cols: 2,
+        ..Default::default()
+    };
+
+    let mut tables = extract_tables_with_options(&file_path, options).unwrap();
+    assert_eq!(tables.len(), 1);
+
+    let sheet = tables.pop().expect("table exists");
+    assert_eq!(sheet.row_count(), 6);
+    assert!(sheet.column_names().is_none());
+
+    let mut sheet_with_headers = sheet.clone();
+    sheet_with_headers.name_columns_by_row(0).unwrap();
+    let names = sheet_with_headers.column_names().unwrap();
+    assert_eq!(names[0], "Name");
+    assert_eq!(names[1], "Qty");
 }
 
 // Helper function to create a temporary text file for testing

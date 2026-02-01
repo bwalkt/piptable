@@ -586,8 +586,9 @@ fn build_import_stmt(pair: Pair<Rule>, line: usize) -> BuildResult<Statement> {
                 options = build_import_options(p)?;
             }
             Rule::with_clause => {
-                // For backward compatibility, ignore with clause but don't error
-                // This allows old scripts using "with {...}" to continue working
+                let pair_for_error = p.clone();
+                let expr = build_expr(p.into_inner().next().unwrap())?;
+                options = build_import_options_from_expr(expr, &pair_for_error)?;
             }
             _ => {}
         }
@@ -722,32 +723,112 @@ fn build_import_options(pair: Pair<Rule>) -> BuildResult<ImportOptions> {
             for param in inner.into_inner() {
                 let mut param_inner = param.into_inner();
                 let key_pair = param_inner.next().unwrap();
-                let key = key_pair.as_str();
+                let key = key_pair.as_str().to_string();
                 let value_pair = param_inner.next().unwrap();
                 let value = build_expr(value_pair.clone())?;
-
-                match key {
-                    "headers" => {
-                        if let Expr::Literal(Literal::Bool(b)) = value {
-                            options.has_headers = Some(b);
-                        } else {
-                            return Err(BuildError::from_pair(
-                                &value_pair,
-                                "headers option must be a boolean (true or false)",
-                            ));
-                        }
-                    }
-                    _ => {
-                        return Err(BuildError::from_pair(
-                            &key_pair,
-                            format!("Unknown import option: {key}"),
-                        ));
-                    }
-                }
+                apply_import_option(&mut options, key, value, &value_pair)?;
             }
             Ok(options)
         }
         _ => Ok(ImportOptions::default()),
+    }
+}
+
+fn build_import_options_from_expr(expr: Expr, pair: &Pair<Rule>) -> BuildResult<ImportOptions> {
+    match expr {
+        Expr::Object(items) => {
+            let mut options = ImportOptions::default();
+            for (key, value) in items {
+                apply_import_option(&mut options, key, value, pair)?;
+            }
+            Ok(options)
+        }
+        _ => Err(BuildError::from_pair(
+            pair,
+            "import with-clause must be an object literal",
+        )),
+    }
+}
+
+fn apply_import_option(
+    options: &mut ImportOptions,
+    key: String,
+    value: Expr,
+    pair: &Pair<Rule>,
+) -> BuildResult<()> {
+    match key.as_str() {
+        "headers" | "has_headers" => {
+            if let Expr::Literal(Literal::Bool(b)) = value {
+                options.has_headers = Some(b);
+                Ok(())
+            } else {
+                Err(BuildError::from_pair(
+                    pair,
+                    "headers option must be a boolean (true or false)",
+                ))
+            }
+        }
+        "detect_headers" => {
+            if let Expr::Literal(Literal::Bool(b)) = value {
+                options.detect_headers = Some(b);
+                Ok(())
+            } else {
+                Err(BuildError::from_pair(
+                    pair,
+                    "detect_headers option must be a boolean (true or false)",
+                ))
+            }
+        }
+        "page_range" => {
+            if let Expr::Literal(Literal::String(s)) = value {
+                options.page_range = Some(s);
+                Ok(())
+            } else {
+                Err(BuildError::from_pair(
+                    pair,
+                    "page_range option must be a string (e.g., \"1-5\")",
+                ))
+            }
+        }
+        "min_table_rows" => {
+            if let Expr::Literal(Literal::Int(n)) = value {
+                options.min_table_rows = Some(n as usize);
+                Ok(())
+            } else {
+                Err(BuildError::from_pair(
+                    pair,
+                    "min_table_rows option must be an integer",
+                ))
+            }
+        }
+        "min_table_cols" => {
+            if let Expr::Literal(Literal::Int(n)) = value {
+                options.min_table_cols = Some(n as usize);
+                Ok(())
+            } else {
+                Err(BuildError::from_pair(
+                    pair,
+                    "min_table_cols option must be an integer",
+                ))
+            }
+        }
+        "min_table_size" => {
+            if let Expr::Literal(Literal::Int(n)) = value {
+                let size = n as usize;
+                options.min_table_rows = Some(size);
+                options.min_table_cols = Some(size);
+                Ok(())
+            } else {
+                Err(BuildError::from_pair(
+                    pair,
+                    "min_table_size option must be an integer",
+                ))
+            }
+        }
+        _ => Err(BuildError::from_pair(
+            pair,
+            format!("Unknown import option: {key}"),
+        )),
     }
 }
 

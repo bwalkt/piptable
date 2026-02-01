@@ -79,13 +79,64 @@ dim passing = filter(names, scores)
 print(passing)`
   },
   markdown_import: {
-    description: "Markdown table import (file-based)",
-    code: `' Markdown Table Import
-' Markdown import works with files in the DSL:
+    description: "Markdown table import example",
+    code: `' Markdown Table Import Example
+' In a real environment, you would use:
 ' dim tables = import "README.md" into book
 ' dim first = tables["table_1"]
-'
-' File access is not available in the playground.`
+
+' Simulating markdown table data for playground:
+dim readme_table = [
+  ["Feature", "Status", "Description"],
+  ["Import CSV", "✅", "Full support"],
+  ["Import Excel", "✅", "Multi-sheet support"],
+  ["Import JSON", "✅", "Records and columns"],
+  ["Import Markdown", "✅", "Extract all tables"],
+  ["Import PDF", "✅", "Table extraction"],
+  ["Export Markdown", "🚧", "Coming soon"]
+]
+
+' Analyze feature status
+dim complete = 0
+dim in_progress = 0
+for i = 2 to 7
+  if readme_table[i][2] == "✅" then
+    complete = complete + 1
+  elseif readme_table[i][2] == "🚧" then
+    in_progress = in_progress + 1
+  end if
+next
+
+print("Features complete: " + str(complete))
+print("Features in progress: " + str(in_progress))`
+  },
+  pdf_import: {
+    description: "PDF table extraction example",
+    code: `' PDF Table Extraction Example
+' In a real environment, you would use:
+' dim report = import "financial_report.pdf" into book
+' dim quarterly = report["table_1"]
+
+' Simulating PDF extracted table for playground:
+dim financial_data = [
+  ["Quarter", "Revenue", "Expenses", "Profit"],
+  ["Q1 2024", 150000, 120000, 30000],
+  ["Q2 2024", 175000, 130000, 45000],
+  ["Q3 2024", 200000, 140000, 60000],
+  ["Q4 2024", 225000, 150000, 75000]
+]
+
+' Calculate totals
+dim total_revenue = 0
+dim total_profit = 0
+for i = 2 to 5
+  total_revenue = total_revenue + financial_data[i][2]
+  total_profit = total_profit + financial_data[i][4]
+next
+
+print("Annual Revenue: $" + str(total_revenue))
+print("Annual Profit: $" + str(total_profit))
+print("Profit Margin: " + str(round(total_profit * 100 / total_revenue, 2)) + "%")`
   },
   append_upsert: {
     description: "Append and upsert operations",
@@ -134,11 +185,6 @@ dim banana_qty = index(products, match("Banana", products, 0), 3)
 dim block = offset(products, 1, 0, 1, 2)
 dim bin_next = xlookup(6, [1, 3, 5, 7], ["A", "B", "C", "D"], "N/A", 1, 2)
 print("Total: " + str(total) + ", Avg: " + str(average))`
-  },
-  markdown_tables: {
-    description: "Markdown table import (Rust API)",
-    code: `' Markdown table import uses the Rust API (not available in DSL yet)
-print("Use piptable_markdown::extract_tables(markdown) in Rust")`
   }
 };
 

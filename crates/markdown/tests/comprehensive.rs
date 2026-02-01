@@ -91,3 +91,19 @@ fn test_no_tables_error() {
     assert!(result.is_err());
     assert!(result.unwrap_err().to_string().contains("No tables found"));
 }
+
+#[test]
+fn test_min_table_options_filter() {
+    let md = r#"
+| A | B |
+|---|---|
+| 1 | 2 |
+"#;
+
+    let options = piptable_markdown::MarkdownOptions {
+        min_table_rows: 3,
+        min_table_cols: 2,
+    };
+    let result = piptable_markdown::extract_tables_with_options(md, options);
+    assert!(result.is_err());
+}

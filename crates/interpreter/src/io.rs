@@ -186,7 +186,11 @@ fn export_sheet_with_mode_impl(sheet: &Sheet, path: &str, mode: ExportMode) -> R
             let has_headers = detect_csv_headers(path, delimiter)?;
 
             // Load the file with proper header handling
-            let mut existing_sheet = import_sheet(path, None, has_headers)
+            let import_options = ImportOptions {
+                has_headers: Some(has_headers),
+                ..ImportOptions::default()
+            };
+            let mut existing_sheet = import_sheet(path, None, &import_options)
                 .map_err(|e| format!("Failed to load existing file: {}", e))?;
 
             // Append new data to existing sheet based on mode
@@ -232,7 +236,11 @@ fn export_sheet_with_mode_impl(sheet: &Sheet, path: &str, mode: ExportMode) -> R
         // JSON append mode - need to load entire array, append, and save
         if std::path::Path::new(path).exists() {
             // Load existing JSON file
-            let mut existing_sheet = import_sheet(path, None, false)
+            let import_options = ImportOptions {
+                has_headers: Some(false),
+                ..ImportOptions::default()
+            };
+            let mut existing_sheet = import_sheet(path, None, &import_options)
                 .map_err(|e| format!("Failed to load existing JSON: {}", e))?;
 
             // Append new data to existing sheet based on mode
@@ -638,8 +646,9 @@ fn append_sheet_or_update(
 pub fn import_sheet(
     path: &str,
     sheet_name: Option<&str>,
-    has_headers: bool,
+    options: &ImportOptions,
 ) -> Result<Sheet, String> {
+    let has_headers = resolve_has_headers(options);
     #[cfg(target_arch = "wasm32")]
     let _ = sheet_name;
     // URL support would go here in the future
@@ -655,7 +664,7 @@ pub fn import_sheet(
         } else {
             Sheet::from_csv(path).map_err(|e| format!("Failed to import CSV: {}", e))?
         };
-        if has_headers {
+        if has_headers && !sheet.data().is_empty() {
             sheet
                 .name_columns_by_row(0)
                 .map_err(|e| format!("Failed to name columns: {}", e))?;
@@ -703,13 +712,18 @@ pub fn import_sheet(
     } else if path_lower.ends_with(".pdf") {
         #[cfg(not(target_arch = "wasm32"))]
         {
-            let tables = piptable_pdf::extract_tables_from_pdf(path)
-                .map_err(|e| format!("Failed to import PDF: {}", e))?;
+            let tables = import_pdf_tables(path, options)?;
+            if tables.len() > 1 {
+                return Err(format!(
+                    "PDF '{}' contains {} tables; import into a book to access all tables",
+                    path,
+                    tables.len()
+                ));
+            }
             let first = tables
                 .into_iter()
                 .next()
                 .ok_or_else(|| format!("No tables found in PDF '{}'", path))?;
-            // For Phase 1, return the first table found
             Ok(first)
         }
         #[cfg(target_arch = "wasm32")]
@@ -744,7 +758,7 @@ pub fn import_sheet(
             }
 
             let mut sheet = sheets.remove(0);
-            if has_headers {
+            if has_headers && !sheet.data().is_empty() {
                 sheet
                     .name_columns_by_row(0)
                     .map_err(|e| format!("Failed to name columns: {}", e))?;
@@ -780,7 +794,7 @@ pub fn import_multi_files(paths: &[String], options: &ImportOptions) -> Result<V
             counter += 1;
         }
 
-        let sheet = import_sheet(path, None, options.has_headers.unwrap_or(true))?;
+        let sheet = import_sheet(path, None, options)?;
         sheets.insert(name, Value::Sheet(sheet));
     }
 
@@ -791,9 +805,94 @@ pub fn import_multi_files(paths: &[String], options: &ImportOptions) -> Result<V
     }
 }
 
-pub fn import_markdown_book(path: &str, has_headers: bool) -> Result<Value, String> {
+fn resolve_has_headers(options: &ImportOptions) -> bool {
+    options
+        .detect_headers
+        .or(options.has_headers)
+        .unwrap_or(true)
+}
+
+fn resolve_min_table_rows(options: &ImportOptions) -> usize {
+    options.min_table_rows.unwrap_or(2)
+}
+
+fn resolve_min_table_cols(options: &ImportOptions) -> usize {
+    options.min_table_cols.unwrap_or(2)
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+fn parse_page_range(range: &str) -> Result<Option<(usize, usize)>, String> {
+    let trimmed = range.trim();
+    if trimmed.is_empty() {
+        return Ok(None);
+    }
+
+    if let Some((start, end)) = trimmed.split_once('-') {
+        let start_num = start
+            .trim()
+            .parse::<usize>()
+            .map_err(|_| format!("Invalid page_range '{}': start must be a number", range))?;
+        let end_num = end
+            .trim()
+            .parse::<usize>()
+            .map_err(|_| format!("Invalid page_range '{}': end must be a number", range))?;
+        if start_num == 0 || end_num == 0 || start_num > end_num {
+            return Err(format!(
+                "Invalid page_range '{}': must be 1-based start-end",
+                range
+            ));
+        }
+        Ok(Some((start_num, end_num)))
+    } else {
+        let page = trimmed.parse::<usize>().map_err(|_| {
+            format!(
+                "Invalid page_range '{}': must be a number or start-end",
+                range
+            )
+        })?;
+        if page == 0 {
+            return Err(format!("Invalid page_range '{}': must be 1-based", range));
+        }
+        Ok(Some((page, page)))
+    }
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+pub fn import_pdf_tables(path: &str, options: &ImportOptions) -> Result<Vec<Sheet>, String> {
+    let pdf_options = piptable_pdf::extractor::PdfOptions {
+        page_range: match &options.page_range {
+            Some(range) => parse_page_range(range)?,
+            None => None,
+        },
+        ocr_enabled: false,
+        ocr_language: "eng".to_string(),
+        min_table_rows: resolve_min_table_rows(options),
+        min_table_cols: resolve_min_table_cols(options),
+    };
+
+    let mut tables = piptable_pdf::extract_tables_with_options(path, pdf_options)
+        .map_err(|e| format!("Failed to import PDF: {}", e))?;
+
+    if tables.is_empty() {
+        return Err(format!("No tables found in PDF '{}'", path));
+    }
+
+    if resolve_has_headers(options) {
+        for sheet in &mut tables {
+            if !sheet.data().is_empty() {
+                sheet
+                    .name_columns_by_row(0)
+                    .map_err(|e| format!("Failed to name columns: {}", e))?;
+            }
+        }
+    }
+
+    Ok(tables)
+}
+
+pub fn import_markdown_book(path: &str, options: &ImportOptions) -> Result<Value, String> {
     #[cfg(target_arch = "wasm32")]
-    let _ = has_headers;
+    let _ = options;
 
     #[cfg(target_arch = "wasm32")]
     {
@@ -804,7 +903,11 @@ pub fn import_markdown_book(path: &str, has_headers: bool) -> Result<Value, Stri
     {
         let markdown = std::fs::read_to_string(path)
             .map_err(|e| format!("Failed to read Markdown file: {}", e))?;
-        let mut sheets = piptable_markdown::extract_tables(&markdown)
+        let md_options = piptable_markdown::MarkdownOptions {
+            min_table_rows: resolve_min_table_rows(options),
+            min_table_cols: resolve_min_table_cols(options),
+        };
+        let mut sheets = piptable_markdown::extract_tables_with_options(&markdown, md_options)
             .map_err(|e| format!("Failed to import Markdown: {}", e))?;
 
         if sheets.is_empty() {
@@ -813,7 +916,7 @@ pub fn import_markdown_book(path: &str, has_headers: bool) -> Result<Value, Stri
 
         let mut book = HashMap::new();
         for (idx, mut sheet) in sheets.drain(..).enumerate() {
-            if has_headers {
+            if resolve_has_headers(options) && !sheet.data().is_empty() {
                 sheet
                     .name_columns_by_row(0)
                     .map_err(|e| format!("Failed to name columns: {}", e))?;

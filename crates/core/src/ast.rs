@@ -432,6 +432,14 @@ pub struct ChartOption {
 pub struct ImportOptions {
     /// Whether files have headers (default: true)
     pub has_headers: Option<bool>,
+    /// Optional page range (PDF only). Example: "1-5"
+    pub page_range: Option<String>,
+    /// Minimum table rows (PDF/Markdown)
+    pub min_table_rows: Option<usize>,
+    /// Minimum table columns (PDF/Markdown)
+    pub min_table_cols: Option<usize>,
+    /// Alias for headers detection (PDF/Markdown)
+    pub detect_headers: Option<bool>,
 }
 
 impl ImportOptions {
@@ -464,6 +472,7 @@ impl ImportOptions {
     pub fn without_headers() -> Self {
         Self {
             has_headers: Some(false),
+            ..Self::default()
         }
     }
 }

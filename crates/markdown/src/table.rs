@@ -14,17 +14,52 @@ pub struct MarkdownTables {
     pub tables: Vec<MarkdownTable>,
 }
 
+#[derive(Debug, Clone, Copy)]
+pub struct MarkdownOptions {
+    pub min_table_rows: usize,
+    pub min_table_cols: usize,
+}
+
+impl Default for MarkdownOptions {
+    fn default() -> Self {
+        Self {
+            min_table_rows: 2,
+            min_table_cols: 2,
+        }
+    }
+}
+
 impl MarkdownTables {
     pub fn from_markdown(markdown: &str) -> Result<Self> {
-        let arena = Arena::new();
-        let mut options = ComrakOptions::default();
-        options.extension.table = true;
+        Self::from_markdown_with_options(markdown, MarkdownOptions::default())
+    }
 
-        let root = parse_document(&arena, markdown, &options);
+    pub fn from_markdown_with_options(markdown: &str, options: MarkdownOptions) -> Result<Self> {
+        let arena = Arena::new();
+        let mut comrak_options = ComrakOptions::default();
+        comrak_options.extension.table = true;
+
+        let root = parse_document(&arena, markdown, &comrak_options);
         let mut tables = Vec::new();
         collect_tables(root, &mut tables)?;
 
-        Ok(Self { tables })
+        let filtered = tables
+            .into_iter()
+            .filter(|table| {
+                // Count total rows including header if present
+                let header_count = if table.headers.is_some() { 1 } else { 0 };
+                let total_row_count = header_count + table.rows.len();
+                let col_count = table
+                    .rows
+                    .first()
+                    .map(|row| row.len())
+                    .or_else(|| table.headers.as_ref().map(|h| h.len()))
+                    .unwrap_or(0);
+                total_row_count >= options.min_table_rows && col_count >= options.min_table_cols
+            })
+            .collect();
+
+        Ok(Self { tables: filtered })
     }
 }
 
