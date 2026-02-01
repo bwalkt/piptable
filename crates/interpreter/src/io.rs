@@ -791,6 +791,39 @@ pub fn import_multi_files(paths: &[String], options: &ImportOptions) -> Result<V
     }
 }
 
+pub fn import_pdf_book(path: &str, has_headers: bool) -> Result<Value, String> {
+    #[cfg(target_arch = "wasm32")]
+    let _ = has_headers;
+
+    #[cfg(target_arch = "wasm32")]
+    {
+        return Err("PDF import is not supported in the playground".to_string());
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        let tables = piptable_pdf::extract_tables_from_pdf(path)
+            .map_err(|e| format!("Failed to import PDF: {}", e))?;
+
+        if tables.is_empty() {
+            return Err(format!("No tables found in PDF '{}'", path));
+        }
+
+        let mut book = HashMap::new();
+        for (idx, mut sheet) in tables.into_iter().enumerate() {
+            if has_headers {
+                sheet
+                    .name_columns_by_row(0)
+                    .map_err(|e| format!("Failed to name columns: {}", e))?;
+            }
+            let name = format!("table_{}", idx + 1);
+            book.insert(name, Value::Sheet(sheet));
+        }
+
+        Ok(Value::Object(book))
+    }
+}
+
 pub fn import_markdown_book(path: &str, has_headers: bool) -> Result<Value, String> {
     #[cfg(target_arch = "wasm32")]
     let _ = has_headers;

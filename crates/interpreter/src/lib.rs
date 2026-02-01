@@ -866,7 +866,7 @@ impl Interpreter {
                     // Single file import
                     let has_headers = options.has_headers.unwrap_or(true);
                     let path_lower = paths[0].to_lowercase();
-                    if path_lower.ends_with(".md") || path_lower.ends_with(".markdown") {
+                    if path_lower.ends_with(".md") {
                         if sheet_name_str.is_some() {
                             return Err(PipError::Import(format!(
                                 "Line {}: sheet clause is not supported for Markdown import",
@@ -874,6 +874,15 @@ impl Interpreter {
                             )));
                         }
                         io::import_markdown_book(&paths[0], has_headers)
+                            .map_err(|e| PipError::Import(format!("Line {}: {}", line, e)))?
+                    } else if path_lower.ends_with(".pdf") {
+                        if sheet_name_str.is_some() {
+                            return Err(PipError::Import(format!(
+                                "Line {}: sheet clause is not supported for PDF import",
+                                line
+                            )));
+                        }
+                        io::import_pdf_book(&paths[0], has_headers)
                             .map_err(|e| PipError::Import(format!("Line {}: {}", line, e)))?
                     } else {
                         let sheet =

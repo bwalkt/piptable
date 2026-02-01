@@ -13,6 +13,7 @@ PipTable supports importing and exporting various file formats for data intercha
 | Parquet | .parquet | ✅ | ✅ | ❌ | Columnar storage |
 | TOON | .toon | ✅ | ✅ | ❌ | PipTable native format |
 | Markdown | .md | ✅ | 🚧 | ✅ | Import tables from docs |
+| PDF | .pdf | ✅ | 🚧 | ✅ | Extract tables from PDFs |
 
 ## CSV/TSV Format
 
@@ -220,6 +221,22 @@ Result Sheet:
 - Column names: ["Name", "Score", "Pass"]
 - Types: [String, Int, Bool]
 - 3 data rows
+
+## PDF Format
+
+Extract tables from PDFs and return them as a book of sheets.
+
+### Import Options
+
+```piptable
+dim tables = import "report.pdf" into book
+dim first = tables["table_1"]
+```
+
+### PDF Features
+- **Table extraction**: Extracts tables found in the PDF
+- **Multiple tables**: Each table is a sheet in the book
+- **Header detection**: First row becomes column names
 
 ## TOON Format
 
