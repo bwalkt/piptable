@@ -186,7 +186,11 @@ fn export_sheet_with_mode_impl(sheet: &Sheet, path: &str, mode: ExportMode) -> R
             let has_headers = detect_csv_headers(path, delimiter)?;
 
             // Load the file with proper header handling
-            let mut existing_sheet = import_sheet(path, None, has_headers)
+            let import_options = ImportOptions {
+                has_headers: Some(has_headers),
+                ..ImportOptions::default()
+            };
+            let mut existing_sheet = import_sheet(path, None, &import_options)
                 .map_err(|e| format!("Failed to load existing file: {}", e))?;
 
             // Append new data to existing sheet based on mode
@@ -232,7 +236,11 @@ fn export_sheet_with_mode_impl(sheet: &Sheet, path: &str, mode: ExportMode) -> R
         // JSON append mode - need to load entire array, append, and save
         if std::path::Path::new(path).exists() {
             // Load existing JSON file
-            let mut existing_sheet = import_sheet(path, None, false)
+            let import_options = ImportOptions {
+                has_headers: Some(false),
+                ..ImportOptions::default()
+            };
+            let mut existing_sheet = import_sheet(path, None, &import_options)
                 .map_err(|e| format!("Failed to load existing JSON: {}", e))?;
 
             // Append new data to existing sheet based on mode
@@ -638,8 +646,9 @@ fn append_sheet_or_update(
 pub fn import_sheet(
     path: &str,
     sheet_name: Option<&str>,
-    has_headers: bool,
+    options: &ImportOptions,
 ) -> Result<Sheet, String> {
+    let has_headers = resolve_has_headers(options);
     #[cfg(target_arch = "wasm32")]
     let _ = sheet_name;
     // URL support would go here in the future
@@ -703,11 +712,14 @@ pub fn import_sheet(
     } else if path_lower.ends_with(".pdf") {
         #[cfg(not(target_arch = "wasm32"))]
         {
-            let options = ImportOptions {
-                has_headers: Some(has_headers),
-                ..ImportOptions::default()
-            };
             let tables = import_pdf_tables(path, &options)?;
+            if tables.len() > 1 {
+                return Err(format!(
+                    "PDF '{}' contains {} tables; import into a book to access all tables",
+                    path,
+                    tables.len()
+                ));
+            }
             let first = tables
                 .into_iter()
                 .next()
@@ -782,7 +794,7 @@ pub fn import_multi_files(paths: &[String], options: &ImportOptions) -> Result<V
             counter += 1;
         }
 
-        let sheet = import_sheet(path, None, resolve_has_headers(options))?;
+        let sheet = import_sheet(path, None, options)?;
         sheets.insert(name, Value::Sheet(sheet));
     }
 

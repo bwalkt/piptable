@@ -864,10 +864,6 @@ impl Interpreter {
                         .map_err(|e| PipError::Import(format!("Line {}: {}", line, e)))?
                 } else {
                     // Single file import
-                    let has_headers = options
-                        .detect_headers
-                        .or(options.has_headers)
-                        .unwrap_or(true);
                     let path_lower = paths[0].to_lowercase();
                     if path_lower.ends_with(".md") {
                         if sheet_name_str.is_some() {
@@ -887,28 +883,25 @@ impl Interpreter {
                         }
                         #[cfg(target_arch = "wasm32")]
                         {
-                            return Err(PipError::Import(
-                                "PDF import is not supported in the playground".to_string(),
-                            ));
+                            return Err(PipError::Import(format!(
+                                "Line {}: PDF import is not supported in the playground",
+                                line
+                            )));
                         }
                         #[cfg(not(target_arch = "wasm32"))]
                         {
                             let tables = io::import_pdf_tables(&paths[0], &options)
                                 .map_err(|e| PipError::Import(format!("Line {}: {}", line, e)))?;
-                            if tables.len() == 1 {
-                                Value::Sheet(tables.into_iter().next().expect("table exists"))
-                            } else {
-                                let mut book = std::collections::HashMap::new();
-                                for (idx, sheet) in tables.into_iter().enumerate() {
-                                    let name = format!("table_{}", idx + 1);
-                                    book.insert(name, Value::Sheet(sheet));
-                                }
-                                Value::Object(book)
+                            let mut book = std::collections::HashMap::new();
+                            for (idx, sheet) in tables.into_iter().enumerate() {
+                                let name = format!("table_{}", idx + 1);
+                                book.insert(name, Value::Sheet(sheet));
                             }
+                            Value::Object(book)
                         }
                     } else {
                         let sheet =
-                            io::import_sheet(&paths[0], sheet_name_str.as_deref(), has_headers)
+                            io::import_sheet(&paths[0], sheet_name_str.as_deref(), &options)
                                 .map_err(|e| PipError::Import(format!("Line {}: {}", line, e)))?;
                         // Return as Sheet value to enable SQL queries
                         Value::Sheet(sheet)
@@ -2378,7 +2371,11 @@ impl Interpreter {
         } else if path_lower.ends_with(".xlsx") || path_lower.ends_with(".xls") {
             // Load Excel file as Sheet and register it
             use crate::io::import_sheet;
-            let sheet = import_sheet(path, None, true) // Assume Excel files have headers by default
+            let import_options = ImportOptions {
+                has_headers: Some(true),
+                ..ImportOptions::default()
+            };
+            let sheet = import_sheet(path, None, &import_options) // Assume Excel files have headers by default
                 .map_err(|e| {
                     PipError::runtime(0, format!("Failed to load Excel file '{}': {}", path, e))
                 })?;
@@ -2389,7 +2386,11 @@ impl Interpreter {
         } else if path_lower.ends_with(".toon") {
             // Load TOON file as Sheet and register it
             use crate::io::import_sheet;
-            let sheet = import_sheet(path, None, true) // TOON files have structured format with headers
+            let import_options = ImportOptions {
+                has_headers: Some(true),
+                ..ImportOptions::default()
+            };
+            let sheet = import_sheet(path, None, &import_options) // TOON files have structured format with headers
                 .map_err(|e| {
                     PipError::runtime(0, format!("Failed to load TOON file '{}': {}", path, e))
                 })?;
@@ -5378,10 +5379,14 @@ combined = consolidate(stores, "_store")
         book.save_as_xlsx(&xlsx_path).unwrap();
 
         // Test that our io module can load specific sheets
-        let result1 = io::import_sheet(&xlsx_path, None, true).unwrap();
+        let import_options = ImportOptions {
+            has_headers: Some(true),
+            ..ImportOptions::default()
+        };
+        let result1 = io::import_sheet(&xlsx_path, None, &import_options).unwrap();
         assert_eq!(result1.row_count(), 2);
 
-        let result2 = io::import_sheet(&xlsx_path, Some("Data"), true).unwrap();
+        let result2 = io::import_sheet(&xlsx_path, Some("Data"), &import_options).unwrap();
         assert_eq!(result2.row_count(), 2);
         assert_eq!(
             result2.data()[1][0],

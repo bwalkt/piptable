@@ -8,10 +8,10 @@ PipTable can extract tables from PDF documents, making it easy to analyze data f
 
 ```piptable
 ' Single table -> sheet
-dim report = import "report.pdf" into report
+dim report = import "report.pdf" into sheet
 
 ' Multiple tables -> book
-dim tables = import "report.pdf" into tables
+dim tables = import "report.pdf" into book
 dim summary = tables["table_1"]
 dim details = tables["table_2"]
 ```
@@ -125,12 +125,12 @@ export analysis to "experiment_results.json"
 PDF tables automatically detect data types:
 
 | PDF Content | Detected Type | Example |
-|-------------|---------------|---------|
-| Numbers | Int/Float | `42`, `3.14` |
-| Percentages | String/Float | `"85%"` → can parse |
-| Currency | String | `"$1,234.56"` |
-| Dates | String | `"2024-01-01"` |
-| Text | String | `"Product Name"` |
+| ----------- | ------------- | ------- |
+| Numbers     | Int/Float     | `42`, `3.14` |
+| Percentages | String/Float  | `"85%"` → can parse |
+| Currency    | String        | `"$1,234.56"` |
+| Dates       | String        | `"2024-01-01"` |
+| Text        | String        | `"Product Name"` |
 
 ### Multiple Table Handling
 
@@ -140,20 +140,16 @@ PDFs often contain multiple tables:
 ' Process all tables in a PDF
 dim document = import "complex_report.pdf" into book
 
-' Iterate through all tables
-for i = 1 to 10  ' Check up to 10 tables
-    dim table_name = "table_" + str(i)
+' Iterate through all tables (keys() avoids fixed limits)
+for key in document.keys()
+    dim table = document[key]
+    print(key + " has " + str(table.row_count()) + " rows")
     
-    if document.has_key(table_name) then
-        dim table = document[table_name]
-        print("Table " + str(i) + " has " + str(table.row_count()) + " rows")
-        
-        ' Process based on content
-        if table.has_column("Revenue") then
-            print("  -> Financial table detected")
-        elseif table.has_column("Name") then
-            print("  -> Personnel table detected")
-        end if
+    ' Process based on content
+    if table.has_column("Revenue") then
+        print("  -> Financial table detected")
+    elseif table.has_column("Name") then
+        print("  -> Personnel table detected")
     end if
 next
 ```
