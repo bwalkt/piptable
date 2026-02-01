@@ -864,7 +864,10 @@ impl Interpreter {
                         .map_err(|e| PipError::Import(format!("Line {}: {}", line, e)))?
                 } else {
                     // Single file import
-                    let has_headers = options.has_headers.unwrap_or(true);
+                    let has_headers = options
+                        .detect_headers
+                        .or(options.has_headers)
+                        .unwrap_or(true);
                     let path_lower = paths[0].to_lowercase();
                     if path_lower.ends_with(".md") {
                         if sheet_name_str.is_some() {
@@ -873,7 +876,7 @@ impl Interpreter {
                                 line
                             )));
                         }
-                        io::import_markdown_book(&paths[0], has_headers)
+                        io::import_markdown_book(&paths[0], &options)
                             .map_err(|e| PipError::Import(format!("Line {}: {}", line, e)))?
                     } else if path_lower.ends_with(".pdf") {
                         if sheet_name_str.is_some() {
@@ -890,7 +893,7 @@ impl Interpreter {
                         }
                         #[cfg(not(target_arch = "wasm32"))]
                         {
-                            let tables = io::import_pdf_tables(&paths[0], has_headers)
+                            let tables = io::import_pdf_tables(&paths[0], &options)
                                 .map_err(|e| PipError::Import(format!("Line {}: {}", line, e)))?;
                             if tables.len() == 1 {
                                 Value::Sheet(tables.into_iter().next().expect("table exists"))

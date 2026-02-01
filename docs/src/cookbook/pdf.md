@@ -19,8 +19,16 @@ dim details = tables["table_2"]
 ### With Headers
 
 ```piptable
-' Import with header detection (book)
-dim report = import "financial_report.pdf" with {"has_headers": true} into book
+dim options = {
+    "has_headers": true,
+    "detect_headers": true,
+    "min_table_rows": 2,
+    "min_table_cols": 2,
+    "min_table_size": 2,
+    "page_range": "1-5"
+}
+
+dim report = import "financial_report.pdf" with options into book
 
 ' First row of each table becomes column names
 dim quarterly = report["table_1"]

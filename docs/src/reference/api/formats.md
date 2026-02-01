@@ -197,6 +197,17 @@ dim tables = import "README.md" into book
 
 ' Access a table by name (table_1, table_2, ...)
 dim first = tables["table_1"]
+
+' Optional import options
+dim options = {
+  "has_headers": true,
+  "detect_headers": true,
+  "min_table_rows": 2,
+  "min_table_cols": 2,
+  "min_table_size": 2,
+  "page_range": "1-3"  ' ignored for Markdown
+}
+dim tables = import "README.md" with options into book
 ```
 
 ### Markdown Features
@@ -205,6 +216,7 @@ dim first = tables["table_1"]
 - **Inline formatting**: Strip Markdown syntax (bold, italic, code)
 - **Multiple tables**: Extract all tables as a book of sheets
 - **Header detection**: First row becomes column names
+- **Options**: min_table_rows/min_table_cols, detect_headers (page_range ignored)
 
 ### Markdown Example
 
@@ -238,8 +250,16 @@ dim report = import "report.pdf" into report
 dim tables = import "report.pdf" into tables
 dim summary = tables["table_1"]
 
-' With header detection (book)
-dim report_tables = import "financial.pdf" with {"has_headers": true} into book
+' With options (book)
+dim options = {
+  "has_headers": true,
+  "detect_headers": true,
+  "min_table_rows": 2,
+  "min_table_cols": 2,
+  "min_table_size": 2,
+  "page_range": "1-5"
+}
+dim report_tables = import "financial.pdf" with options into book
 ```
 
 ### PDF Features

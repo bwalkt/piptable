@@ -124,6 +124,10 @@ File format is automatically detected from extension:
 | .md | Markdown | book |
 | .pdf | PDF | sheet/book |
 
+Markdown and PDF imports accept optional table extraction options:
+`has_headers`, `detect_headers`, `min_table_rows`, `min_table_cols`, `min_table_size`.
+`page_range` applies to PDFs only and is ignored for Markdown.
+
 ## Dynamic Import/Export
 
 ### Variable Paths

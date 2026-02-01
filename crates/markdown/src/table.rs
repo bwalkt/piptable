@@ -14,8 +14,27 @@ pub struct MarkdownTables {
     pub tables: Vec<MarkdownTable>,
 }
 
+#[derive(Debug, Clone, Copy)]
+pub struct MarkdownOptions {
+    pub min_table_rows: usize,
+    pub min_table_cols: usize,
+}
+
+impl Default for MarkdownOptions {
+    fn default() -> Self {
+        Self {
+            min_table_rows: 2,
+            min_table_cols: 2,
+        }
+    }
+}
+
 impl MarkdownTables {
     pub fn from_markdown(markdown: &str) -> Result<Self> {
+        Self::from_markdown_with_options(markdown, MarkdownOptions::default())
+    }
+
+    pub fn from_markdown_with_options(markdown: &str, options: MarkdownOptions) -> Result<Self> {
         let arena = Arena::new();
         let mut options = ComrakOptions::default();
         options.extension.table = true;
@@ -24,7 +43,21 @@ impl MarkdownTables {
         let mut tables = Vec::new();
         collect_tables(root, &mut tables)?;
 
-        Ok(Self { tables })
+        let filtered = tables
+            .into_iter()
+            .filter(|table| {
+                let row_count = table.rows.len();
+                let col_count = table
+                    .rows
+                    .first()
+                    .map(|row| row.len())
+                    .or_else(|| table.headers.as_ref().map(|h| h.len()))
+                    .unwrap_or(0);
+                row_count >= options.min_table_rows && col_count >= options.min_table_cols
+            })
+            .collect();
+
+        Ok(Self { tables: filtered })
     }
 }
 

@@ -737,6 +737,58 @@ fn build_import_options(pair: Pair<Rule>) -> BuildResult<ImportOptions> {
                             ));
                         }
                     }
+                    "detect_headers" => {
+                        if let Expr::Literal(Literal::Bool(b)) = value {
+                            options.detect_headers = Some(b);
+                        } else {
+                            return Err(BuildError::from_pair(
+                                &value_pair,
+                                "detect_headers option must be a boolean (true or false)",
+                            ));
+                        }
+                    }
+                    "page_range" => {
+                        if let Expr::Literal(Literal::String(s)) = value {
+                            options.page_range = Some(s);
+                        } else {
+                            return Err(BuildError::from_pair(
+                                &value_pair,
+                                "page_range option must be a string (e.g., \"1-5\")",
+                            ));
+                        }
+                    }
+                    "min_table_rows" => {
+                        if let Expr::Literal(Literal::Int(n)) = value {
+                            options.min_table_rows = Some(n as usize);
+                        } else {
+                            return Err(BuildError::from_pair(
+                                &value_pair,
+                                "min_table_rows option must be an integer",
+                            ));
+                        }
+                    }
+                    "min_table_cols" => {
+                        if let Expr::Literal(Literal::Int(n)) = value {
+                            options.min_table_cols = Some(n as usize);
+                        } else {
+                            return Err(BuildError::from_pair(
+                                &value_pair,
+                                "min_table_cols option must be an integer",
+                            ));
+                        }
+                    }
+                    "min_table_size" => {
+                        if let Expr::Literal(Literal::Int(n)) = value {
+                            let size = n as usize;
+                            options.min_table_rows = Some(size);
+                            options.min_table_cols = Some(size);
+                        } else {
+                            return Err(BuildError::from_pair(
+                                &value_pair,
+                                "min_table_size option must be an integer",
+                            ));
+                        }
+                    }
                     _ => {
                         return Err(BuildError::from_pair(
                             &key_pair,

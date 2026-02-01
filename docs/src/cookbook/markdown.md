@@ -26,6 +26,23 @@ dim features = docs["table_1"]
 print(features.column_names())  ' ["Feature", "Status", "Description"]
 ```
 
+### With Options
+
+```piptable
+dim options = {
+    "has_headers": true,
+    "detect_headers": true,
+    "min_table_rows": 2,
+    "min_table_cols": 2,
+    "min_table_size": 2,
+    "page_range": "1-3"  ' ignored for Markdown
+}
+
+dim docs = import "documentation.md" with options into book
+```
+
+Note: `page_range` is ignored for Markdown imports.
+
 ## Examples
 
 ### Documentation to Data
