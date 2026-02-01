@@ -199,8 +199,6 @@ dim data = import csv_text as csv into sheet
 dim json_text = '[{"name": "Alice", "age": 30}]'
 dim data = import json_text as json into sheet
 
-' Markdown string
-dim md_tables = import "report.md" into book
 ```
 
 ## Error Handling

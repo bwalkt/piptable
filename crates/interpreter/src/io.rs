@@ -727,7 +727,7 @@ pub fn import_sheet(
         {
             Err("HTML import is not supported in the playground".to_string())
         }
-    } else if path_lower.ends_with(".md") || path_lower.ends_with(".markdown") {
+    } else if path_lower.ends_with(".md") {
         #[cfg(not(target_arch = "wasm32"))]
         {
             let markdown = std::fs::read_to_string(path)
