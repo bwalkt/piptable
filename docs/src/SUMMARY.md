@@ -53,6 +53,7 @@
   - [Sheet Rust API](cookbook/sheet-rust-api.md)
   - [Formulas](cookbook/formulas.md)
   - [Markdown Tables](cookbook/markdown.md)
+  - [PDF Tables](cookbook/pdf.md)
   
 - [ETL Pipelines](cookbook/etl.md)
   - [Data Import](cookbook/import.md)

@@ -87,6 +87,14 @@ print(passing)`
 '
 ' File access is not available in the playground.`
   },
+  pdf_import: {
+    description: "PDF table import (file-based)",
+    code: `' PDF Table Import
+' dim tables = import "report.pdf" into book
+' dim first = tables["table_1"]
+'
+' File access is not available in the playground.`
+  },
   append_upsert: {
     description: "Append and upsert operations",
     code: `' Append + Upsert

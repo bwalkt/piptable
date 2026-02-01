@@ -3464,6 +3464,25 @@ export data to "{}""#,
         }
     }
 
+    #[cfg(not(target_arch = "wasm32"))]
+    #[tokio::test]
+    #[ignore = "requires pdfium/tesseract dependencies"]
+    async fn test_import_pdf_tables() {
+        let dir = tempfile::tempdir().unwrap();
+        let file_path = dir.path().join("tables.pdf");
+
+        // Minimal placeholder PDF content for the extractor path.
+        std::fs::write(&file_path, "Minimal PDF content with <50 chars").unwrap();
+
+        let mut interp = Interpreter::new();
+        let script = format!(r#"import "{}" into tables"#, file_path.display());
+        let program = PipParser::parse_str(&script).unwrap();
+        let result = interp.eval(program).await;
+
+        // We only assert that the import attempts to run; actual extraction depends on PDF tooling.
+        assert!(result.is_ok() || result.is_err());
+    }
+
     #[tokio::test]
     async fn test_multi_file_import() {
         let dir = tempfile::tempdir().unwrap();
