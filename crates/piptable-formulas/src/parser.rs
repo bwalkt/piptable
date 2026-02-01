@@ -270,12 +270,16 @@ impl<'a> Lexer<'a> {
 
         let mut end = self.pos;
         let mut saw_c = false;
+        let mut has_bracket = false;
         while let Some(ch) = self.chars.get(end).map(|(_, ch)| *ch) {
             if is_delimiter(ch) && !matches!(ch, '[' | ']' | '+' | '-') {
                 break;
             }
             if matches!(ch, 'C' | 'c') {
                 saw_c = true;
+            }
+            if matches!(ch, '[' | ']') {
+                has_bracket = true;
             }
             if !matches!(
                 ch,
@@ -288,6 +292,14 @@ impl<'a> Lexer<'a> {
 
         if !saw_c {
             return None;
+        }
+
+        // Disambiguation: if no brackets are present, prefer A1 when it parses.
+        if !has_bracket {
+            let text = self.slice(start, end);
+            if CellAddress::from_a1(text).is_ok() {
+                return None;
+            }
         }
 
         let text = self.slice(start, end).to_string();

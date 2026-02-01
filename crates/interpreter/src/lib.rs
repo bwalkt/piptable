@@ -1263,7 +1263,7 @@ impl Interpreter {
                 join_type,
                 condition,
             } => {
-                use piptable_core::ast::JoinCondition;
+                use piptable_core::JoinCondition;
                 use piptable_sheet::SheetError;
 
                 // Evaluate both sides to get sheets
@@ -1280,43 +1280,43 @@ impl Interpreter {
 
                 // Perform the join based on the type and condition
                 let result = match (join_type, condition) {
-                    (piptable_core::ast::JoinType::Inner, JoinCondition::On(key)) => left_sheet
+                    (piptable_core::JoinType::Inner, JoinCondition::On(key)) => left_sheet
                         .inner_join(&right_sheet, key)
                         .map_err(|e: SheetError| PipError::runtime(0, e.to_string()))?,
                     (
-                        piptable_core::ast::JoinType::Inner,
+                        piptable_core::JoinType::Inner,
                         JoinCondition::OnColumns { left: l, right: r },
                     ) => left_sheet
                         .inner_join_on(&right_sheet, l, r)
                         .map_err(|e: SheetError| PipError::runtime(0, e.to_string()))?,
-                    (piptable_core::ast::JoinType::Left, JoinCondition::On(key)) => left_sheet
+                    (piptable_core::JoinType::Left, JoinCondition::On(key)) => left_sheet
                         .left_join(&right_sheet, key)
                         .map_err(|e: SheetError| PipError::runtime(0, e.to_string()))?,
                     (
-                        piptable_core::ast::JoinType::Left,
+                        piptable_core::JoinType::Left,
                         JoinCondition::OnColumns { left: l, right: r },
                     ) => left_sheet
                         .left_join_on(&right_sheet, l, r)
                         .map_err(|e: SheetError| PipError::runtime(0, e.to_string()))?,
-                    (piptable_core::ast::JoinType::Right, JoinCondition::On(key)) => left_sheet
+                    (piptable_core::JoinType::Right, JoinCondition::On(key)) => left_sheet
                         .right_join(&right_sheet, key)
                         .map_err(|e: SheetError| PipError::runtime(0, e.to_string()))?,
                     (
-                        piptable_core::ast::JoinType::Right,
+                        piptable_core::JoinType::Right,
                         JoinCondition::OnColumns { left: l, right: r },
                     ) => left_sheet
                         .right_join_on(&right_sheet, l, r)
                         .map_err(|e: SheetError| PipError::runtime(0, e.to_string()))?,
-                    (piptable_core::ast::JoinType::Full, JoinCondition::On(key)) => left_sheet
+                    (piptable_core::JoinType::Full, JoinCondition::On(key)) => left_sheet
                         .full_join(&right_sheet, key)
                         .map_err(|e: SheetError| PipError::runtime(0, e.to_string()))?,
                     (
-                        piptable_core::ast::JoinType::Full,
+                        piptable_core::JoinType::Full,
                         JoinCondition::OnColumns { left: l, right: r },
                     ) => left_sheet
                         .full_join_on(&right_sheet, l, r)
                         .map_err(|e: SheetError| PipError::runtime(0, e.to_string()))?,
-                    (piptable_core::ast::JoinType::Cross, _) => {
+                    (piptable_core::JoinType::Cross, _) => {
                         // CROSS JOIN is not supported in DSL, only in SQL
                         return Err(PipError::runtime(
                             0,

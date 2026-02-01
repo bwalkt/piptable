@@ -15,6 +15,7 @@ arrow = { workspace = true }
 chrono = { workspace = true }
 piptable-types = { path = "../piptable-types" }
 piptable-sheet = { path = "../sheet" }
+piptable-primitives = { path = "../piptable-primitives" }
 
 [dev-dependencies]
 tempfile = { workspace = true }

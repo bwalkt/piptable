@@ -8,6 +8,7 @@
 //! - Error types
 //! - Common utilities
 
+pub mod boundary;
 pub mod error;
 pub mod value;
 

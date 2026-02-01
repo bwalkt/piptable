@@ -6,7 +6,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use crate::ast::Expr;
+use piptable_types::{Expr, Param};
 
 /// Runtime value in piptable.
 #[derive(Debug, Clone)]
@@ -41,7 +41,7 @@ pub enum Value {
     /// Function reference.
     Function {
         name: String,
-        params: Vec<crate::ast::Param>,
+        params: Vec<Param>,
         is_async: bool,
     },
 

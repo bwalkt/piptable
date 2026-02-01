@@ -6,7 +6,6 @@
 use serde::{Deserialize, Serialize};
 use std::fmt;
 
-// pub mod boundary; // Temporarily disabled - depends on piptable_core::Value
 pub mod toon;
 
 /// A cell address in the spreadsheet (e.g., A1, B2, etc.)
