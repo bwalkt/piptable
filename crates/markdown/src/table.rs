@@ -36,10 +36,10 @@ impl MarkdownTables {
 
     pub fn from_markdown_with_options(markdown: &str, options: MarkdownOptions) -> Result<Self> {
         let arena = Arena::new();
-        let mut options = ComrakOptions::default();
-        options.extension.table = true;
+        let mut comrak_options = ComrakOptions::default();
+        comrak_options.extension.table = true;
 
-        let root = parse_document(&arena, markdown, &options);
+        let root = parse_document(&arena, markdown, &comrak_options);
         let mut tables = Vec::new();
         collect_tables(root, &mut tables)?;
 

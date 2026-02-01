@@ -472,6 +472,7 @@ impl ImportOptions {
     pub fn without_headers() -> Self {
         Self {
             has_headers: Some(false),
+            ..Self::default()
         }
     }
 }
