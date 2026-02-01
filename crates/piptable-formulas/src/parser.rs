@@ -271,8 +271,9 @@ impl<'a> Lexer<'a> {
         let mut end = self.pos;
         let mut saw_c = false;
         let mut has_bracket = false;
+        let mut in_bracket = false;
         while let Some(ch) = self.chars.get(end).map(|(_, ch)| *ch) {
-            if is_delimiter(ch) && !matches!(ch, '[' | ']' | '+' | '-') {
+            if is_delimiter(ch) && !(in_bracket && matches!(ch, '+' | '-')) {
                 break;
             }
             if matches!(ch, 'C' | 'c') {
@@ -280,6 +281,11 @@ impl<'a> Lexer<'a> {
             }
             if matches!(ch, '[' | ']') {
                 has_bracket = true;
+            }
+            if ch == '[' {
+                in_bracket = true;
+            } else if ch == ']' {
+                in_bracket = false;
             }
             if !matches!(
                 ch,
@@ -854,6 +860,14 @@ mod tests {
         assert!(matches!(expr, FormulaExpr::R1C1Ref(_)));
         let expr = parse_formula("Sheet1!R[-1]C:R[1]C").unwrap();
         assert!(matches!(expr, FormulaExpr::SheetR1C1RangeRef { .. }));
+    }
+
+    #[test]
+    fn test_r1c1_plus_minus_delimiters() {
+        let expr = parse_formula("R1C1+1").unwrap();
+        assert!(matches!(expr, FormulaExpr::BinaryOp { .. }));
+        let expr = parse_formula("R[1]C[1]-1").unwrap();
+        assert!(matches!(expr, FormulaExpr::BinaryOp { .. }));
     }
 
     #[test]
