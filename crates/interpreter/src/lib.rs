@@ -864,17 +864,48 @@ impl Interpreter {
                         .map_err(|e| PipError::Import(format!("Line {}: {}", line, e)))?
                 } else {
                     // Single file import
-                    let has_headers = options.has_headers.unwrap_or(true);
+                    let has_headers = options
+                        .detect_headers
+                        .or(options.has_headers)
+                        .unwrap_or(true);
                     let path_lower = paths[0].to_lowercase();
-                    if path_lower.ends_with(".md") || path_lower.ends_with(".markdown") {
+                    if path_lower.ends_with(".md") {
                         if sheet_name_str.is_some() {
                             return Err(PipError::Import(format!(
                                 "Line {}: sheet clause is not supported for Markdown import",
                                 line
                             )));
                         }
-                        io::import_markdown_book(&paths[0], has_headers)
+                        io::import_markdown_book(&paths[0], &options)
                             .map_err(|e| PipError::Import(format!("Line {}: {}", line, e)))?
+                    } else if path_lower.ends_with(".pdf") {
+                        if sheet_name_str.is_some() {
+                            return Err(PipError::Import(format!(
+                                "Line {}: sheet clause is not supported for PDF import",
+                                line
+                            )));
+                        }
+                        #[cfg(target_arch = "wasm32")]
+                        {
+                            return Err(PipError::Import(
+                                "PDF import is not supported in the playground".to_string(),
+                            ));
+                        }
+                        #[cfg(not(target_arch = "wasm32"))]
+                        {
+                            let tables = io::import_pdf_tables(&paths[0], &options)
+                                .map_err(|e| PipError::Import(format!("Line {}: {}", line, e)))?;
+                            if tables.len() == 1 {
+                                Value::Sheet(tables.into_iter().next().expect("table exists"))
+                            } else {
+                                let mut book = std::collections::HashMap::new();
+                                for (idx, sheet) in tables.into_iter().enumerate() {
+                                    let name = format!("table_{}", idx + 1);
+                                    book.insert(name, Value::Sheet(sheet));
+                                }
+                                Value::Object(book)
+                            }
+                        }
                     } else {
                         let sheet =
                             io::import_sheet(&paths[0], sheet_name_str.as_deref(), has_headers)
@@ -3453,6 +3484,66 @@ export data to "{}""#,
         } else {
             panic!("Markdown import should return a book object");
         }
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    #[tokio::test]
+    async fn test_import_markdown_options() {
+        let dir = tempfile::tempdir().unwrap();
+        let file_path = dir.path().join("options.md");
+
+        let md = "| Name | Qty |\n| ---- | --- |\n| Apple | 10 |";
+        std::fs::write(&file_path, md).unwrap();
+
+        let mut interp = Interpreter::new();
+        let script = format!(
+            r#"import "{}" into tables with {{ "detect_headers": true, "min_table_rows": 1 }}"#,
+            file_path.display()
+        );
+        let program = PipParser::parse_str(&script).unwrap();
+        interp.eval(program).await.unwrap();
+
+        let data = interp.get_var("tables").await.unwrap();
+        if let Value::Object(book) = &data {
+            let sheet = match book.get("table_1") {
+                Some(Value::Sheet(sheet)) => sheet,
+                _ => panic!("Expected table_1 sheet"),
+            };
+            let names = sheet.column_names().unwrap();
+            assert_eq!(names[0], "Name");
+            assert_eq!(names[1], "Qty");
+        } else {
+            panic!("Markdown import should return a book object");
+        }
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    #[tokio::test]
+    async fn test_import_markdown_min_table_size_filters() {
+        let dir = tempfile::tempdir().unwrap();
+        let file_path = dir.path().join("min_size.md");
+
+        let md = "| A | B |\n|---|---|\n| 1 | 2 |";
+        std::fs::write(&file_path, md).unwrap();
+
+        let mut interp = Interpreter::new();
+        let script = format!(
+            r#"import "{}" into tables with {{ "min_table_size": 3 }}"#,
+            file_path.display()
+        );
+        let program = PipParser::parse_str(&script).unwrap();
+        let err = interp.eval(program).await.unwrap_err();
+        assert!(err.to_string().to_lowercase().contains("no tables found"));
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    #[tokio::test]
+    async fn test_import_pdf_invalid_page_range_option() {
+        let mut interp = Interpreter::new();
+        let script = r#"import "missing.pdf" into tables with { "page_range": "0-2" }"#;
+        let program = PipParser::parse_str(script).unwrap();
+        let err = interp.eval(program).await.unwrap_err();
+        assert!(err.to_string().contains("Invalid page_range"));
     }
 
     #[tokio::test]

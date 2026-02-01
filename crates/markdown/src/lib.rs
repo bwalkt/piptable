@@ -4,11 +4,27 @@ mod table;
 use error::{MarkdownError, Result};
 use piptable_sheet::{CellValue, Sheet};
 
-pub use table::{MarkdownTable, MarkdownTables};
+pub use table::{MarkdownOptions, MarkdownTable, MarkdownTables};
 
 /// Extract all tables from a markdown string as Sheets.
 pub fn extract_tables(markdown: &str) -> Result<Vec<Sheet>> {
     let tables = MarkdownTables::from_markdown(markdown)?;
+    let mut sheets = Vec::new();
+
+    for table in tables.tables {
+        sheets.push(table.to_sheet()?);
+    }
+
+    if sheets.is_empty() {
+        Err(MarkdownError::NoTablesFound)
+    } else {
+        Ok(sheets)
+    }
+}
+
+/// Extract all tables from a markdown string with options.
+pub fn extract_tables_with_options(markdown: &str, options: MarkdownOptions) -> Result<Vec<Sheet>> {
+    let tables = MarkdownTables::from_markdown_with_options(markdown, options)?;
     let mut sheets = Vec::new();
 
     for table in tables.tables {
