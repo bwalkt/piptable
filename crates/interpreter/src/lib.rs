@@ -3533,10 +3533,7 @@ export data to "{}""#,
         );
         let program = PipParser::parse_str(&script).unwrap();
         let err = interp.eval(program).await.unwrap_err();
-        assert!(err
-            .to_string()
-            .to_lowercase()
-            .contains("no tables found"));
+        assert!(err.to_string().to_lowercase().contains("no tables found"));
     }
 
     #[tokio::test]
