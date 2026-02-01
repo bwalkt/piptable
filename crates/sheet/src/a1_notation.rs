@@ -47,6 +47,7 @@ pub fn parse_a1(notation: &str) -> Result<(usize, usize)> {
 
 /// Parse A1-style range notation (e.g., "A1:C3")
 /// Returns ((start_row, start_col), (end_row, end_col)) as 0-based indices
+#[allow(dead_code)]
 pub fn parse_a1_range(notation: &str) -> Result<((usize, usize), (usize, usize))> {
     let parts: Vec<&str> = notation.split(':').collect();
 
