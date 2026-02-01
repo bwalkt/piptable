@@ -224,19 +224,43 @@ Result Sheet:
 
 ## PDF Format
 
-Extract tables from PDFs and return them as a book of sheets.
+Extract tables from PDF documents with automatic OCR support for scanned documents.
 
 ### Import Options
 
 ```piptable
+' Import all tables from PDF
 dim tables = import "report.pdf" into book
-dim first = tables["table_1"]
+
+' Access specific table
+dim summary = tables["table_1"]
+
+' With header detection
+dim report = import "financial.pdf" with {"has_headers": true} into book
 ```
 
 ### PDF Features
-- **Table extraction**: Extracts tables found in the PDF
-- **Multiple tables**: Each table is a sheet in the book
-- **Header detection**: First row becomes column names
+- **Table extraction**: Detect and extract tabular data from PDFs
+- **Multiple tables**: Each table becomes a sheet in the book
+- **OCR support**: Automatic OCR for scanned documents (when available)
+- **Type inference**: Auto-detect numeric and text data
+- **Header detection**: Optional first row as column names
+
+### PDF Example
+
+```piptable
+' Process financial report
+dim report = import "Q4_report.pdf" into book
+
+' Iterate through tables
+for i = 1 to 10
+    dim table_name = "table_" + str(i)
+    if report.has_key(table_name) then
+        dim table = report[table_name]
+        print("Processing " + table_name + ": " + str(table.row_count()) + " rows")
+    end if
+next
+```
 
 ## TOON Format
 
