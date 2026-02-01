@@ -103,7 +103,7 @@ export summary to "metrics-summary.xlsx"
 
 ### API Documentation Parser
 
-Extract API endpoints from markdown docs:
+Extract API endpoints from Markdown docs:
 
 ```piptable
 ' Import API documentation
@@ -379,7 +379,7 @@ end if
 
 ### Markdown Generation
 
-While export is pending, you can prepare data for markdown:
+While export is pending, you can prepare data for Markdown:
 
 ```piptable
 ' Prepare data for markdown export

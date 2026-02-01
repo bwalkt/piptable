@@ -327,9 +327,7 @@ end if
 ```piptable
 ' If tables are cut off or incomplete
 dim options = {
-    "page_range": "1-5",     ' Limit to specific pages
-    "min_table_size": 3,     ' Minimum rows to consider as table
-    "detect_headers": true    ' Try to identify headers
+    "has_headers": true    ' First row becomes column names
 }
 
 dim tables = import "report.pdf" with options into book
