@@ -79,29 +79,13 @@ dim passing = filter(names, scores)
 print(passing)`
   },
   markdown_import: {
-    description: "Markdown table import (Rust API)",
+    description: "Markdown table import (file-based)",
     code: `' Markdown Table Import
-dim markdown_doc = "
-# Project Status Report
-
-## Task Overview
-| Task | Status | Progress |
-|------|--------|----------|
-| Design | Complete | 100% |
-| Implementation | In Progress | 75% |
-| Testing | Pending | 0% |
-
-## Team Members
-| Name | Role | Active |
-|------|------|--------|
-| Alice | Lead | true |
-| Bob | Dev | true |
-| Charlie | QA | false |
-"
-
-' Markdown import is not available in the DSL yet.
-' Use the Rust API instead:
-' piptable_markdown::extract_tables(markdown_doc)`
+' Markdown import works with files in the DSL:
+' dim tables = import "README.md" into book
+' dim first = tables["table_1"]
+'
+' File access is not available in the playground.`
   },
   append_upsert: {
     description: "Append and upsert operations",
