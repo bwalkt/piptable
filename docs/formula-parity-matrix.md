@@ -13,7 +13,6 @@ This document tracks formula function parity between Piptable's implementation a
 | | SUM | ✅ | ✅ | Basic aggregation |
 | | AVERAGE | ✅ | ✅ | Mean calculation |
 | | COUNT | ✅ | ✅ | Count numeric values |
-| | COUNTA | ✅ | ✅ | Count non-empty cells |
 | | MAX | ✅ | ✅ | Maximum value |
 | | MIN | ✅ | ✅ | Minimum value |
 | **Logical** | | | | |

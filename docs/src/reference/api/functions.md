@@ -49,7 +49,6 @@ Note: `len()` is formula-backed. For objects, use `len(keys(obj))` to count fiel
 | `sum(values...)` | Sum of values/arrays or sheet range | `sum([1, 2, 3])` → `6.0` | ✅ Implemented |
 | `avg(values...)` | Average of values/arrays or sheet range | `avg([1, 2, 3])` → `2.0` | ✅ Implemented |
 | `count(values...)` | Count numeric values or sheet range | `count([1, 2, 3])` → `3` | ✅ Implemented |
-| `counta(values...)` | Count non-empty values or sheet range | `counta([1, null, "x"])` → `2` | ✅ Implemented |
 | `round(n, decimals)` | Round number | `round(3.14159, 2)` → `3.14` | 📋 Planned |
 | `floor(n)` | Round down | `floor(3.9)` → `3` | 📋 Planned |
 | `ceil(n)` | Round up | `ceil(3.1)` → `4` | 📋 Planned |

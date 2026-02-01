@@ -313,10 +313,6 @@ impl FunctionRegistry {
             ),
         );
         self.register(
-            "COUNTA",
-            FunctionDefinition::variadic(1, ParamType::Any, ReturnType::Number, functions::counta),
-        );
-        self.register(
             "MAX",
             FunctionDefinition::variadic(1, ParamType::Number, ReturnType::Number, functions::max),
         );
@@ -855,7 +851,7 @@ impl ValueResolver for EvalContext {
 
     fn get_range(&self, range: &CellRange) -> Vec<Value> {
         let Some(values) = self.ranges.get(range) else {
-            return Vec::with_capacity(0);
+            return Vec::new();
         };
         if values.iter().all(|v| matches!(v, Value::Array(_))) {
             return values.clone();
@@ -955,14 +951,18 @@ fn eval_binary(op: BinaryOperator, left: Value, right: Value) -> Value {
         BinaryOperator::Power => numeric_op(left, right, |l, r| l.powf(r)),
         BinaryOperator::Equal => Value::Bool(left == right),
         BinaryOperator::NotEqual => Value::Bool(left != right),
-        BinaryOperator::LessThan => Value::Bool(compare_numbers(&left, &right, |l, r| l < r)),
-        BinaryOperator::LessThanOrEqual => {
-            Value::Bool(compare_numbers(&left, &right, |l, r| l <= r))
-        }
-        BinaryOperator::GreaterThan => Value::Bool(compare_numbers(&left, &right, |l, r| l > r)),
-        BinaryOperator::GreaterThanOrEqual => {
-            Value::Bool(compare_numbers(&left, &right, |l, r| l >= r))
-        }
+        BinaryOperator::LessThan => compare_numbers(&left, &right, |l, r| l < r)
+            .map(Value::Bool)
+            .unwrap_or(Value::Error(ErrorValue::Value)),
+        BinaryOperator::LessThanOrEqual => compare_numbers(&left, &right, |l, r| l <= r)
+            .map(Value::Bool)
+            .unwrap_or(Value::Error(ErrorValue::Value)),
+        BinaryOperator::GreaterThan => compare_numbers(&left, &right, |l, r| l > r)
+            .map(Value::Bool)
+            .unwrap_or(Value::Error(ErrorValue::Value)),
+        BinaryOperator::GreaterThanOrEqual => compare_numbers(&left, &right, |l, r| l >= r)
+            .map(Value::Bool)
+            .unwrap_or(Value::Error(ErrorValue::Value)),
         BinaryOperator::And => logical_op(left, right, |l, r| l && r),
         BinaryOperator::Or => logical_op(left, right, |l, r| l || r),
         BinaryOperator::Concat => Value::String(format!(
@@ -991,35 +991,23 @@ fn is_zero(value: &Value) -> bool {
     }
 }
 
-fn compare_numbers(left: &Value, right: &Value, cmp: fn(f64, f64) -> bool) -> bool {
+fn compare_numbers(left: &Value, right: &Value, cmp: fn(f64, f64) -> bool) -> Option<bool> {
     match (left, right) {
-        (Value::Int(l), Value::Int(r)) => cmp(*l as f64, *r as f64),
-        (Value::Float(l), Value::Float(r)) => cmp(*l, *r),
-        (Value::Int(l), Value::Float(r)) => cmp(*l as f64, *r),
-        (Value::Float(l), Value::Int(r)) => cmp(*l, *r as f64),
-        _ => false,
+        (Value::Int(l), Value::Int(r)) => Some(cmp(*l as f64, *r as f64)),
+        (Value::Float(l), Value::Float(r)) => Some(cmp(*l, *r)),
+        (Value::Int(l), Value::Float(r)) => Some(cmp(*l as f64, *r)),
+        (Value::Float(l), Value::Int(r)) => Some(cmp(*l, *r as f64)),
+        _ => None,
     }
 }
 
 fn logical_op(left: Value, right: Value, op: fn(bool, bool) -> bool) -> Value {
-    let to_bool = |value: &Value| -> Option<bool> {
-        match value {
-            Value::Bool(b) => Some(*b),
-            Value::Int(n) => Some(*n != 0),
-            Value::Float(f) => {
-                if f.is_nan() {
-                    None
-                } else {
-                    Some(*f != 0.0)
-                }
-            }
-            _ => None,
-        }
-    };
-
-    match (to_bool(&left), to_bool(&right)) {
-        (Some(l), Some(r)) => Value::Bool(op(l, r)),
-        _ => Value::Error(ErrorValue::Value),
+    match (
+        functions::coerce_to_bool(&left),
+        functions::coerce_to_bool(&right),
+    ) {
+        (Ok(l), Ok(r)) => Value::Bool(op(l, r)),
+        (Err(err), _) | (_, Err(err)) => Value::Error(err),
     }
 }
 
@@ -1315,6 +1303,6 @@ mod tests {
         let ctx = EvalContext::default();
         let compiled = engine.compile("=\"a\"<1").unwrap();
         let value = engine.evaluate(&compiled, &ctx).expect("eval ok");
-        assert_eq!(value, Value::Bool(false));
+        assert_eq!(value, Value::Error(ErrorValue::Value));
     }
 }
