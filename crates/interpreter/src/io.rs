@@ -703,7 +703,11 @@ pub fn import_sheet(
     } else if path_lower.ends_with(".pdf") {
         #[cfg(not(target_arch = "wasm32"))]
         {
-            let tables = import_pdf_tables(path, has_headers)?;
+            let options = ImportOptions {
+                has_headers: Some(has_headers),
+                ..ImportOptions::default()
+            };
+            let tables = import_pdf_tables(path, &options)?;
             let first = tables
                 .into_iter()
                 .next()
