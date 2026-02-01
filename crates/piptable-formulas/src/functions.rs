@@ -794,6 +794,14 @@ mod tests {
             rounddown(&[Value::Float(3.9), Value::Int(0)]),
             Value::Float(3.0)
         );
+        assert_eq!(
+            roundup(&[Value::Float(-3.1), Value::Int(0)]),
+            Value::Float(-4.0)
+        );
+        assert_eq!(
+            rounddown(&[Value::Float(-3.9), Value::Int(0)]),
+            Value::Float(-3.0)
+        );
     }
 
     #[test]
@@ -879,6 +887,9 @@ mod tests {
         assert_eq!(even(&[Value::Float(2.1)]), Value::Float(4.0));
         assert_eq!(odd(&[Value::Float(2.5)]), Value::Float(3.0));
         assert_eq!(odd(&[Value::Float(3.1)]), Value::Float(5.0));
+        assert_eq!(even(&[Value::Float(-1.5)]), Value::Float(-2.0));
+        assert_eq!(even(&[Value::Float(-2.1)]), Value::Float(-4.0));
+        assert_eq!(odd(&[Value::Float(-2.5)]), Value::Float(-3.0));
     }
 
     #[test]
@@ -1056,7 +1067,7 @@ pub fn not_fn(values: &[Value]) -> Value {
     }
 }
 
-fn coerce_to_bool(value: &Value) -> Result<bool, ErrorValue> {
+pub fn coerce_to_bool(value: &Value) -> Result<bool, ErrorValue> {
     match value {
         Value::Bool(b) => Ok(*b),
         Value::Int(n) => Ok(*n != 0),
@@ -1617,7 +1628,13 @@ pub fn roundup(values: &[Value]) -> Value {
         Some(n) => {
             let places = places.floor() as i32;
             let multiplier = 10_f64.powi(places);
-            Value::Float((n * multiplier).ceil() / multiplier)
+            let scaled = n * multiplier;
+            let rounded = if scaled.is_sign_negative() {
+                scaled.floor()
+            } else {
+                scaled.ceil()
+            };
+            Value::Float(rounded / multiplier)
         }
         None => Value::Error(ErrorValue::Value),
     }
@@ -1632,7 +1649,13 @@ pub fn rounddown(values: &[Value]) -> Value {
         Some(n) => {
             let places = places.floor() as i32;
             let multiplier = 10_f64.powi(places);
-            Value::Float((n * multiplier).floor() / multiplier)
+            let scaled = n * multiplier;
+            let rounded = if scaled.is_sign_negative() {
+                scaled.ceil()
+            } else {
+                scaled.floor()
+            };
+            Value::Float(rounded / multiplier)
         }
         None => Value::Error(ErrorValue::Value),
     }
@@ -1728,21 +1751,16 @@ pub fn proper(values: &[Value]) -> Value {
     let text = values.first().unwrap_or(&Value::Empty);
     match coerce_to_text(text) {
         Ok(s) => {
-            let result = s
-                .chars()
-                .enumerate()
-                .map(|(i, c)| {
-                    if i == 0
-                        || s.chars()
-                            .nth(i - 1)
-                            .is_some_and(|prev| prev.is_whitespace())
-                    {
-                        c.to_uppercase().to_string()
-                    } else {
-                        c.to_lowercase().to_string()
-                    }
-                })
-                .collect::<String>();
+            let mut result = String::with_capacity(s.len());
+            let mut prev_whitespace = true;
+            for c in s.chars() {
+                if prev_whitespace {
+                    result.extend(c.to_uppercase());
+                } else {
+                    result.extend(c.to_lowercase());
+                }
+                prev_whitespace = c.is_whitespace();
+            }
             Value::String(result)
         }
         Err(err) => Value::Error(err),
@@ -1784,12 +1802,16 @@ pub fn even(values: &[Value]) -> Value {
     let value = values.first().and_then(to_number);
     match value {
         Some(n) => {
-            let rounded = n.ceil();
-            if rounded as i64 % 2 == 0 {
-                Value::Float(rounded)
+            let rounded = n.abs().ceil();
+            let mut result = if rounded as i64 % 2 == 0 {
+                rounded
             } else {
-                Value::Float(rounded + 1.0)
+                rounded + 1.0
+            };
+            if n.is_sign_negative() {
+                result = -result;
             }
+            Value::Float(result)
         }
         None => Value::Error(ErrorValue::Value),
     }
@@ -1800,12 +1822,16 @@ pub fn odd(values: &[Value]) -> Value {
     let value = values.first().and_then(to_number);
     match value {
         Some(n) => {
-            let rounded = n.ceil();
-            if rounded as i64 % 2 != 0 {
-                Value::Float(rounded)
+            let rounded = n.abs().ceil();
+            let mut result = if rounded as i64 % 2 != 0 {
+                rounded
             } else {
-                Value::Float(rounded + 1.0)
+                rounded + 1.0
+            };
+            if n.is_sign_negative() {
+                result = -result;
             }
+            Value::Float(result)
         }
         None => Value::Error(ErrorValue::Value),
     }

@@ -1002,24 +1002,10 @@ fn compare_numbers(left: &Value, right: &Value, cmp: fn(f64, f64) -> bool) -> Op
 }
 
 fn logical_op(left: Value, right: Value, op: fn(bool, bool) -> bool) -> Value {
-    let to_bool = |value: &Value| -> Result<bool, ErrorValue> {
-        match value {
-            Value::Bool(b) => Ok(*b),
-            Value::Int(n) => Ok(*n != 0),
-            Value::Float(f) => {
-                if f.is_nan() {
-                    Err(ErrorValue::Num)
-                } else {
-                    Ok(*f != 0.0)
-                }
-            }
-            Value::Empty => Ok(false),
-            Value::Error(err) => Err(err.clone()),
-            _ => Err(ErrorValue::Value),
-        }
-    };
-
-    match (to_bool(&left), to_bool(&right)) {
+    match (
+        functions::coerce_to_bool(&left),
+        functions::coerce_to_bool(&right),
+    ) {
         (Ok(l), Ok(r)) => Value::Bool(op(l, r)),
         (Err(err), _) | (_, Err(err)) => Value::Error(err),
     }
