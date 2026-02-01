@@ -52,6 +52,7 @@
   - [TOON Processing](cookbook/toon.md)
   - [Sheet Rust API](cookbook/sheet-rust-api.md)
   - [Formulas](cookbook/formulas.md)
+  - [Markdown Tables](cookbook/markdown.md)
   
 - [ETL Pipelines](cookbook/etl.md)
   - [Data Import](cookbook/import.md)

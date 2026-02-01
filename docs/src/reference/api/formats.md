@@ -12,6 +12,7 @@ PipTable supports importing and exporting various file formats for data intercha
 | JSON | .json | ✅ | ✅ | ❌ | Array or object format |
 | Parquet | .parquet | ✅ | ✅ | ❌ | Columnar storage |
 | TOON | .toon | ✅ | ✅ | ❌ | PipTable native format |
+| Markdown | .md | 🚧 | 🚧 | ✅ | Rust API: extract tables from docs |
 
 ## CSV/TSV Format
 
@@ -183,6 +184,47 @@ export sheet to "compressed.parquet" with {
 - **Schema evolution**: Compatible schema changes
 - **Performance**: Fast for large datasets
 
+## Markdown Format
+
+Extract tables from Markdown documents and documentation files.
+
+### Import Options (Rust API)
+
+```rust
+use piptable_markdown::extract_tables;
+
+let md = std::fs::read_to_string("README.md")?;
+let sheets = extract_tables(&md)?;
+```
+
+### DSL Status
+
+Markdown import/export is not available in the DSL yet. Planned syntax will
+mirror other import formats once wired.
+
+### Markdown Features
+- **Table extraction**: Find all tables in document
+- **Type inference**: Auto-detect Int, Float, Bool, String, Null
+- **Inline formatting**: Strip Markdown syntax (bold, italic, code)
+- **Multiple tables**: Extract all tables as Vec<Sheet>
+- **Header detection**: First row becomes column names
+
+### Markdown Example
+
+Input markdown:
+```markdown
+| Name | Score | Pass |
+|------|-------|------|
+| Alice | 95 | true |
+| Bob | 87 | true |
+| Charlie | 72 | false |
+```
+
+Result Sheet:
+- Column names: ["Name", "Score", "Pass"]
+- Types: [String, Int, Bool]
+- 3 data rows
+
 ## TOON Format
 
 PipTable's native format for preserving all data types and metadata.
@@ -236,6 +278,12 @@ dim joined = query(
 - Analytics workloads
 - Data warehouses
 - Columnar operations
+
+### When to use Markdown
+- Documentation data extraction
+- README file analysis
+- Report parsing
+- GitHub/GitLab tables
 
 ### When to use TOON
 - PipTable-to-PipTable transfer

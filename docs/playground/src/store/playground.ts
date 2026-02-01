@@ -78,6 +78,31 @@ dim scores = [88, 0, 92, 75]
 dim passing = filter(names, scores)
 print(passing)`
   },
+  markdown_import: {
+    description: "Markdown table import (Rust API)",
+    code: `' Markdown Table Import
+dim markdown_doc = "
+# Project Status Report
+
+## Task Overview
+| Task | Status | Progress |
+|------|--------|----------|
+| Design | Complete | 100% |
+| Implementation | In Progress | 75% |
+| Testing | Pending | 0% |
+
+## Team Members
+| Name | Role | Active |
+|------|------|--------|
+| Alice | Lead | true |
+| Bob | Dev | true |
+| Charlie | QA | false |
+"
+
+' Markdown import is not available in the DSL yet.
+' Use the Rust API instead:
+' piptable_markdown::extract_tables(markdown_doc)`
+  },
   append_upsert: {
     description: "Append and upsert operations",
     code: `' Append + Upsert
@@ -125,6 +150,11 @@ dim banana_qty = index(products, match("Banana", products, 0), 3)
 dim block = offset(products, 1, 0, 1, 2)
 dim bin_next = xlookup(6, [1, 3, 5, 7], ["A", "B", "C", "D"], "N/A", 1, 2)
 print("Total: " + str(total) + ", Avg: " + str(average))`
+  },
+  markdown_tables: {
+    description: "Markdown table import (Rust API)",
+    code: `' Markdown table import uses the Rust API (not available in DSL yet)
+print("Use piptable_markdown::extract_tables(markdown) in Rust")`
   }
 };
 
