@@ -23,8 +23,8 @@ use crate::formula::CachedFormulaEngine;
 use crate::sheet_conversions::{build_sheet_arrow_array, cell_to_value, infer_sheet_column_type};
 use async_recursion::async_recursion;
 use piptable_core::{
-    BinaryOp, Expr, LValue, Literal, Param, ParamMode, PipError, PipResult, Program, Statement,
-    UnaryOp, Value,
+    BinaryOp, Expr, ImportOptions, LValue, Literal, Param, ParamMode, PipError, PipResult, Program,
+    Statement, UnaryOp, Value,
 };
 use piptable_sheet::{CellValue, Sheet};
 use std::collections::{HashMap, HashSet};
