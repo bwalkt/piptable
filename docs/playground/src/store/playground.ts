@@ -79,7 +79,7 @@ dim passing = filter(names, scores)
 print(passing)`
   },
   markdown_import: {
-    description: "Import tables from markdown",
+    description: "Markdown table import (Rust API)",
     code: `' Markdown Table Import
 dim markdown_doc = "
 # Project Status Report
@@ -99,21 +99,9 @@ dim markdown_doc = "
 | Charlie | QA | false |
 "
 
-' Import all tables from markdown
-dim tables = import markdown_doc as markdown into book
-
-' Process first table (Task Overview)
-dim tasks = tables[0]
-print("Task count: " + str(tasks.row_count() - 1))
-
-' Process second table (Team Members)
-dim team = tables[1]
-dim active_count = query("
-  SELECT COUNT(*) as count 
-  FROM team 
-  WHERE Active = 'true'
-")
-print("Active team members: " + str(active_count[0][0]))`
+' Markdown import is not available in the DSL yet.
+' Use the Rust API instead:
+' piptable_markdown::extract_tables(markdown_doc)`
   },
   append_upsert: {
     description: "Append and upsert operations",
