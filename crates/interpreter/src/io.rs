@@ -655,7 +655,7 @@ pub fn import_sheet(
         } else {
             Sheet::from_csv(path).map_err(|e| format!("Failed to import CSV: {}", e))?
         };
-        if has_headers {
+        if has_headers && !sheet.data().is_empty() {
             sheet
                 .name_columns_by_row(0)
                 .map_err(|e| format!("Failed to name columns: {}", e))?;
@@ -744,7 +744,7 @@ pub fn import_sheet(
             }
 
             let mut sheet = sheets.remove(0);
-            if has_headers {
+            if has_headers && !sheet.data().is_empty() {
                 sheet
                     .name_columns_by_row(0)
                     .map_err(|e| format!("Failed to name columns: {}", e))?;
@@ -811,7 +811,7 @@ pub fn import_pdf_book(path: &str, has_headers: bool) -> Result<Value, String> {
 
         let mut book = HashMap::new();
         for (idx, mut sheet) in tables.into_iter().enumerate() {
-            if has_headers {
+            if has_headers && !sheet.data().is_empty() {
                 sheet
                     .name_columns_by_row(0)
                     .map_err(|e| format!("Failed to name columns: {}", e))?;
@@ -846,7 +846,7 @@ pub fn import_markdown_book(path: &str, has_headers: bool) -> Result<Value, Stri
 
         let mut book = HashMap::new();
         for (idx, mut sheet) in sheets.drain(..).enumerate() {
-            if has_headers {
+            if has_headers && !sheet.data().is_empty() {
                 sheet
                     .name_columns_by_row(0)
                     .map_err(|e| format!("Failed to name columns: {}", e))?;
