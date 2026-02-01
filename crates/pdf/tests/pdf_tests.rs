@@ -38,8 +38,8 @@ fn test_pdf_options_default() {
 
 #[test]
 fn test_pdf_options_page_range_and_headers() {
-    let file_path = Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("tests/test_data/pdf_options_headers.pdf");
+    let file_path =
+        Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/test_data/pdf_options_headers.pdf");
 
     let options = PdfOptions {
         page_range: Some((1, 1)),

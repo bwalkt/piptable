@@ -46,14 +46,16 @@ impl MarkdownTables {
         let filtered = tables
             .into_iter()
             .filter(|table| {
-                let row_count = table.rows.len();
+                // Count total rows including header if present
+                let header_count = if table.headers.is_some() { 1 } else { 0 };
+                let total_row_count = header_count + table.rows.len();
                 let col_count = table
                     .rows
                     .first()
                     .map(|row| row.len())
                     .or_else(|| table.headers.as_ref().map(|h| h.len()))
                     .unwrap_or(0);
-                row_count >= options.min_table_rows && col_count >= options.min_table_cols
+                total_row_count >= options.min_table_rows && col_count >= options.min_table_cols
             })
             .collect();
 

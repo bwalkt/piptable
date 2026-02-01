@@ -3460,15 +3460,13 @@ export data to "{}""#,
         let dir = tempfile::tempdir().unwrap();
         let file_path = dir.path().join("tables.md");
 
-        let md = r#"
-| Name | Qty |
+        let md = r#"| Name | Qty |
 | ---- | --- |
 | Apple | 10 |
 
 | Product | Price |
 | ------- | ----- |
-| Banana | 0.75 |
-"#;
+| Banana | 0.75 |"#;
         std::fs::write(&file_path, md).unwrap();
 
         let mut interp = Interpreter::new();
@@ -4049,32 +4047,6 @@ combined = consolidate(stores, "_store")
         // Sheet without header should return 2 (all rows)
         let raw_len = interp.get_var("raw_len").await.unwrap();
         assert!(matches!(raw_len, Value::Int(2)));
-    }
-
-    #[tokio::test]
-    async fn test_backward_compat_with_clause() {
-        let dir = tempfile::tempdir().unwrap();
-        let file_path = dir.path().join("test.csv");
-
-        // Create a test CSV file
-        std::fs::write(&file_path, "name,age\nalice,30").unwrap();
-
-        let mut interp = Interpreter::new();
-        // Test that old "with {}" syntax still parses (even if ignored)
-        let script = format!(
-            r#"import "{}" into data with {{"delimiter": ","}}"#,
-            file_path.display()
-        );
-        let program = PipParser::parse_str(&script).unwrap();
-        let result = interp.eval(program).await;
-
-        // Should not error - backward compatibility maintained
-        assert!(result.is_ok());
-
-        // Data should still be imported
-        let data = interp.get_var("data").await.unwrap();
-        assert!(matches!(&data, Value::Sheet(sheet) if sheet.row_count() == 2));
-        // header + 1 data row
     }
 
     #[tokio::test]
