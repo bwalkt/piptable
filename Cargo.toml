@@ -100,6 +100,7 @@ piptable-viz = { path = "crates/viz" }
 piptable-sheet = { path = "crates/sheet" }
 piptable-python = { path = "crates/python" }
 piptable-pdf = { path = "crates/pdf" }
+piptable-markdown = { path = "crates/markdown" }
 piptable-primitives = { path = "crates/piptable-primitives" }
 piptable-formulas = { path = "crates/piptable-formulas" }
 

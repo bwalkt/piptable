@@ -3800,6 +3800,7 @@ dependencies = [
  "piptable-core",
  "piptable-formulas",
  "piptable-http",
+ "piptable-markdown",
  "piptable-parser",
  "piptable-pdf",
  "piptable-primitives",

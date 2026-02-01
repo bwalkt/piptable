@@ -35,5 +35,10 @@ let sheet = tables.tables[0].to_sheet()?;
 
 ## Notes
 
-- Markdown import is Rust API only for now.
-- DSL import/export for Markdown is planned.
+## DSL Import
+
+```piptable
+' Import all tables from a Markdown file into a book
+dim tables = import "README.md" into book
+dim first = tables["table_1"]  ' table_1, table_2, ...
+```

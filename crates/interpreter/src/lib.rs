@@ -865,10 +865,23 @@ impl Interpreter {
                 } else {
                     // Single file import
                     let has_headers = options.has_headers.unwrap_or(true);
-                    let sheet = io::import_sheet(&paths[0], sheet_name_str.as_deref(), has_headers)
-                        .map_err(|e| PipError::Import(format!("Line {}: {}", line, e)))?;
-                    // Return as Sheet value to enable SQL queries
-                    Value::Sheet(sheet)
+                    let path_lower = paths[0].to_lowercase();
+                    if path_lower.ends_with(".md") || path_lower.ends_with(".markdown") {
+                        if sheet_name_str.is_some() {
+                            return Err(PipError::Import(format!(
+                                "Line {}: sheet clause is not supported for Markdown import",
+                                line
+                            )));
+                        }
+                        io::import_markdown_book(&paths[0], has_headers)
+                            .map_err(|e| PipError::Import(format!("Line {}: {}", line, e)))?
+                    } else {
+                        let sheet =
+                            io::import_sheet(&paths[0], sheet_name_str.as_deref(), has_headers)
+                                .map_err(|e| PipError::Import(format!("Line {}: {}", line, e)))?;
+                        // Return as Sheet value to enable SQL queries
+                        Value::Sheet(sheet)
+                    }
                 };
 
                 // Store in target variable
@@ -3407,6 +3420,38 @@ export data to "{}""#,
             // Check first data row
             let row = &sheet.data()[1]; // row 0 is header, row 1 is first data row
             assert!(matches!(&row[0], piptable_sheet::CellValue::String(s) if s == "alice"));
+        }
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    #[tokio::test]
+    async fn test_import_markdown_tables() {
+        let dir = tempfile::tempdir().unwrap();
+        let file_path = dir.path().join("tables.md");
+
+        let md = r#"
+| Name | Qty |
+| ---- | --- |
+| Apple | 10 |
+
+| Product | Price |
+| ------- | ----- |
+| Banana | 0.75 |
+"#;
+        std::fs::write(&file_path, md).unwrap();
+
+        let mut interp = Interpreter::new();
+        let script = format!(r#"import "{}" into tables"#, file_path.display());
+        let program = PipParser::parse_str(&script).unwrap();
+        interp.eval(program).await.unwrap();
+
+        let data = interp.get_var("tables").await.unwrap();
+        if let Value::Object(book) = &data {
+            assert_eq!(book.len(), 2);
+            assert!(book.contains_key("table_1"));
+            assert!(book.contains_key("table_2"));
+        } else {
+            panic!("Markdown import should return a book object");
         }
     }
 

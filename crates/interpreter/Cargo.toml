@@ -38,6 +38,7 @@ rust_xlsxwriter = { workspace = true }
 piptable-sql = { workspace = true }
 piptable-http = { workspace = true }
 piptable-pdf = { workspace = true }
+piptable-markdown = { workspace = true }
 tokio = { workspace = true }
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]

@@ -727,6 +727,34 @@ pub fn import_sheet(
         {
             Err("HTML import is not supported in the playground".to_string())
         }
+    } else if path_lower.ends_with(".md") {
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            let markdown = std::fs::read_to_string(path)
+                .map_err(|e| format!("Failed to read Markdown file: {}", e))?;
+            let mut sheets = piptable_markdown::extract_tables(&markdown)
+                .map_err(|e| format!("Failed to import Markdown: {}", e))?;
+
+            if sheets.is_empty() {
+                return Err(format!("No tables found in Markdown '{}'", path));
+            }
+
+            if sheets.len() > 1 {
+                return Err("Markdown import returned multiple tables; import into a book to access all tables".to_string());
+            }
+
+            let mut sheet = sheets.remove(0);
+            if has_headers {
+                sheet
+                    .name_columns_by_row(0)
+                    .map_err(|e| format!("Failed to name columns: {}", e))?;
+            }
+            Ok(sheet)
+        }
+        #[cfg(target_arch = "wasm32")]
+        {
+            Err("Markdown import is not supported in the playground".to_string())
+        }
     } else {
         Err(format!("Unsupported import format for '{}'", path))
     }
@@ -760,5 +788,40 @@ pub fn import_multi_files(paths: &[String], options: &ImportOptions) -> Result<V
         Ok(sheets.into_values().next().unwrap())
     } else {
         Ok(Value::Object(sheets))
+    }
+}
+
+pub fn import_markdown_book(path: &str, has_headers: bool) -> Result<Value, String> {
+    #[cfg(target_arch = "wasm32")]
+    let _ = has_headers;
+
+    #[cfg(target_arch = "wasm32")]
+    {
+        return Err("Markdown import is not supported in the playground".to_string());
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        let markdown = std::fs::read_to_string(path)
+            .map_err(|e| format!("Failed to read Markdown file: {}", e))?;
+        let mut sheets = piptable_markdown::extract_tables(&markdown)
+            .map_err(|e| format!("Failed to import Markdown: {}", e))?;
+
+        if sheets.is_empty() {
+            return Err(format!("No tables found in Markdown '{}'", path));
+        }
+
+        let mut book = HashMap::new();
+        for (idx, mut sheet) in sheets.drain(..).enumerate() {
+            if has_headers {
+                sheet
+                    .name_columns_by_row(0)
+                    .map_err(|e| format!("Failed to name columns: {}", e))?;
+            }
+            let name = format!("table_{}", idx + 1);
+            book.insert(name, Value::Sheet(sheet));
+        }
+
+        Ok(Value::Object(book))
     }
 }

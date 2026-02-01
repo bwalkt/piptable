@@ -12,7 +12,7 @@ PipTable supports importing and exporting various file formats for data intercha
 | JSON | .json | ✅ | ✅ | ❌ | Array or object format |
 | Parquet | .parquet | ✅ | ✅ | ❌ | Columnar storage |
 | TOON | .toon | ✅ | ✅ | ❌ | PipTable native format |
-| Markdown | .md | 🚧 | 🚧 | ✅ | Rust API: extract tables from docs |
+| Markdown | .md | ✅ | 🚧 | ✅ | Import tables from docs |
 
 ## CSV/TSV Format
 
@@ -188,25 +188,21 @@ export sheet to "compressed.parquet" with {
 
 Extract tables from Markdown documents and documentation files.
 
-### Import Options (Rust API)
+### Import Options
 
-```rust
-use piptable_markdown::extract_tables;
+```piptable
+' Import all tables from a Markdown file
+dim tables = import "README.md" into book
 
-let md = std::fs::read_to_string("README.md")?;
-let sheets = extract_tables(&md)?;
+' Access a table by name (table_1, table_2, ...)
+dim first = tables["table_1"]
 ```
-
-### DSL Status
-
-Markdown import/export is not available in the DSL yet. Planned syntax will
-mirror other import formats once wired.
 
 ### Markdown Features
 - **Table extraction**: Find all tables in document
 - **Type inference**: Auto-detect Int, Float, Bool, String, Null
 - **Inline formatting**: Strip Markdown syntax (bold, italic, code)
-- **Multiple tables**: Extract all tables as Vec<Sheet>
+- **Multiple tables**: Extract all tables as a book of sheets
 - **Header detection**: First row becomes column names
 
 ### Markdown Example

@@ -51,9 +51,11 @@ dim records = import "data.json" with {
 ### Markdown Import
 
 ```piptable
-'
-' Markdown import is planned for the DSL. Use the Rust API for now:
-' piptable_markdown::extract_tables(markdown)
+' Import all tables from a Markdown file into a book
+dim tables = import "README.md" into book
+
+' Access tables by name (table_1, table_2, ...)
+dim first = tables["table_1"]
 
 ' Import from GitHub README
 dim readme_url = "https://raw.githubusercontent.com/org/repo/main/README.md"
@@ -119,7 +121,7 @@ File format is automatically detected from extension:
 | .json, .jsonl | JSON | sheet |
 | .parquet | Parquet | sheet |
 | .toon | TOON | sheet |
-| .md | Markdown | book (planned) |
+| .md | Markdown | book |
 
 ## Dynamic Import/Export
 
@@ -197,9 +199,6 @@ dim data = import csv_text as csv into sheet
 dim json_text = '[{"name": "Alice", "age": 30}]'
 dim data = import json_text as json into sheet
 
-' Markdown string
-'
-' Markdown import in DSL is planned. Use Rust API for now.
 ```
 
 ## Error Handling
@@ -281,8 +280,7 @@ print("Converted " + str(rows) + " rows")
 ### Markdown Report Processing
 
 ```piptable
-'
-' Markdown import in DSL is planned. Use Rust API for now.
+dim report = import "weekly_report.md" into book
 
 ' Process each table
 for i = 0 to report.sheet_count() - 1
