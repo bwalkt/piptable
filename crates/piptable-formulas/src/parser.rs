@@ -271,7 +271,7 @@ impl<'a> Lexer<'a> {
         let mut end = self.pos;
         let mut saw_c = false;
         while let Some(ch) = self.chars.get(end).map(|(_, ch)| *ch) {
-            if is_delimiter(ch) {
+            if is_delimiter(ch) && !matches!(ch, '[' | ']' | '+' | '-') {
                 break;
             }
             if matches!(ch, 'C' | 'c') {
