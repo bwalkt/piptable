@@ -1752,14 +1752,14 @@ pub fn proper(values: &[Value]) -> Value {
     match coerce_to_text(text) {
         Ok(s) => {
             let mut result = String::with_capacity(s.len());
-            let mut prev_whitespace = true;
+            let mut prev_is_letter = false;
             for c in s.chars() {
-                if prev_whitespace {
+                if !prev_is_letter && c.is_alphabetic() {
                     result.extend(c.to_uppercase());
                 } else {
                     result.extend(c.to_lowercase());
                 }
-                prev_whitespace = c.is_whitespace();
+                prev_is_letter = c.is_alphabetic();
             }
             Value::String(result)
         }
