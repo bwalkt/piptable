@@ -12,6 +12,7 @@ serde = { workspace = true }
 thiserror = { workspace = true }
 pest = { workspace = true }
 pest_derive = { workspace = true }
+rand = "0.8"
 
 [dev-dependencies]
 criterion = { workspace = true }

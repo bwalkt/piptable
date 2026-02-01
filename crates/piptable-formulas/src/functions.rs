@@ -796,6 +796,181 @@ mod tests {
             Value::Array(vec![Value::Array(vec![Value::Int(3), Value::Int(4)])])
         );
     }
+
+    #[test]
+    fn test_abs() {
+        assert_eq!(abs(&[Value::Float(-5.5)]), Value::Float(5.5));
+        assert_eq!(abs(&[Value::Int(-10)]), Value::Float(10.0));
+        assert_eq!(abs(&[Value::Float(3.14)]), Value::Float(3.14));
+        assert_eq!(
+            abs(&[Value::String("x".to_string())]),
+            Value::Error(ErrorValue::Value)
+        );
+    }
+
+    #[test]
+    fn test_round_functions() {
+        assert_eq!(
+            round(&[Value::Float(3.456), Value::Int(2)]),
+            Value::Float(3.46)
+        );
+        assert_eq!(round(&[Value::Float(3.456)]), Value::Float(3.0));
+        assert_eq!(
+            roundup(&[Value::Float(3.1), Value::Int(0)]),
+            Value::Float(4.0)
+        );
+        assert_eq!(
+            rounddown(&[Value::Float(3.9), Value::Int(0)]),
+            Value::Float(3.0)
+        );
+    }
+
+    #[test]
+    fn test_product() {
+        let values = vec![Value::Int(2), Value::Float(3.0), Value::Int(4)];
+        assert_eq!(product(&values), Value::Float(24.0));
+
+        let values = vec![Value::String("x".to_string()), Value::Empty];
+        assert_eq!(product(&values), Value::Int(0));
+    }
+
+    #[test]
+    fn test_mod_fn() {
+        assert_eq!(mod_fn(&[Value::Int(10), Value::Int(3)]), Value::Float(1.0));
+        assert_eq!(
+            mod_fn(&[Value::Float(10.5), Value::Float(2.0)]),
+            Value::Float(0.5)
+        );
+        assert_eq!(
+            mod_fn(&[Value::Int(10), Value::Int(0)]),
+            Value::Error(ErrorValue::Div0)
+        );
+    }
+
+    #[test]
+    fn test_power_sqrt() {
+        assert_eq!(power(&[Value::Int(2), Value::Int(3)]), Value::Float(8.0));
+        assert_eq!(sqrt(&[Value::Float(16.0)]), Value::Float(4.0));
+        assert_eq!(sqrt(&[Value::Float(-1.0)]), Value::Error(ErrorValue::Num));
+    }
+
+    #[test]
+    fn test_text_functions() {
+        assert_eq!(
+            trim(&[Value::String("  hello  ".to_string())]),
+            Value::String("hello".to_string())
+        );
+        assert_eq!(
+            upper(&[Value::String("hello".to_string())]),
+            Value::String("HELLO".to_string())
+        );
+        assert_eq!(
+            lower(&[Value::String("HELLO".to_string())]),
+            Value::String("hello".to_string())
+        );
+        assert_eq!(
+            proper(&[Value::String("hello world".to_string())]),
+            Value::String("Hello World".to_string())
+        );
+    }
+
+    #[test]
+    fn test_is_functions() {
+        assert_eq!(isblank(&[Value::Empty]), Value::Bool(true));
+        assert_eq!(isblank(&[Value::Int(0)]), Value::Bool(false));
+
+        assert_eq!(
+            iserror(&[Value::Error(ErrorValue::Div0)]),
+            Value::Bool(true)
+        );
+        assert_eq!(iserror(&[Value::Int(1)]), Value::Bool(false));
+
+        assert_eq!(isna(&[Value::Error(ErrorValue::NA)]), Value::Bool(true));
+        assert_eq!(isna(&[Value::Error(ErrorValue::Div0)]), Value::Bool(false));
+
+        assert_eq!(isnumber(&[Value::Int(1)]), Value::Bool(true));
+        assert_eq!(isnumber(&[Value::Float(1.5)]), Value::Bool(true));
+        assert_eq!(
+            isnumber(&[Value::String("1".to_string())]),
+            Value::Bool(false)
+        );
+
+        assert_eq!(
+            istext(&[Value::String("hello".to_string())]),
+            Value::Bool(true)
+        );
+        assert_eq!(istext(&[Value::Int(1)]), Value::Bool(false));
+    }
+
+    #[test]
+    fn test_even_odd() {
+        assert_eq!(even(&[Value::Float(1.5)]), Value::Float(2.0));
+        assert_eq!(even(&[Value::Float(2.1)]), Value::Float(4.0));
+        assert_eq!(odd(&[Value::Float(2.5)]), Value::Float(3.0));
+        assert_eq!(odd(&[Value::Float(3.1)]), Value::Float(5.0));
+    }
+
+    #[test]
+    fn test_int_trunc() {
+        assert_eq!(int(&[Value::Float(3.9)]), Value::Float(3.0));
+        assert_eq!(int(&[Value::Float(-3.9)]), Value::Float(-4.0));
+        assert_eq!(trunc(&[Value::Float(3.9)]), Value::Float(3.0));
+        assert_eq!(trunc(&[Value::Float(-3.9)]), Value::Float(-3.0));
+        assert_eq!(
+            trunc(&[Value::Float(3.456), Value::Int(2)]),
+            Value::Float(3.45)
+        );
+    }
+
+    #[test]
+    fn test_sign() {
+        assert_eq!(sign(&[Value::Float(5.0)]), Value::Int(1));
+        assert_eq!(sign(&[Value::Float(-5.0)]), Value::Int(-1));
+        assert_eq!(sign(&[Value::Float(0.0)]), Value::Int(0));
+    }
+
+    #[test]
+    fn test_pi_exp_ln_log() {
+        let pi_result = pi(&[]);
+        assert!(matches!(pi_result, Value::Float(f) if (f - std::f64::consts::PI).abs() < 1e-10));
+
+        let exp_result = exp(&[Value::Float(1.0)]);
+        assert!(matches!(exp_result, Value::Float(f) if (f - std::f64::consts::E).abs() < 1e-10));
+
+        assert_eq!(ln(&[Value::Float(std::f64::consts::E)]), Value::Float(1.0));
+        assert_eq!(ln(&[Value::Float(-1.0)]), Value::Error(ErrorValue::Num));
+
+        let log_result = log(&[Value::Float(100.0)]);
+        assert!(matches!(log_result, Value::Float(f) if (f - 2.0).abs() < 1e-10));
+
+        assert_eq!(log10(&[Value::Float(1000.0)]), Value::Float(3.0));
+    }
+
+    #[test]
+    fn test_fact() {
+        assert_eq!(fact(&[Value::Int(0)]), Value::Float(1.0));
+        assert_eq!(fact(&[Value::Int(5)]), Value::Float(120.0));
+        assert_eq!(fact(&[Value::Float(5.5)]), Value::Float(120.0)); // Floors to 5
+        assert_eq!(fact(&[Value::Int(-1)]), Value::Error(ErrorValue::Num));
+        assert_eq!(fact(&[Value::Int(171)]), Value::Error(ErrorValue::Num)); // Too large
+    }
+
+    #[test]
+    fn test_rand() {
+        let result = rand(&[]);
+        assert!(matches!(result, Value::Float(f) if f >= 0.0 && f < 1.0));
+    }
+
+    #[test]
+    fn test_randbetween() {
+        let result = randbetween(&[Value::Int(1), Value::Int(10)]);
+        assert!(matches!(result, Value::Int(n) if n >= 1 && n <= 10));
+
+        assert_eq!(
+            randbetween(&[Value::Int(10), Value::Int(1)]),
+            Value::Error(ErrorValue::Value)
+        );
+    }
 }
 
 /// Max function - finds maximum value
@@ -1476,4 +1651,354 @@ pub fn offset(values: &[Value]) -> Value {
 
 pub fn not_implemented(_: &[Value]) -> Value {
     Value::Error(ErrorValue::NA)
+}
+
+/// ABS function - returns absolute value
+pub fn abs(values: &[Value]) -> Value {
+    let value = values.first().unwrap_or(&Value::Empty);
+    match to_number(value) {
+        Some(n) => Value::Float(n.abs()),
+        None => Value::Error(ErrorValue::Value),
+    }
+}
+
+/// ROUND function - rounds to specified decimal places
+pub fn round(values: &[Value]) -> Value {
+    let number = values.first().and_then(to_number);
+    let places = values.get(1).and_then(to_number).unwrap_or(0.0);
+
+    match number {
+        Some(n) => {
+            let places = places.floor() as i32;
+            let multiplier = 10_f64.powi(places);
+            Value::Float((n * multiplier).round() / multiplier)
+        }
+        None => Value::Error(ErrorValue::Value),
+    }
+}
+
+/// ROUNDUP function - rounds up to specified decimal places
+pub fn roundup(values: &[Value]) -> Value {
+    let number = values.first().and_then(to_number);
+    let places = values.get(1).and_then(to_number).unwrap_or(0.0);
+
+    match number {
+        Some(n) => {
+            let places = places.floor() as i32;
+            let multiplier = 10_f64.powi(places);
+            Value::Float((n * multiplier).ceil() / multiplier)
+        }
+        None => Value::Error(ErrorValue::Value),
+    }
+}
+
+/// ROUNDDOWN function - rounds down to specified decimal places
+pub fn rounddown(values: &[Value]) -> Value {
+    let number = values.first().and_then(to_number);
+    let places = values.get(1).and_then(to_number).unwrap_or(0.0);
+
+    match number {
+        Some(n) => {
+            let places = places.floor() as i32;
+            let multiplier = 10_f64.powi(places);
+            Value::Float((n * multiplier).floor() / multiplier)
+        }
+        None => Value::Error(ErrorValue::Value),
+    }
+}
+
+/// PRODUCT function - multiplies all numeric values
+pub fn product(values: &[Value]) -> Value {
+    let mut result = 1.0;
+    let mut has_number = false;
+
+    walk_values(values, &mut |value| {
+        if let Some(num) = to_number(value) {
+            result *= num;
+            has_number = true;
+        }
+    });
+
+    if has_number {
+        Value::Float(result)
+    } else {
+        Value::Int(0)
+    }
+}
+
+/// MOD function - returns remainder after division
+pub fn mod_fn(values: &[Value]) -> Value {
+    let dividend = values.first().and_then(to_number);
+    let divisor = values.get(1).and_then(to_number);
+
+    match (dividend, divisor) {
+        (Some(a), Some(b)) => {
+            if b == 0.0 {
+                Value::Error(ErrorValue::Div0)
+            } else {
+                Value::Float(a % b)
+            }
+        }
+        _ => Value::Error(ErrorValue::Value),
+    }
+}
+
+/// POWER function - raises number to a power
+pub fn power(values: &[Value]) -> Value {
+    let base = values.first().and_then(to_number);
+    let exponent = values.get(1).and_then(to_number);
+
+    match (base, exponent) {
+        (Some(a), Some(b)) => Value::Float(a.powf(b)),
+        _ => Value::Error(ErrorValue::Value),
+    }
+}
+
+/// SQRT function - returns square root
+pub fn sqrt(values: &[Value]) -> Value {
+    let value = values.first().and_then(to_number);
+
+    match value {
+        Some(n) if n >= 0.0 => Value::Float(n.sqrt()),
+        Some(_) => Value::Error(ErrorValue::Num),
+        None => Value::Error(ErrorValue::Value),
+    }
+}
+
+/// TRIM function - removes leading/trailing spaces
+pub fn trim(values: &[Value]) -> Value {
+    let text = values.first().unwrap_or(&Value::Empty);
+    match coerce_to_text(text) {
+        Ok(s) => Value::String(s.trim().to_string()),
+        Err(err) => Value::Error(err),
+    }
+}
+
+/// UPPER function - converts text to uppercase
+pub fn upper(values: &[Value]) -> Value {
+    let text = values.first().unwrap_or(&Value::Empty);
+    match coerce_to_text(text) {
+        Ok(s) => Value::String(s.to_uppercase()),
+        Err(err) => Value::Error(err),
+    }
+}
+
+/// LOWER function - converts text to lowercase
+pub fn lower(values: &[Value]) -> Value {
+    let text = values.first().unwrap_or(&Value::Empty);
+    match coerce_to_text(text) {
+        Ok(s) => Value::String(s.to_lowercase()),
+        Err(err) => Value::Error(err),
+    }
+}
+
+/// PROPER function - capitalizes first letter of each word
+pub fn proper(values: &[Value]) -> Value {
+    let text = values.first().unwrap_or(&Value::Empty);
+    match coerce_to_text(text) {
+        Ok(s) => {
+            let result = s
+                .chars()
+                .enumerate()
+                .map(|(i, c)| {
+                    if i == 0
+                        || s.chars()
+                            .nth(i - 1)
+                            .is_some_and(|prev| prev.is_whitespace())
+                    {
+                        c.to_uppercase().to_string()
+                    } else {
+                        c.to_lowercase().to_string()
+                    }
+                })
+                .collect::<String>();
+            Value::String(result)
+        }
+        Err(err) => Value::Error(err),
+    }
+}
+
+/// ISBLANK function - checks if cell is blank
+pub fn isblank(values: &[Value]) -> Value {
+    let value = values.first().unwrap_or(&Value::Empty);
+    Value::Bool(matches!(value, Value::Empty))
+}
+
+/// ISERROR function - checks if value is an error
+pub fn iserror(values: &[Value]) -> Value {
+    let value = values.first().unwrap_or(&Value::Empty);
+    Value::Bool(matches!(value, Value::Error(_)))
+}
+
+/// ISNA function - checks if value is #N/A error
+pub fn isna(values: &[Value]) -> Value {
+    let value = values.first().unwrap_or(&Value::Empty);
+    Value::Bool(matches!(value, Value::Error(ErrorValue::NA)))
+}
+
+/// ISNUMBER function - checks if value is a number
+pub fn isnumber(values: &[Value]) -> Value {
+    let value = values.first().unwrap_or(&Value::Empty);
+    Value::Bool(matches!(value, Value::Int(_) | Value::Float(_)))
+}
+
+/// ISTEXT function - checks if value is text
+pub fn istext(values: &[Value]) -> Value {
+    let value = values.first().unwrap_or(&Value::Empty);
+    Value::Bool(matches!(value, Value::String(_)))
+}
+
+/// EVEN function - rounds up to nearest even integer
+pub fn even(values: &[Value]) -> Value {
+    let value = values.first().and_then(to_number);
+    match value {
+        Some(n) => {
+            let rounded = n.ceil();
+            if rounded as i64 % 2 == 0 {
+                Value::Float(rounded)
+            } else {
+                Value::Float(rounded + 1.0)
+            }
+        }
+        None => Value::Error(ErrorValue::Value),
+    }
+}
+
+/// ODD function - rounds up to nearest odd integer
+pub fn odd(values: &[Value]) -> Value {
+    let value = values.first().and_then(to_number);
+    match value {
+        Some(n) => {
+            let rounded = n.ceil();
+            if rounded as i64 % 2 != 0 {
+                Value::Float(rounded)
+            } else {
+                Value::Float(rounded + 1.0)
+            }
+        }
+        None => Value::Error(ErrorValue::Value),
+    }
+}
+
+/// INT function - rounds down to integer
+pub fn int(values: &[Value]) -> Value {
+    let value = values.first().and_then(to_number);
+    match value {
+        Some(n) => Value::Float(n.floor()),
+        None => Value::Error(ErrorValue::Value),
+    }
+}
+
+/// TRUNC function - truncates number to integer
+pub fn trunc(values: &[Value]) -> Value {
+    let number = values.first().and_then(to_number);
+    let places = values.get(1).and_then(to_number).unwrap_or(0.0);
+
+    match number {
+        Some(n) => {
+            let places = places.floor() as i32;
+            let multiplier = 10_f64.powi(places);
+            Value::Float((n * multiplier).trunc() / multiplier)
+        }
+        None => Value::Error(ErrorValue::Value),
+    }
+}
+
+/// SIGN function - returns sign of number (-1, 0, 1)
+pub fn sign(values: &[Value]) -> Value {
+    let value = values.first().and_then(to_number);
+    match value {
+        Some(n) if n > 0.0 => Value::Int(1),
+        Some(n) if n < 0.0 => Value::Int(-1),
+        Some(_) => Value::Int(0),
+        None => Value::Error(ErrorValue::Value),
+    }
+}
+
+/// RAND function - returns random number between 0 and 1
+pub fn rand(_: &[Value]) -> Value {
+    use rand::Rng;
+    let mut rng = rand::thread_rng();
+    Value::Float(rng.gen_range(0.0..1.0))
+}
+
+/// RANDBETWEEN function - returns random integer between two numbers
+pub fn randbetween(values: &[Value]) -> Value {
+    use rand::Rng;
+    let bottom = values.first().and_then(to_number);
+    let top = values.get(1).and_then(to_number);
+
+    match (bottom, top) {
+        (Some(a), Some(b)) => {
+            let min = a.floor() as i64;
+            let max = b.floor() as i64;
+            if min > max {
+                Value::Error(ErrorValue::Value)
+            } else {
+                let mut rng = rand::thread_rng();
+                Value::Int(rng.gen_range(min..=max))
+            }
+        }
+        _ => Value::Error(ErrorValue::Value),
+    }
+}
+
+/// PI function - returns value of pi
+pub fn pi(_: &[Value]) -> Value {
+    Value::Float(std::f64::consts::PI)
+}
+
+/// EXP function - returns e raised to a power
+pub fn exp(values: &[Value]) -> Value {
+    let value = values.first().and_then(to_number);
+    match value {
+        Some(n) => Value::Float(n.exp()),
+        None => Value::Error(ErrorValue::Value),
+    }
+}
+
+/// LN function - returns natural logarithm
+pub fn ln(values: &[Value]) -> Value {
+    let value = values.first().and_then(to_number);
+    match value {
+        Some(n) if n > 0.0 => Value::Float(n.ln()),
+        Some(_) => Value::Error(ErrorValue::Num),
+        None => Value::Error(ErrorValue::Value),
+    }
+}
+
+/// LOG function - returns logarithm to specified base
+pub fn log(values: &[Value]) -> Value {
+    let number = values.first().and_then(to_number);
+    let base = values.get(1).and_then(to_number).unwrap_or(10.0);
+
+    match (number, base) {
+        (Some(n), b) if n > 0.0 && b > 0.0 && b != 1.0 => Value::Float(n.log(b)),
+        _ => Value::Error(ErrorValue::Num),
+    }
+}
+
+/// LOG10 function - returns base-10 logarithm
+pub fn log10(values: &[Value]) -> Value {
+    let value = values.first().and_then(to_number);
+    match value {
+        Some(n) if n > 0.0 => Value::Float(n.log10()),
+        Some(_) => Value::Error(ErrorValue::Num),
+        None => Value::Error(ErrorValue::Value),
+    }
+}
+
+/// FACT function - returns factorial
+pub fn fact(values: &[Value]) -> Value {
+    let value = values.first().and_then(to_number);
+    match value {
+        Some(n) if (0.0..=170.0).contains(&n) => {
+            let n = n.floor() as u32;
+            let result = (1..=n).fold(1.0, |acc, i| acc * i as f64);
+            Value::Float(result)
+        }
+        Some(n) if n < 0.0 => Value::Error(ErrorValue::Num),
+        Some(_) => Value::Error(ErrorValue::Num), // Too large
+        None => Value::Error(ErrorValue::Value),
+    }
 }

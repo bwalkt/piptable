@@ -476,6 +476,195 @@ impl FunctionRegistry {
                 functions::offset,
             ),
         );
+
+        // Additional Math functions
+        self.register(
+            "ABS",
+            FunctionDefinition::fixed(vec![ParamType::Number], ReturnType::Number, functions::abs),
+        );
+        self.register(
+            "ROUND",
+            FunctionDefinition::range(
+                1,
+                2,
+                vec![ParamType::Number, ParamType::Number],
+                ReturnType::Number,
+                functions::round,
+            ),
+        );
+        self.register(
+            "ROUNDUP",
+            FunctionDefinition::range(
+                1,
+                2,
+                vec![ParamType::Number, ParamType::Number],
+                ReturnType::Number,
+                functions::roundup,
+            ),
+        );
+        self.register(
+            "ROUNDDOWN",
+            FunctionDefinition::range(
+                1,
+                2,
+                vec![ParamType::Number, ParamType::Number],
+                ReturnType::Number,
+                functions::rounddown,
+            ),
+        );
+        self.register(
+            "PRODUCT",
+            FunctionDefinition::variadic(
+                1,
+                ParamType::Number,
+                ReturnType::Number,
+                functions::product,
+            ),
+        );
+        self.register(
+            "MOD",
+            FunctionDefinition::fixed(
+                vec![ParamType::Number, ParamType::Number],
+                ReturnType::Number,
+                functions::mod_fn,
+            ),
+        );
+        self.register(
+            "POWER",
+            FunctionDefinition::fixed(
+                vec![ParamType::Number, ParamType::Number],
+                ReturnType::Number,
+                functions::power,
+            ),
+        );
+        self.register(
+            "SQRT",
+            FunctionDefinition::fixed(vec![ParamType::Number], ReturnType::Number, functions::sqrt),
+        );
+        self.register(
+            "INT",
+            FunctionDefinition::fixed(vec![ParamType::Number], ReturnType::Number, functions::int),
+        );
+        self.register(
+            "TRUNC",
+            FunctionDefinition::range(
+                1,
+                2,
+                vec![ParamType::Number, ParamType::Number],
+                ReturnType::Number,
+                functions::trunc,
+            ),
+        );
+        self.register(
+            "SIGN",
+            FunctionDefinition::fixed(vec![ParamType::Number], ReturnType::Number, functions::sign),
+        );
+        self.register(
+            "EVEN",
+            FunctionDefinition::fixed(vec![ParamType::Number], ReturnType::Number, functions::even),
+        );
+        self.register(
+            "ODD",
+            FunctionDefinition::fixed(vec![ParamType::Number], ReturnType::Number, functions::odd),
+        );
+        self.register(
+            "RAND",
+            FunctionDefinition::fixed(vec![], ReturnType::Number, functions::rand),
+        );
+        self.register(
+            "RANDBETWEEN",
+            FunctionDefinition::fixed(
+                vec![ParamType::Number, ParamType::Number],
+                ReturnType::Number,
+                functions::randbetween,
+            ),
+        );
+        self.register(
+            "PI",
+            FunctionDefinition::fixed(vec![], ReturnType::Number, functions::pi),
+        );
+        self.register(
+            "EXP",
+            FunctionDefinition::fixed(vec![ParamType::Number], ReturnType::Number, functions::exp),
+        );
+        self.register(
+            "LN",
+            FunctionDefinition::fixed(vec![ParamType::Number], ReturnType::Number, functions::ln),
+        );
+        self.register(
+            "LOG",
+            FunctionDefinition::range(
+                1,
+                2,
+                vec![ParamType::Number, ParamType::Number],
+                ReturnType::Number,
+                functions::log,
+            ),
+        );
+        self.register(
+            "LOG10",
+            FunctionDefinition::fixed(
+                vec![ParamType::Number],
+                ReturnType::Number,
+                functions::log10,
+            ),
+        );
+        self.register(
+            "FACT",
+            FunctionDefinition::fixed(vec![ParamType::Number], ReturnType::Number, functions::fact),
+        );
+
+        // Additional Text functions
+        self.register(
+            "TRIM",
+            FunctionDefinition::fixed(vec![ParamType::Text], ReturnType::Text, functions::trim),
+        );
+        self.register(
+            "UPPER",
+            FunctionDefinition::fixed(vec![ParamType::Text], ReturnType::Text, functions::upper),
+        );
+        self.register(
+            "LOWER",
+            FunctionDefinition::fixed(vec![ParamType::Text], ReturnType::Text, functions::lower),
+        );
+        self.register(
+            "PROPER",
+            FunctionDefinition::fixed(vec![ParamType::Text], ReturnType::Text, functions::proper),
+        );
+
+        // Information functions
+        self.register(
+            "ISBLANK",
+            FunctionDefinition::fixed(
+                vec![ParamType::Any],
+                ReturnType::Logical,
+                functions::isblank,
+            ),
+        );
+        self.register(
+            "ISERROR",
+            FunctionDefinition::fixed(
+                vec![ParamType::Any],
+                ReturnType::Logical,
+                functions::iserror,
+            ),
+        );
+        self.register(
+            "ISNA",
+            FunctionDefinition::fixed(vec![ParamType::Any], ReturnType::Logical, functions::isna),
+        );
+        self.register(
+            "ISNUMBER",
+            FunctionDefinition::fixed(
+                vec![ParamType::Any],
+                ReturnType::Logical,
+                functions::isnumber,
+            ),
+        );
+        self.register(
+            "ISTEXT",
+            FunctionDefinition::fixed(vec![ParamType::Any], ReturnType::Logical, functions::istext),
+        );
     }
 
     fn register(&mut self, name: &str, def: FunctionDefinition) {
