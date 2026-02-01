@@ -3486,6 +3486,59 @@ export data to "{}""#,
         }
     }
 
+    #[cfg(not(target_arch = "wasm32"))]
+    #[tokio::test]
+    async fn test_import_markdown_options() {
+        let dir = tempfile::tempdir().unwrap();
+        let file_path = dir.path().join("options.md");
+
+        let md = "| Name | Qty |\n| ---- | --- |\n| Apple | 10 |";
+        std::fs::write(&file_path, md).unwrap();
+
+        let mut interp = Interpreter::new();
+        let script = format!(
+            r#"import "{}" into tables with {{ "detect_headers": true, "min_table_rows": 1 }}"#,
+            file_path.display()
+        );
+        let program = PipParser::parse_str(&script).unwrap();
+        interp.eval(program).await.unwrap();
+
+        let data = interp.get_var("tables").await.unwrap();
+        if let Value::Object(book) = &data {
+            let sheet = match book.get("table_1") {
+                Some(Value::Sheet(sheet)) => sheet,
+                _ => panic!("Expected table_1 sheet"),
+            };
+            let names = sheet.column_names().unwrap();
+            assert_eq!(names[0], "Name");
+            assert_eq!(names[1], "Qty");
+        } else {
+            panic!("Markdown import should return a book object");
+        }
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    #[tokio::test]
+    async fn test_import_markdown_min_table_size_filters() {
+        let dir = tempfile::tempdir().unwrap();
+        let file_path = dir.path().join("min_size.md");
+
+        let md = "| A | B |\n|---|---|\n| 1 | 2 |";
+        std::fs::write(&file_path, md).unwrap();
+
+        let mut interp = Interpreter::new();
+        let script = format!(
+            r#"import "{}" into tables with {{ "min_table_size": 3 }}"#,
+            file_path.display()
+        );
+        let program = PipParser::parse_str(&script).unwrap();
+        let err = interp.eval(program).await.unwrap_err();
+        assert!(err
+            .to_string()
+            .to_lowercase()
+            .contains("no tables found"));
+    }
+
     #[tokio::test]
     async fn test_multi_file_import() {
         let dir = tempfile::tempdir().unwrap();
