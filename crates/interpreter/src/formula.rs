@@ -19,7 +19,6 @@ const DSL_FORMULA_FUNCTIONS: &[&str] = &[
     "AVERAGE",
     "AVG",
     "COUNT",
-    "COUNTA",
     "MAX",
     "MIN",
     "IF",
@@ -169,7 +168,6 @@ pub fn range_function_name(name: &str) -> Option<&'static str> {
         "MIN" => Some("MIN"),
         "MAX" => Some("MAX"),
         "COUNT" => Some("COUNT"),
-        "COUNTA" => Some("COUNTA"),
         _ => None,
     }
 }

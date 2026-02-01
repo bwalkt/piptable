@@ -78,7 +78,6 @@ async fn test_sheet_formula_eval_helpers() {
         dim min_short = min(s, "A1:A2")
         dim max_short = max(s, "A1:A2")
         dim count_short = count(s, "A1:A2")
-        dim counta_short = counta(s, "A1:A2")
         dim is_formula = is_sheet_cell_formula(s, "B1")
         dim is_not_formula = is_sheet_cell_formula(s, "A1")
     "#;
@@ -111,10 +110,6 @@ async fn test_sheet_formula_eval_helpers() {
     ));
     assert!(matches!(
         interp.get_var("count_short").await,
-        Some(Value::Int(2))
-    ));
-    assert!(matches!(
-        interp.get_var("counta_short").await,
         Some(Value::Int(2))
     ));
     assert!(matches!(

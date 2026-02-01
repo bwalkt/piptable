@@ -73,7 +73,6 @@ dim average_short = avg(sales, "A1:A10")
 dim min_short = min(sales, "A1:A10")
 dim max_short = max(sales, "A1:A10")
 dim count_short = count(sales, "A1:A10")
-dim counta_short = counta(sales, "A1:A10")
 dim cached = sheet_get_a1_eval(sales, "B1")
 ```
 

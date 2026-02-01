@@ -330,29 +330,6 @@ pub fn count(values: &[Value]) -> Value {
     Value::Int(count as i64)
 }
 
-pub fn counta(values: &[Value]) -> Value {
-    let mut count = 0usize;
-    let mut error: Option<ErrorValue> = None;
-
-    walk_values(values, &mut |value| match value {
-        Value::Empty => {}
-        Value::Error(err) => {
-            if error.is_none() {
-                error = Some(err.clone());
-            }
-        }
-        _ => {
-            count += 1;
-        }
-    });
-
-    if let Some(err) = error {
-        Value::Error(err)
-    } else {
-        Value::Int(count as i64)
-    }
-}
-
 pub fn concat(values: &[Value]) -> Value {
     let mut first_error: Option<ErrorValue> = None;
     let mut result = String::new();
@@ -483,7 +460,7 @@ mod tests {
     }
 
     #[test]
-    fn test_count_and_counta() {
+    fn test_count() {
         let values = vec![
             Value::Int(1),
             Value::Float(2.5),
@@ -492,12 +469,6 @@ mod tests {
             Value::Array(vec![Value::Int(7), Value::String("y".to_string())]),
         ];
         assert_eq!(count(&values), Value::Int(3));
-
-        let values = vec![Value::Empty, Value::String("a".to_string())];
-        assert_eq!(counta(&values), Value::Int(1));
-
-        let values = vec![Value::Int(1), Value::Error(ErrorValue::Div0)];
-        assert_eq!(counta(&values), Value::Error(ErrorValue::Div0));
     }
 
     #[test]
@@ -524,10 +495,10 @@ mod tests {
         assert_eq!(result, Value::Bool(false));
 
         let result = and_fn(&[Value::Empty]);
-        assert_eq!(result, Value::Error(ErrorValue::Value));
+        assert_eq!(result, Value::Bool(false));
 
         let result = and_fn(&[Value::Float(f64::NAN), Value::Empty]);
-        assert_eq!(result, Value::Error(ErrorValue::Value));
+        assert_eq!(result, Value::Error(ErrorValue::Num));
 
         let result = and_fn(&[Value::Error(ErrorValue::Div0), Value::Bool(false)]);
         assert_eq!(result, Value::Error(ErrorValue::Div0));
@@ -536,7 +507,7 @@ mod tests {
         assert_eq!(result, Value::Bool(true));
 
         let result = or_fn(&[Value::Empty]);
-        assert_eq!(result, Value::Error(ErrorValue::Value));
+        assert_eq!(result, Value::Bool(false));
 
         let result = or_fn(&[Value::Error(ErrorValue::Div0), Value::Bool(true)]);
         assert_eq!(result, Value::Error(ErrorValue::Div0));
@@ -659,7 +630,7 @@ mod tests {
     #[test]
     fn test_if_defaults() {
         let result = if_fn(&[Value::Bool(true)]);
-        assert_eq!(result, Value::Bool(true));
+        assert_eq!(result, Value::Error(ErrorValue::Value));
 
         let result = if_fn(&[Value::Bool(false), Value::Int(1)]);
         assert_eq!(result, Value::Bool(false));
@@ -699,7 +670,7 @@ mod tests {
         assert_eq!(result, Value::Bool(true));
 
         let result = or_fn(&[Value::Float(f64::NAN), Value::Empty]);
-        assert_eq!(result, Value::Error(ErrorValue::Value));
+        assert_eq!(result, Value::Error(ErrorValue::Num));
 
         let result = or_fn(&[Value::String("x".to_string())]);
         assert_eq!(result, Value::Error(ErrorValue::Value));
@@ -1015,15 +986,15 @@ pub fn min(values: &[Value]) -> Value {
 
 pub fn if_fn(values: &[Value]) -> Value {
     let condition = values.first().unwrap_or(&Value::Empty);
-    let then_value = values.get(1).cloned().unwrap_or(Value::Bool(true));
+    let then_value = values
+        .get(1)
+        .cloned()
+        .unwrap_or(Value::Error(ErrorValue::Value));
     let else_value = values.get(2).cloned().unwrap_or(Value::Bool(false));
 
-    let truthy = match condition {
-        Value::Bool(b) => *b,
-        Value::Int(n) => *n != 0,
-        Value::Float(f) => *f != 0.0,
-        Value::Empty => false,
-        _ => return Value::Error(ErrorValue::Value),
+    let truthy = match coerce_to_bool(condition) {
+        Ok(value) => value,
+        Err(err) => return Value::Error(err),
     };
 
     if truthy {
@@ -1034,111 +1005,71 @@ pub fn if_fn(values: &[Value]) -> Value {
 }
 
 pub fn and_fn(values: &[Value]) -> Value {
-    let mut has_coercible = false;
     let mut any_false = false;
     let mut first_error: Option<ErrorValue> = None;
 
-    walk_values(values, &mut |value| match value {
-        Value::Empty => {}
-        Value::Bool(b) => {
-            has_coercible = true;
-            if !b {
-                any_false = true;
-            }
+    walk_values(values, &mut |value| match coerce_to_bool(value) {
+        Ok(false) => {
+            any_false = true;
         }
-        Value::Int(n) => {
-            has_coercible = true;
-            if *n == 0 {
-                any_false = true;
-            }
-        }
-        Value::Float(f) => {
-            if f.is_nan() {
-                return;
-            }
-            has_coercible = true;
-            if *f == 0.0 {
-                any_false = true;
-            }
-        }
-        Value::Error(err) => {
+        Ok(true) => {}
+        Err(err) => {
             if first_error.is_none() {
-                first_error = Some(err.clone());
-            }
-        }
-        _ => {
-            if first_error.is_none() {
-                first_error = Some(ErrorValue::Value);
+                first_error = Some(err);
             }
         }
     });
 
     if let Some(err) = first_error {
         return Value::Error(err);
-    }
-    if !has_coercible {
-        return Value::Error(ErrorValue::Value);
     }
     Value::Bool(!any_false)
 }
 
 pub fn or_fn(values: &[Value]) -> Value {
-    let mut has_coercible = false;
     let mut any_true = false;
     let mut first_error: Option<ErrorValue> = None;
 
-    walk_values(values, &mut |value| match value {
-        Value::Empty => {}
-        Value::Bool(b) => {
-            has_coercible = true;
-            if *b {
-                any_true = true;
-            }
+    walk_values(values, &mut |value| match coerce_to_bool(value) {
+        Ok(true) => {
+            any_true = true;
         }
-        Value::Int(n) => {
-            has_coercible = true;
-            if *n != 0 {
-                any_true = true;
-            }
-        }
-        Value::Float(f) => {
-            if f.is_nan() {
-                return;
-            }
-            has_coercible = true;
-            if *f != 0.0 {
-                any_true = true;
-            }
-        }
-        Value::Error(err) => {
+        Ok(false) => {}
+        Err(err) => {
             if first_error.is_none() {
-                first_error = Some(err.clone());
-            }
-        }
-        _ => {
-            if first_error.is_none() {
-                first_error = Some(ErrorValue::Value);
+                first_error = Some(err);
             }
         }
     });
 
     if let Some(err) = first_error {
         return Value::Error(err);
-    }
-    if !has_coercible {
-        return Value::Error(ErrorValue::Value);
     }
     Value::Bool(any_true)
 }
 
 pub fn not_fn(values: &[Value]) -> Value {
     let value = values.first().unwrap_or(&Value::Empty);
+    match coerce_to_bool(value) {
+        Ok(value) => Value::Bool(!value),
+        Err(err) => Value::Error(err),
+    }
+}
+
+fn coerce_to_bool(value: &Value) -> Result<bool, ErrorValue> {
     match value {
-        Value::Bool(b) => Value::Bool(!b),
-        Value::Int(n) => Value::Bool(*n == 0),
-        Value::Float(f) => Value::Bool(*f == 0.0),
-        Value::Empty => Value::Bool(true),
-        _ => Value::Error(ErrorValue::Value),
+        Value::Bool(b) => Ok(*b),
+        Value::Int(n) => Ok(*n != 0),
+        Value::Float(f) => {
+            if f.is_nan() {
+                Err(ErrorValue::Num)
+            } else {
+                Ok(*f != 0.0)
+            }
+        }
+        Value::Empty => Ok(false),
+        Value::Error(err) => Err(err.clone()),
+        _ => Err(ErrorValue::Value),
     }
 }
 
