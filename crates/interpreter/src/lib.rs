@@ -1119,7 +1119,7 @@ impl Interpreter {
                     (Value::Object(_), _) => Err(PipError::runtime(0, "Object key must be string")),
                     (Value::Sheet(_), _) => Err(PipError::runtime(
                         0,
-                        "Sheet index must be string (A1 notation)",
+                        "Sheet index must be string (A1 or R1C1 notation)",
                     )),
                     _ => Err(PipError::runtime(
                         0,

@@ -1,6 +1,7 @@
 [workspace]
 resolver = "2"
 members = [
+    "crates/piptable-types",
     "crates/core",
     "crates/parser",
     "crates/sql",
@@ -101,6 +102,7 @@ piptable-sheet = { path = "crates/sheet" }
 piptable-python = { path = "crates/python" }
 piptable-pdf = { path = "crates/pdf" }
 piptable-markdown = { path = "crates/markdown" }
+piptable-types = { path = "crates/piptable-types" }
 piptable-primitives = { path = "crates/piptable-primitives" }
 piptable-formulas = { path = "crates/piptable-formulas" }
 

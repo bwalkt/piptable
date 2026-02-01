@@ -3750,6 +3750,7 @@ dependencies = [
  "arrow",
  "chrono",
  "piptable-sheet",
+ "piptable-types",
  "serde",
  "serde_json",
  "tempfile",
@@ -3858,8 +3859,8 @@ dependencies = [
 name = "piptable-primitives"
 version = "0.1.0"
 dependencies = [
- "piptable-core",
  "piptable-sheet",
+ "piptable-types",
  "rmp-serde",
  "serde",
  "thiserror 2.0.18",
@@ -3894,6 +3895,7 @@ dependencies = [
  "csv",
  "indexmap",
  "parquet",
+ "piptable-primitives",
  "rust_xlsxwriter",
  "scraper",
  "serde",
@@ -3914,6 +3916,16 @@ dependencies = [
  "thiserror 2.0.18",
  "tokio",
  "tracing",
+]
+
+[[package]]
+name = "piptable-types"
+version = "0.1.0"
+dependencies = [
+ "indexmap",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.18",
 ]
 
 [[package]]

@@ -77,6 +77,13 @@ dim counta_short = counta(sales, "A1:A10")
 dim cached = sheet_get_a1_eval(sales, "B1")
 ```
 
+R1C1 notation is also supported in formulas:
+
+```piptable
+dim total_r1c1 = sheet_eval_formula(sales, "SUM(R1C1:R10C1)")
+dim relative = sheet_get_cell_value(sales, "B2")  ' "=R[-1]C[-1]" in B2
+```
+
 Notes:
 - `sheet_get_cell_value` evaluates formulas stored as strings in cells (e.g., `"=SUM(A1:A2)"`).
 - When a formula references a cell that contains another formula string, it is treated as a string value (no recursive evaluation yet).

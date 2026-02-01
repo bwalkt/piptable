@@ -225,7 +225,7 @@ pub fn toon_to_value(toon: &ToonValue) -> Value {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use piptable_core::ast::{Expr, Literal, Param, ParamMode};
+    use piptable_types::{Expr, Literal, Param, ParamMode};
     use piptable_sheet::Sheet;
     use std::collections::HashMap;
 

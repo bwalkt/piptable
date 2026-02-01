@@ -68,7 +68,10 @@ pub fn eval_sheet_formula(sheet: &Sheet, formula: &str, line: usize) -> PipResul
     let compiled = engine.compile(formula).map_err(|e| {
         PipError::runtime(line, format_formula_error("sheet_eval_formula", formula, e))
     })?;
-    let resolver = SheetResolver { sheet };
+    let resolver = SheetResolver {
+        sheet,
+        base_cell: None,
+    };
     let result = engine.evaluate(&compiled, &resolver).map_err(|e| {
         PipError::runtime(line, format_formula_error("sheet_eval_formula", formula, e))
     })?;
@@ -112,11 +115,12 @@ impl CachedFormulaEngine {
         &mut self,
         compiled: &CompiledFormula,
         sheet: &Sheet,
+        base_cell: Option<CellAddress>,
         line: usize,
         context: &str,
         formula: &str,
     ) -> PipResult<Value> {
-        let resolver = SheetResolver { sheet };
+        let resolver = SheetResolver { sheet, base_cell };
         let result = self
             .engine
             .evaluate(compiled, &resolver)
@@ -133,7 +137,7 @@ pub fn eval_sheet_formula_cached(
     context: &str,
 ) -> PipResult<Value> {
     let compiled = engine.compile_cached(formula, line, context)?;
-    engine.evaluate(&compiled, sheet, line, context, formula)
+    engine.evaluate(&compiled, sheet, None, line, context, formula)
 }
 
 #[allow(dead_code)]
@@ -177,7 +181,21 @@ pub fn eval_sheet_cell(sheet: &Sheet, notation: &str, line: usize) -> PipResult<
     })?;
     match cell {
         CellValue::String(s) if s.trim_start().starts_with('=') => {
-            eval_sheet_formula(sheet, s, line)
+            let base_cell = sheet.get_a1_addr(notation).map_err(|e| {
+                PipError::runtime(line, format!("Invalid cell notation '{}': {}", notation, e))
+            })?;
+            let mut engine = FormulaEngine::new();
+            let compiled = engine.compile(s).map_err(|e| {
+                PipError::runtime(line, format_formula_error("sheet_eval_formula", s, e))
+            })?;
+            let resolver = SheetResolver {
+                sheet,
+                base_cell: Some(base_cell),
+            };
+            let result = engine.evaluate(&compiled, &resolver).map_err(|e| {
+                PipError::runtime(line, format_formula_error("sheet_eval_formula", s, e))
+            })?;
+            formula_to_core_with_context(result, line, "sheet_eval_formula", s)
         }
         _ => Ok(cell_to_core(cell)),
     }
@@ -194,8 +212,12 @@ pub fn eval_sheet_cell_cached(
     })?;
     match cell {
         CellValue::String(s) if s.trim_start().starts_with('=') => {
+            let base_cell = sheet.get_a1_addr(notation).map_err(|e| {
+                PipError::runtime(line, format!("Invalid cell notation '{}': {}", notation, e))
+            })?;
             let context = format!("cell {}", notation);
-            eval_sheet_formula_cached(engine, sheet, s, line, &context)
+            let compiled = engine.compile_cached(s, line, &context)?;
+            engine.evaluate(&compiled, sheet, Some(base_cell), line, &context, s)
         }
         _ => Ok(cell_to_core(cell)),
     }
@@ -203,6 +225,7 @@ pub fn eval_sheet_cell_cached(
 
 struct SheetResolver<'a> {
     sheet: &'a Sheet,
+    base_cell: Option<CellAddress>,
 }
 
 impl ValueResolver for SheetResolver<'_> {
@@ -232,6 +255,10 @@ impl ValueResolver for SheetResolver<'_> {
             values.push(FormulaValue::Array(row));
         }
         values
+    }
+
+    fn current_cell(&self) -> Option<CellAddress> {
+        self.base_cell
     }
 }
 

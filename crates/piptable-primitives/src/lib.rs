@@ -6,7 +6,7 @@
 use serde::{Deserialize, Serialize};
 use std::fmt;
 
-pub mod boundary;
+// pub mod boundary; // Temporarily disabled - depends on piptable_core::Value
 pub mod toon;
 
 /// A cell address in the spreadsheet (e.g., A1, B2, etc.)
@@ -91,6 +91,11 @@ impl CellAddress {
         let col_letters = column_index_to_letters(self.col);
         format!("{}{}", col_letters, self.row + 1)
     }
+
+    /// Convert to absolute R1C1 notation
+    pub fn to_r1c1(&self) -> String {
+        format!("R{}C{}", self.row + 1, self.col + 1)
+    }
 }
 
 /// A range of cells (e.g., A1:B10)
@@ -172,6 +177,186 @@ pub enum CellRef {
         col_abs: bool,
         addr: CellAddress,
     },
+}
+
+/// R1C1 axis reference.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum R1C1Axis {
+    /// Absolute index (1-based in notation).
+    Absolute(u32),
+    /// Relative offset from the current cell.
+    Relative(i32),
+    /// Same row/column as the current cell.
+    Current,
+}
+
+/// R1C1-style cell reference (e.g., R1C1, R[-1]C[2], RC).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub struct R1C1Ref {
+    pub row: R1C1Axis,
+    pub col: R1C1Axis,
+}
+
+impl R1C1Ref {
+    /// Parse R1C1 notation (e.g., "R1C1", "R[-1]C[2]", "RC").
+    pub fn from_r1c1(s: &str) -> Result<Self, AddressError> {
+        let trimmed = s.trim();
+        if trimmed.is_empty() {
+            return Err(AddressError::InvalidRange(
+                "Empty R1C1 reference".to_string(),
+            ));
+        }
+
+        let mut chars = trimmed.chars().peekable();
+        let r = chars
+            .next()
+            .ok_or_else(|| AddressError::InvalidRange(trimmed.to_string()))?;
+        if r != 'R' && r != 'r' {
+            return Err(AddressError::InvalidRange(trimmed.to_string()));
+        }
+
+        let row = parse_r1c1_axis(&mut chars)?;
+
+        let c = chars
+            .next()
+            .ok_or_else(|| AddressError::InvalidRange(trimmed.to_string()))?;
+        if c != 'C' && c != 'c' {
+            return Err(AddressError::InvalidRange(trimmed.to_string()));
+        }
+
+        let col = parse_r1c1_axis(&mut chars)?;
+
+        if chars.peek().is_some() {
+            return Err(AddressError::InvalidRange(trimmed.to_string()));
+        }
+
+        Ok(Self { row, col })
+    }
+
+    /// Returns true if both row and column are absolute.
+    pub fn is_absolute(&self) -> bool {
+        matches!(self.row, R1C1Axis::Absolute(_)) && matches!(self.col, R1C1Axis::Absolute(_))
+    }
+
+    /// Resolve to an absolute cell address using an optional base cell.
+    pub fn resolve(&self, base: Option<CellAddress>) -> Result<CellAddress, AddressError> {
+        let base = match base {
+            Some(base) => base,
+            None => {
+                if self.is_absolute() {
+                    CellAddress::new(0, 0)
+                } else {
+                    return Err(AddressError::InvalidRange(
+                        "Relative R1C1 reference requires a base cell".to_string(),
+                    ));
+                }
+            }
+        };
+
+        let row = resolve_axis(self.row, base.row)?;
+        let col = resolve_axis(self.col, base.col)?;
+
+        Ok(CellAddress { row, col })
+    }
+
+    /// Convert to A1 notation using an optional base cell for relative references.
+    pub fn to_a1(&self, base: Option<CellAddress>) -> Result<String, AddressError> {
+        let addr = self.resolve(base)?;
+        Ok(addr.to_a1())
+    }
+
+    /// Convert back to R1C1 string notation.
+    pub fn to_r1c1(&self) -> String {
+        format!(
+            "{}{}",
+            axis_to_r1c1('R', self.row),
+            axis_to_r1c1('C', self.col)
+        )
+    }
+}
+
+fn parse_r1c1_axis<I>(chars: &mut std::iter::Peekable<I>) -> Result<R1C1Axis, AddressError>
+where
+    I: Iterator<Item = char>,
+{
+    match chars.peek().copied() {
+        Some('[') => {
+            chars.next();
+            let mut digits = String::new();
+            if matches!(chars.peek(), Some('+') | Some('-')) {
+                digits.push(chars.next().unwrap());
+            }
+            while let Some(ch) = chars.peek().copied() {
+                if ch.is_ascii_digit() {
+                    digits.push(ch);
+                    chars.next();
+                } else {
+                    break;
+                }
+            }
+            if digits.is_empty() || digits == "+" || digits == "-" {
+                return Err(AddressError::InvalidRange(
+                    "Invalid R1C1 offset".to_string(),
+                ));
+            }
+            if chars.next() != Some(']') {
+                return Err(AddressError::InvalidRange(
+                    "Invalid R1C1 offset".to_string(),
+                ));
+            }
+            let offset = digits
+                .parse::<i32>()
+                .map_err(|_| AddressError::InvalidRange("Invalid R1C1 offset".to_string()))?;
+            Ok(R1C1Axis::Relative(offset))
+        }
+        Some(ch) if ch.is_ascii_digit() => {
+            let mut digits = String::new();
+            while let Some(ch) = chars.peek().copied() {
+                if ch.is_ascii_digit() {
+                    digits.push(ch);
+                    chars.next();
+                } else {
+                    break;
+                }
+            }
+            let value = digits
+                .parse::<u32>()
+                .map_err(|_| AddressError::InvalidRange(digits.clone()))?;
+            if value == 0 {
+                return Err(AddressError::InvalidRange(digits));
+            }
+            Ok(R1C1Axis::Absolute(value))
+        }
+        _ => Ok(R1C1Axis::Current),
+    }
+}
+
+fn resolve_axis(axis: R1C1Axis, base: u32) -> Result<u32, AddressError> {
+    match axis {
+        R1C1Axis::Absolute(value) => Ok(value - 1),
+        R1C1Axis::Current => Ok(base),
+        R1C1Axis::Relative(offset) => {
+            let base_i = i64::from(base);
+            let offset_i = i64::from(offset);
+            let resolved = base_i + offset_i;
+            if resolved < 0 {
+                return Err(AddressError::InvalidRange(
+                    "R1C1 reference resolved out of bounds".to_string(),
+                ));
+            }
+            u32::try_from(resolved).map_err(|_| {
+                AddressError::InvalidRange("R1C1 reference resolved out of bounds".to_string())
+            })
+        }
+    }
+}
+
+fn axis_to_r1c1(prefix: char, axis: R1C1Axis) -> String {
+    match axis {
+        R1C1Axis::Absolute(value) => format!("{}{}", prefix, value),
+        R1C1Axis::Relative(offset) => format!("{}[{}]", prefix, offset),
+        R1C1Axis::Current => prefix.to_string(),
+    }
 }
 
 impl CellRef {
@@ -466,6 +651,48 @@ mod tests {
 
         let addr = CellAddress::new(9, 26);
         assert_eq!(addr.to_a1(), "AA10");
+    }
+
+    #[test]
+    fn test_r1c1_parsing_absolute() {
+        let r = R1C1Ref::from_r1c1("R1C1").unwrap();
+        assert!(r.is_absolute());
+        let addr = r.resolve(None).unwrap();
+        assert_eq!(addr, CellAddress::new(0, 0));
+
+        let r = R1C1Ref::from_r1c1("R5C3").unwrap();
+        let addr = r.resolve(None).unwrap();
+        assert_eq!(addr, CellAddress::new(4, 2));
+    }
+
+    #[test]
+    fn test_r1c1_parsing_relative() {
+        let base = CellAddress::new(10, 10);
+        let r = R1C1Ref::from_r1c1("R[1]C[-2]").unwrap();
+        let addr = r.resolve(Some(base)).unwrap();
+        assert_eq!(addr, CellAddress::new(11, 8));
+
+        let r = R1C1Ref::from_r1c1("RC").unwrap();
+        let addr = r.resolve(Some(base)).unwrap();
+        assert_eq!(addr, base);
+        assert_eq!(r.to_a1(Some(base)).unwrap(), "K11");
+    }
+
+    #[test]
+    fn test_r1c1_errors() {
+        assert!(R1C1Ref::from_r1c1("").is_err());
+        assert!(R1C1Ref::from_r1c1("R0C1").is_err());
+        assert!(R1C1Ref::from_r1c1("R1C0").is_err());
+        assert!(R1C1Ref::from_r1c1("R[abc]C1").is_err());
+        assert!(R1C1Ref::from_r1c1("R1").is_err());
+    }
+
+    #[test]
+    fn test_r1c1_formatting() {
+        let addr = CellAddress::new(0, 0);
+        assert_eq!(addr.to_r1c1(), "R1C1");
+        let r = R1C1Ref::from_r1c1("R[-1]C[2]").unwrap();
+        assert_eq!(r.to_r1c1(), "R[-1]C[2]");
     }
 
     #[test]

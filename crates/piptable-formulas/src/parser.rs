@@ -1,7 +1,7 @@
 //! Formula parser module
 
 use crate::{BinaryOperator, FormulaError, FormulaExpr, UnaryOperator};
-use piptable_primitives::{CellAddress, CellRange, ErrorValue, Value};
+use piptable_primitives::{CellAddress, CellRange, ErrorValue, R1C1Ref, Value};
 
 #[derive(Debug, Clone, PartialEq)]
 enum TokenKind {
@@ -37,6 +37,12 @@ enum TokenKind {
 struct Token {
     kind: TokenKind,
     pos: usize,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ParsedCellRef {
+    A1(CellAddress),
+    R1C1(R1C1Ref),
 }
 
 struct Lexer<'a> {
@@ -211,6 +217,9 @@ impl<'a> Lexer<'a> {
 
     fn identifier_or_cell_token(&mut self) -> Result<TokenKind, FormulaError> {
         let start = self.pos;
+        if let Some(token) = self.r1c1_cell_token(start) {
+            return Ok(token);
+        }
         let _ = self.consume('$');
         let mut col_letters = String::new();
         while let Some(ch) = self.peek() {
@@ -252,6 +261,42 @@ impl<'a> Lexer<'a> {
             }
         }
         Ok(TokenKind::Identifier(ident))
+    }
+
+    fn r1c1_cell_token(&mut self, start: usize) -> Option<TokenKind> {
+        if !matches!(self.peek(), Some('R') | Some('r')) {
+            return None;
+        }
+
+        let mut end = self.pos;
+        let mut saw_c = false;
+        while let Some(ch) = self.chars.get(end).map(|(_, ch)| *ch) {
+            if is_delimiter(ch) {
+                break;
+            }
+            if matches!(ch, 'C' | 'c') {
+                saw_c = true;
+            }
+            if !matches!(
+                ch,
+                'R' | 'r' | 'C' | 'c' | '[' | ']' | '+' | '-' | '0'..='9'
+            ) {
+                return None;
+            }
+            end += 1;
+        }
+
+        if !saw_c {
+            return None;
+        }
+
+        let text = self.slice(start, end);
+        if R1C1Ref::from_r1c1(text).is_ok() {
+            self.pos = end;
+            Some(TokenKind::CellRef(text.to_string()))
+        } else {
+            None
+        }
     }
 
     fn skip_whitespace(&mut self) {
@@ -532,8 +577,7 @@ impl Parser {
         first: String,
         sheet: Option<String>,
     ) -> Result<FormulaExpr, FormulaError> {
-        let start = CellAddress::from_a1(&first)
-            .map_err(|e| FormulaError::ParseError(format!("Invalid cell ref: {}", e)))?;
+        let start = self.parse_cell_ref_text(&first)?;
         if matches!(self.peek_kind(), TokenKind::Colon) {
             self.advance();
             let end_text = match self.advance().kind.clone() {
@@ -544,19 +588,81 @@ impl Parser {
                     ))
                 }
             };
-            let end = CellAddress::from_a1(&end_text)
-                .map_err(|e| FormulaError::ParseError(format!("Invalid cell ref: {}", e)))?;
-            let range = CellRange::new(start, end);
-            if let Some(sheet) = sheet {
-                Ok(FormulaExpr::SheetRangeRef { sheet, range })
-            } else {
-                Ok(FormulaExpr::RangeRef(range))
+            let end = self.parse_cell_ref_text(&end_text)?;
+            match (start, end) {
+                (ParsedCellRef::A1(start), ParsedCellRef::A1(end)) => {
+                    let range = CellRange::new(start, end);
+                    if let Some(sheet) = sheet {
+                        Ok(FormulaExpr::SheetRangeRef { sheet, range })
+                    } else {
+                        Ok(FormulaExpr::RangeRef(range))
+                    }
+                }
+                (ParsedCellRef::R1C1(start), ParsedCellRef::R1C1(end)) => {
+                    if start.is_absolute() && end.is_absolute() {
+                        let range = CellRange::new(
+                            start
+                                .resolve(None)
+                                .map_err(|e| FormulaError::ParseError(e.to_string()))?,
+                            end.resolve(None)
+                                .map_err(|e| FormulaError::ParseError(e.to_string()))?,
+                        );
+                        if let Some(sheet) = sheet {
+                            Ok(FormulaExpr::SheetRangeRef { sheet, range })
+                        } else {
+                            Ok(FormulaExpr::RangeRef(range))
+                        }
+                    } else if let Some(sheet) = sheet {
+                        Ok(FormulaExpr::SheetR1C1RangeRef { sheet, start, end })
+                    } else {
+                        Ok(FormulaExpr::R1C1RangeRef { start, end })
+                    }
+                }
+                _ => Err(FormulaError::ParseError(
+                    "Mixed A1/R1C1 ranges are not supported".to_string(),
+                )),
             }
         } else if let Some(sheet) = sheet {
-            Ok(FormulaExpr::SheetCellRef { sheet, addr: start })
+            match start {
+                ParsedCellRef::A1(addr) => Ok(FormulaExpr::SheetCellRef { sheet, addr }),
+                ParsedCellRef::R1C1(addr) => {
+                    if addr.is_absolute() {
+                        let resolved = addr
+                            .resolve(None)
+                            .map_err(|e| FormulaError::ParseError(e.to_string()))?;
+                        Ok(FormulaExpr::SheetCellRef {
+                            sheet,
+                            addr: resolved,
+                        })
+                    } else {
+                        Ok(FormulaExpr::SheetR1C1Ref { sheet, addr })
+                    }
+                }
+            }
         } else {
-            Ok(FormulaExpr::CellRef(start))
+            match start {
+                ParsedCellRef::A1(addr) => Ok(FormulaExpr::CellRef(addr)),
+                ParsedCellRef::R1C1(addr) => {
+                    if addr.is_absolute() {
+                        let resolved = addr
+                            .resolve(None)
+                            .map_err(|e| FormulaError::ParseError(e.to_string()))?;
+                        Ok(FormulaExpr::CellRef(resolved))
+                    } else {
+                        Ok(FormulaExpr::R1C1Ref(addr))
+                    }
+                }
+            }
         }
+    }
+
+    fn parse_cell_ref_text(&self, text: &str) -> Result<ParsedCellRef, FormulaError> {
+        if let Ok(addr) = CellAddress::from_a1(text) {
+            return Ok(ParsedCellRef::A1(addr));
+        }
+        let r1c1 = R1C1Ref::from_r1c1(text)
+            .map_err(|e| FormulaError::ParseError(format!("Invalid cell ref: {}", e)))?;
+        Ok(ParsedCellRef::R1C1(r1c1))
     }
 
     fn parse_arguments(&mut self) -> Result<Vec<FormulaExpr>, FormulaError> {
@@ -724,6 +830,18 @@ mod tests {
         assert!(matches!(expr, FormulaExpr::SheetCellRef { .. }));
         let expr = parse_formula("'My Sheet'!A1:B2").unwrap();
         assert!(matches!(expr, FormulaExpr::SheetRangeRef { .. }));
+    }
+
+    #[test]
+    fn test_parse_r1c1_cell_and_range() {
+        let expr = parse_formula("R1C1").unwrap();
+        assert!(matches!(expr, FormulaExpr::CellRef(_)));
+        let expr = parse_formula("R1C1:R2C2").unwrap();
+        assert!(matches!(expr, FormulaExpr::RangeRef(_)));
+        let expr = parse_formula("R[1]C[1]").unwrap();
+        assert!(matches!(expr, FormulaExpr::R1C1Ref(_)));
+        let expr = parse_formula("Sheet1!R[-1]C:R[1]C").unwrap();
+        assert!(matches!(expr, FormulaExpr::SheetR1C1RangeRef { .. }));
     }
 
     #[test]
