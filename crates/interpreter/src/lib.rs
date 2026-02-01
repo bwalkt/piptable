@@ -882,8 +882,29 @@ impl Interpreter {
                                 line
                             )));
                         }
-                        io::import_pdf_book(&paths[0], has_headers)
-                            .map_err(|e| PipError::Import(format!("Line {}: {}", line, e)))?
+                        #[cfg(target_arch = "wasm32")]
+                        {
+                            return Err(PipError::Import(
+                                "PDF import is not supported in the playground".to_string(),
+                            ));
+                        }
+                        #[cfg(not(target_arch = "wasm32"))]
+                        {
+                            let tables = io::import_pdf_tables(&paths[0], has_headers)
+                                .map_err(|e| PipError::Import(format!("Line {}: {}", line, e)))?;
+                            if tables.len() == 1 {
+                                Value::Sheet(
+                                    tables.into_iter().next().expect("table exists"),
+                                )
+                            } else {
+                                let mut book = std::collections::HashMap::new();
+                                for (idx, sheet) in tables.into_iter().enumerate() {
+                                    let name = format!("table_{}", idx + 1);
+                                    book.insert(name, Value::Sheet(sheet));
+                                }
+                                Value::Object(book)
+                            }
+                        }
                     } else {
                         let sheet =
                             io::import_sheet(&paths[0], sheet_name_str.as_deref(), has_headers)
@@ -3462,25 +3483,6 @@ export data to "{}""#,
         } else {
             panic!("Markdown import should return a book object");
         }
-    }
-
-    #[cfg(not(target_arch = "wasm32"))]
-    #[tokio::test]
-    #[ignore = "requires pdfium/tesseract dependencies"]
-    async fn test_import_pdf_tables() {
-        let dir = tempfile::tempdir().unwrap();
-        let file_path = dir.path().join("tables.pdf");
-
-        // Minimal placeholder PDF content for the extractor path.
-        std::fs::write(&file_path, "Minimal PDF content with <50 chars").unwrap();
-
-        let mut interp = Interpreter::new();
-        let script = format!(r#"import "{}" into tables"#, file_path.display());
-        let program = PipParser::parse_str(&script).unwrap();
-        let result = interp.eval(program).await;
-
-        // We only assert that the import attempts to run; actual extraction depends on PDF tooling.
-        assert!(result.is_ok() || result.is_err());
     }
 
     #[tokio::test]

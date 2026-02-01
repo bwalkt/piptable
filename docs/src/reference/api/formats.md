@@ -225,18 +225,21 @@ Result Sheet:
 ## PDF Format
 
 Extract tables from PDF documents with automatic OCR support for scanned documents.
+If a single table is found, import returns a sheet. If multiple tables are found,
+import returns a book of sheets.
 
 ### Import Options
 
 ```piptable
-' Import all tables from PDF
-dim tables = import "report.pdf" into book
+' Single table -> sheet
+dim report = import "report.pdf" into report
 
-' Access specific table
+' Multiple tables -> book
+dim tables = import "report.pdf" into tables
 dim summary = tables["table_1"]
 
-' With header detection
-dim report = import "financial.pdf" with {"has_headers": true} into book
+' With header detection (book)
+dim report_tables = import "financial.pdf" with {"has_headers": true} into book
 ```
 
 ### PDF Features

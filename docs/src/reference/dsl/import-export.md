@@ -122,7 +122,7 @@ File format is automatically detected from extension:
 | .parquet | Parquet | sheet |
 | .toon | TOON | sheet |
 | .md | Markdown | book |
-| .pdf | PDF | book |
+| .pdf | PDF | sheet/book |
 
 ## Dynamic Import/Export
 

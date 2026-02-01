@@ -7,10 +7,11 @@ PipTable can extract tables from PDF documents, making it easy to analyze data f
 ### Basic Import
 
 ```piptable
-' Import all tables from a PDF file
-dim tables = import "report.pdf" into book
+' Single table -> sheet
+dim report = import "report.pdf" into report
 
-' Access individual tables by name
+' Multiple tables -> book
+dim tables = import "report.pdf" into tables
 dim summary = tables["table_1"]
 dim details = tables["table_2"]
 ```
@@ -18,7 +19,7 @@ dim details = tables["table_2"]
 ### With Headers
 
 ```piptable
-' Import with header detection
+' Import with header detection (book)
 dim report = import "financial_report.pdf" with {"has_headers": true} into book
 
 ' First row of each table becomes column names
