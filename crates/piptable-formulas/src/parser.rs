@@ -290,10 +290,10 @@ impl<'a> Lexer<'a> {
             return None;
         }
 
-        let text = self.slice(start, end);
-        if R1C1Ref::from_r1c1(text).is_ok() {
+        let text = self.slice(start, end).to_string();
+        if R1C1Ref::from_r1c1(&text).is_ok() {
             self.pos = end;
-            Some(TokenKind::CellRef(text.to_string()))
+            Some(TokenKind::CellRef(text))
         } else {
             None
         }
