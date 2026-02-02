@@ -6,7 +6,10 @@
 use serde::{Deserialize, Serialize};
 use std::fmt;
 
+pub mod address;
 pub mod toon;
+
+pub use address::*;
 
 /// A cell address in the spreadsheet (e.g., A1, B2, etc.)
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]

@@ -152,63 +152,7 @@ fn configure_linking_with_config(python_config: &PathBuf) -> bool {
             }
         }
 
-        // Parse all linker flags, not just -L and -l
-        let mut skip_next = false;
-        let flags: Vec<&str> = ldflags.split_whitespace().collect();
-
-        for (i, flag) in flags.iter().enumerate() {
-            if skip_next {
-                skip_next = false;
-                continue;
-            }
-
-            if let Some(path) = flag.strip_prefix("-L") {
-                if !path.is_empty() {
-                    println!("cargo:rustc-link-search=native={}", path);
-                } else if i + 1 < flags.len() {
-                    println!("cargo:rustc-link-search=native={}", flags[i + 1]);
-                    skip_next = true;
-                }
-            } else if let Some(lib) = flag.strip_prefix("-l") {
-                let lib = if !lib.is_empty() {
-                    lib
-                } else if i + 1 < flags.len() {
-                    skip_next = true;
-                    flags[i + 1]
-                } else {
-                    ""
-                };
-                // Only skip system libraries that cargo handles automatically
-                if !lib.is_empty() && !["intl", "dl", "util", "rt"].contains(&lib) {
-                    println!("cargo:rustc-link-lib={}", lib);
-                }
-            } else if let Some(framework) = flag.strip_prefix("-framework") {
-                if !framework.is_empty() {
-                    // -frameworkName
-                    println!("cargo:rustc-link-lib=framework={}", framework);
-                } else if i + 1 < flags.len() {
-                    // -framework Name
-                    let framework = flags[i + 1];
-                    println!("cargo:rustc-link-lib=framework={}", framework);
-                    skip_next = true;
-                }
-            } else if *flag == "-F" && i + 1 < flags.len() {
-                // -F <path> (space-separated)
-                let path = flags[i + 1];
-                println!("cargo:rustc-link-search=framework={}", path);
-                skip_next = true;
-            } else if let Some(path) = flag.strip_prefix("-F") {
-                println!("cargo:rustc-link-search=framework={}", path);
-            } else if flag.starts_with("-Wl,") {
-                // Pass through linker flags like -Wl,-rpath,path
-                println!("cargo:rustc-link-arg={}", flag);
-            } else if *flag == "-pthread" {
-                println!("cargo:rustc-link-arg=-pthread");
-            } else if flag.starts_with('-') {
-                // Preserve any other linker flags we don't explicitly parse
-                println!("cargo:rustc-link-arg={}", flag);
-            }
-        }
+        emit_linker_flags(ldflags.split_whitespace().collect());
 
         return true;
     }
@@ -277,92 +221,75 @@ if sys.platform == 'darwin':
                 println!("cargo:rustc-link-lib={}", lib_name);
             } else if let Some(ldflags) = line.strip_prefix("LDFLAGS:") {
                 // Parse additional LDFLAGS (including framework flags that can appear here on macOS)
-                let mut skip_next = false;
-                let flags: Vec<&str> = ldflags.split_whitespace().collect();
-
-                for (i, flag) in flags.iter().enumerate() {
-                    if skip_next {
-                        skip_next = false;
-                        continue;
-                    }
-
-                    if let Some(path) = flag.strip_prefix("-L") {
-                        if !path.is_empty() {
-                            println!("cargo:rustc-link-search=native={}", path);
-                        } else if i + 1 < flags.len() {
-                            println!("cargo:rustc-link-search=native={}", flags[i + 1]);
-                            skip_next = true;
-                        }
-                    } else if let Some(lib) = flag.strip_prefix("-l") {
-                        let lib = if !lib.is_empty() {
-                            lib
-                        } else if i + 1 < flags.len() {
-                            skip_next = true;
-                            flags[i + 1]
-                        } else {
-                            ""
-                        };
-                        if !lib.is_empty() && !["intl", "dl", "util", "rt"].contains(&lib) {
-                            println!("cargo:rustc-link-lib={}", lib);
-                        }
-                    } else if let Some(framework) = flag.strip_prefix("-framework") {
-                        if !framework.is_empty() {
-                            // -frameworkName
-                            println!("cargo:rustc-link-lib=framework={}", framework);
-                        } else if i + 1 < flags.len() {
-                            // -framework Name
-                            let framework = flags[i + 1];
-                            println!("cargo:rustc-link-lib=framework={}", framework);
-                            skip_next = true;
-                        }
-                    } else if let Some(path) = flag.strip_prefix("-F") {
-                        println!("cargo:rustc-link-search=framework={}", path);
-                    } else if flag.starts_with("-Wl,") {
-                        println!("cargo:rustc-link-arg={}", flag);
-                    }
-                }
+                emit_linker_flags(ldflags.split_whitespace().collect());
             } else if let Some(extra) = line
                 .strip_prefix("LIBS:")
                 .or_else(|| line.strip_prefix("SYSLIBS:"))
                 .or_else(|| line.strip_prefix("LINKFORSHARED:"))
             {
-                let mut iter = extra.split_whitespace().peekable();
-                while let Some(flag) = iter.next() {
-                    if let Some(path) = flag.strip_prefix("-L") {
-                        let path = if !path.is_empty() {
-                            Some(path)
-                        } else {
-                            iter.peek().copied()
-                        };
-                        if let Some(path) = path {
-                            println!("cargo:rustc-link-search=native={}", path);
-                            if flag == "-L" {
-                                iter.next();
-                            }
-                        }
-                    } else if let Some(lib) = flag.strip_prefix("-l") {
-                        let lib = if !lib.is_empty() {
-                            Some(lib)
-                        } else {
-                            iter.peek().copied()
-                        };
-                        if let Some(lib) = lib {
-                            if !lib.is_empty() && !["intl", "dl", "util", "rt"].contains(&lib) {
-                                println!("cargo:rustc-link-lib={}", lib);
-                            }
-                            if flag == "-l" {
-                                iter.next();
-                            }
-                        }
-                    } else if flag.starts_with("-Wl,") || flag == "-pthread" {
-                        println!("cargo:rustc-link-arg={}", flag);
-                    }
-                }
+                emit_linker_flags(extra.split_whitespace().collect());
             } else if let Some(framework_dir) = line.strip_prefix("FRAMEWORKDIR:") {
                 println!("cargo:rustc-link-search=framework={}", framework_dir);
             } else if let Some(framework) = line.strip_prefix("FRAMEWORK:") {
                 println!("cargo:rustc-link-lib=framework={}", framework);
             }
+        }
+    }
+}
+
+fn emit_linker_flags(flags: Vec<&str>) {
+    let mut skip_next = false;
+    for (i, flag) in flags.iter().enumerate() {
+        if skip_next {
+            skip_next = false;
+            continue;
+        }
+
+        if let Some(path) = flag.strip_prefix("-L") {
+            if !path.is_empty() {
+                println!("cargo:rustc-link-search=native={}", path);
+            } else if i + 1 < flags.len() {
+                println!("cargo:rustc-link-search=native={}", flags[i + 1]);
+                skip_next = true;
+            }
+        } else if let Some(lib) = flag.strip_prefix("-l") {
+            let lib = if !lib.is_empty() {
+                lib
+            } else if i + 1 < flags.len() {
+                skip_next = true;
+                flags[i + 1]
+            } else {
+                ""
+            };
+            // Only skip system libraries that cargo handles automatically
+            if !lib.is_empty() && !["intl", "dl", "util", "rt"].contains(&lib) {
+                println!("cargo:rustc-link-lib={}", lib);
+            }
+        } else if let Some(framework) = flag.strip_prefix("-framework") {
+            if !framework.is_empty() {
+                // -frameworkName
+                println!("cargo:rustc-link-lib=framework={}", framework);
+            } else if i + 1 < flags.len() {
+                // -framework Name
+                let framework = flags[i + 1];
+                println!("cargo:rustc-link-lib=framework={}", framework);
+                skip_next = true;
+            }
+        } else if *flag == "-F" && i + 1 < flags.len() {
+            // -F <path> (space-separated)
+            let path = flags[i + 1];
+            println!("cargo:rustc-link-search=framework={}", path);
+            skip_next = true;
+        } else if let Some(path) = flag.strip_prefix("-F") {
+            println!("cargo:rustc-link-search=framework={}", path);
+        } else if flag.starts_with("-Wl,") {
+            // Pass through linker flags like -Wl,-rpath,path
+            println!("cargo:rustc-link-arg={}", flag);
+        } else if *flag == "-pthread" {
+            println!("cargo:rustc-link-arg=-pthread");
+        } else if flag.starts_with('-') {
+            // Preserve any other linker flags we don't explicitly parse
+            println!("cargo:rustc-link-arg={}", flag);
         }
     }
 }

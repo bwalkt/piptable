@@ -3,12 +3,17 @@
 //! Utility functions for spreadsheet operations including number formatting,
 //! date/time handling, and error utilities.
 
+use piptable_formatting::ssf_format;
 use piptable_primitives::Value;
 
+pub mod cell_data;
 pub mod datetime;
 pub mod formatting;
 
-/// Format a value for display
+pub use cell_data::*;
+pub use piptable_primitives::address::*;
+
+/// Format a value for display, honoring an optional SSF-style format string.
 pub fn format_value(value: &Value, format: Option<&str>) -> String {
     match value {
         Value::Empty => String::new(),
@@ -24,11 +29,7 @@ pub fn format_value(value: &Value, format: Option<&str>) -> String {
 /// Format an integer with optional format string
 fn format_number_int(n: i64, format: Option<&str>) -> String {
     if let Some(fmt) = format {
-        // TODO: Implement number format parsing
-        match fmt {
-            "#,##0" => format_with_thousands_separator(n),
-            _ => n.to_string(),
-        }
+        ssf_format(fmt, &Value::Int(n), None)
     } else {
         n.to_string()
     }
@@ -37,55 +38,13 @@ fn format_number_int(n: i64, format: Option<&str>) -> String {
 /// Format a float with optional format string
 fn format_number_float(f: f64, format: Option<&str>) -> String {
     if let Some(fmt) = format {
-        // TODO: Implement number format parsing
-        match fmt {
-            "0.00" => format!("{:.2}", f),
-            "0.00%" => format!("{:.2}%", f * 100.0),
-            "#,##0.00" => format_float_with_thousands(f, 2),
-            _ => f.to_string(),
-        }
+        ssf_format(fmt, &Value::Float(f), None)
     } else {
         f.to_string()
     }
 }
 
-/// Format number with thousands separator
-fn format_with_thousands_separator(n: i64) -> String {
-    let s = n.abs().to_string();
-    let mut result = String::new();
-
-    for (i, c) in s.chars().rev().enumerate() {
-        if i > 0 && i % 3 == 0 {
-            result.push(',');
-        }
-        result.push(c);
-    }
-
-    if n < 0 {
-        result.push('-');
-    }
-
-    result.chars().rev().collect()
-}
-
-/// Format float with thousands separator
-fn format_float_with_thousands(f: f64, decimals: usize) -> String {
-    let sign = if f < 0.0 { "-" } else { "" };
-    let abs_f = f.abs();
-    let int_part = abs_f.floor() as i64;
-    let frac_part = ((abs_f - int_part as f64) * 10_f64.powi(decimals as i32)) as u64;
-
-    let int_formatted = format_with_thousands_separator(int_part);
-    format!(
-        "{}{}.{:0width$}",
-        sign,
-        int_formatted,
-        frac_part,
-        width = decimals
-    )
-}
-
-/// Parse a value from a string
+/// Parse a value from a string with basic type inference.
 pub fn parse_value(s: &str) -> Value {
     // Empty string
     if s.is_empty() {
@@ -119,53 +78,9 @@ pub fn parse_value(s: &str) -> Value {
     Value::String(s.to_string())
 }
 
-/// Convert column index to letter (0 -> A, 1 -> B, 25 -> Z, 26 -> AA, etc.)
-pub fn column_index_to_letter(index: u32) -> String {
-    let mut result = String::new();
-    let mut n = index;
-
-    loop {
-        let remainder = n % 26;
-        result.push((b'A' + remainder as u8) as char);
-        n /= 26;
-
-        if n == 0 {
-            break;
-        }
-        n -= 1; // Adjust for 1-based indexing
-    }
-
-    result.chars().rev().collect()
-}
-
-/// Convert column letter to index (A -> 0, B -> 1, Z -> 25, AA -> 26, etc.)
-pub fn column_letter_to_index(s: &str) -> Result<u32, String> {
-    if s.is_empty() {
-        return Err("Empty column".to_string());
-    }
-
-    let mut result = 0u32;
-    for c in s.chars() {
-        if !c.is_ascii_uppercase() {
-            return Err(format!("Invalid column character: {}", c));
-        }
-        result = result * 26 + (c as u32 - 'A' as u32 + 1);
-    }
-
-    Ok(result - 1) // Convert to 0-based
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn test_format_with_thousands() {
-        assert_eq!(format_with_thousands_separator(1234567), "1,234,567");
-        assert_eq!(format_with_thousands_separator(-1234567), "-1,234,567");
-        assert_eq!(format_with_thousands_separator(123), "123");
-        assert_eq!(format_with_thousands_separator(0), "0");
-    }
 
     #[test]
     fn test_column_conversions() {
