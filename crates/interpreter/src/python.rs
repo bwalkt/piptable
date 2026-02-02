@@ -31,6 +31,7 @@ pub struct PyFunctionDef {
 }
 
 /// Python runtime for executing UDFs.
+#[derive(Clone)]
 pub struct PythonRuntime {
     /// Registered Python functions by name.
     functions: Arc<RwLock<HashMap<String, PyFunctionDef>>>,
@@ -267,6 +268,9 @@ fn value_to_py(py: Python<'_>, value: &Value) -> PyResult<PyObject> {
             // Return function name as string
             Ok(name.into_pyobject(py)?.to_owned().into_any().unbind())
         }
+        Value::Lambda { .. } => Err(PyErr::new::<pyo3::exceptions::PyTypeError, _>(
+            "Lambda values cannot be converted to Python",
+        )),
         Value::Sheet(sheet) => {
             // Convert Sheet to list of dicts (like to_records)
             if let Some(records) = sheet.to_records() {

@@ -4,9 +4,9 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-piptable-primitives = { path = "../piptable-primitives" }
+piptable-primitives = { path = "../primitives" }
 piptable-core = { path = "../core" }
-piptable-utils = { path = "../piptable-utils" }
+piptable-utils = { path = "../utils" }
 chrono = { workspace = true }
 serde = { workspace = true }
 thiserror = { workspace = true }

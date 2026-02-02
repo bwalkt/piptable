@@ -21,10 +21,10 @@ arrow = { workspace = true }
 piptable-core = { path = "../core" }
 piptable-interpreter = { path = "../interpreter" }
 piptable-parser = { path = "../parser" }
-piptable-primitives = { path = "../piptable-primitives" }
-piptable-formulas = { path = "../piptable-formulas" }
+piptable-primitives = { path = "../primitives" }
+piptable-formulas = { path = "../formulas" }
 piptable-sheet = { path = "../sheet" }
-piptable-utils = { path = "../piptable-utils" }
+piptable-utils = { path = "../utils" }
 
 [dependencies.web-sys]
 version = "0.3"
