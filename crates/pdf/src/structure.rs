@@ -338,6 +338,9 @@ impl StructureDetector {
     }
 
     fn heading_level(&self, line: &Line, avg_font_size: f32) -> Option<u8> {
+        if let Some(level) = heading_level_by_pattern(&line.text) {
+            return Some(level);
+        }
         if avg_font_size <= 0.0 {
             return None;
         }
@@ -506,6 +509,51 @@ fn resolve_page_range(
     Ok((start, end))
 }
 
+fn heading_level_by_pattern(text: &str) -> Option<u8> {
+    let trimmed = text.trim();
+    if trimmed.is_empty() {
+        return None;
+    }
+
+    let chapter_re = heading_chapter_regex();
+    if chapter_re.is_match(trimmed) {
+        return Some(1);
+    }
+
+    let numbered_re = heading_numbered_regex();
+    if let Some(caps) = numbered_re.captures(trimmed) {
+        let marker = caps.get(1).map(|m| m.as_str()).unwrap_or("");
+        let dot_count = marker.matches('.').count();
+        return Some(if dot_count >= 2 { 3 } else { 2 });
+    }
+
+    let roman_re = heading_roman_regex();
+    if roman_re.is_match(trimmed) {
+        return Some(2);
+    }
+
+    None
+}
+
+fn heading_chapter_regex() -> &'static regex::Regex {
+    static RE: std::sync::OnceLock<regex::Regex> = std::sync::OnceLock::new();
+    RE.get_or_init(|| regex::Regex::new(r"(?i)^chapter\s+\d+\b").expect("valid chapter regex"))
+}
+
+fn heading_numbered_regex() -> &'static regex::Regex {
+    static RE: std::sync::OnceLock<regex::Regex> = std::sync::OnceLock::new();
+    RE.get_or_init(|| {
+        regex::Regex::new(r"^(\d+(?:\.\d+)*\.)\s+\S").expect("valid numbered heading regex")
+    })
+}
+
+fn heading_roman_regex() -> &'static regex::Regex {
+    static RE: std::sync::OnceLock<regex::Regex> = std::sync::OnceLock::new();
+    RE.get_or_init(|| {
+        regex::Regex::new(r"(?i)^([IVX]+)\.\s+\S").expect("valid roman heading regex")
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -596,6 +644,50 @@ mod tests {
                 assert_eq!(text, "Line one Line two");
             }
             _ => panic!("expected paragraph"),
+        }
+    }
+
+    #[test]
+    fn test_heading_pattern_detection() {
+        let detector = StructureDetector::default();
+        let blocks = vec![
+            TextBlock {
+                text: "1. Introduction".to_string(),
+                bbox: BoundingBox {
+                    left: 0.0,
+                    top: 700.0,
+                    right: 200.0,
+                    bottom: 690.0,
+                },
+                page: 0,
+                font_size: 12.0,
+                font_name: "Test".to_string(),
+                is_bold: false,
+                is_italic: false,
+            },
+            TextBlock {
+                text: "Body line".to_string(),
+                bbox: BoundingBox {
+                    left: 0.0,
+                    top: 600.0,
+                    right: 200.0,
+                    bottom: 590.0,
+                },
+                page: 1,
+                font_size: 12.0,
+                font_name: "Test".to_string(),
+                is_bold: false,
+                is_italic: false,
+            },
+        ];
+
+        let doc = detector.analyze_blocks(blocks, 2);
+        match &doc.elements[0] {
+            DocumentElement::Heading { level, text, .. } => {
+                assert_eq!(*level, 2);
+                assert_eq!(text, "1. Introduction");
+            }
+            _ => panic!("expected heading"),
         }
     }
 }

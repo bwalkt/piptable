@@ -1,3 +1,4 @@
+use piptable_pdf::{extract_structure_with_options, StructuredDocument};
 use piptable_pdf::{extract_tables_from_pdf, extract_tables_with_options, PdfError, PdfOptions};
 use std::io::Write;
 use std::path::Path;
@@ -36,6 +37,24 @@ fn test_pdf_options_default() {
     assert_eq!(options.min_table_rows, 2);
     assert_eq!(options.min_table_cols, 2);
     assert!(!options.extract_structure);
+}
+
+#[test]
+#[ignore = "Requires PDFium system dependencies for structure extraction"]
+fn test_extract_structure_basic() {
+    let file_path =
+        Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/test_data/pdf_options_headers.pdf");
+
+    let options = PdfOptions {
+        extract_structure: true,
+        ..Default::default()
+    };
+
+    let doc: StructuredDocument = extract_structure_with_options(&file_path, options).unwrap();
+    assert!(!doc.elements.is_empty());
+    assert!(!doc.to_markdown().trim().is_empty());
+    let json = doc.to_llm_json();
+    assert!(json["document"]["elements"].is_array());
 }
 
 #[test]

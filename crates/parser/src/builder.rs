@@ -825,6 +825,17 @@ fn apply_import_option(
                 ))
             }
         }
+        "extract_structure" | "structure" => {
+            if let Expr::Literal(Literal::Bool(b)) = value {
+                options.extract_structure = Some(b);
+                Ok(())
+            } else {
+                Err(BuildError::from_pair(
+                    pair,
+                    "extract_structure option must be a boolean (true or false)",
+                ))
+            }
+        }
         _ => Err(BuildError::from_pair(
             pair,
             format!("Unknown import option: {key}"),

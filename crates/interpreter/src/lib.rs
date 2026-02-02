@@ -890,14 +890,22 @@ impl Interpreter {
                         }
                         #[cfg(not(target_arch = "wasm32"))]
                         {
-                            let tables = io::import_pdf_tables(&paths[0], &options)
-                                .map_err(|e| PipError::Import(format!("Line {}: {}", line, e)))?;
-                            let mut book = std::collections::HashMap::new();
-                            for (idx, sheet) in tables.into_iter().enumerate() {
-                                let name = format!("table_{}", idx + 1);
-                                book.insert(name, Value::Sheet(sheet));
+                            if options.extract_structure.unwrap_or(false) {
+                                io::import_pdf_structure(&paths[0], &options).map_err(|e| {
+                                    PipError::Import(format!("Line {}: {}", line, e))
+                                })?
+                            } else {
+                                let tables =
+                                    io::import_pdf_tables(&paths[0], &options).map_err(|e| {
+                                        PipError::Import(format!("Line {}: {}", line, e))
+                                    })?;
+                                let mut book = std::collections::HashMap::new();
+                                for (idx, sheet) in tables.into_iter().enumerate() {
+                                    let name = format!("table_{}", idx + 1);
+                                    book.insert(name, Value::Sheet(sheet));
+                                }
+                                Value::Object(book)
                             }
-                            Value::Object(book)
                         }
                     } else {
                         let sheet =
