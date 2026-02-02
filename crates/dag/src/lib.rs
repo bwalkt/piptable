@@ -126,7 +126,7 @@ impl Dag {
     /// Validate that the graph is acyclic using a full topological traversal.
     pub fn validate_acyclic(&self) -> Result<(), DagError> {
         let keys: Vec<String> = self.nodes.keys().cloned().collect();
-        self.topological_sort(keys, |node| node.input_keys.clone())?;
+        self.topological_sort(keys, |node| self.dependents_with_ranges(node))?;
         Ok(())
     }
 }
