@@ -155,7 +155,8 @@ pub fn sanitize_sheet_name(name: Option<&str>) -> Option<String> {
         .chars()
         .any(|c| c.is_whitespace() || !c.is_ascii_alphanumeric())
     {
-        return Some(format!("'{}'", name));
+        let escaped = name.replace('\'', "''");
+        return Some(format!("'{}'", escaped));
     }
     Some(name.to_string())
 }
@@ -163,7 +164,9 @@ pub fn sanitize_sheet_name(name: Option<&str>) -> Option<String> {
 /// Remove single quotes from sheet name.
 pub fn desanitize_sheet_name(name: Option<&str>) -> Option<String> {
     let name = name?;
-    Some(name.replace('\'', ""))
+    let trimmed = name.strip_prefix('\'').unwrap_or(name);
+    let trimmed = trimmed.strip_suffix('\'').unwrap_or(trimmed);
+    Some(trimmed.replace("''", "'"))
 }
 
 /// Escape special regex characters in a string.

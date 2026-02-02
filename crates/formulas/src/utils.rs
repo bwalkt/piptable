@@ -104,12 +104,23 @@ pub fn balance_quotes(input: &str) -> String {
 
 /// Add/remove parenthesis and add closing quotes in formulas.
 pub fn balance_formula(input: &str) -> String {
-    balance_parentheses(input)
+    balance_parentheses(&balance_quotes(input))
 }
 
 /// Check if parenthesis is balanced.
 pub fn is_balanced_parenthesis(input: &str) -> bool {
-    balance_parentheses(input).len() == input.len()
+    let mut depth: i32 = 0;
+    for ch in input.chars() {
+        if is_open_paren(ch) {
+            depth += 1;
+        } else if matches!(ch, ')' | ']') {
+            if depth == 0 {
+                return false;
+            }
+            depth -= 1;
+        }
+    }
+    depth == 0
 }
 
 /// Check if text is a formula.

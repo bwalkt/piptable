@@ -1,8 +1,9 @@
 use chrono::{DateTime, Utc};
-use piptable_primitives::{ErrorValue, Value};
+use piptable_primitives::Value;
 
 #[derive(Debug, Clone, Default)]
 pub struct SsfFormatOptions<'a> {
+    /// Locale support is not implemented yet.
     pub locale: Option<&'a str>,
 }
 
@@ -30,8 +31,8 @@ pub fn ssf_format(pattern: &str, value: &Value, _opts: Option<SsfFormatOptions<'
         Value::String(s) => format_text(&section.pattern, s),
         Value::Error(err) => err.label().to_string(),
         Value::Array(_) => "#VALUE!".to_string(),
-        Value::Int(n) => format_number_or_date(&section.pattern, *n as f64, value),
-        Value::Float(f) => format_number_or_date(&section.pattern, *f, value),
+        Value::Int(n) => format_number_or_date(&section.pattern, *n as f64),
+        Value::Float(f) => format_number_or_date(&section.pattern, *f),
     }
 }
 
@@ -130,14 +131,14 @@ fn format_text(pattern: &str, text: &str) -> String {
     }
 }
 
-fn format_number_or_date(pattern: &str, value: f64, original: &Value) -> String {
+fn format_number_or_date(pattern: &str, value: f64) -> String {
     if is_date_pattern(pattern) {
         return format_date_pattern(pattern, value);
     }
-    format_number_pattern(pattern, value, original)
+    format_number_pattern(pattern, value)
 }
 
-fn format_number_pattern(pattern: &str, value: f64, original: &Value) -> String {
+fn format_number_pattern(pattern: &str, value: f64) -> String {
     let mut working = pattern.to_string();
     let mut prefix = String::new();
     let mut suffix = String::new();
@@ -235,10 +236,6 @@ fn format_number_pattern(pattern: &str, value: f64, original: &Value) -> String 
     }
     out.push_str(&suffix.replace('%', ""));
 
-    if matches!(original, Value::Error(ErrorValue::Value)) {
-        return "#VALUE!".to_string();
-    }
-
     out
 }
 
@@ -265,8 +262,22 @@ fn format_with_thousands(input: &str) -> String {
 }
 
 fn is_date_pattern(pattern: &str) -> bool {
-    let lower = pattern.to_ascii_lowercase();
-    lower.contains('y') || lower.contains('m') || lower.contains('d') || lower.contains('h')
+    let cleaned = strip_quoted_text(pattern);
+    let lower = cleaned.to_ascii_lowercase();
+
+    if lower.contains('y') || lower.contains('d') || lower.contains('h') || lower.contains('s') {
+        return true;
+    }
+
+    if lower.contains('m') {
+        return lower.contains(':')
+            || lower.contains('y')
+            || lower.contains('d')
+            || lower.contains('h')
+            || lower.contains('s');
+    }
+
+    false
 }
 
 fn format_date_pattern(pattern: &str, value: f64) -> String {
@@ -280,35 +291,76 @@ fn format_date_pattern(pattern: &str, value: f64) -> String {
 fn excel_pattern_to_chrono(pattern: &str) -> String {
     let mut out = pattern.to_string();
     let replacements = [
-        ("yyyy", "%Y"),
-        ("yy", "%y"),
-        ("mmmm", "%B"),
-        ("mmm", "%b"),
-        ("mm", "%m"),
-        ("m", "%-m"),
-        ("dddd", "%A"),
-        ("ddd", "%a"),
-        ("dd", "%d"),
-        ("d", "%-d"),
-        ("hh", "%H"),
-        ("h", "%-H"),
-        ("ss", "%S"),
-        ("s", "%-S"),
+        ("yyyy", "{YYYY}"),
+        ("yy", "{YY}"),
+        ("mmmm", "{MMMM}"),
+        ("mmm", "{MMM}"),
+        ("mm", "{MM}"),
+        ("m", "{M}"),
+        ("dddd", "{DDDD}"),
+        ("ddd", "{DDD}"),
+        ("dd", "{DD}"),
+        ("d", "{D}"),
+        ("hh", "{HH}"),
+        ("h", "{H}"),
+        ("ss", "{SS}"),
+        ("s", "{S}"),
     ];
 
-    for (excel, chrono) in replacements {
-        out = out.replace(excel, chrono);
+    for (excel, placeholder) in replacements {
+        out = out.replace(excel, placeholder);
     }
+
+    let chrono_replacements = [
+        ("{YYYY}", "%Y"),
+        ("{YY}", "%y"),
+        ("{MMMM}", "%B"),
+        ("{MMM}", "%b"),
+        ("{MM}", "%m"),
+        ("{M}", "%-m"),
+        ("{DDDD}", "%A"),
+        ("{DDD}", "%a"),
+        ("{DD}", "%d"),
+        ("{D}", "%-d"),
+        ("{HH}", "%H"),
+        ("{H}", "%-H"),
+        ("{SS}", "%S"),
+        ("{S}", "%-S"),
+    ];
+
+    for (placeholder, chrono) in chrono_replacements {
+        out = out.replace(placeholder, chrono);
+    }
+
     out
 }
 
 fn excel_date_to_datetime(serial: f64) -> Option<DateTime<Utc>> {
     const EXCEL_EPOCH: i64 = 25569;
-    let days = serial.floor() as i64;
+    let mut days = serial.floor() as i64;
+    if days >= 60 {
+        // Excel's 1900 leap year bug: skip the non-existent 1900-02-29
+        days -= 1;
+    }
     let time_fraction = serial - serial.floor();
     let unix_days = days - EXCEL_EPOCH;
     let unix_seconds = unix_days * 86400 + (time_fraction * 86400.0) as i64;
     DateTime::from_timestamp(unix_seconds, 0)
+}
+
+fn strip_quoted_text(input: &str) -> String {
+    let mut out = String::with_capacity(input.len());
+    let mut in_quotes = false;
+    for ch in input.chars() {
+        if ch == '"' {
+            in_quotes = !in_quotes;
+            continue;
+        }
+        if !in_quotes {
+            out.push(ch);
+        }
+    }
+    out
 }
 
 #[cfg(test)]
@@ -340,7 +392,7 @@ mod tests {
     fn test_ssf_format_date() {
         let value = Value::Float(44562.0);
         let formatted = ssf_format("mm/dd/yyyy", &value, None);
-        assert!(formatted.contains('/'));
+        assert_eq!(formatted, "12/31/2021");
     }
 
     #[test]

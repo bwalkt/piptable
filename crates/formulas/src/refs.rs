@@ -29,6 +29,7 @@ pub struct FormulaReference {
 
 #[derive(Debug, Clone, Default)]
 pub struct FormulaToRelativeReferenceOptions {
+    /// TODO: implement exclusion range and circular handling.
     pub exclusion_range: Option<(CellAddress, CellAddress)>,
     pub ignore_circular: bool,
 }
@@ -182,10 +183,16 @@ pub fn extract_references(formula: &str) -> Vec<FormulaReference> {
         let left = cap.get(2).map(|m| m.as_str()).unwrap_or("");
         let right = cap.get(3).map(|m| m.as_str());
 
-        let mode = if right.is_some() {
-            r1c1_mode(left)
+        let left_mode = r1c1_mode(left);
+        let mode = if let Some(r) = right {
+            let right_mode = r1c1_mode(r);
+            match (left_mode, right_mode) {
+                (ReferenceMode::Absolute, ReferenceMode::Absolute) => ReferenceMode::Absolute,
+                (ReferenceMode::Relative, ReferenceMode::Relative) => ReferenceMode::Relative,
+                _ => ReferenceMode::Mixed,
+            }
         } else {
-            r1c1_mode(left)
+            left_mode
         };
 
         let kind = if right.is_some() {
@@ -357,8 +364,7 @@ fn parse_a1_ref(text: &str) -> Option<A1Ref> {
 }
 
 fn parse_a1_cell(text: &str) -> Option<A1Cell> {
-    let re = Regex::new(r"^(\$?)([A-Za-z]+)(\$?)(\d+)$").ok()?;
-    let caps = re.captures(text)?;
+    let caps = a1_cell_regex().captures(text)?;
     let abs_col = caps.get(1).map(|m| m.as_str()) == Some("$");
     let abs_row = caps.get(3).map(|m| m.as_str()) == Some("$");
     let col = letters_to_number(caps.get(2)?.as_str())?;
@@ -375,16 +381,14 @@ fn parse_a1_cell(text: &str) -> Option<A1Cell> {
 }
 
 fn parse_a1_column(text: &str) -> Option<A1Column> {
-    let re = Regex::new(r"^(\$?)([A-Za-z]+)$").ok()?;
-    let caps = re.captures(text)?;
+    let caps = a1_column_regex().captures(text)?;
     let abs_col = caps.get(1).map(|m| m.as_str()) == Some("$");
     let col = letters_to_number(caps.get(2)?.as_str())?;
     Some(A1Column { col, abs_col })
 }
 
 fn parse_a1_row(text: &str) -> Option<A1Row> {
-    let re = Regex::new(r"^(\$?)(\d+)$").ok()?;
-    let caps = re.captures(text)?;
+    let caps = a1_row_regex().captures(text)?;
     let abs_row = caps.get(1).map(|m| m.as_str()) == Some("$");
     let row = caps.get(2)?.as_str().parse::<i32>().ok()?;
     if row < 1 {
@@ -508,6 +512,21 @@ fn r1c1_regex() -> &'static Regex {
         Regex::new(r"((?:'[^']+'|[^'!,]+)!)?(R(?:\[[-+]?\d+\]|\d+)?C(?:\[[-+]?\d+\]|\d+)?)(?::(R(?:\[[-+]?\d+\]|\d+)?C(?:\[[-+]?\d+\]|\d+)?))?")
             .expect("valid regex")
     })
+}
+
+fn a1_cell_regex() -> &'static Regex {
+    static RE: std::sync::OnceLock<Regex> = std::sync::OnceLock::new();
+    RE.get_or_init(|| Regex::new(r"^(\$?)([A-Za-z]+)(\$?)(\d+)$").expect("valid regex"))
+}
+
+fn a1_column_regex() -> &'static Regex {
+    static RE: std::sync::OnceLock<Regex> = std::sync::OnceLock::new();
+    RE.get_or_init(|| Regex::new(r"^(\$?)([A-Za-z]+)$").expect("valid regex"))
+}
+
+fn a1_row_regex() -> &'static Regex {
+    static RE: std::sync::OnceLock<Regex> = std::sync::OnceLock::new();
+    RE.get_or_init(|| Regex::new(r"^(\$?)(\d+)$").expect("valid regex"))
 }
 
 #[cfg(test)]
