@@ -142,8 +142,8 @@ pub fn make_key(position: &NodeRef) -> String {
         NodeRef::Static(reference) => reference.id.clone(),
         NodeRef::Cell(cell) => {
             let addr = CellAddress::new(cell.row_index, cell.column_index);
-            let address = cell_to_address(Some(addr), false, false, false, false)
-                .unwrap_or_default();
+            let address =
+                cell_to_address(Some(addr), false, false, false, false).unwrap_or_default();
             let mut prefix = String::new();
             if let Some(id) = &cell.data_validation_id {
                 prefix.push_str(id);
@@ -156,10 +156,10 @@ pub fn make_key(position: &NodeRef) -> String {
         NodeRef::Range(range) => {
             let start = CellAddress::new(range.start_row_index, range.start_column_index);
             let end = CellAddress::new(range.end_row_index, range.end_column_index);
-            let start_addr = cell_to_address(Some(start), false, false, false, false)
-                .unwrap_or_default();
-            let end_addr = cell_to_address(Some(end), false, false, false, false)
-                .unwrap_or_default();
+            let start_addr =
+                cell_to_address(Some(start), false, false, false, false).unwrap_or_default();
+            let end_addr =
+                cell_to_address(Some(end), false, false, false, false).unwrap_or_default();
             format!("{}!{}:{}", range.sheet_id, start_addr, end_addr)
         }
     }
