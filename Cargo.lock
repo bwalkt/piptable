@@ -3759,6 +3759,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "piptable-dag"
+version = "0.1.0"
+dependencies = [
+ "piptable-primitives",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.18",
+]
+
+[[package]]
 name = "piptable-formatting"
 version = "0.1.0"
 dependencies = [
@@ -3775,6 +3785,7 @@ dependencies = [
  "pest",
  "pest_derive",
  "piptable-core",
+ "piptable-dag",
  "piptable-primitives",
  "piptable-utils",
  "rand 0.8.5",

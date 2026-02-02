@@ -120,6 +120,39 @@ fn eval_lookup() -> Result<(), Box<dyn std::error::Error>> {
 }
 ```
 
+### Dependency Tracking (Rust)
+
+The formula engine can track dependencies and compute recalculation order. For
+sheet-aware workflows, use the `*_with_sheet` APIs along with a `SheetIdResolver`.
+
+```rust
+use piptable_formulas::{FormulaEngine, SheetIdResolver};
+use piptable_primitives::CellAddress;
+
+struct Resolver;
+impl SheetIdResolver for Resolver {
+    fn sheet_id(&self, sheet_name: &str) -> Option<u32> {
+        match sheet_name {
+            "Sheet1" => Some(1),
+            _ => None,
+        }
+    }
+}
+
+fn track_dependencies() -> Result<(), Box<dyn std::error::Error>> {
+    let mut engine = FormulaEngine::new();
+    let a1 = CellAddress::new(0, 0);
+    let b1 = CellAddress::new(0, 1);
+
+    engine.set_formula_with_sheet(1, b1, "=Sheet1!A1+1", Some(&Resolver))?;
+    engine.mark_dirty_with_sheet(1, &a1);
+
+    let dirty = engine.get_dirty_nodes_with_sheet()?;
+    assert!(dirty.iter().any(|cell| cell.sheet_id == 1 && cell.addr == b1));
+    Ok(())
+}
+```
+
 ### SQL Integration
 
 Sheets automatically convert to tables for SQL queries:

@@ -7,6 +7,7 @@ edition = "2021"
 piptable-primitives = { path = "../primitives" }
 piptable-core = { path = "../core" }
 piptable-utils = { path = "../utils" }
+piptable-dag = { path = "../dag" }
 chrono = { workspace = true }
 serde = { workspace = true }
 thiserror = { workspace = true }

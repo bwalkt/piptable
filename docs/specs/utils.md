@@ -12,3 +12,6 @@
 ## Scope
 - This file is for internal development guidance only.
 - User-facing docs (DSL, cookbook, playground) should not document these helpers directly.
+
+## Related internals
+- Dependency tracking is handled by `piptable-dag` and is wired via `piptable-formulas`.
