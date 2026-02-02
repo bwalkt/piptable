@@ -296,7 +296,7 @@ fn number2alpha(index: u32) -> String {
     loop {
         let rem = (n % 26) as u8;
         out.push((b'A' + rem) as char);
-        n = n / 26;
+        n /= 26;
         if n == 0 {
             break;
         }
