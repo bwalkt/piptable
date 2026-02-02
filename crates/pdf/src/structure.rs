@@ -694,7 +694,7 @@ mod tests {
                     right: 200.0,
                     bottom: 675.0,
                 },
-                page: 0,
+                page: 1,
                 font_size: 12.0,
                 font_name: "Test".to_string(),
                 is_bold: false,
