@@ -236,6 +236,7 @@ import file_pattern into book [options]
 **Options:**
 - `without headers` - First row is data, not headers
 - `sheet "name"` - Specific sheet from Excel
+- `with { ... }` - Import options (e.g., PDF page range, structure extraction)
 
 **Examples:**
 ```piptable
@@ -250,6 +251,9 @@ dim raw = import "data.csv" into sheet without headers
 
 ' Specific Excel sheet
 dim report = import "workbook.xlsx" sheet "Report" into sheet
+
+' PDF structure extraction (returns JSON object)
+dim doc = import "paper.pdf" into sheet with { "extract_structure": true }
 
 ' Note: Additional options like delimiter and encoding are planned features
 ```

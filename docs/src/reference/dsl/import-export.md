@@ -128,6 +128,11 @@ Markdown and PDF imports accept optional table extraction options:
 `has_headers`, `detect_headers`, `min_table_rows`, `min_table_cols`, `min_table_size`.
 `page_range` applies to PDFs only and is ignored for Markdown.
 
+PDF imports also support structure extraction:
+`extract_structure` (or `structure`) returns a structured JSON object instead of tables.
+
+PDF table imports return a book-style object of tables (`table_1`, `table_2`, ...).
+
 ## Dynamic Import/Export
 
 ### Variable Paths
@@ -147,6 +152,18 @@ dim format = get_env("DATA_FORMAT", "csv")
 dim path = "data." + format
 
 dim data = import path into sheet
+```
+
+### PDF Structure Extraction
+
+Use `extract_structure` to return a structured JSON object (LLM-friendly) instead of tables:
+
+```piptable
+dim doc = import "paper.pdf" into sheet with {
+  "extract_structure": true
+}
+
+dim elements = doc["document"]["elements"]
 ```
 
 ### Batch Processing
