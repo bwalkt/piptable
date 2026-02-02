@@ -3785,6 +3785,7 @@ dependencies = [
  "pest",
  "pest_derive",
  "piptable-core",
+ "piptable-dag",
  "piptable-primitives",
  "piptable-utils",
  "rand 0.8.5",

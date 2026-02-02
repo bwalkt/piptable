@@ -3,6 +3,7 @@
 //! Formula parsing, compilation, and evaluation engine.
 //! Includes formula registry for standard functions (SUM, VLOOKUP, etc.)
 
+use piptable_dag::{CellCoordinate, CellCoordinateRange, Dag, NodeRef};
 use piptable_primitives::{CellAddress, CellRange, ErrorValue, R1C1Ref, Value};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -110,6 +111,8 @@ pub enum UnaryOperator {
 pub struct FormulaEngine {
     /// Cache of compiled formulas
     cache: HashMap<CellAddress, CompiledFormula>,
+    /// Dependency graph for recalculation ordering
+    dag: Dag,
     /// Function registry
     functions: FunctionRegistry,
 }
@@ -119,6 +122,7 @@ impl FormulaEngine {
     pub fn new() -> Self {
         Self {
             cache: HashMap::new(),
+            dag: Dag::new(),
             functions: FunctionRegistry::default(),
         }
     }
@@ -146,6 +150,19 @@ impl FormulaEngine {
     /// Set a formula for a cell
     pub fn set_formula(&mut self, cell: CellAddress, formula: &str) -> Result<(), FormulaError> {
         let compiled = self.compile(formula)?;
+        let cell_ref = NodeRef::Cell(cell_to_coordinate(cell));
+        self.dag.delete_cell(cell_ref.clone());
+        for dep in &compiled.dependencies {
+            let dep_ref = NodeRef::Cell(cell_to_coordinate(*dep));
+            self.dag
+                .add_node_input(cell_ref.clone(), dep_ref, true)
+                .map_err(|_| FormulaError::CircularReference)?;
+        }
+        let mut ranges = Vec::new();
+        collect_range_dependencies(&compiled.ast, &mut ranges);
+        for range in ranges {
+            self.add_range_dependency(&cell, &range)?;
+        }
         self.cache.insert(cell, compiled);
         Ok(())
     }
@@ -157,7 +174,77 @@ impl FormulaEngine {
 
     /// Clear cache for a cell
     pub fn invalidate(&mut self, cell: &CellAddress) {
+        let cell_ref = NodeRef::Cell(cell_to_coordinate(*cell));
+        self.dag.delete_cell(cell_ref);
         self.cache.remove(cell);
+    }
+
+    /// Remove a formula and its dependencies from the DAG.
+    pub fn remove_formula(&mut self, cell: &CellAddress) {
+        let cell_ref = NodeRef::Cell(cell_to_coordinate(*cell));
+        self.dag.delete_node(cell_ref);
+        self.cache.remove(cell);
+    }
+
+    /// Mark a cell as dirty to trigger dependent recalculation ordering.
+    pub fn mark_dirty(&mut self, cell: &CellAddress) {
+        let cell_ref = NodeRef::Cell(cell_to_coordinate(*cell));
+        self.dag.mark_cell_as_dirty(cell_ref);
+    }
+
+    /// Get dirty nodes in recalculation order.
+    pub fn get_dirty_nodes(&mut self) -> Result<Vec<CellAddress>, FormulaError> {
+        let nodes = self
+            .dag
+            .get_dirty_nodes()
+            .map_err(|_| FormulaError::CircularReference)?;
+        Ok(nodes
+            .into_iter()
+            .filter_map(|node| node.position)
+            .filter_map(|pos| match pos {
+                piptable_dag::NodePosition::Cell(cell) => Some(coordinate_to_cell(cell)),
+                _ => None,
+            })
+            .collect())
+    }
+
+    /// Add a range dependency to a formula cell.
+    pub fn add_range_dependency(
+        &mut self,
+        formula_cell: &CellAddress,
+        range: &CellRange,
+    ) -> Result<(), FormulaError> {
+        let cell_ref = NodeRef::Cell(cell_to_coordinate(*formula_cell));
+        let range_ref = NodeRef::Range(CellCoordinateRange {
+            sheet_id: 0,
+            start_row_index: range.start.row,
+            start_column_index: range.start.col,
+            end_row_index: range.end.row,
+            end_column_index: range.end.col,
+        });
+        self.dag
+            .add_node_input(cell_ref, range_ref, true)
+            .map_err(|_| FormulaError::CircularReference)?;
+        Ok(())
+    }
+
+    /// Get dependents of a cell in recalculation order.
+    pub fn dependents_in_order(
+        &self,
+        cell: &CellAddress,
+    ) -> Result<Vec<CellAddress>, FormulaError> {
+        let nodes = self
+            .dag
+            .get_dependents(NodeRef::Cell(cell_to_coordinate(*cell)))
+            .map_err(|_| FormulaError::CircularReference)?;
+        Ok(nodes
+            .into_iter()
+            .filter_map(|node| node.position)
+            .filter_map(|pos| match pos {
+                piptable_dag::NodePosition::Cell(cell) => Some(coordinate_to_cell(cell)),
+                _ => None,
+            })
+            .collect())
     }
 
     /// Evaluate a compiled formula against a context
@@ -695,6 +782,20 @@ impl Default for FormulaEngine {
     }
 }
 
+fn cell_to_coordinate(cell: CellAddress) -> CellCoordinate {
+    CellCoordinate {
+        row_index: cell.row,
+        column_index: cell.col,
+        sheet_id: 0,
+        data_validation_id: None,
+        conditional_format_id: None,
+    }
+}
+
+fn coordinate_to_cell(cell: CellCoordinate) -> CellAddress {
+    CellAddress::new(cell.row_index, cell.column_index)
+}
+
 /// Function definition
 pub struct FunctionDefinition {
     pub min_args: usize,
@@ -916,6 +1017,25 @@ fn collect_dependencies(expr: &FormulaExpr, deps: &mut HashSet<CellAddress>) {
         FormulaExpr::UnaryOp { expr, .. } => {
             collect_dependencies(expr, deps);
         }
+    }
+}
+
+fn collect_range_dependencies(expr: &FormulaExpr, deps: &mut Vec<CellRange>) {
+    match expr {
+        FormulaExpr::RangeRef(range) => deps.push(*range),
+        FormulaExpr::FunctionCall { args, .. } => {
+            for arg in args {
+                collect_range_dependencies(arg, deps);
+            }
+        }
+        FormulaExpr::BinaryOp { left, right, .. } => {
+            collect_range_dependencies(left, deps);
+            collect_range_dependencies(right, deps);
+        }
+        FormulaExpr::UnaryOp { expr, .. } => {
+            collect_range_dependencies(expr, deps);
+        }
+        _ => {}
     }
 }
 
@@ -1148,6 +1268,32 @@ mod tests {
         assert_eq!(compiled.source, "=1+2");
         engine.invalidate(&cell);
         assert!(engine.get_formula(&cell).is_none());
+    }
+
+    #[test]
+    fn test_dependency_dirty_order() {
+        let mut engine = FormulaEngine::new();
+        let a1 = CellAddress::new(0, 0);
+        let b1 = CellAddress::new(0, 1);
+        engine.set_formula(b1, "=A1+1").expect("set ok");
+        engine.mark_dirty(&a1);
+        let dirty = engine.get_dirty_nodes().expect("dirty nodes");
+        let a1_idx = dirty.iter().position(|cell| *cell == a1).unwrap();
+        let b1_idx = dirty.iter().position(|cell| *cell == b1).unwrap();
+        assert!(a1_idx < b1_idx);
+    }
+
+    #[test]
+    fn test_dependency_range_support() {
+        let mut engine = FormulaEngine::new();
+        let a1 = CellAddress::new(0, 0);
+        let c1 = CellAddress::new(0, 2);
+        engine
+            .set_formula(c1, "=SUM(A1:A2)")
+            .expect("set ok");
+        engine.mark_dirty(&a1);
+        let dirty = engine.get_dirty_nodes().expect("dirty nodes");
+        assert!(dirty.contains(&c1));
     }
 
     #[test]
