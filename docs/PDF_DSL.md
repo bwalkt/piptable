@@ -48,8 +48,7 @@ All PDF import options can be specified using the `with` clause:
 | `min_table_rows` | Integer | 2 | Minimum rows for table detection |
 | `min_table_cols` | Integer | 2 | Minimum columns for table detection |
 | `detect_headers` | Boolean | false | Auto-detect table headers |
-| `extract_structure` | Boolean | false | Extract document structure instead of tables |
-| `structure` | Boolean | false | Alias for extract_structure |
+| `extract_structure` / `structure` | Boolean | false | Extract document structure instead of tables (both options are equivalent) |
 
 ## Table Extraction Examples
 
@@ -156,7 +155,7 @@ import "report.pdf" into structure with { "extract_structure": true }
 
 ' Process both
 dim first_table = tables.table_1
-dim heading_count = count(filter(structure.elements, e => e.type == "heading"))
+dim heading_count = len(filter(structure.elements, e => e.type == "heading"))
 print("Found table_1 and " + heading_count + " headings")
 ```
 

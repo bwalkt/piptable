@@ -270,7 +270,7 @@ impl StructureDetector {
             blocks.push(TextBlock {
                 text: trimmed.to_string(),
                 bbox,
-                page: page_index,
+                page: page_index + 1,
                 font_size,
                 font_name,
                 is_bold,
@@ -635,7 +635,7 @@ mod tests {
                     right: 200.0,
                     bottom: 680.0,
                 },
-                page: 0,
+                page: 1,
                 font_size: 24.0,
                 font_name: "TestBold".to_string(),
                 is_bold: true,
@@ -657,7 +657,7 @@ mod tests {
             },
         ];
 
-        let doc = detector.analyze_blocks(blocks, 1);
+        let doc = detector.analyze_blocks(blocks, 2);
         assert!(!doc.elements.is_empty());
         match &doc.elements[0] {
             DocumentElement::Heading { level, text, .. } => {
@@ -680,7 +680,7 @@ mod tests {
                     right: 200.0,
                     bottom: 690.0,
                 },
-                page: 0,
+                page: 1,
                 font_size: 12.0,
                 font_name: "Test".to_string(),
                 is_bold: false,
@@ -724,7 +724,7 @@ mod tests {
                     right: 200.0,
                     bottom: 690.0,
                 },
-                page: 0,
+                page: 1,
                 font_size: 12.0,
                 font_name: "Test".to_string(),
                 is_bold: false,
@@ -738,7 +738,7 @@ mod tests {
                     right: 200.0,
                     bottom: 590.0,
                 },
-                page: 1,
+                page: 2,
                 font_size: 12.0,
                 font_name: "Test".to_string(),
                 is_bold: false,

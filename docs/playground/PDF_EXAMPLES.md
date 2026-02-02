@@ -149,8 +149,8 @@ for each h in headings
 next
 
 ' Count elements by type
-dim heading_count = count(filter(doc.elements, e => e.type == "heading"))
-dim para_count = count(filter(doc.elements, e => e.type == "paragraph"))
+dim heading_count = len(filter(doc.elements, e => e.type == "heading"))
+dim para_count = len(filter(doc.elements, e => e.type == "paragraph"))
 
 print("")
 print("Statistics:")
