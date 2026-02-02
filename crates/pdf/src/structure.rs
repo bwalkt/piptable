@@ -129,8 +129,8 @@ impl StructuredDocument {
 
     /// Converts the structured document to JSON format optimized for LLM processing.
     ///
-    /// The JSON structure includes element metadata such as type, content, page numbers,
-    /// and bounding boxes for spatial understanding.
+    /// The JSON structure includes top-level `elements` and `metadata` keys.
+    /// Each element contains type, content, page numbers, and bounding boxes.
     ///
     /// # Example
     /// ```rust,no_run
