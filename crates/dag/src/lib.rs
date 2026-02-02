@@ -117,6 +117,7 @@ pub enum DagError {
 pub struct Dag {
     nodes: HashMap<String, DagNode>,
     ranges: HashMap<String, CellCoordinateRange>,
+    ranges_by_row: HashMap<u32, HashMap<u32, Vec<String>>>,
     dirty_nodes: HashSet<String>,
     max_range_cells: u64,
 }
@@ -126,10 +127,35 @@ impl Default for Dag {
         Self {
             nodes: HashMap::new(),
             ranges: HashMap::new(),
+            ranges_by_row: HashMap::new(),
             dirty_nodes: HashSet::new(),
             max_range_cells: 10_000,
         }
     }
+}
+
+#[derive(Debug, Clone)]
+pub enum DeleteMode {
+    ClearInputs,
+    DetachFromInputs,
+    RemoveNode,
+}
+
+#[derive(Debug, Clone)]
+pub enum DagOperation {
+    AddInput {
+        formula: NodeRef,
+        input: NodeRef,
+        mark_as_dirty: bool,
+    },
+    RemoveInput {
+        formula: NodeRef,
+        input: NodeRef,
+    },
+    Delete {
+        position: NodeRef,
+        mode: DeleteMode,
+    },
 }
 
 pub fn is_cell_coordinate_within_cell_range(
@@ -283,6 +309,21 @@ impl Dag {
         self.add_node_input(formula_cell, input_position, false)
     }
 
+    pub fn add_node_inputs<I>(
+        &mut self,
+        formula_cell: NodeRef,
+        inputs: I,
+        mark_as_dirty: bool,
+    ) -> Result<(), DagError>
+    where
+        I: IntoIterator<Item = NodeRef>,
+    {
+        for input in inputs {
+            self.add_node_input(formula_cell.clone(), input, mark_as_dirty)?;
+        }
+        Ok(())
+    }
+
     pub fn remove_node_input(&mut self, formula_cell: NodeRef, input_position: NodeRef) {
         let formula_key = self.key(&formula_cell);
         let input_key = self.key(&input_position);
@@ -321,6 +362,7 @@ impl Dag {
     }
 
     pub fn delete_cell(&mut self, pos: NodeRef) {
+        // Clear incoming edges but keep dependents intact.
         let key = self.key(&pos);
         self.clear_node_inputs(pos);
         self.prune_if_orphan(&key);
@@ -381,11 +423,16 @@ impl Dag {
         self.mark_as_dirty_key(&key);
     }
 
-    pub fn get_dirty_nodes(&mut self) -> Result<Vec<DagNodeIdentifier>, DagError> {
+    pub fn get_dirty_nodes(&self) -> Result<Vec<DagNodeIdentifier>, DagError> {
         let keys: Vec<String> = self.dirty_nodes.iter().cloned().collect();
         let dependents = self.topological_sort(keys, |node| self.dependents_with_ranges(node))?;
-        self.dirty_nodes.clear();
         Ok(self.identifiers_from_keys(&dependents))
+    }
+
+    pub fn take_dirty_nodes(&mut self) -> Result<Vec<DagNodeIdentifier>, DagError> {
+        let nodes = self.get_dirty_nodes()?;
+        self.dirty_nodes.clear();
+        Ok(nodes)
     }
 
     pub fn peek_dirty_nodes(&self) -> Result<Vec<DagNodeIdentifier>, DagError> {
@@ -416,8 +463,33 @@ impl Dag {
         self.visit_node(pos, |node| self.dependents_with_ranges(node))
     }
 
+    pub fn apply_operations<I>(&mut self, ops: I) -> Result<(), DagError>
+    where
+        I: IntoIterator<Item = DagOperation>,
+    {
+        for op in ops {
+            match op {
+                DagOperation::AddInput {
+                    formula,
+                    input,
+                    mark_as_dirty,
+                } => self.add_node_input(formula, input, mark_as_dirty)?,
+                DagOperation::RemoveInput { formula, input } => {
+                    self.remove_node_input(formula, input);
+                }
+                DagOperation::Delete { position, mode } => match mode {
+                    DeleteMode::ClearInputs => self.delete_cell(position),
+                    DeleteMode::DetachFromInputs => self.remove_cell_from_graph(position),
+                    DeleteMode::RemoveNode => self.delete_node(position),
+                },
+            }
+        }
+        Ok(())
+    }
+
     pub fn reset(&mut self) {
         self.ranges.clear();
+        self.ranges_by_row.clear();
         self.dirty_nodes.clear();
         self.nodes.clear();
     }
@@ -436,6 +508,7 @@ impl Dag {
             .collect();
         for key in keys {
             self.ranges.remove(&key);
+            self.remove_range_index(&key);
         }
     }
 
@@ -499,6 +572,7 @@ impl Dag {
         if self.nodes.contains_key(&key) {
             if let NodeRef::Range(range) = position {
                 self.ranges.insert(key.clone(), range.clone());
+                self.add_range_index(&key, range);
             }
             return key;
         }
@@ -519,6 +593,7 @@ impl Dag {
 
         if let NodeRef::Range(range) = position {
             self.ranges.insert(key.clone(), range.clone());
+            self.add_range_index(&key, range);
         }
 
         self.nodes.insert(key.clone(), node);
@@ -542,6 +617,7 @@ impl Dag {
         if remove {
             self.nodes.remove(key);
             self.ranges.remove(key);
+            self.remove_range_index(key);
             self.dirty_nodes.remove(key);
         }
     }
@@ -593,17 +669,47 @@ impl Dag {
 
     fn get_node_from_cell_ranges(&self, cell: &CellCoordinate) -> Vec<CellCoordinateRange> {
         let mut valid_ranges = Vec::new();
-        for range in self.ranges.values() {
+        let Some(sheet_rows) = self.ranges_by_row.get(&cell.sheet_id) else {
+            return valid_ranges;
+        };
+        let Some(range_keys) = sheet_rows.get(&cell.row_index) else {
+            return valid_ranges;
+        };
+
+        for key in range_keys {
+            let Some(range) = self.ranges.get(key) else {
+                continue;
+            };
             if !is_cell_coordinate_within_cell_range(cell, range) {
                 continue;
             }
-            if let Some(range_node) = self.nodes.get(&self.key(&NodeRef::Range(range.clone()))) {
+            if let Some(range_node) = self.nodes.get(key) {
                 if !range_node.dependent_keys.is_empty() {
                     valid_ranges.push(range.clone());
                 }
             }
         }
         valid_ranges
+    }
+
+    fn add_range_index(&mut self, key: &str, range: &CellCoordinateRange) {
+        let sheet = self.ranges_by_row.entry(range.sheet_id).or_default();
+        let start = range.start_row_index.min(range.end_row_index);
+        let end = range.start_row_index.max(range.end_row_index);
+        for row in start..=end {
+            let entry = sheet.entry(row).or_default();
+            if !entry.iter().any(|k| k == key) {
+                entry.push(key.to_string());
+            }
+        }
+    }
+
+    fn remove_range_index(&mut self, key: &str) {
+        for sheet in self.ranges_by_row.values_mut() {
+            for keys in sheet.values_mut() {
+                keys.retain(|k| k != key);
+            }
+        }
     }
 
     fn dependents_with_ranges(&self, node: &DagNode) -> HashSet<String> {

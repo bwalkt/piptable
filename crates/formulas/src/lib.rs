@@ -242,7 +242,7 @@ impl FormulaEngine {
 
     /// Get dirty nodes in recalculation order.
     pub fn get_dirty_nodes(&mut self) -> Result<Vec<CellAddress>, FormulaError> {
-        let nodes = self.dag.get_dirty_nodes().map_err(map_dag_error)?;
+        let nodes = self.dag.take_dirty_nodes().map_err(map_dag_error)?;
         Ok(nodes
             .into_iter()
             .filter_map(|node| node.position)
@@ -263,7 +263,7 @@ impl FormulaEngine {
 
     /// Get dirty nodes with sheet information in recalculation order.
     pub fn get_dirty_nodes_with_sheet(&mut self) -> Result<Vec<SheetCellAddress>, FormulaError> {
-        let nodes = self.dag.get_dirty_nodes().map_err(map_dag_error)?;
+        let nodes = self.dag.take_dirty_nodes().map_err(map_dag_error)?;
         Ok(nodes
             .into_iter()
             .filter_map(|node| node.position)
