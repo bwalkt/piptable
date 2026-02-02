@@ -11,6 +11,17 @@ use std::hash::{Hash, Hasher};
 
 pub mod functions;
 pub mod parser;
+pub mod refs;
+pub mod utils;
+
+pub use refs::{
+    extract_references, formula_to_relative_reference, FormulaReference, FormulaToRelativeReferenceOptions,
+    ReferenceKind, ReferenceMode,
+};
+pub use utils::{
+    balance_formula, balance_parentheses, balance_quotes, is_a_formula, is_alternate_formula,
+    is_balanced_parenthesis, is_valid_formula, validate_formula,
+};
 
 /// Compiled formula ready for evaluation
 #[derive(Debug, Clone, Serialize, Deserialize)]

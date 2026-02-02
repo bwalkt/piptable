@@ -3759,6 +3759,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "piptable-formatting"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "piptable-primitives",
+]
+
+[[package]]
 name = "piptable-formulas"
 version = "0.1.0"
 dependencies = [
@@ -3770,6 +3778,7 @@ dependencies = [
  "piptable-primitives",
  "piptable-utils",
  "rand 0.8.5",
+ "regex",
  "serde",
  "thiserror 2.0.18",
 ]
@@ -3935,8 +3944,10 @@ name = "piptable-utils"
 version = "0.1.0"
 dependencies = [
  "chrono",
+ "piptable-formatting",
  "piptable-primitives",
  "serde",
+ "serde_json",
  "thiserror 2.0.18",
 ]
 
