@@ -204,10 +204,9 @@ fn format_number_pattern(pattern: &str, value: f64, original: &Value) -> String 
     // Only add minus sign if:
     // 1. Value is negative AND
     // 2. Pattern doesn't already contain a minus sign
-    if value < 0.0 && !has_minus_in_pattern
-        && !int_formatted.starts_with('-') {
-            int_formatted = format!("-{}", int_formatted);
-        }
+    if value < 0.0 && !has_minus_in_pattern && !int_formatted.starts_with('-') {
+        int_formatted = format!("-{}", int_formatted);
+    }
 
     let mut out = String::new();
     out.push_str(&prefix.replace('%', ""));
