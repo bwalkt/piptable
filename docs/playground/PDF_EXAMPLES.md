@@ -145,10 +145,10 @@ dim doc = {
 dim headings = filter(doc.document.elements, e => e.type == "heading")
 
 print("Document Structure:")
-foreach h in headings {
+for each h in headings
     dim indent = repeat("  ", h.level - 1)
     print(indent + "- " + h.content + " (page " + (h.page + 1) + ")")
-}
+next
 
 ' Count elements by type
 dim heading_count = count(filter(doc.document.elements, e => e.type == "heading"))
@@ -156,7 +156,7 @@ dim para_count = count(filter(doc.document.elements, e => e.type == "paragraph")
 
 print("")
 print("Statistics:")
-print("Total pages: " + doc.metadata.page_count)
+print("Total pages: " + doc.document.metadata.page_count)
 print("Headings: " + heading_count)
 print("Paragraphs: " + para_count)
 ```
@@ -322,22 +322,22 @@ dim doc = {
 dim keywords = ["revenue", "profit", "expense"]
 
 print("🔍 Keyword Search Results:")
-foreach keyword in keywords {
+for each keyword in keywords
     print("")
     print("Searching for: " + upper(keyword))
     dim found = false
     
-    foreach elem in doc.document.elements {
+    for each elem in doc.document.elements
         if lower(elem.content) contains lower(keyword) {
             print("  ✓ Found in " + elem.type + ": " + elem.content)
             found = true
         }
-    }
+    next
     
     if not found {
         print("  ✗ Not found")
     }
-}
+next
 ```
 
 ## Try It Yourself

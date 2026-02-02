@@ -84,9 +84,9 @@ import "specs.pdf" into products with {
 
 ' Filter and export
 dim table = products.table_1
-select * from table
+dim results = select * from table
 where Price < 100
-export to "affordable_products.csv"
+export results to "affordable_products.csv"
 ```
 
 ## Document Structure Extraction
@@ -140,9 +140,9 @@ import "manual.pdf" into docs with {
 
 ' Process the structured content
 dim headings = filter(docs.document.elements, e => e.type == "heading")
-foreach h in headings {
+for each h in headings
     print("Level " + h.level + ": " + h.content)
-}
+next
 ```
 
 ## Combined Workflows
@@ -168,18 +168,18 @@ print("Found table_1 and " + heading_count + " headings")
 ' Process multiple PDFs
 dim files = ["report1.pdf", "report2.pdf", "report3.pdf"]
 
-foreach file in files {
+for each file in files
     import file into data
     
     ' Process each file's tables
     dim table = data.table_1
-    select 
+    dim results = select 
         file as source_file,
         sum(Revenue) as total_revenue
     from table
     group by source_file
-    export to "consolidated.csv" append
-}
+    export results to "consolidated.csv" append
+next
 ```
 
 ## Error Handling

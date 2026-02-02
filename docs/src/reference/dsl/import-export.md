@@ -156,7 +156,8 @@ dim data = import path into sheet
 
 ### PDF Structure Extraction
 
-Use `extract_structure` to return a structured JSON object (LLM-friendly) instead of tables:
+Use `extract_structure` to return a structured JSON object (LLM-friendly) instead of tables.
+The `into sheet` target still receives a JSON-style value, not a tabular sheet:
 
 ```piptable
 dim doc = import "paper.pdf" into sheet with {

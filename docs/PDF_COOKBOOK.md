@@ -15,7 +15,7 @@ Real-world examples and recipes for PDF processing with PipTable.
 
 ## Research Paper to Markdown
 
-**Goal**: Convert a research paper PDF to markdown for blog posts or documentation.
+**Goal**: Convert a research paper PDF to Markdown for blog posts or documentation.
 
 ```vba
 ' Extract paper structure
@@ -28,7 +28,7 @@ export paper to "paper.json"
 dim elements = paper.document.elements
 dim abstract_found = false
 
-foreach elem in elements {
+for each elem in elements
     if elem.type == "heading" and elem.content contains "Abstract" {
         abstract_found = true
     }
@@ -36,7 +36,7 @@ foreach elem in elements {
         print("Abstract: " + elem.content)
         break
     }
-}
+next
 ```
 
 ## Financial Report Analysis
@@ -67,7 +67,7 @@ where Year >= 2020
 order by Year desc
 
 ' Export analysis
-export to "financial_analysis.xlsx"
+export analysis to "financial_analysis.xlsx"
 ```
 
 ## Multi-PDF Consolidation
@@ -86,7 +86,7 @@ create table consolidated (
 ' Process each monthly report
 dim months = ["jan", "feb", "mar", "apr", "may", "jun"]
 
-foreach month in months {
+for each month in months
     dim filename = "report_2024_" + month + ".pdf"
     
     ' Import tables from each PDF
@@ -104,7 +104,7 @@ foreach month in months {
         Amount
     from monthly_data
     where Amount > 0
-}
+next
 
 ' Generate summary
 select 
@@ -116,7 +116,7 @@ from consolidated
 group by Category
 order by Total desc
 
-export to "quarterly_summary.csv"
+export summary to "quarterly_summary.csv"
 ```
 
 ## Catalog Data Extraction
@@ -150,7 +150,7 @@ where Price < OriginalPrice
 order by (OriginalPrice - Price) desc
 limit 20
 
-export to "sale_items.json"
+export results to "sale_items.json"
 ```
 
 ## Legal Document Processing
@@ -165,7 +165,7 @@ import "contract.pdf" into contract with { "extract_structure": true }
 dim elements = contract.document.elements
 dim clauses = []
 
-foreach elem in elements {
+for each elem in elements
     if elem.type == "heading" {
         ' Track section numbers like "3.1", "3.2"
         if elem.content matches "^\\d+\\.\\d+" {
@@ -179,18 +179,18 @@ foreach elem in elements {
         ' Add paragraph to current clause
         clauses[-1].content += elem.content + " "
     }
-}
+next
 
 ' Search for key terms
 dim important_terms = ["liability", "termination", "payment", "confidential"]
 
-foreach clause in clauses {
-    foreach term in important_terms {
+for each clause in clauses
+    for each term in important_terms
         if lower(clause.content) contains term {
             print("Section " + clause.section + " (page " + clause.page + ") mentions: " + term)
         }
-    }
-}
+    next
+next
 ```
 
 ## Scientific Data Tables
@@ -223,7 +223,7 @@ where PValue < 0.05
 order by PValue asc
 
 ' Export for further analysis
-export to "experimental_results.csv"
+export results to "experimental_results.csv"
 ```
 
 ## Invoice Processing
@@ -242,7 +242,7 @@ create table all_invoices (
     total decimal
 )
 
-foreach file in invoice_files {
+for each file in invoice_files
     try {
         import file into invoice_data with {
             page_range: "1-1",  ' Invoices are usually 1 page
@@ -266,7 +266,7 @@ foreach file in invoice_files {
         print("Failed to process: " + file)
         ' Log failed files for manual review
     }
-}
+next
 
 ' Monthly summary
 select 
@@ -278,7 +278,7 @@ from all_invoices
 group by month(date)
 order by Month
 
-export to "accounts_payable.xlsx"
+export data to "accounts_payable.xlsx"
 ```
 
 ## Academic Transcript Analysis
@@ -324,7 +324,7 @@ group by Department
 having sum(Credits) >= 3
 order by DeptGPA desc
 
-export to "academic_analysis.json"
+export results to "academic_analysis.json"
 ```
 
 ## Advanced Techniques
@@ -340,12 +340,12 @@ import "report.pdf" into tables
 dim current_section = "Unknown"
 dim table_sections = []
 
-foreach elem in structure.document.elements {
+for each elem in structure.document.elements
     if elem.type == "heading" {
         current_section = elem.content
     }
     ' Table pages are not tracked yet; associate headings manually as needed
-}
+next
 
 ' Example manual association
 table_sections.push({
