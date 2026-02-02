@@ -2247,7 +2247,7 @@ impl Interpreter {
 
                     // Check Python functions if feature is enabled
                     #[cfg(feature = "python")]
-                    if let Some(runtime) = &self.python_runtime {
+                    if let Some(runtime) = self.python_runtime.clone() {
                         if runtime.has_function(name).await {
                             let arg_vals = self.eval_args(args, line).await?;
                             return runtime.call(name, arg_vals).await;

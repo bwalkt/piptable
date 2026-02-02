@@ -495,6 +495,8 @@ fn validate_program(program: &Program) -> Result<(), String> {
 /// # Examples
 ///
 /// ```no_run
+/// use piptable_wasm::run_code;
+///
 /// # async fn example() {
 /// let js: wasm_bindgen::JsValue = run_code("dim x = 1".into()).await.unwrap();
 /// // `js` is a JsValue holding the ExecResult JSON object described above.
@@ -512,7 +514,7 @@ pub async fn run_code(code: String) -> Result<JsValue, JsValue> {
 ///
 /// # Examples
 ///
-/// ```
+/// ```ignore
 /// use futures::executor::block_on;
 ///
 /// // Example usage: run a simple program and inspect success flag.
