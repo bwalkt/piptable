@@ -3871,6 +3871,7 @@ dependencies = [
  "pdfium-render",
  "piptable-sheet",
  "regex",
+ "serde_json",
  "tempfile",
  "tesseract",
  "thiserror 2.0.18",

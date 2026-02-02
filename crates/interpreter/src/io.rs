@@ -868,6 +868,7 @@ pub fn import_pdf_tables(path: &str, options: &ImportOptions) -> Result<Vec<Shee
         ocr_language: "eng".to_string(),
         min_table_rows: resolve_min_table_rows(options),
         min_table_cols: resolve_min_table_cols(options),
+        ..Default::default()
     };
 
     let mut tables = piptable_pdf::extract_tables_with_options(path, pdf_options)

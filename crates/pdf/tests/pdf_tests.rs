@@ -20,6 +20,7 @@ fn test_extract_tables_with_options() {
         ocr_language: "eng".to_string(),
         min_table_rows: 3,
         min_table_cols: 2,
+        ..Default::default()
     };
 
     let result = piptable_pdf::extract_tables_with_options("/non/existent/file.pdf", options);
@@ -34,6 +35,7 @@ fn test_pdf_options_default() {
     assert_eq!(options.ocr_language, "eng");
     assert_eq!(options.min_table_rows, 2);
     assert_eq!(options.min_table_cols, 2);
+    assert!(!options.extract_structure);
 }
 
 #[test]
