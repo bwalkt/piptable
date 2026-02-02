@@ -173,11 +173,21 @@ pub fn is_cell_coordinate_within_cell_range(
     position: &CellCoordinate,
     range: &CellCoordinateRange,
 ) -> bool {
+    let (start_row, end_row) = if range.start_row_index <= range.end_row_index {
+        (range.start_row_index, range.end_row_index)
+    } else {
+        (range.end_row_index, range.start_row_index)
+    };
+    let (start_col, end_col) = if range.start_column_index <= range.end_column_index {
+        (range.start_column_index, range.end_column_index)
+    } else {
+        (range.end_column_index, range.start_column_index)
+    };
     position.sheet_id == range.sheet_id
-        && position.row_index >= range.start_row_index
-        && position.row_index <= range.end_row_index
-        && position.column_index >= range.start_column_index
-        && position.column_index <= range.end_column_index
+        && position.row_index >= start_row
+        && position.row_index <= end_row
+        && position.column_index >= start_col
+        && position.column_index <= end_col
 }
 
 pub fn is_cell_coordinate(position: &NodeRef) -> bool {
@@ -247,14 +257,18 @@ impl Dag {
         mark_as_dirty: bool,
     ) -> Result<(), DagError> {
         if let NodeRef::Range(range) = &input_position {
-            let rows = range
-                .end_row_index
-                .saturating_sub(range.start_row_index)
-                .saturating_add(1) as u64;
-            let cols = range
-                .end_column_index
-                .saturating_sub(range.start_column_index)
-                .saturating_add(1) as u64;
+            let (row_start, row_end) = if range.start_row_index <= range.end_row_index {
+                (range.start_row_index, range.end_row_index)
+            } else {
+                (range.end_row_index, range.start_row_index)
+            };
+            let (col_start, col_end) = if range.start_column_index <= range.end_column_index {
+                (range.start_column_index, range.end_column_index)
+            } else {
+                (range.end_column_index, range.start_column_index)
+            };
+            let rows = row_end.saturating_sub(row_start).saturating_add(1) as u64;
+            let cols = col_end.saturating_sub(col_start).saturating_add(1) as u64;
             let cells = rows.saturating_mul(cols);
             if cells > self.max_range_cells {
                 return Err(DagError::RangeTooLarge {
