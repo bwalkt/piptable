@@ -43,9 +43,6 @@ pub fn ssf_format_color(pattern: &str, value: &Value) -> Option<String> {
 
 fn select_section(pattern: &str, value: &Value) -> Option<FormatSection> {
     let sections: Vec<&str> = pattern.split(';').collect();
-    if sections.is_empty() {
-        return None;
-    }
 
     let section = match value {
         Value::String(_) => sections.get(3).copied().unwrap_or(sections[0]),
@@ -145,19 +142,19 @@ fn format_number_pattern(pattern: &str, value: f64) -> String {
 
     let mut first_placeholder = None;
     let mut last_placeholder = None;
-    for (idx, ch) in working.chars().enumerate() {
+    for (idx, ch) in working.char_indices() {
         if matches!(ch, '0' | '#' | '?') {
             if first_placeholder.is_none() {
                 first_placeholder = Some(idx);
             }
-            last_placeholder = Some(idx);
+            last_placeholder = Some(idx + ch.len_utf8());
         }
     }
 
     if let (Some(first), Some(last)) = (first_placeholder, last_placeholder) {
         prefix = working[..first].to_string();
-        suffix = working[last + 1..].to_string();
-        working = working[first..=last].to_string();
+        suffix = working[last..].to_string();
+        working = working[first..last].to_string();
     }
 
     let use_percent = suffix.contains('%') || prefix.contains('%') || working.contains('%');
@@ -270,11 +267,7 @@ fn is_date_pattern(pattern: &str) -> bool {
     }
 
     if lower.contains('m') {
-        return lower.contains(':')
-            || lower.contains('y')
-            || lower.contains('d')
-            || lower.contains('h')
-            || lower.contains('s');
+        return lower.contains(':');
     }
 
     false
@@ -289,7 +282,7 @@ fn format_date_pattern(pattern: &str, value: f64) -> String {
 }
 
 fn excel_pattern_to_chrono(pattern: &str) -> String {
-    let mut out = pattern.to_string();
+    let mut out = pattern.to_ascii_lowercase();
     let replacements = [
         ("yyyy", "{YYYY}"),
         ("yy", "{YY}"),

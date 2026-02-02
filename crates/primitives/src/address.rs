@@ -37,6 +37,8 @@ pub fn convert_cell_to_range(cell: CellAddress) -> CellRange {
 
 /// Converts address string to a CellAddress.
 pub fn address_to_cell(address: &str, options: AddressToCellOptions) -> Option<CellAddress> {
+    let address = address.trim();
+    let address = address.rsplit_once('!').map(|(_, a)| a).unwrap_or(address);
     let max_row = options
         .row_count
         .map(|v| v.min(MAX_ROW_COUNT))
@@ -204,12 +206,19 @@ pub fn supplant(input: &str, values: &HashMap<String, String>) -> String {
     while let Some(ch) = chars.next() {
         if ch == '{' {
             let mut key = String::new();
+            let mut closed = false;
             while let Some(next) = chars.peek().copied() {
                 chars.next();
                 if next == '}' {
+                    closed = true;
                     break;
                 }
                 key.push(next);
+            }
+            if !closed {
+                out.push('{');
+                out.push_str(&key);
+                break;
             }
             if let Some(replacement) = values.get(&key) {
                 out.push_str(replacement);
@@ -247,40 +256,32 @@ pub fn column_letter_to_index(s: &str) -> Result<u32, String> {
 }
 
 fn find_a1_match(address: &str) -> Option<(String, String)> {
+    let address = address.trim();
     let bytes = address.as_bytes();
-    let mut i = 0;
-    while i < bytes.len() {
-        let mut j = i;
-        if bytes[j] == b'$' {
-            j += 1;
-            if j >= bytes.len() {
-                break;
-            }
-        }
-        if !bytes[j].is_ascii_alphabetic() {
-            i += 1;
-            continue;
-        }
-        let letters_start = j;
-        while j < bytes.len() && bytes[j].is_ascii_alphabetic() {
-            j += 1;
-        }
-        let letters = &address[letters_start..j];
-        if j < bytes.len() && bytes[j] == b'$' {
-            j += 1;
-        }
-        let digits_start = j;
-        while j < bytes.len() && bytes[j].is_ascii_digit() {
-            j += 1;
-        }
-        if digits_start == j {
-            i += 1;
-            continue;
-        }
-        let digits = &address[digits_start..j];
-        return Some((letters.to_ascii_uppercase(), digits.to_string()));
+    let mut j = 0;
+    if bytes.get(j) == Some(&b'$') {
+        j += 1;
     }
-    None
+    if j >= bytes.len() || !bytes[j].is_ascii_alphabetic() {
+        return None;
+    }
+    let letters_start = j;
+    while j < bytes.len() && bytes[j].is_ascii_alphabetic() {
+        j += 1;
+    }
+    let letters = &address[letters_start..j];
+    if j < bytes.len() && bytes[j] == b'$' {
+        j += 1;
+    }
+    let digits_start = j;
+    while j < bytes.len() && bytes[j].is_ascii_digit() {
+        j += 1;
+    }
+    if digits_start == j || j != bytes.len() {
+        return None;
+    }
+    let digits = &address[digits_start..j];
+    Some((letters.to_ascii_uppercase(), digits.to_string()))
 }
 
 fn is_column_only(address: &str) -> bool {
@@ -315,7 +316,7 @@ fn alpha2number(letters: &str) -> Option<u32> {
             return None;
         }
         let value = (ch.to_ascii_uppercase() as u8 - b'A' + 1) as u32;
-        result = result * 26 + value;
+        result = result.checked_mul(26)?.checked_add(value)?;
     }
     Some(result)
 }

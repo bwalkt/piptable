@@ -1,12 +1,6 @@
 use crate::parser::parse_formula;
 use crate::FormulaError;
 
-const INVERSE_PAREN_MAP: [(&str, &str); 2] = [("(", ")"), ("[", "]")];
-
-fn is_paren(ch: char) -> bool {
-    matches!(ch, '(' | ')' | '[' | ']')
-}
-
 fn is_open_paren(ch: char) -> bool {
     matches!(ch, '(' | '[')
 }
@@ -15,22 +9,24 @@ fn is_open_paren(ch: char) -> bool {
 pub fn balance_parentheses(input: &str) -> String {
     let mut stack: Vec<char> = Vec::new();
     for ch in input.chars() {
-        if is_paren(ch) {
-            if is_open_paren(ch) {
-                stack.push(ch);
-            } else {
-                stack.pop();
+        if is_open_paren(ch) {
+            stack.push(ch);
+        } else if matches!(ch, ')' | ']') {
+            if let Some(open) = stack.last().copied() {
+                if matches!((open, ch), ('(', ')') | ('[', ']')) {
+                    stack.pop();
+                }
             }
         }
     }
 
     let mut out = input.to_string();
-    for open in stack {
-        let close = INVERSE_PAREN_MAP
-            .iter()
-            .find(|(k, _)| k.starts_with(open))
-            .map(|(_, v)| *v)
-            .unwrap_or(")");
+    while let Some(open) = stack.pop() {
+        let close = match open {
+            '(' => ")",
+            '[' => "]",
+            _ => ")",
+        };
         out.push_str(close);
     }
     out
@@ -75,14 +71,14 @@ pub fn balance_quotes(input: &str) -> String {
         return input.to_string();
     }
 
-    let mut insert_index = input.len();
-    while insert_index > 0 && input.chars().nth(insert_index - 1).unwrap().is_whitespace() {
+    let mut insert_index = chars.len();
+    while insert_index > 0 && chars[insert_index - 1].is_whitespace() {
         insert_index -= 1;
     }
 
     let mut close_start = insert_index;
     while close_start > 0 {
-        let ch = input.chars().nth(close_start - 1).unwrap();
+        let ch = chars[close_start - 1];
         if ch != ')' && ch != ']' {
             break;
         }
@@ -91,7 +87,10 @@ pub fn balance_quotes(input: &str) -> String {
 
     let trailing_parens = insert_index - close_start;
     let parens_to_keep_outside = string_start_scope_count.min(trailing_parens);
-    let insertion_pos = insert_index - parens_to_keep_outside;
+    let insertion_char_index = insert_index - parens_to_keep_outside;
+    let mut char_to_byte: Vec<usize> = input.char_indices().map(|(i, _)| i).collect();
+    char_to_byte.push(input.len());
+    let insertion_pos = char_to_byte[insertion_char_index];
 
     let mut out = String::new();
     out.push_str(&input[..insertion_pos]);
@@ -107,18 +106,21 @@ pub fn balance_formula(input: &str) -> String {
 
 /// Check if parenthesis is balanced.
 pub fn is_balanced_parenthesis(input: &str) -> bool {
-    let mut depth: i32 = 0;
+    let mut stack: Vec<char> = Vec::new();
     for ch in input.chars() {
         if is_open_paren(ch) {
-            depth += 1;
+            stack.push(ch);
         } else if matches!(ch, ')' | ']') {
-            if depth == 0 {
+            let open = match stack.pop() {
+                Some(open) => open,
+                None => return false,
+            };
+            if !matches!((open, ch), ('(', ')') | ('[', ']')) {
                 return false;
             }
-            depth -= 1;
         }
     }
-    depth == 0
+    stack.is_empty()
 }
 
 /// Check if text is a formula.

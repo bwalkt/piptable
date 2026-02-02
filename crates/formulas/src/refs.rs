@@ -87,129 +87,136 @@ pub fn formula_to_relative_reference(
 pub fn extract_references(formula: &str) -> Vec<FormulaReference> {
     let mut matches: Vec<(usize, FormulaReference)> = Vec::new();
 
-    for cap in cell_regex()
-        .captures_iter(formula)
-        .filter_map(|cap| cap.get(0).map(|m| (m.start(), cap)))
-    {
-        let start = cap.0;
-        let cap = cap.1;
-        let sheet = cap
-            .get(1)
-            .map(|m| m.as_str().trim_end_matches('!').to_string());
-        let left = cap.get(2).map(|m| m.as_str()).unwrap_or("");
-        let right = cap.get(3).map(|m| m.as_str());
+    for (start_offset, end_offset, is_string) in split_formula_segments(formula) {
+        if is_string {
+            continue;
+        }
+        let segment = &formula[start_offset..end_offset];
 
-        let (kind, mode) = if right.is_some() {
+        for cap in cell_regex()
+            .captures_iter(segment)
+            .filter_map(|cap| cap.get(0).map(|m| (m.start(), cap)))
+        {
+            let start = start_offset + cap.0;
+            let cap = cap.1;
+            let sheet = cap
+                .get(1)
+                .map(|m| m.as_str().trim_end_matches('!').to_string());
+            let left = cap.get(2).map(|m| m.as_str()).unwrap_or("");
+            let right = cap.get(3).map(|m| m.as_str());
+
+            let (kind, mode) = if right.is_some() {
+                let left_ref = parse_a1_ref(left);
+                let right_ref = right.and_then(parse_a1_ref);
+                (ReferenceKind::Range, combine_modes(left_ref, right_ref))
+            } else {
+                let left_ref = parse_a1_ref(left);
+                (ReferenceKind::Cell, mode_from_ref(left_ref))
+            };
+
+            matches.push((
+                start,
+                FormulaReference {
+                    text: cap.get(0).unwrap().as_str().to_string(),
+                    sheet,
+                    kind,
+                    mode,
+                },
+            ));
+        }
+
+        for cap in column_range_regex()
+            .captures_iter(segment)
+            .filter_map(|cap| cap.get(0).map(|m| (m.start(), cap)))
+        {
+            let start = start_offset + cap.0;
+            let cap = cap.1;
+            let sheet = cap
+                .get(1)
+                .map(|m| m.as_str().trim_end_matches('!').to_string());
+            let left = cap.get(2).map(|m| m.as_str()).unwrap_or("");
+            let right = cap.get(3).map(|m| m.as_str()).unwrap_or("");
+
             let left_ref = parse_a1_ref(left);
-            let right_ref = right.and_then(parse_a1_ref);
-            (ReferenceKind::Range, combine_modes(left_ref, right_ref))
-        } else {
+            let right_ref = parse_a1_ref(right);
+
+            matches.push((
+                start,
+                FormulaReference {
+                    text: cap.get(0).unwrap().as_str().to_string(),
+                    sheet,
+                    kind: ReferenceKind::ColumnRange,
+                    mode: combine_modes(left_ref, right_ref),
+                },
+            ));
+        }
+
+        for cap in row_range_regex()
+            .captures_iter(segment)
+            .filter_map(|cap| cap.get(0).map(|m| (m.start(), cap)))
+        {
+            let start = start_offset + cap.0;
+            let cap = cap.1;
+            let sheet = cap
+                .get(1)
+                .map(|m| m.as_str().trim_end_matches('!').to_string());
+            let left = cap.get(2).map(|m| m.as_str()).unwrap_or("");
+            let right = cap.get(3).map(|m| m.as_str()).unwrap_or("");
+
             let left_ref = parse_a1_ref(left);
-            (ReferenceKind::Cell, mode_from_ref(left_ref))
-        };
+            let right_ref = parse_a1_ref(right);
 
-        matches.push((
-            start,
-            FormulaReference {
-                text: cap.get(0).unwrap().as_str().to_string(),
-                sheet,
-                kind,
-                mode,
-            },
-        ));
-    }
+            matches.push((
+                start,
+                FormulaReference {
+                    text: cap.get(0).unwrap().as_str().to_string(),
+                    sheet,
+                    kind: ReferenceKind::RowRange,
+                    mode: combine_modes(left_ref, right_ref),
+                },
+            ));
+        }
 
-    for cap in column_range_regex()
-        .captures_iter(formula)
-        .filter_map(|cap| cap.get(0).map(|m| (m.start(), cap)))
-    {
-        let start = cap.0;
-        let cap = cap.1;
-        let sheet = cap
-            .get(1)
-            .map(|m| m.as_str().trim_end_matches('!').to_string());
-        let left = cap.get(2).map(|m| m.as_str()).unwrap_or("");
-        let right = cap.get(3).map(|m| m.as_str()).unwrap_or("");
+        for cap in r1c1_regex()
+            .captures_iter(segment)
+            .filter_map(|cap| cap.get(0).map(|m| (m.start(), cap)))
+        {
+            let start = start_offset + cap.0;
+            let cap = cap.1;
+            let sheet = cap
+                .get(1)
+                .map(|m| m.as_str().trim_end_matches('!').to_string());
+            let left = cap.get(2).map(|m| m.as_str()).unwrap_or("");
+            let right = cap.get(3).map(|m| m.as_str());
 
-        let left_ref = parse_a1_ref(left);
-        let right_ref = parse_a1_ref(right);
+            let left_mode = r1c1_mode(left);
+            let mode = if let Some(r) = right {
+                let right_mode = r1c1_mode(r);
+                match (left_mode, right_mode) {
+                    (ReferenceMode::Absolute, ReferenceMode::Absolute) => ReferenceMode::Absolute,
+                    (ReferenceMode::Relative, ReferenceMode::Relative) => ReferenceMode::Relative,
+                    _ => ReferenceMode::Mixed,
+                }
+            } else {
+                left_mode
+            };
 
-        matches.push((
-            start,
-            FormulaReference {
-                text: cap.get(0).unwrap().as_str().to_string(),
-                sheet,
-                kind: ReferenceKind::ColumnRange,
-                mode: combine_modes(left_ref, right_ref),
-            },
-        ));
-    }
+            let kind = if right.is_some() {
+                ReferenceKind::R1C1Range
+            } else {
+                ReferenceKind::R1C1Cell
+            };
 
-    for cap in row_range_regex()
-        .captures_iter(formula)
-        .filter_map(|cap| cap.get(0).map(|m| (m.start(), cap)))
-    {
-        let start = cap.0;
-        let cap = cap.1;
-        let sheet = cap
-            .get(1)
-            .map(|m| m.as_str().trim_end_matches('!').to_string());
-        let left = cap.get(2).map(|m| m.as_str()).unwrap_or("");
-        let right = cap.get(3).map(|m| m.as_str()).unwrap_or("");
-
-        let left_ref = parse_a1_ref(left);
-        let right_ref = parse_a1_ref(right);
-
-        matches.push((
-            start,
-            FormulaReference {
-                text: cap.get(0).unwrap().as_str().to_string(),
-                sheet,
-                kind: ReferenceKind::RowRange,
-                mode: combine_modes(left_ref, right_ref),
-            },
-        ));
-    }
-
-    for cap in r1c1_regex()
-        .captures_iter(formula)
-        .filter_map(|cap| cap.get(0).map(|m| (m.start(), cap)))
-    {
-        let start = cap.0;
-        let cap = cap.1;
-        let sheet = cap
-            .get(1)
-            .map(|m| m.as_str().trim_end_matches('!').to_string());
-        let left = cap.get(2).map(|m| m.as_str()).unwrap_or("");
-        let right = cap.get(3).map(|m| m.as_str());
-
-        let left_mode = r1c1_mode(left);
-        let mode = if let Some(r) = right {
-            let right_mode = r1c1_mode(r);
-            match (left_mode, right_mode) {
-                (ReferenceMode::Absolute, ReferenceMode::Absolute) => ReferenceMode::Absolute,
-                (ReferenceMode::Relative, ReferenceMode::Relative) => ReferenceMode::Relative,
-                _ => ReferenceMode::Mixed,
-            }
-        } else {
-            left_mode
-        };
-
-        let kind = if right.is_some() {
-            ReferenceKind::R1C1Range
-        } else {
-            ReferenceKind::R1C1Cell
-        };
-
-        matches.push((
-            start,
-            FormulaReference {
-                text: cap.get(0).unwrap().as_str().to_string(),
-                sheet,
-                kind,
-                mode,
-            },
-        ));
+            matches.push((
+                start,
+                FormulaReference {
+                    text: cap.get(0).unwrap().as_str().to_string(),
+                    sheet,
+                    kind,
+                    mode,
+                },
+            ));
+        }
     }
 
     matches.sort_by(|a, b| a.0.cmp(&b.0));
@@ -217,77 +224,83 @@ pub fn extract_references(formula: &str) -> Vec<FormulaReference> {
 }
 
 fn replace_cell_refs(formula: &str, d_row: i32, d_col: i32) -> String {
-    cell_regex()
-        .replace_all(formula, |caps: &regex::Captures| {
-            let sheet_prefix = caps.get(1).map(|m| m.as_str()).unwrap_or("");
-            let left = caps.get(2).map(|m| m.as_str()).unwrap_or("");
-            let right = caps.get(3).map(|m| m.as_str());
+    replace_outside_quotes(formula, |segment| {
+        cell_regex()
+            .replace_all(segment, |caps: &regex::Captures| {
+                let sheet_prefix = caps.get(1).map(|m| m.as_str()).unwrap_or("");
+                let left = caps.get(2).map(|m| m.as_str()).unwrap_or("");
+                let right = caps.get(3).map(|m| m.as_str());
 
-            let adjust_one = |addr: &str| -> String {
-                match parse_a1_ref(addr) {
-                    Some(A1Ref::Cell(cell)) => format_cell(adjust_cell(cell, d_row, d_col)),
-                    _ => addr.to_string(),
+                let adjust_one = |addr: &str| -> String {
+                    match parse_a1_ref(addr) {
+                        Some(A1Ref::Cell(cell)) => format_cell(adjust_cell(cell, d_row, d_col)),
+                        _ => addr.to_string(),
+                    }
+                };
+
+                if let Some(right) = right {
+                    let left_adj = adjust_one(left);
+                    let right_adj = adjust_one(right);
+                    format!("{}{}:{}", sheet_prefix, left_adj, right_adj)
+                } else {
+                    let left_adj = adjust_one(left);
+                    format!("{}{}", sheet_prefix, left_adj)
                 }
-            };
-
-            if let Some(right) = right {
-                let left_adj = adjust_one(left);
-                let right_adj = adjust_one(right);
-                format!("{}{}:{}", sheet_prefix, left_adj, right_adj)
-            } else {
-                let left_adj = adjust_one(left);
-                format!("{}{}", sheet_prefix, left_adj)
-            }
-        })
-        .to_string()
+            })
+            .to_string()
+    })
 }
 
 fn replace_column_ranges(formula: &str, d_col: i32) -> String {
-    column_range_regex()
-        .replace_all(formula, |caps: &regex::Captures| {
-            let sheet_prefix = caps.get(1).map(|m| m.as_str()).unwrap_or("");
-            let left = caps.get(2).map(|m| m.as_str()).unwrap_or("");
-            let right = caps.get(3).map(|m| m.as_str()).unwrap_or("");
+    replace_outside_quotes(formula, |segment| {
+        column_range_regex()
+            .replace_all(segment, |caps: &regex::Captures| {
+                let sheet_prefix = caps.get(1).map(|m| m.as_str()).unwrap_or("");
+                let left = caps.get(2).map(|m| m.as_str()).unwrap_or("");
+                let right = caps.get(3).map(|m| m.as_str()).unwrap_or("");
 
-            let left_ref = parse_a1_ref(left);
-            let right_ref = parse_a1_ref(right);
+                let left_ref = parse_a1_ref(left);
+                let right_ref = parse_a1_ref(right);
 
-            let left_adj = match left_ref {
-                Some(A1Ref::Column(col)) => format_column(adjust_column(col, d_col)),
-                _ => left.to_string(),
-            };
-            let right_adj = match right_ref {
-                Some(A1Ref::Column(col)) => format_column(adjust_column(col, d_col)),
-                _ => right.to_string(),
-            };
+                let left_adj = match left_ref {
+                    Some(A1Ref::Column(col)) => format_column(adjust_column(col, d_col)),
+                    _ => left.to_string(),
+                };
+                let right_adj = match right_ref {
+                    Some(A1Ref::Column(col)) => format_column(adjust_column(col, d_col)),
+                    _ => right.to_string(),
+                };
 
-            format!("{}{}:{}", sheet_prefix, left_adj, right_adj)
-        })
-        .to_string()
+                format!("{}{}:{}", sheet_prefix, left_adj, right_adj)
+            })
+            .to_string()
+    })
 }
 
 fn replace_row_ranges(formula: &str, d_row: i32) -> String {
-    row_range_regex()
-        .replace_all(formula, |caps: &regex::Captures| {
-            let sheet_prefix = caps.get(1).map(|m| m.as_str()).unwrap_or("");
-            let left = caps.get(2).map(|m| m.as_str()).unwrap_or("");
-            let right = caps.get(3).map(|m| m.as_str()).unwrap_or("");
+    replace_outside_quotes(formula, |segment| {
+        row_range_regex()
+            .replace_all(segment, |caps: &regex::Captures| {
+                let sheet_prefix = caps.get(1).map(|m| m.as_str()).unwrap_or("");
+                let left = caps.get(2).map(|m| m.as_str()).unwrap_or("");
+                let right = caps.get(3).map(|m| m.as_str()).unwrap_or("");
 
-            let left_ref = parse_a1_ref(left);
-            let right_ref = parse_a1_ref(right);
+                let left_ref = parse_a1_ref(left);
+                let right_ref = parse_a1_ref(right);
 
-            let left_adj = match left_ref {
-                Some(A1Ref::Row(row)) => format_row(adjust_row(row, d_row)),
-                _ => left.to_string(),
-            };
-            let right_adj = match right_ref {
-                Some(A1Ref::Row(row)) => format_row(adjust_row(row, d_row)),
-                _ => right.to_string(),
-            };
+                let left_adj = match left_ref {
+                    Some(A1Ref::Row(row)) => format_row(adjust_row(row, d_row)),
+                    _ => left.to_string(),
+                };
+                let right_adj = match right_ref {
+                    Some(A1Ref::Row(row)) => format_row(adjust_row(row, d_row)),
+                    _ => right.to_string(),
+                };
 
-            format!("{}{}:{}", sheet_prefix, left_adj, right_adj)
-        })
-        .to_string()
+                format!("{}{}:{}", sheet_prefix, left_adj, right_adj)
+            })
+            .to_string()
+    })
 }
 
 fn adjust_cell(cell: A1Cell, d_row: i32, d_col: i32) -> A1Cell {
@@ -462,34 +475,75 @@ fn combine_modes(left: Option<A1Ref>, right: Option<A1Ref>) -> ReferenceMode {
 
 fn r1c1_mode(text: &str) -> ReferenceMode {
     let upper = text.to_ascii_uppercase();
-    let mut abs = 0;
-    let mut rel = 0;
-    if upper.contains('R') {
-        if upper.contains("R[") || upper == "RC" || upper == "R" {
-            rel += 1;
-        } else {
-            abs += 1;
+    let Some((r_part, c_part)) = upper.split_once('C') else {
+        return ReferenceMode::Relative;
+    };
+    let row_spec = r_part.strip_prefix('R').unwrap_or("");
+    let col_spec = c_part;
+
+    let row_rel = row_spec.is_empty() || row_spec.starts_with('[');
+    let col_rel = col_spec.is_empty() || col_spec.starts_with('[');
+
+    match (row_rel, col_rel) {
+        (true, true) => ReferenceMode::Relative,
+        (false, false) => ReferenceMode::Absolute,
+        _ => ReferenceMode::Mixed,
+    }
+}
+
+fn split_formula_segments(formula: &str) -> Vec<(usize, usize, bool)> {
+    let mut segments = Vec::new();
+    let mut in_string = false;
+    let mut last = 0;
+    let mut iter = formula.char_indices().peekable();
+    while let Some((idx, ch)) = iter.next() {
+        if ch == '"' {
+            if in_string {
+                if let Some((_, next)) = iter.peek() {
+                    if *next == '"' {
+                        iter.next();
+                        continue;
+                    }
+                }
+                let end = idx + ch.len_utf8();
+                segments.push((last, end, true));
+                last = end;
+                in_string = false;
+            } else {
+                if idx > last {
+                    segments.push((last, idx, false));
+                }
+                last = idx;
+                in_string = true;
+            }
         }
     }
-    if upper.contains('C') {
-        if upper.contains("C[") || upper == "RC" || upper == "C" {
-            rel += 1;
+    if last < formula.len() {
+        segments.push((last, formula.len(), in_string));
+    }
+    segments
+}
+
+fn replace_outside_quotes<F>(formula: &str, f: F) -> String
+where
+    F: Fn(&str) -> String,
+{
+    let mut out = String::with_capacity(formula.len());
+    for (start, end, is_string) in split_formula_segments(formula) {
+        let segment = &formula[start..end];
+        if is_string {
+            out.push_str(segment);
         } else {
-            abs += 1;
+            out.push_str(&f(segment));
         }
     }
-    match (abs > 0, rel > 0) {
-        (true, true) => ReferenceMode::Mixed,
-        (true, false) => ReferenceMode::Absolute,
-        (false, true) => ReferenceMode::Relative,
-        _ => ReferenceMode::Relative,
-    }
+    out
 }
 
 fn cell_regex() -> &'static Regex {
     static RE: std::sync::OnceLock<Regex> = std::sync::OnceLock::new();
     RE.get_or_init(|| {
-        Regex::new(r"((?:'[^']+'|[^'!,]+)!)?(\$?[A-Za-z]+\$?\d+)(?::(\$?[A-Za-z]+\$?\d+))?")
+        Regex::new(r"((?:'(?:[^']|'')+'|[^'!,]+)!)?(\$?[A-Za-z]+\$?\d+)(?::(\$?[A-Za-z]+\$?\d+))?")
             .expect("valid regex")
     })
 }
@@ -497,19 +551,24 @@ fn cell_regex() -> &'static Regex {
 fn column_range_regex() -> &'static Regex {
     static RE: std::sync::OnceLock<Regex> = std::sync::OnceLock::new();
     RE.get_or_init(|| {
-        Regex::new(r"((?:'[^']+'|[^'!,]+)!)?(\$?[A-Za-z]+):(\$?[A-Za-z]+)").expect("valid regex")
+        Regex::new(r"((?:'(?:[^']|'')+'|[^'!,]+)!)?(\$?[A-Za-z]+):(\$?[A-Za-z]+)")
+            .expect("valid regex")
     })
 }
 
 fn row_range_regex() -> &'static Regex {
     static RE: std::sync::OnceLock<Regex> = std::sync::OnceLock::new();
-    RE.get_or_init(|| Regex::new(r"((?:'[^']+'|[^'!,]+)!)?(\$?\d+):(\$?\d+)").expect("valid regex"))
+    RE.get_or_init(|| {
+        Regex::new(r"((?:'(?:[^']|'')+'|[^'!,]+)!)?(\$?\d+):(\$?\d+)").expect("valid regex")
+    })
 }
 
 fn r1c1_regex() -> &'static Regex {
     static RE: std::sync::OnceLock<Regex> = std::sync::OnceLock::new();
     RE.get_or_init(|| {
-        Regex::new(r"((?:'[^']+'|[^'!,]+)!)?(R(?:\[[-+]?\d+\]|\d+)?C(?:\[[-+]?\d+\]|\d+)?)(?::(R(?:\[[-+]?\d+\]|\d+)?C(?:\[[-+]?\d+\]|\d+)?))?")
+        Regex::new(
+            r"((?:'(?:[^']|'')+'|[^'!,]+)!)?(R(?:\[[-+]?\d+\]|\d+)?C(?:\[[-+]?\d+\]|\d+)?)(?::(R(?:\[[-+]?\d+\]|\d+)?C(?:\[[-+]?\d+\]|\d+)?))?",
+        )
             .expect("valid regex")
     })
 }
