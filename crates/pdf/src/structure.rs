@@ -1,7 +1,28 @@
+//! PDF document structure extraction module.
+//!
+//! This module provides functionality to extract structured content from PDF documents,
+//! including headings, paragraphs, and document hierarchy. It uses font analysis and
+//! pattern matching to identify document elements.
+//!
+//! # Example
+//!
+//! ```rust,no_run
+//! use piptable_pdf::structure::StructureDetector;
+//! use pdfium_render::prelude::*;
+//!
+//! let detector = StructureDetector::default();
+//! let pdfium = Pdfium::new(Pdfium::bind_to_system_library()?);
+//! let document = pdfium.load_pdf_from_file("paper.pdf", None)?;
+//!
+//! let structured_doc = detector.analyze_document(&document, None)?;
+//! let markdown = structured_doc.to_markdown();
+//! ```
+
 use crate::error::{PdfError, Result};
 use pdfium_render::prelude::*;
 use serde_json::json;
 
+/// Represents a bounding box for text elements in PDF coordinates.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct BoundingBox {
     pub left: f32,
@@ -34,6 +55,7 @@ impl BoundingBox {
     }
 }
 
+/// Represents a text block extracted from a PDF with styling information.
 #[derive(Debug, Clone)]
 pub struct TextBlock {
     pub text: String,
@@ -45,6 +67,7 @@ pub struct TextBlock {
     pub is_italic: bool,
 }
 
+/// Represents a structured document element.
 #[derive(Debug, Clone)]
 pub enum DocumentElement {
     Heading {
@@ -60,13 +83,23 @@ pub enum DocumentElement {
     },
 }
 
+/// Represents a complete structured document extracted from a PDF.
 #[derive(Debug, Clone)]
 pub struct StructuredDocument {
+    /// List of document elements in reading order
     pub elements: Vec<DocumentElement>,
+    /// Total number of pages in the source PDF
     pub page_count: usize,
 }
 
 impl StructuredDocument {
+    /// Converts the structured document to Markdown format.
+    ///
+    /// # Example
+    /// ```rust,no_run
+    /// let markdown = doc.to_markdown();
+    /// std::fs::write("output.md", markdown)?;
+    /// ```
     pub fn to_markdown(&self) -> String {
         let mut out = String::new();
         for element in &self.elements {
@@ -87,6 +120,16 @@ impl StructuredDocument {
         out
     }
 
+    /// Converts the structured document to JSON format optimized for LLM processing.
+    ///
+    /// The JSON structure includes element metadata such as type, content, page numbers,
+    /// and bounding boxes for spatial understanding.
+    ///
+    /// # Example
+    /// ```rust,no_run
+    /// let json = doc.to_llm_json();
+    /// let json_str = serde_json::to_string_pretty(&json)?;
+    /// ```
     pub fn to_llm_json(&self) -> serde_json::Value {
         let elements = self
             .elements
@@ -134,6 +177,10 @@ impl StructuredDocument {
     }
 }
 
+/// PDF document structure detector with configurable parameters.
+///
+/// The detector analyzes PDF text blocks to identify document structure including
+/// headings and paragraphs. It uses both font-based and pattern-based detection methods.
 #[derive(Debug, Clone)]
 pub struct StructureDetector {
     heading_ratio_h1: f32,
@@ -160,6 +207,14 @@ impl Default for StructureDetector {
 }
 
 impl StructureDetector {
+    /// Analyzes a PDF document and extracts its structure.
+    ///
+    /// # Arguments
+    /// * `document` - The PDF document to analyze
+    /// * `page_range` - Optional page range to process (1-indexed, inclusive)
+    ///
+    /// # Returns
+    /// A `StructuredDocument` containing extracted headings and paragraphs in reading order.
     pub fn analyze_document(
         &self,
         document: &PdfDocument,
