@@ -164,15 +164,9 @@ pub enum DagOperation {
         mark_as_dirty: bool,
     },
     /// Remove a dependency edge.
-    RemoveInput {
-        formula: NodeRef,
-        input: NodeRef,
-    },
+    RemoveInput { formula: NodeRef, input: NodeRef },
     /// Delete or detach a node according to mode.
-    Delete {
-        position: NodeRef,
-        mode: DeleteMode,
-    },
+    Delete { position: NodeRef, mode: DeleteMode },
 }
 
 pub fn is_cell_coordinate_within_cell_range(
