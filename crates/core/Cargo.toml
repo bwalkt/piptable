@@ -13,9 +13,9 @@ serde_json = { workspace = true }
 thiserror = { workspace = true }
 arrow = { workspace = true }
 chrono = { workspace = true }
-piptable-types = { path = "../piptable-types" }
+piptable-types = { path = "../types" }
 piptable-sheet = { path = "../sheet" }
-piptable-primitives = { path = "../piptable-primitives" }
+piptable-primitives = { path = "../primitives" }
 
 [dev-dependencies]
 tempfile = { workspace = true }

@@ -7,7 +7,7 @@ edition = "2021"
 serde = { workspace = true }
 thiserror = { workspace = true }
 rmp-serde = { version = "1.1", optional = true }
-piptable-types = { path = "../piptable-types" }
+piptable-types = { path = "../types" }
 
 [features]
 default = ["toon"]

@@ -1,7 +1,7 @@
 [workspace]
 resolver = "2"
 members = [
-    "crates/piptable-types",
+    "crates/types",
     "crates/core",
     "crates/parser",
     "crates/sql",
@@ -13,11 +13,11 @@ members = [
     "crates/sheet",
     "crates/markdown",
     "crates/python",
-    "crates/piptable-wasm",
+    "crates/wasm",
     "crates/pdf",
-    "crates/piptable-primitives",
-    "crates/piptable-formulas",
-    "crates/piptable-utils",
+    "crates/primitives",
+    "crates/formulas",
+    "crates/utils",
 ]
 
 [workspace.package]
@@ -102,9 +102,11 @@ piptable-sheet = { path = "crates/sheet" }
 piptable-python = { path = "crates/python" }
 piptable-pdf = { path = "crates/pdf" }
 piptable-markdown = { path = "crates/markdown" }
-piptable-types = { path = "crates/piptable-types" }
-piptable-primitives = { path = "crates/piptable-primitives" }
-piptable-formulas = { path = "crates/piptable-formulas" }
+piptable-types = { path = "crates/types" }
+piptable-primitives = { path = "crates/primitives" }
+piptable-formulas = { path = "crates/formulas" }
+piptable-utils = { path = "crates/utils" }
+piptable-wasm = { path = "crates/wasm" }
 
 [workspace.lints.rust]
 unsafe_code = "forbid"
