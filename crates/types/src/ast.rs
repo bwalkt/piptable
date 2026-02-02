@@ -440,6 +440,8 @@ pub struct ImportOptions {
     pub min_table_cols: Option<usize>,
     /// Alias for headers detection (PDF/Markdown)
     pub detect_headers: Option<bool>,
+    /// Extract document structure (PDF only)
+    pub extract_structure: Option<bool>,
 }
 
 impl ImportOptions {

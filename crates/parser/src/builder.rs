@@ -718,6 +718,10 @@ fn build_import_options(pair: Pair<Rule>) -> BuildResult<ImportOptions> {
 
     match inner.as_rule() {
         Rule::without_headers => Ok(ImportOptions::without_headers()),
+        Rule::structure_clause => Ok(ImportOptions {
+            extract_structure: Some(true),
+            ..ImportOptions::default()
+        }),
         Rule::named_params => {
             let mut options = ImportOptions::default();
             for param in inner.into_inner() {
@@ -822,6 +826,17 @@ fn apply_import_option(
                 Err(BuildError::from_pair(
                     pair,
                     "min_table_size option must be an integer",
+                ))
+            }
+        }
+        "extract_structure" | "structure" => {
+            if let Expr::Literal(Literal::Bool(b)) = value {
+                options.extract_structure = Some(b);
+                Ok(())
+            } else {
+                Err(BuildError::from_pair(
+                    pair,
+                    "extract_structure option must be a boolean (true or false)",
                 ))
             }
         }

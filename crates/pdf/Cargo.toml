@@ -23,6 +23,7 @@ pdfium-render = "0.8"
 # Text processing
 regex = "1.11"
 lazy_static = "1.5"
+serde_json = { workspace = true }
 
 # Utilities
 tracing = { workspace = true }

@@ -890,14 +890,22 @@ impl Interpreter {
                         }
                         #[cfg(not(target_arch = "wasm32"))]
                         {
-                            let tables = io::import_pdf_tables(&paths[0], &options)
-                                .map_err(|e| PipError::Import(format!("Line {}: {}", line, e)))?;
-                            let mut book = std::collections::HashMap::new();
-                            for (idx, sheet) in tables.into_iter().enumerate() {
-                                let name = format!("table_{}", idx + 1);
-                                book.insert(name, Value::Sheet(sheet));
+                            if options.extract_structure.unwrap_or(false) {
+                                io::import_pdf_structure(&paths[0], &options).map_err(|e| {
+                                    PipError::Import(format!("Line {}: {}", line, e))
+                                })?
+                            } else {
+                                let tables =
+                                    io::import_pdf_tables(&paths[0], &options).map_err(|e| {
+                                        PipError::Import(format!("Line {}: {}", line, e))
+                                    })?;
+                                let mut book = std::collections::HashMap::new();
+                                for (idx, sheet) in tables.into_iter().enumerate() {
+                                    let name = format!("table_{}", idx + 1);
+                                    book.insert(name, Value::Sheet(sheet));
+                                }
+                                Value::Object(book)
                             }
-                            Value::Object(book)
                         }
                     } else {
                         let sheet =
@@ -3543,6 +3551,16 @@ export data to "{}""#,
         let program = PipParser::parse_str(script).unwrap();
         let err = interp.eval(program).await.unwrap_err();
         assert!(err.to_string().contains("Invalid page_range"));
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    #[tokio::test]
+    async fn test_import_pdf_with_structure_clause() {
+        let mut interp = Interpreter::new();
+        let script = r#"import "missing.pdf" into doc with structure"#;
+        let program = PipParser::parse_str(script).unwrap();
+        let err = interp.eval(program).await.unwrap_err();
+        assert!(err.to_string().contains("Failed to import PDF structure"));
     }
 
     #[tokio::test]

@@ -1,6 +1,7 @@
 use crate::detector::{TableDetector, TableRegion};
 use crate::error::{PdfError, Result};
 use crate::ocr::OcrEngine;
+use crate::structure::{StructureDetector, StructuredDocument};
 use lopdf::Document;
 use pdfium_render::prelude::*;
 use std::path::Path;
@@ -12,6 +13,7 @@ pub struct PdfOptions {
     pub ocr_language: String,
     pub min_table_rows: usize,
     pub min_table_cols: usize,
+    pub extract_structure: bool,
 }
 
 impl Default for PdfOptions {
@@ -22,6 +24,7 @@ impl Default for PdfOptions {
             ocr_language: "eng".to_string(),
             min_table_rows: 2,
             min_table_cols: 2,
+            extract_structure: false,
         }
     }
 }
@@ -30,6 +33,7 @@ pub struct PdfExtractor {
     options: PdfOptions,
     detector: TableDetector,
     ocr_engine: Option<OcrEngine>,
+    structure_detector: StructureDetector,
 }
 
 impl PdfExtractor {
@@ -45,7 +49,25 @@ impl PdfExtractor {
             options,
             detector,
             ocr_engine,
+            structure_detector: StructureDetector::default(),
         }
+    }
+
+    pub fn extract_structure_from_path(&self, path: &Path) -> Result<StructuredDocument> {
+        let pdfium = Pdfium::new(
+            Pdfium::bind_to_library(Pdfium::pdfium_platform_library_name_at_path("./"))
+                .or_else(|_| Pdfium::bind_to_system_library())
+                .map_err(|e| {
+                    PdfError::ExtractionError(format!("Failed to initialize PDFium: {}", e))
+                })?,
+        );
+
+        let document = pdfium.load_pdf_from_file(path, None).map_err(|e| {
+            PdfError::ExtractionError(format!("Failed to load PDF for structure: {}", e))
+        })?;
+
+        self.structure_detector
+            .analyze_document(&document, self.options.page_range)
     }
 
     pub fn extract_tables_from_path(&self, path: &Path) -> Result<Vec<TableRegion>> {

@@ -820,6 +820,10 @@ fn resolve_min_table_cols(options: &ImportOptions) -> usize {
     options.min_table_cols.unwrap_or(2)
 }
 
+fn resolve_extract_structure(options: &ImportOptions) -> bool {
+    options.extract_structure.unwrap_or(false)
+}
+
 #[cfg(not(target_arch = "wasm32"))]
 fn parse_page_range(range: &str) -> Result<Option<(usize, usize)>, String> {
     let trimmed = range.trim();
@@ -868,6 +872,7 @@ pub fn import_pdf_tables(path: &str, options: &ImportOptions) -> Result<Vec<Shee
         ocr_language: "eng".to_string(),
         min_table_rows: resolve_min_table_rows(options),
         min_table_cols: resolve_min_table_cols(options),
+        ..Default::default()
     };
 
     let mut tables = piptable_pdf::extract_tables_with_options(path, pdf_options)
@@ -888,6 +893,26 @@ pub fn import_pdf_tables(path: &str, options: &ImportOptions) -> Result<Vec<Shee
     }
 
     Ok(tables)
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+pub fn import_pdf_structure(path: &str, options: &ImportOptions) -> Result<Value, String> {
+    let pdf_options = piptable_pdf::extractor::PdfOptions {
+        page_range: match &options.page_range {
+            Some(range) => parse_page_range(range)?,
+            None => None,
+        },
+        ocr_enabled: false,
+        ocr_language: "eng".to_string(),
+        min_table_rows: resolve_min_table_rows(options),
+        min_table_cols: resolve_min_table_cols(options),
+        extract_structure: resolve_extract_structure(options),
+    };
+
+    let doc = piptable_pdf::extract_structure_with_options(path, pdf_options)
+        .map_err(|e| format!("Failed to import PDF structure: {}", e))?;
+
+    Ok(Value::from_json(doc.to_llm_json()))
 }
 
 pub fn import_markdown_book(path: &str, options: &ImportOptions) -> Result<Value, String> {

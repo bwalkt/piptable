@@ -2,6 +2,7 @@ pub mod detector;
 pub mod error;
 pub mod extractor;
 pub mod ocr;
+pub mod structure;
 
 use detector::TableRegion;
 use error::Result;
@@ -32,6 +33,20 @@ pub fn extract_tables_with_options<P: AsRef<Path>>(
     } else {
         Ok(sheets)
     }
+}
+
+/// Extract structured document content from a PDF file using default options.
+pub fn extract_structure_from_pdf<P: AsRef<Path>>(path: P) -> Result<StructuredDocument> {
+    extract_structure_with_options(path, extractor::PdfOptions::default())
+}
+
+/// Extract structured document content from a PDF file with custom options.
+pub fn extract_structure_with_options<P: AsRef<Path>>(
+    path: P,
+    options: extractor::PdfOptions,
+) -> Result<StructuredDocument> {
+    let extractor = PdfExtractor::new(options);
+    extractor.extract_structure_from_path(path.as_ref())
 }
 
 /// Convert a detected table region to a Sheet
@@ -92,3 +107,4 @@ fn parse_cell_value(text: &str) -> CellValue {
 // Re-export commonly used types
 pub use error::PdfError;
 pub use extractor::PdfOptions;
+pub use structure::{BoundingBox, DocumentElement, StructuredDocument, TextBlock};

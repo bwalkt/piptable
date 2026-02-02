@@ -24,6 +24,7 @@
     - [Conditionals](reference/dsl/if.md)
     - [Loops](reference/dsl/loops.md)
     - [Import/Export](reference/dsl/import-export.md)
+    - [PDF Import (DSL)](../PDF_DSL.md)
     - [Append/Upsert](reference/dsl/append-upsert.md)
     - [Join Operations](reference/dsl/joins.md)
   
@@ -54,6 +55,7 @@
   - [Formulas](cookbook/formulas.md)
   - [Markdown Tables](cookbook/markdown.md)
   - [PDF Tables](cookbook/pdf.md)
+  - [PDF Structure Recipes](../PDF_COOKBOOK.md)
   
 - [ETL Pipelines](cookbook/etl.md)
   - [Data Import](cookbook/import.md)
@@ -83,5 +85,6 @@
 ---
 
 [Playground](playground.md)
+[Playground: PDF Examples](../playground/PDF_EXAMPLES.md)
 [Changelog](changelog.md)
 [License](license.md)
