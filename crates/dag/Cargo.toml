@@ -9,6 +9,3 @@ serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
 piptable-primitives = { workspace = true }
 thiserror = { workspace = true }
-
-[dev-dependencies]
-serde_json = { workspace = true }

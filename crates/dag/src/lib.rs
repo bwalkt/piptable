@@ -122,6 +122,14 @@ pub struct Dag {
     max_range_cells: u64,
 }
 
+impl Dag {
+    pub fn validate_acyclic(&self) -> Result<(), DagError> {
+        let keys: Vec<String> = self.nodes.keys().cloned().collect();
+        self.topological_sort(keys, |node| node.input_keys.clone())?;
+        Ok(())
+    }
+}
+
 impl Default for Dag {
     fn default() -> Self {
         Self {
@@ -186,10 +194,14 @@ pub fn make_key(position: &NodeRef) -> String {
                 cell_to_address(Some(addr), false, false, false, false).unwrap_or_default();
             let mut prefix = String::new();
             if let Some(id) = &cell.data_validation_id {
+                prefix.push_str("dv=");
                 prefix.push_str(id);
+                prefix.push(';');
             }
             if let Some(id) = &cell.conditional_format_id {
+                prefix.push_str("cf=");
                 prefix.push_str(id);
+                prefix.push(';');
             }
             format!("{}{}!{}", prefix, cell.sheet_id, address)
         }
@@ -268,6 +280,19 @@ impl Dag {
                     return Err(DagError::CircularDependency {
                         cycle: vec![formula_key, input_key],
                     });
+                }
+                for (key, node) in &self.nodes {
+                    let Some(NodePosition::Cell(pos)) = &node.position else {
+                        continue;
+                    };
+                    if !is_cell_coordinate_within_cell_range(pos, &range) {
+                        continue;
+                    }
+                    if self.has_path(&formula_key, key) {
+                        return Err(DagError::CircularDependency {
+                            cycle: vec![formula_key, key.clone()],
+                        });
+                    }
                 }
             }
         }
@@ -394,6 +419,7 @@ impl Dag {
         self.clear_node_inputs(pos);
         self.nodes.remove(&key);
         self.ranges.remove(&key);
+        self.remove_range_index(&key);
         self.dirty_nodes.remove(&key);
     }
 
@@ -437,7 +463,7 @@ impl Dag {
 
     pub fn peek_dirty_nodes(&self) -> Result<Vec<DagNodeIdentifier>, DagError> {
         let keys: Vec<String> = self.dirty_nodes.iter().cloned().collect();
-        let dependents = self.topological_sort(keys, |node| node.dependent_keys.clone())?;
+        let dependents = self.topological_sort(keys, |node| self.dependents_with_ranges(node))?;
         Ok(self.identifiers_from_keys(&dependents))
     }
 
@@ -521,7 +547,7 @@ impl Dag {
         serde_json::to_string(&nodes)
     }
 
-    pub fn from_json(&mut self, nodes: Vec<(String, DagNodeJson)>) {
+    pub fn from_json(&mut self, nodes: Vec<(String, DagNodeJson)>) -> Result<(), DagError> {
         self.reset();
         for (key, node_json) in &nodes {
             let position = node_json.position.clone();
@@ -549,6 +575,8 @@ impl Dag {
                 node.dependent_keys.insert(dependent.key);
             }
         }
+        self.validate_acyclic()?;
+        Ok(())
     }
 
     pub fn key(&self, position: &NodeRef) -> String {
@@ -565,6 +593,22 @@ impl Dag {
             return false;
         };
         !self.get_node_from_cell_ranges(cell).is_empty()
+    }
+
+    pub fn inputs_for(&self, position: &NodeRef) -> Vec<NodeRef> {
+        let key = self.key(position);
+        let Some(node) = self.nodes.get(&key) else {
+            return Vec::new();
+        };
+        node.input_keys
+            .iter()
+            .filter_map(|input_key| self.nodes.get(input_key))
+            .map(|node| match &node.position {
+                Some(NodePosition::Cell(cell)) => NodeRef::Cell(cell.clone()),
+                Some(NodePosition::Range(range)) => NodeRef::Range(range.clone()),
+                None => NodeRef::Static(StaticReference { id: node.key.clone() }),
+            })
+            .collect()
     }
 
     fn ensure_node(&mut self, position: &NodeRef) -> String {
@@ -860,7 +904,7 @@ mod tests {
         let nodes: Vec<(String, DagNodeJson)> = serde_json::from_str(&json).unwrap();
 
         let mut restored = Dag::new();
-        restored.from_json(nodes);
+        restored.from_json(nodes).unwrap();
         assert!(restored.has_node(&a1));
         assert!(restored.has_node(&b1));
     }

@@ -124,7 +124,7 @@ pub enum UnaryOperator {
 /// Formula compilation and caching engine
 pub struct FormulaEngine {
     /// Cache of compiled formulas
-    cache: HashMap<CellAddress, CompiledFormula>,
+    cache: HashMap<SheetCellAddress, CompiledFormula>,
     /// Dependency graph for recalculation ordering
     dag: Dag,
     /// Function registry
@@ -143,7 +143,7 @@ impl FormulaEngine {
 
     /// Compile a formula string
     pub fn compile(&mut self, formula: &str) -> Result<CompiledFormula, FormulaError> {
-        self.compile_with_context(formula, 0, None)
+        self.compile_with_context(formula, 0, None, None)
     }
 
     /// Compile a formula with sheet context and optional sheet resolver.
@@ -152,10 +152,11 @@ impl FormulaEngine {
         formula: &str,
         sheet_id: u32,
         resolver: Option<&dyn SheetIdResolver>,
+        base_cell: Option<CellAddress>,
     ) -> Result<CompiledFormula, FormulaError> {
         let ast = parser::parse_formula(formula)?;
         let mut deps = Vec::new();
-        collect_dependencies(&ast, sheet_id, resolver, &mut deps);
+        collect_dependencies(&ast, sheet_id, resolver, base_cell, &mut deps);
         let hash = hash_formula(formula);
         Ok(CompiledFormula {
             source: formula.to_string(),
@@ -183,16 +184,21 @@ impl FormulaEngine {
         formula: &str,
         resolver: Option<&dyn SheetIdResolver>,
     ) -> Result<(), FormulaError> {
-        let compiled = self.compile_with_context(formula, sheet_id, resolver)?;
+        let compiled = self.compile_with_context(formula, sheet_id, resolver, Some(cell))?;
         let cell_ref = NodeRef::Cell(cell_to_coordinate_with_sheet(sheet_id, cell));
+        let cache_key = SheetCellAddress { sheet_id, addr: cell };
+        let previous = self.cache.get(&cache_key).cloned();
+        let previous_inputs = self.dag.inputs_for(&cell_ref);
+
         self.dag.delete_cell(cell_ref.clone());
+        let mut dag_result: Result<(), FormulaError> = Ok(());
         for dep in &compiled.dependencies {
-            match dep {
+            let result = match dep {
                 FormulaDependency::Cell { sheet_id, addr } => {
                     let dep_ref = NodeRef::Cell(cell_to_coordinate_with_sheet(*sheet_id, *addr));
                     self.dag
                         .add_node_input(cell_ref.clone(), dep_ref, true)
-                        .map_err(map_dag_error)?;
+                        .map_err(map_dag_error)
                 }
                 FormulaDependency::Range { sheet_id, range } => {
                     let range_ref = NodeRef::Range(CellCoordinateRange {
@@ -204,37 +210,83 @@ impl FormulaEngine {
                     });
                     self.dag
                         .add_node_input(cell_ref.clone(), range_ref, true)
-                        .map_err(map_dag_error)?;
+                        .map_err(map_dag_error)
                 }
                 FormulaDependency::SheetCell { .. } | FormulaDependency::SheetRange { .. } => {
-                    // Unresolved sheet names are stored as metadata only.
+                    // Unresolved sheet names are stored as metadata only (no DAG edge).
+                    Ok(())
                 }
+            };
+            if let Err(err) = result {
+                dag_result = Err(err);
+                break;
             }
         }
-        self.cache.insert(cell, compiled);
+
+        if let Err(err) = dag_result {
+            self.dag.delete_cell(cell_ref.clone());
+            for input in previous_inputs {
+                let _ = self.dag.add_node_input(cell_ref.clone(), input, false);
+            }
+            if let Some(prev) = previous {
+                self.cache.insert(cache_key, prev);
+            } else {
+                self.cache.remove(&cache_key);
+            }
+            return Err(err);
+        }
+
+        self.cache.insert(cache_key, compiled);
         Ok(())
     }
 
     /// Get compiled formula for a cell
     pub fn get_formula(&self, cell: &CellAddress) -> Option<&CompiledFormula> {
-        self.cache.get(cell)
+        self.get_formula_with_sheet(0, cell)
     }
 
-    /// Clear cache for a cell
+    pub fn get_formula_with_sheet(
+        &self,
+        sheet_id: u32,
+        cell: &CellAddress,
+    ) -> Option<&CompiledFormula> {
+        self.cache.get(&SheetCellAddress {
+            sheet_id,
+            addr: *cell,
+        })
+    }
+
+    /// Clear cache for a cell (sheet 0) and detach its inputs from the DAG.
     pub fn invalidate(&mut self, cell: &CellAddress) {
-        let cell_ref = NodeRef::Cell(cell_to_coordinate(*cell));
+        self.invalidate_with_sheet(0, cell);
+    }
+
+    /// Clear cache for a cell and detach its inputs from the DAG.
+    pub fn invalidate_with_sheet(&mut self, sheet_id: u32, cell: &CellAddress) {
+        let cell_ref = NodeRef::Cell(cell_to_coordinate_with_sheet(sheet_id, *cell));
         self.dag.delete_cell(cell_ref);
-        self.cache.remove(cell);
+        self.cache.remove(&SheetCellAddress {
+            sheet_id,
+            addr: *cell,
+        });
+    }
+
+    /// Remove a formula and its dependencies from the DAG (sheet 0).
+    pub fn remove_formula(&mut self, cell: &CellAddress) {
+        self.remove_formula_with_sheet(0, cell);
     }
 
     /// Remove a formula and its dependencies from the DAG.
-    pub fn remove_formula(&mut self, cell: &CellAddress) {
-        let cell_ref = NodeRef::Cell(cell_to_coordinate(*cell));
+    pub fn remove_formula_with_sheet(&mut self, sheet_id: u32, cell: &CellAddress) {
+        let cell_ref = NodeRef::Cell(cell_to_coordinate_with_sheet(sheet_id, *cell));
         self.dag.delete_node(cell_ref);
-        self.cache.remove(cell);
+        self.cache.remove(&SheetCellAddress {
+            sheet_id,
+            addr: *cell,
+        });
     }
 
-    /// Mark a cell as dirty to trigger dependent recalculation ordering.
+    /// Mark a cell as dirty to trigger dependent recalculation ordering (sheet 0).
     pub fn mark_dirty(&mut self, cell: &CellAddress) {
         let cell_ref = NodeRef::Cell(cell_to_coordinate_with_sheet(0, *cell));
         self.dag.mark_cell_as_dirty(cell_ref);
@@ -247,8 +299,14 @@ impl FormulaEngine {
             .into_iter()
             .filter_map(|node| node.position)
             .filter_map(|pos| match pos {
-                piptable_dag::NodePosition::Cell(cell) if cell.sheet_id == 0 => {
-                    Some(coordinate_to_cell(cell))
+                piptable_dag::NodePosition::Cell(cell) => {
+                    if cell.sheet_id == 0 {
+                        Some(coordinate_to_cell(cell))
+                    } else {
+                        self.dag
+                            .mark_cell_as_dirty(NodeRef::Cell(cell.clone()));
+                        None
+                    }
                 }
                 _ => None,
             })
@@ -283,9 +341,18 @@ impl FormulaEngine {
         formula_cell: &CellAddress,
         range: &CellRange,
     ) -> Result<(), FormulaError> {
-        let cell_ref = NodeRef::Cell(cell_to_coordinate_with_sheet(0, *formula_cell));
+        self.add_range_dependency_with_sheet(0, formula_cell, range)
+    }
+
+    pub fn add_range_dependency_with_sheet(
+        &mut self,
+        sheet_id: u32,
+        formula_cell: &CellAddress,
+        range: &CellRange,
+    ) -> Result<(), FormulaError> {
+        let cell_ref = NodeRef::Cell(cell_to_coordinate_with_sheet(sheet_id, *formula_cell));
         let range_ref = NodeRef::Range(CellCoordinateRange {
-            sheet_id: 0,
+            sheet_id,
             start_row_index: range.start.row,
             start_column_index: range.start.col,
             end_row_index: range.end.row,
@@ -888,10 +955,6 @@ fn cell_to_coordinate_with_sheet(sheet_id: u32, cell: CellAddress) -> CellCoordi
     }
 }
 
-fn cell_to_coordinate(cell: CellAddress) -> CellCoordinate {
-    cell_to_coordinate_with_sheet(0, cell)
-}
-
 fn coordinate_to_cell(cell: CellCoordinate) -> CellAddress {
     CellAddress::new(cell.row_index, cell.column_index)
 }
@@ -1110,6 +1173,7 @@ fn collect_dependencies(
     expr: &FormulaExpr,
     sheet_id: u32,
     resolver: Option<&dyn SheetIdResolver>,
+    base_cell: Option<CellAddress>,
     deps: &mut Vec<FormulaDependency>,
 ) {
     match expr {
@@ -1118,12 +1182,31 @@ fn collect_dependencies(
             sheet_id,
             addr: *addr,
         }),
-        FormulaExpr::R1C1Ref(_) => {}
+        FormulaExpr::R1C1Ref(r1c1) => {
+            if let Some(base) = base_cell {
+                if let Ok(addr) = r1c1.resolve(Some(base)) {
+                    deps.push(FormulaDependency::Cell { sheet_id, addr });
+                }
+            } else {
+                // R1C1 references need a base cell; resolve during evaluation.
+            }
+        }
         FormulaExpr::RangeRef(range) => deps.push(FormulaDependency::Range {
             sheet_id,
             range: *range,
         }),
-        FormulaExpr::R1C1RangeRef { .. } => {}
+        FormulaExpr::R1C1RangeRef { start, end } => {
+            if let Some(base) = base_cell {
+                if let (Ok(start), Ok(end)) = (start.resolve(Some(base)), end.resolve(Some(base))) {
+                    deps.push(FormulaDependency::Range {
+                        sheet_id,
+                        range: CellRange::new(start, end),
+                    });
+                }
+            } else {
+                // R1C1 ranges need a base cell; resolve during evaluation.
+            }
+        }
         FormulaExpr::SheetCellRef { sheet, addr } => {
             if let Some(resolver) = resolver.and_then(|r| r.sheet_id(sheet)) {
                 deps.push(FormulaDependency::Cell {
@@ -1150,19 +1233,56 @@ fn collect_dependencies(
                 });
             }
         }
-        FormulaExpr::SheetR1C1Ref { .. } => {}
-        FormulaExpr::SheetR1C1RangeRef { .. } => {}
+        FormulaExpr::SheetR1C1Ref { sheet, addr } => {
+            if let Some(base) = base_cell {
+                if let Ok(resolved) = addr.resolve(Some(base)) {
+                    if let Some(resolver) = resolver.and_then(|r| r.sheet_id(sheet)) {
+                        deps.push(FormulaDependency::Cell {
+                            sheet_id: resolver,
+                            addr: resolved,
+                        });
+                    } else {
+                        deps.push(FormulaDependency::SheetCell {
+                            sheet: sheet.clone(),
+                            addr: resolved,
+                        });
+                    }
+                }
+            } else {
+                // R1C1 references need a base cell; resolve during evaluation.
+            }
+        }
+        FormulaExpr::SheetR1C1RangeRef { sheet, start, end } => {
+            if let Some(base) = base_cell {
+                if let (Ok(start), Ok(end)) = (start.resolve(Some(base)), end.resolve(Some(base))) {
+                    let range = CellRange::new(start, end);
+                    if let Some(resolver) = resolver.and_then(|r| r.sheet_id(sheet)) {
+                        deps.push(FormulaDependency::Range {
+                            sheet_id: resolver,
+                            range,
+                        });
+                    } else {
+                        deps.push(FormulaDependency::SheetRange {
+                            sheet: sheet.clone(),
+                            range,
+                        });
+                    }
+                }
+            } else {
+                // R1C1 ranges need a base cell; resolve during evaluation.
+            }
+        }
         FormulaExpr::FunctionCall { args, .. } => {
             for arg in args {
-                collect_dependencies(arg, sheet_id, resolver, deps);
+                collect_dependencies(arg, sheet_id, resolver, base_cell, deps);
             }
         }
         FormulaExpr::BinaryOp { left, right, .. } => {
-            collect_dependencies(left, sheet_id, resolver, deps);
-            collect_dependencies(right, sheet_id, resolver, deps);
+            collect_dependencies(left, sheet_id, resolver, base_cell, deps);
+            collect_dependencies(right, sheet_id, resolver, base_cell, deps);
         }
         FormulaExpr::UnaryOp { expr, .. } => {
-            collect_dependencies(expr, sheet_id, resolver, deps);
+            collect_dependencies(expr, sheet_id, resolver, base_cell, deps);
         }
     }
 }
@@ -1500,7 +1620,7 @@ mod tests {
             ))),
         };
         let mut deps = Vec::new();
-        collect_dependencies(&expr, 3, None, &mut deps);
+        collect_dependencies(&expr, 3, None, None, &mut deps);
         assert!(deps.contains(&FormulaDependency::Cell {
             sheet_id: 3,
             addr: CellAddress::new(0, 0),
@@ -1554,7 +1674,7 @@ mod tests {
             addr: CellAddress::new(0, 0),
         };
         let mut deps = Vec::new();
-        collect_dependencies(&expr, 0, None, &mut deps);
+        collect_dependencies(&expr, 0, None, None, &mut deps);
         assert_eq!(
             deps,
             vec![FormulaDependency::SheetCell {
@@ -1568,7 +1688,7 @@ mod tests {
             range: CellRange::new(CellAddress::new(0, 0), CellAddress::new(0, 1)),
         };
         deps.clear();
-        collect_dependencies(&expr, 0, None, &mut deps);
+        collect_dependencies(&expr, 0, None, None, &mut deps);
         assert_eq!(
             deps,
             vec![FormulaDependency::SheetRange {
