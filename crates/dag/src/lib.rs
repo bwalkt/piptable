@@ -123,6 +123,7 @@ pub struct Dag {
 }
 
 impl Dag {
+    /// Validate that the graph is acyclic using a full topological traversal.
     pub fn validate_acyclic(&self) -> Result<(), DagError> {
         let keys: Vec<String> = self.nodes.keys().cloned().collect();
         self.topological_sort(keys, |node| node.input_keys.clone())?;
@@ -142,24 +143,32 @@ impl Default for Dag {
     }
 }
 
+/// Controls how a delete operation mutates the graph.
 #[derive(Debug, Clone)]
 pub enum DeleteMode {
+    /// Clear inputs but keep dependents.
     ClearInputs,
+    /// Detach from inputs; keep dependents.
     DetachFromInputs,
+    /// Remove node and all links.
     RemoveNode,
 }
 
+/// Batch DAG operations for efficient updates.
 #[derive(Debug, Clone)]
 pub enum DagOperation {
+    /// Add a dependency edge.
     AddInput {
         formula: NodeRef,
         input: NodeRef,
         mark_as_dirty: bool,
     },
+    /// Remove a dependency edge.
     RemoveInput {
         formula: NodeRef,
         input: NodeRef,
     },
+    /// Delete or detach a node according to mode.
     Delete {
         position: NodeRef,
         mode: DeleteMode,
@@ -218,10 +227,12 @@ pub fn make_key(position: &NodeRef) -> String {
 }
 
 impl Dag {
+    /// Create a new DAG with default limits.
     pub fn new() -> Self {
         Self::default()
     }
 
+    /// Create a DAG with a custom maximum range size.
     pub fn with_max_range_cells(max_range_cells: u64) -> Self {
         Self {
             max_range_cells,
@@ -229,10 +240,12 @@ impl Dag {
         }
     }
 
+    /// Return the maximum allowed range size (in cells).
     pub fn max_range_cells(&self) -> u64 {
         self.max_range_cells
     }
 
+    /// Add a dependency edge from a formula cell to an input.
     pub fn add_node_input(
         &mut self,
         formula_cell: NodeRef,
@@ -326,6 +339,7 @@ impl Dag {
         Ok(())
     }
 
+    /// Add an input edge without marking dirty.
     pub fn add_node_input_to_graph(
         &mut self,
         formula_cell: NodeRef,
@@ -334,6 +348,7 @@ impl Dag {
         self.add_node_input(formula_cell, input_position, false)
     }
 
+    /// Add multiple inputs to a formula node.
     pub fn add_node_inputs<I>(
         &mut self,
         formula_cell: NodeRef,
@@ -349,6 +364,7 @@ impl Dag {
         Ok(())
     }
 
+    /// Remove a dependency edge between two nodes.
     pub fn remove_node_input(&mut self, formula_cell: NodeRef, input_position: NodeRef) {
         let formula_key = self.key(&formula_cell);
         let input_key = self.key(&input_position);
@@ -361,6 +377,7 @@ impl Dag {
         }
     }
 
+    /// Delete all nodes belonging to a sheet.
     pub fn delete_sheet(&mut self, sheet_id: u32) {
         let keys: Vec<String> = self
             .nodes
@@ -386,6 +403,7 @@ impl Dag {
         }
     }
 
+    /// Clear inputs for a cell node while keeping dependents intact.
     pub fn delete_cell(&mut self, pos: NodeRef) {
         // Clear incoming edges but keep dependents intact.
         let key = self.key(&pos);
@@ -393,6 +411,7 @@ impl Dag {
         self.prune_if_orphan(&key);
     }
 
+    /// Detach a node from its inputs, keep dependents intact.
     pub fn remove_cell_from_graph(&mut self, pos: NodeRef) {
         // Detach this node from its inputs, keep dependents intact.
         let key = self.key(&pos);
@@ -413,6 +432,7 @@ impl Dag {
         self.prune_if_orphan(&key);
     }
 
+    /// Fully remove a node and its dependency links.
     pub fn delete_node(&mut self, pos: NodeRef) {
         // Fully remove a node and its dependency links.
         let key = self.key(&pos);
@@ -423,6 +443,7 @@ impl Dag {
         self.dirty_nodes.remove(&key);
     }
 
+    /// Clear incoming edges from inputs; keep dependents referencing this node.
     pub fn clear_node_inputs(&mut self, pos: NodeRef) {
         // Clear incoming edges from inputs; keep dependents referencing this node.
         let key = self.key(&pos);
@@ -444,29 +465,34 @@ impl Dag {
         self.mark_as_dirty_key(&key);
     }
 
+    /// Mark a node as dirty for recalculation.
     pub fn mark_cell_as_dirty(&mut self, pos: NodeRef) {
         let key = self.ensure_node(&pos);
         self.mark_as_dirty_key(&key);
     }
 
+    /// Return dirty nodes in recalculation order without clearing the dirty set.
     pub fn get_dirty_nodes(&self) -> Result<Vec<DagNodeIdentifier>, DagError> {
         let keys: Vec<String> = self.dirty_nodes.iter().cloned().collect();
         let dependents = self.topological_sort(keys, |node| self.dependents_with_ranges(node))?;
         Ok(self.identifiers_from_keys(&dependents))
     }
 
+    /// Return dirty nodes and clear the dirty set.
     pub fn take_dirty_nodes(&mut self) -> Result<Vec<DagNodeIdentifier>, DagError> {
         let nodes = self.get_dirty_nodes()?;
         self.dirty_nodes.clear();
         Ok(nodes)
     }
 
+    /// Peek dirty nodes using range-aware dependents.
     pub fn peek_dirty_nodes(&self) -> Result<Vec<DagNodeIdentifier>, DagError> {
         let keys: Vec<String> = self.dirty_nodes.iter().cloned().collect();
         let dependents = self.topological_sort(keys, |node| self.dependents_with_ranges(node))?;
         Ok(self.identifiers_from_keys(&dependents))
     }
 
+    /// Return direct precedents for a node.
     pub fn get_precedents(&self, pos: NodeRef) -> Result<Vec<DagNodeIdentifier>, DagError> {
         self.visit_node(pos, |node| node.input_keys.clone())
     }
@@ -479,16 +505,19 @@ impl Dag {
             .unwrap_or(false)
     }
 
+    /// Return all precedents in topological order.
     pub fn get_all_precedents(&self, pos: NodeRef) -> Result<Vec<DagNodeIdentifier>, DagError> {
         let key = self.key(&pos);
         let nodes = self.topological_sort(vec![key], |node| node.input_keys.clone())?;
         Ok(self.identifiers_from_keys(&nodes))
     }
 
+    /// Return dependents in topological order.
     pub fn get_dependents(&self, pos: NodeRef) -> Result<Vec<DagNodeIdentifier>, DagError> {
         self.visit_node(pos, |node| self.dependents_with_ranges(node))
     }
 
+    /// Apply a batch of DAG operations.
     pub fn apply_operations<I>(&mut self, ops: I) -> Result<(), DagError>
     where
         I: IntoIterator<Item = DagOperation>,
@@ -538,6 +567,7 @@ impl Dag {
         }
     }
 
+    /// Serialize the DAG to JSON.
     pub fn to_json(&self) -> Result<String, serde_json::Error> {
         let nodes: Vec<(String, DagNodeJson)> = self
             .nodes
@@ -547,6 +577,7 @@ impl Dag {
         serde_json::to_string(&nodes)
     }
 
+    /// Restore DAG state from JSON and validate acyclicity.
     pub fn from_json(&mut self, nodes: Vec<(String, DagNodeJson)>) -> Result<(), DagError> {
         self.reset();
         for (key, node_json) in &nodes {
@@ -595,6 +626,7 @@ impl Dag {
         !self.get_node_from_cell_ranges(cell).is_empty()
     }
 
+    /// Return the direct input nodes (cells, ranges, or statics) for a position.
     pub fn inputs_for(&self, position: &NodeRef) -> Vec<NodeRef> {
         let key = self.key(position);
         let Some(node) = self.nodes.get(&key) else {

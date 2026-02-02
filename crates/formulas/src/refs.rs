@@ -29,7 +29,7 @@ pub struct FormulaReference {
 
 #[derive(Debug, Clone, Default)]
 pub struct FormulaToRelativeReferenceOptions {
-    /// TODO: implement exclusion range and circular handling.
+    /// Reserved for future exclusion range and circular handling.
     pub exclusion_range: Option<(CellAddress, CellAddress)>,
     pub ignore_circular: bool,
 }

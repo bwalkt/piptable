@@ -36,15 +36,20 @@ pub struct CompiledFormula {
     pub hash: u64,
 }
 
-/// Formula dependency reference
+/// Dependency reference captured while compiling a formula.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum FormulaDependency {
+    /// Sheet-resolved single cell.
     Cell { sheet_id: u32, addr: CellAddress },
+    /// Sheet-resolved range.
     Range { sheet_id: u32, range: CellRange },
+    /// Sheet name unresolved; stored as metadata only.
     SheetCell { sheet: String, addr: CellAddress },
+    /// Sheet name unresolved; stored as metadata only.
     SheetRange { sheet: String, range: CellRange },
 }
 
+/// A cell address paired with a sheet ID.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct SheetCellAddress {
     pub sheet_id: u32,
@@ -141,12 +146,12 @@ impl FormulaEngine {
         }
     }
 
-    /// Compile a formula string
+    /// Compile a formula string using sheet 0 and no sheet resolver.
     pub fn compile(&mut self, formula: &str) -> Result<CompiledFormula, FormulaError> {
         self.compile_with_context(formula, 0, None, None)
     }
 
-    /// Compile a formula with sheet context and optional sheet resolver.
+    /// Compile a formula with sheet context, optional resolver, and base cell for R1C1 refs.
     pub fn compile_with_context(
         &mut self,
         formula: &str,
@@ -171,12 +176,13 @@ impl FormulaEngine {
         &self.functions
     }
 
-    /// Set a formula for a cell
+    /// Set a formula for a cell on sheet 0.
     pub fn set_formula(&mut self, cell: CellAddress, formula: &str) -> Result<(), FormulaError> {
         self.set_formula_with_sheet(0, cell, formula, None)
     }
 
     /// Set a formula for a cell with sheet context and optional sheet resolver.
+    /// Unresolved sheet names are recorded in metadata but not added to the DAG.
     pub fn set_formula_with_sheet(
         &mut self,
         sheet_id: u32,
@@ -243,11 +249,12 @@ impl FormulaEngine {
         Ok(())
     }
 
-    /// Get compiled formula for a cell
+    /// Get compiled formula for a cell on sheet 0.
     pub fn get_formula(&self, cell: &CellAddress) -> Option<&CompiledFormula> {
         self.get_formula_with_sheet(0, cell)
     }
 
+    /// Get compiled formula for a cell with sheet context.
     pub fn get_formula_with_sheet(
         &self,
         sheet_id: u32,
@@ -295,7 +302,7 @@ impl FormulaEngine {
         self.dag.mark_cell_as_dirty(cell_ref);
     }
 
-    /// Get dirty nodes in recalculation order.
+    /// Get dirty nodes in recalculation order for sheet 0.
     pub fn get_dirty_nodes(&mut self) -> Result<Vec<CellAddress>, FormulaError> {
         let nodes = self.dag.take_dirty_nodes().map_err(map_dag_error)?;
         Ok(nodes
@@ -337,7 +344,7 @@ impl FormulaEngine {
             .collect())
     }
 
-    /// Add a range dependency to a formula cell.
+    /// Add a range dependency to a formula cell on sheet 0.
     pub fn add_range_dependency(
         &mut self,
         formula_cell: &CellAddress,
@@ -346,6 +353,7 @@ impl FormulaEngine {
         self.add_range_dependency_with_sheet(0, formula_cell, range)
     }
 
+    /// Add a range dependency to a formula cell with explicit sheet context.
     pub fn add_range_dependency_with_sheet(
         &mut self,
         sheet_id: u32,
@@ -366,7 +374,7 @@ impl FormulaEngine {
         Ok(())
     }
 
-    /// Get dependents of a cell in recalculation order.
+    /// Get dependents of a cell in recalculation order for sheet 0.
     pub fn dependents_in_order(
         &self,
         cell: &CellAddress,
@@ -1073,6 +1081,7 @@ pub enum FormulaError {
 
 /// Resolves sheet names to sheet IDs for dependency tracking.
 pub trait SheetIdResolver {
+    /// Return a numeric sheet ID for a sheet name, or None if unknown.
     fn sheet_id(&self, sheet_name: &str) -> Option<u32>;
 }
 
