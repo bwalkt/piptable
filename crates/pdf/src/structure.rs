@@ -615,7 +615,7 @@ fn heading_numbered_regex() -> &'static regex::Regex {
 fn heading_roman_regex() -> &'static regex::Regex {
     static RE: std::sync::OnceLock<regex::Regex> = std::sync::OnceLock::new();
     RE.get_or_init(|| {
-        regex::Regex::new(r"(?i)^([IVX]+)\.\s+\S").expect("valid roman heading regex")
+        regex::Regex::new(r"(?i)^([IVXLCDM]+)\.\s+\S").expect("valid roman heading regex")
     })
 }
 
