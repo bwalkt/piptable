@@ -6,15 +6,14 @@
 use piptable_formatting::ssf_format;
 use piptable_primitives::Value;
 
-pub mod address;
 pub mod cell_data;
 pub mod datetime;
 pub mod formatting;
 
-pub use address::*;
 pub use cell_data::*;
+pub use piptable_primitives::address::*;
 
-/// Format a value for display
+/// Format a value for display, honoring an optional SSF-style format string.
 pub fn format_value(value: &Value, format: Option<&str>) -> String {
     match value {
         Value::Empty => String::new(),
@@ -45,7 +44,7 @@ fn format_number_float(f: f64, format: Option<&str>) -> String {
     }
 }
 
-/// Parse a value from a string
+/// Parse a value from a string with basic type inference.
 pub fn parse_value(s: &str) -> Value {
     // Empty string
     if s.is_empty() {
@@ -77,42 +76,6 @@ pub fn parse_value(s: &str) -> Value {
 
     // Default to string
     Value::String(s.to_string())
-}
-
-/// Convert column index to letter (0 -> A, 1 -> B, 25 -> Z, 26 -> AA, etc.)
-pub fn column_index_to_letter(index: u32) -> String {
-    let mut result = String::new();
-    let mut n = index;
-
-    loop {
-        let remainder = n % 26;
-        result.push((b'A' + remainder as u8) as char);
-        n /= 26;
-
-        if n == 0 {
-            break;
-        }
-        n -= 1; // Adjust for 1-based indexing
-    }
-
-    result.chars().rev().collect()
-}
-
-/// Convert column letter to index (A -> 0, B -> 1, Z -> 25, AA -> 26, etc.)
-pub fn column_letter_to_index(s: &str) -> Result<u32, String> {
-    if s.is_empty() {
-        return Err("Empty column".to_string());
-    }
-
-    let mut result = 0u32;
-    for c in s.chars() {
-        if !c.is_ascii_uppercase() {
-            return Err(format!("Invalid column character: {}", c));
-        }
-        result = result * 26 + (c as u32 - 'A' as u32 + 1);
-    }
-
-    Ok(result - 1) // Convert to 0-based
 }
 
 #[cfg(test)]
