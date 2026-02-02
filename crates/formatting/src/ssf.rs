@@ -42,7 +42,7 @@ pub fn ssf_format_color(pattern: &str, value: &Value) -> Option<String> {
 }
 
 fn select_section(pattern: &str, value: &Value) -> Option<FormatSection> {
-    let sections: Vec<&str> = pattern.split(';').collect();
+    let sections = split_sections(pattern);
 
     let section = match value {
         Value::String(_) => sections.get(3).copied().unwrap_or(sections[0]),
@@ -56,6 +56,33 @@ fn select_section(pattern: &str, value: &Value) -> Option<FormatSection> {
         pattern: section.to_string(),
         color,
     })
+}
+
+fn split_sections(pattern: &str) -> Vec<&str> {
+    let mut sections = Vec::new();
+    let mut in_quotes = false;
+    let mut start = 0;
+    let bytes = pattern.as_bytes();
+    let mut i = 0;
+    while i < bytes.len() {
+        match bytes[i] {
+            b'"' => {
+                if in_quotes && i + 1 < bytes.len() && bytes[i + 1] == b'"' {
+                    i += 1;
+                } else {
+                    in_quotes = !in_quotes;
+                }
+            }
+            b';' if !in_quotes => {
+                sections.push(&pattern[start..i]);
+                start = i + 1;
+            }
+            _ => {}
+        }
+        i += 1;
+    }
+    sections.push(&pattern[start..]);
+    sections
 }
 
 fn choose_numeric_section<'a>(value: f64, sections: &'a [&'a str]) -> &'a str {
@@ -194,10 +221,16 @@ fn format_number_pattern(pattern: &str, value: f64) -> String {
     let int_part = parts.next().unwrap_or("0");
     let frac_part = parts.next();
 
+    let min_int_digits = int_pattern.chars().filter(|c| *c == '0').count();
+    let mut int_digits = int_part.trim_start_matches('-').to_string();
+    if min_int_digits > int_digits.len() {
+        int_digits = format!("{:0>width$}", int_digits, width = min_int_digits);
+    }
+
     let mut int_formatted = if use_separator {
-        format_with_thousands(int_part)
+        format_with_thousands(&int_digits)
     } else {
-        int_part.to_string()
+        int_digits
     };
 
     // Only add minus sign if:

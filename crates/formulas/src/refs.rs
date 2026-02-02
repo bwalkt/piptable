@@ -417,7 +417,7 @@ fn letters_to_number(letters: &str) -> Option<i32> {
             return None;
         }
         let value = (ch.to_ascii_uppercase() as u8 - b'A' + 1) as i32;
-        result = result * 26 + value;
+        result = result.checked_mul(26)?.checked_add(value)?;
     }
     Some(result)
 }

@@ -107,6 +107,9 @@ pub fn get_row_index_from_address(address: &str) -> Option<String> {
         return None;
     }
     if stripped.chars().all(|c| c.is_ascii_digit()) {
+        if stripped == "0" {
+            return None;
+        }
         return Some(stripped.to_string());
     }
     None
@@ -125,10 +128,18 @@ pub fn cell_to_address(
     let row_number = cell.row + 1;
 
     if is_full_column {
-        return Some(column_alpha);
+        return Some(format!(
+            "{}{}",
+            if is_absolute_column { "$" } else { "" },
+            column_alpha
+        ));
     }
     if is_full_row {
-        return Some(row_number.to_string());
+        return Some(format!(
+            "{}{}",
+            if is_absolute_row { "$" } else { "" },
+            row_number
+        ));
     }
 
     Some(format!(
