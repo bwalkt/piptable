@@ -332,7 +332,9 @@ impl FormulaEngine {
     ) -> Result<Vec<SheetCellAddress>, FormulaError> {
         let nodes = self
             .dag
-            .get_dependents(NodeRef::Cell(cell_to_coordinate_with_sheet(sheet_id, *cell)))
+            .get_dependents(NodeRef::Cell(cell_to_coordinate_with_sheet(
+                sheet_id, *cell,
+            )))
             .map_err(|_| FormulaError::CircularReference)?;
         Ok(nodes
             .into_iter()
@@ -1407,9 +1409,7 @@ mod tests {
         let mut engine = FormulaEngine::new();
         let a1 = CellAddress::new(0, 0);
         let c1 = CellAddress::new(0, 2);
-        engine
-            .set_formula(c1, "=SUM(A1:A2)")
-            .expect("set ok");
+        engine.set_formula(c1, "=SUM(A1:A2)").expect("set ok");
         engine.mark_dirty(&a1);
         let dirty = engine.get_dirty_nodes().expect("dirty nodes");
         assert!(dirty.contains(&c1));

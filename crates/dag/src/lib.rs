@@ -214,8 +214,14 @@ impl Dag {
             self.mark_as_dirty_key(&formula_key);
         }
 
-        let is_static = matches!(self.nodes.get(&formula_key).map(|n| n.kind), Some(DagNodeKind::Static));
-        let is_cell = matches!(self.nodes.get(&formula_key).map(|n| n.kind), Some(DagNodeKind::Cell));
+        let is_static = matches!(
+            self.nodes.get(&formula_key).map(|n| n.kind),
+            Some(DagNodeKind::Static)
+        );
+        let is_cell = matches!(
+            self.nodes.get(&formula_key).map(|n| n.kind),
+            Some(DagNodeKind::Cell)
+        );
         if is_static || is_cell {
             if let Some(node) = self.nodes.get_mut(&formula_key) {
                 node.input_keys.insert(input_key.clone());
