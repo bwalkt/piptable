@@ -168,7 +168,8 @@ fn format_number_pattern(pattern: &str, value: f64, original: &Value) -> String 
     // When pattern contains minus sign (e.g., "-0.0"), we should:
     // 1. Use absolute value for formatting
     // 2. Let the pattern's minus sign handle the negative display
-    let has_minus_in_pattern = prefix.contains('-') || suffix.contains('-');
+    let has_minus_in_pattern =
+        prefix.contains('-') && !prefix.chars().any(|ch| ch.is_ascii_alphabetic());
     if value < 0.0 && has_minus_in_pattern {
         number = number.abs();
     }
