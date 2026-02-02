@@ -606,7 +606,9 @@ impl Dag {
             .map(|node| match &node.position {
                 Some(NodePosition::Cell(cell)) => NodeRef::Cell(cell.clone()),
                 Some(NodePosition::Range(range)) => NodeRef::Range(range.clone()),
-                None => NodeRef::Static(StaticReference { id: node.key.clone() }),
+                None => NodeRef::Static(StaticReference {
+                    id: node.key.clone(),
+                }),
             })
             .collect()
     }

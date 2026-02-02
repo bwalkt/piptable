@@ -186,7 +186,10 @@ impl FormulaEngine {
     ) -> Result<(), FormulaError> {
         let compiled = self.compile_with_context(formula, sheet_id, resolver, Some(cell))?;
         let cell_ref = NodeRef::Cell(cell_to_coordinate_with_sheet(sheet_id, cell));
-        let cache_key = SheetCellAddress { sheet_id, addr: cell };
+        let cache_key = SheetCellAddress {
+            sheet_id,
+            addr: cell,
+        };
         let previous = self.cache.get(&cache_key).cloned();
         let previous_inputs = self.dag.inputs_for(&cell_ref);
 
@@ -303,8 +306,7 @@ impl FormulaEngine {
                     if cell.sheet_id == 0 {
                         Some(coordinate_to_cell(cell))
                     } else {
-                        self.dag
-                            .mark_cell_as_dirty(NodeRef::Cell(cell.clone()));
+                        self.dag.mark_cell_as_dirty(NodeRef::Cell(cell.clone()));
                         None
                     }
                 }
