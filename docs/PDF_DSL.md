@@ -58,9 +58,9 @@ All PDF import options can be specified using the `with` clause:
 ```vba
 ' Import quarterly report tables
 import "Q3_2024.pdf" into quarterly with {
-    page_range: "10-25",
-    min_table_rows: 4,
-    detect_headers: true
+    "page_range": "10-25",
+    "min_table_rows": 4,
+    "detect_headers": true
 }
 
 ' Process the first table
@@ -78,8 +78,8 @@ where Revenue > 0
 ```vba
 ' Import product specifications
 import "specs.pdf" into products with {
-    min_table_cols: 3,
-    detect_headers: true
+    "min_table_cols": 3,
+    "detect_headers": true
 }
 
 ' Filter and export
@@ -183,15 +183,15 @@ next
 ## Error Handling
 
 ```vba
-try {
+try
     import "document.pdf" into data with {
         "page_range": "1-1000"  ' May exceed actual pages
     }
-} catch error {
-    print("Import failed: " + error)
+catch error
+    print("Import failed: " + error.message)
     ' Fallback to first 10 pages
     import "document.pdf" into data with { "page_range": "1-10" }
-}
+end try
 ```
 
 ## Performance Tips
@@ -213,7 +213,7 @@ Returns a JSON object with:
 - Each element includes:
   - `type`: "heading" or "paragraph"
   - `content`: The text content
-  - `page`: Page number (0-indexed)
+  - `page`: Page number (1-indexed)
   - `bbox`: Bounding box coordinates
   - `level`: (headings only) 1-4 for H1-H4
 
