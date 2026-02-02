@@ -15,8 +15,8 @@ pub mod refs;
 pub mod utils;
 
 pub use refs::{
-    extract_references, formula_to_relative_reference, FormulaReference, FormulaToRelativeReferenceOptions,
-    ReferenceKind, ReferenceMode,
+    extract_references, formula_to_relative_reference, FormulaReference,
+    FormulaToRelativeReferenceOptions, ReferenceKind, ReferenceMode,
 };
 pub use utils::{
     balance_formula, balance_parentheses, balance_quotes, is_a_formula, is_alternate_formula,

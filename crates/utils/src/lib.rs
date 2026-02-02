@@ -6,10 +6,10 @@
 use piptable_formatting::ssf_format;
 use piptable_primitives::Value;
 
-pub mod datetime;
-pub mod formatting;
 pub mod address;
 pub mod cell_data;
+pub mod datetime;
+pub mod formatting;
 
 pub use address::*;
 pub use cell_data::*;

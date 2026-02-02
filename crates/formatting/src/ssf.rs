@@ -178,7 +178,10 @@ fn format_number_pattern(pattern: &str, value: f64, original: &Value) -> String 
         None => (working.as_str(), ""),
     };
 
-    let decimals = frac_pattern.chars().filter(|c| *c == '0' || *c == '#').count();
+    let decimals = frac_pattern
+        .chars()
+        .filter(|c| *c == '0' || *c == '#')
+        .count();
     let has_required_decimal = frac_pattern.chars().any(|c| c == '0');
     let use_separator = int_pattern.contains(',');
 
@@ -329,7 +332,10 @@ mod tests {
     #[test]
     fn test_ssf_format_color() {
         let value = Value::Float(-1.0);
-        assert_eq!(ssf_format_color("[Red]-0.0", &value), Some("RED".to_string()));
+        assert_eq!(
+            ssf_format_color("[Red]-0.0", &value),
+            Some("RED".to_string())
+        );
     }
 
     #[test]

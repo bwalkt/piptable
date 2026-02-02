@@ -284,8 +284,16 @@ fn replace_row_ranges(formula: &str, d_row: i32) -> String {
 }
 
 fn adjust_cell(cell: A1Cell, d_row: i32, d_col: i32) -> A1Cell {
-    let row = if cell.abs_row { cell.row } else { cell.row + d_row };
-    let col = if cell.abs_col { cell.col } else { cell.col + d_col };
+    let row = if cell.abs_row {
+        cell.row
+    } else {
+        cell.row + d_row
+    };
+    let col = if cell.abs_col {
+        cell.col
+    } else {
+        cell.col + d_col
+    };
 
     A1Cell {
         row: row.max(1),
@@ -295,7 +303,11 @@ fn adjust_cell(cell: A1Cell, d_row: i32, d_col: i32) -> A1Cell {
 }
 
 fn adjust_column(col: A1Column, d_col: i32) -> A1Column {
-    let new_col = if col.abs_col { col.col } else { col.col + d_col };
+    let new_col = if col.abs_col {
+        col.col
+    } else {
+        col.col + d_col
+    };
     A1Column {
         col: new_col.max(1),
         ..col
@@ -303,7 +315,11 @@ fn adjust_column(col: A1Column, d_col: i32) -> A1Column {
 }
 
 fn adjust_row(row: A1Row, d_row: i32) -> A1Row {
-    let new_row = if row.abs_row { row.row } else { row.row + d_row };
+    let new_row = if row.abs_row {
+        row.row
+    } else {
+        row.row + d_row
+    };
     A1Row {
         row: new_row.max(1),
         ..row
@@ -477,8 +493,7 @@ fn cell_regex() -> &'static Regex {
 fn column_range_regex() -> &'static Regex {
     static RE: std::sync::OnceLock<Regex> = std::sync::OnceLock::new();
     RE.get_or_init(|| {
-        Regex::new(r"((?:'[^']+'|[^'!,]+)!)?(\$?[A-Za-z]+):(\$?[A-Za-z]+)")
-            .expect("valid regex")
+        Regex::new(r"((?:'[^']+'|[^'!,]+)!)?(\$?[A-Za-z]+):(\$?[A-Za-z]+)").expect("valid regex")
     })
 }
 

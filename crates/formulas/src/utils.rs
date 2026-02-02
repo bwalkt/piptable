@@ -131,7 +131,9 @@ pub fn is_alternate_formula(text: &str) -> bool {
     }
     let has_letters = after_sign.chars().any(|c| c.is_ascii_alphabetic());
     if after_sign.chars().any(|c| c.is_whitespace()) && !has_letters {
-        return after_sign.chars().any(|c| matches!(c, '+' | '*' | '/' | '^' | '=' | '<' | '>'));
+        return after_sign
+            .chars()
+            .any(|c| matches!(c, '+' | '*' | '/' | '^' | '=' | '<' | '>'));
     }
     true
 }
