@@ -3553,6 +3553,16 @@ export data to "{}""#,
         assert!(err.to_string().contains("Invalid page_range"));
     }
 
+    #[cfg(not(target_arch = "wasm32"))]
+    #[tokio::test]
+    async fn test_import_pdf_with_structure_clause() {
+        let mut interp = Interpreter::new();
+        let script = r#"import "missing.pdf" into doc with structure"#;
+        let program = PipParser::parse_str(script).unwrap();
+        let err = interp.eval(program).await.unwrap_err();
+        assert!(err.to_string().contains("Failed to import PDF structure"));
+    }
+
     #[tokio::test]
     async fn test_multi_file_import() {
         let dir = tempfile::tempdir().unwrap();

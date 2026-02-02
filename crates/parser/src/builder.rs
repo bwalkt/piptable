@@ -718,6 +718,11 @@ fn build_import_options(pair: Pair<Rule>) -> BuildResult<ImportOptions> {
 
     match inner.as_rule() {
         Rule::without_headers => Ok(ImportOptions::without_headers()),
+        Rule::structure_clause => {
+            let mut options = ImportOptions::default();
+            options.extract_structure = Some(true);
+            Ok(options)
+        }
         Rule::named_params => {
             let mut options = ImportOptions::default();
             for param in inner.into_inner() {
