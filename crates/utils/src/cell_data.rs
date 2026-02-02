@@ -9,47 +9,47 @@ fn get_field<'a>(value: Option<&'a JsonValue>, short: &str, long: &str) -> Optio
     map.get(short).or_else(|| map.get(long))
 }
 
-pub fn get_cell_user_entered_value<'a>(cell: Option<&'a JsonValue>) -> Option<&'a JsonValue> {
+pub fn get_cell_user_entered_value(cell: Option<&JsonValue>) -> Option<&JsonValue> {
     get_field(cell, "ue", "userEnteredValue")
 }
 
-pub fn get_cell_effective_value<'a>(cell: Option<&'a JsonValue>) -> Option<&'a JsonValue> {
+pub fn get_cell_effective_value(cell: Option<&JsonValue>) -> Option<&JsonValue> {
     get_field(cell, "ev", "effectiveValue")
 }
 
-pub fn get_cell_user_entered_format<'a>(cell: Option<&'a JsonValue>) -> Option<&'a JsonValue> {
+pub fn get_cell_user_entered_format(cell: Option<&JsonValue>) -> Option<&JsonValue> {
     get_field(cell, "uf", "userEnteredFormat")
 }
 
-pub fn get_cell_effective_format<'a>(cell: Option<&'a JsonValue>) -> Option<&'a JsonValue> {
+pub fn get_cell_effective_format(cell: Option<&JsonValue>) -> Option<&JsonValue> {
     get_field(cell, "ef", "effectiveFormat")
 }
 
-pub fn get_cell_formatted_value<'a>(cell: Option<&'a JsonValue>) -> Option<&'a JsonValue> {
+pub fn get_cell_formatted_value(cell: Option<&JsonValue>) -> Option<&JsonValue> {
     get_field(cell, "fv", "formattedValue")
 }
 
-pub fn get_style_id<'a>(style_ref: Option<&'a JsonValue>) -> Option<&'a JsonValue> {
+pub fn get_style_id(style_ref: Option<&JsonValue>) -> Option<&JsonValue> {
     get_field(style_ref, "sid", "styleId")
 }
 
-pub fn get_extended_value_number<'a>(ext_value: Option<&'a JsonValue>) -> Option<&'a JsonValue> {
+pub fn get_extended_value_number(ext_value: Option<&JsonValue>) -> Option<&JsonValue> {
     get_field(ext_value, "nv", "numberValue")
 }
 
-pub fn get_extended_value_string<'a>(ext_value: Option<&'a JsonValue>) -> Option<&'a JsonValue> {
+pub fn get_extended_value_string(ext_value: Option<&JsonValue>) -> Option<&JsonValue> {
     get_field(ext_value, "sv", "stringValue")
 }
 
-pub fn get_extended_value_bool<'a>(ext_value: Option<&'a JsonValue>) -> Option<&'a JsonValue> {
+pub fn get_extended_value_bool(ext_value: Option<&JsonValue>) -> Option<&JsonValue> {
     get_field(ext_value, "bv", "boolValue")
 }
 
-pub fn get_extended_value_formula<'a>(ext_value: Option<&'a JsonValue>) -> Option<&'a JsonValue> {
+pub fn get_extended_value_formula(ext_value: Option<&JsonValue>) -> Option<&JsonValue> {
     get_field(ext_value, "fv", "formulaValue")
 }
 
-pub fn get_extended_value_error<'a>(ext_value: Option<&'a JsonValue>) -> Option<&'a JsonValue> {
+pub fn get_extended_value_error(ext_value: Option<&JsonValue>) -> Option<&JsonValue> {
     get_field(ext_value, "ev", "errorValue")
 }
 

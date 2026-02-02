@@ -329,10 +329,10 @@ if sys.platform == 'darwin':
                 let mut iter = extra.split_whitespace().peekable();
                 while let Some(flag) = iter.next() {
                     if let Some(path) = flag.strip_prefix("-L") {
-                        let path = if !path.is_empty() {
-                            Some(path)
-                        } else {
+                        let path = if path.is_empty() {
                             iter.peek().copied()
+                        } else {
+                            Some(path)
                         };
                         if let Some(path) = path {
                             println!("cargo:rustc-link-search=native={}", path);
@@ -341,10 +341,10 @@ if sys.platform == 'darwin':
                             }
                         }
                     } else if let Some(lib) = flag.strip_prefix("-l") {
-                        let lib = if !lib.is_empty() {
-                            Some(lib)
-                        } else {
+                        let lib = if lib.is_empty() {
                             iter.peek().copied()
+                        } else {
+                            Some(lib)
                         };
                         if let Some(lib) = lib {
                             if !lib.is_empty() && !["intl", "dl", "util", "rt"].contains(&lib) {
