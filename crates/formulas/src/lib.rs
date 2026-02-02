@@ -2,10 +2,6 @@
 //!
 //! Formula parsing, compilation, and evaluation engine.
 //! Includes formula registry for standard functions (SUM, VLOOKUP, etc.)
-#![allow(clippy::if_same_then_else)]
-#![allow(clippy::chars_next_cmp)]
-#![allow(clippy::collapsible_if)]
-#![allow(clippy::implicit_saturating_sub)]
 
 use piptable_primitives::{CellAddress, CellRange, ErrorValue, R1C1Ref, Value};
 use serde::{Deserialize, Serialize};

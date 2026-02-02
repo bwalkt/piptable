@@ -28,7 +28,7 @@ pub fn balance_parentheses(input: &str) -> String {
     for open in stack {
         let close = INVERSE_PAREN_MAP
             .iter()
-            .find(|(k, _)| k.chars().next() == Some(open))
+            .find(|(k, _)| k.starts_with(open))
             .map(|(_, v)| *v)
             .unwrap_or(")");
         out.push_str(close);
@@ -41,8 +41,8 @@ pub fn balance_parentheses(input: &str) -> String {
 pub fn balance_quotes(input: &str) -> String {
     let chars: Vec<char> = input.chars().collect();
     let mut in_string = false;
-    let mut open_scope_count = 0;
-    let mut string_start_scope_count = 0;
+    let mut open_scope_count: usize = 0;
+    let mut string_start_scope_count: usize = 0;
 
     let mut i = 0;
     while i < chars.len() {
@@ -63,10 +63,8 @@ pub fn balance_quotes(input: &str) -> String {
         if !in_string {
             if is_open_paren(ch) {
                 open_scope_count += 1;
-            } else if ch == ')' || ch == ']' {
-                if open_scope_count > 0 {
-                    open_scope_count -= 1;
-                }
+            } else if (ch == ')' || ch == ']') && open_scope_count > 0 {
+                open_scope_count -= 1;
             }
         }
 
