@@ -25,7 +25,7 @@ import "paper.pdf" into paper with { "extract_structure": true }
 export paper to "paper.json"
 
 ' Or process headings first
-dim elements = paper.document.elements
+dim elements = paper.elements
 dim abstract_found = false
 
 for each elem in elements
@@ -162,7 +162,7 @@ export results to "sale_items.json"
 import "contract.pdf" into contract with { "extract_structure": true }
 
 ' Find specific sections
-dim elements = contract.document.elements
+dim elements = contract.elements
 dim clauses = []
 
 for each elem in elements
@@ -340,7 +340,7 @@ import "report.pdf" into tables
 dim current_section = "Unknown"
 dim table_sections = []
 
-for each elem in structure.document.elements
+for each elem in structure.elements
     if elem.type == "heading" {
         current_section = elem.content
     }

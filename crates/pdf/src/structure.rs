@@ -10,12 +10,15 @@
 //! use piptable_pdf::structure::StructureDetector;
 //! use pdfium_render::prelude::*;
 //!
-//! let detector = StructureDetector::default();
-//! let pdfium = Pdfium::new(Pdfium::bind_to_system_library()?);
-//! let document = pdfium.load_pdf_from_file("paper.pdf", None)?;
-//!
-//! let structured_doc = detector.analyze_document(&document, None)?;
-//! let markdown = structured_doc.to_markdown();
+//! fn main() -> Result<(), Box<dyn std::error::Error>> {
+//!     let detector = StructureDetector::default();
+//!     let pdfium = Pdfium::new(Pdfium::bind_to_system_library()?);
+//!     let document = pdfium.load_pdf_from_file("paper.pdf", None)?;
+//!     let structured_doc = detector.analyze_document(&document, None)?;
+//!     let markdown = structured_doc.to_markdown();
+//!     println!("{}", markdown);
+//!     Ok(())
+//! }
 //! ```
 
 use crate::error::{PdfError, Result};
@@ -97,8 +100,12 @@ impl StructuredDocument {
     ///
     /// # Example
     /// ```rust,no_run
+    /// # use piptable_pdf::StructuredDocument;
+    /// # fn demo(doc: &StructuredDocument) -> Result<(), Box<dyn std::error::Error>> {
     /// let markdown = doc.to_markdown();
     /// std::fs::write("output.md", markdown)?;
+    /// # Ok(())
+    /// # }
     /// ```
     pub fn to_markdown(&self) -> String {
         let mut out = String::new();
@@ -127,8 +134,13 @@ impl StructuredDocument {
     ///
     /// # Example
     /// ```rust,no_run
+    /// # use piptable_pdf::StructuredDocument;
+    /// # fn demo(doc: &StructuredDocument) -> Result<(), Box<dyn std::error::Error>> {
     /// let json = doc.to_llm_json();
     /// let json_str = serde_json::to_string_pretty(&json)?;
+    /// println!("{}", json_str);
+    /// # Ok(())
+    /// # }
     /// ```
     pub fn to_llm_json(&self) -> serde_json::Value {
         let elements = self
@@ -167,11 +179,9 @@ impl StructuredDocument {
             .collect::<Vec<_>>();
 
         json!({
-            "document": {
-                "elements": elements,
-                "metadata": {
-                    "page_count": self.page_count,
-                }
+            "elements": elements,
+            "metadata": {
+                "page_count": self.page_count,
             }
         })
     }

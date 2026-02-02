@@ -99,50 +99,48 @@ group by Quarter
 ```vba
 ' Simulate document structure from PDF extraction
 dim doc = {
-    "document": {
-        "elements": [
-            {
-                "type": "heading",
-                "level": 1,
-                "content": "Introduction",
-                "page": 0
-            },
-            {
-                "type": "paragraph",
-                "content": "This document describes our Q3 results...",
-                "page": 0
-            },
-            {
-                "type": "heading",
-                "level": 2,
-                "content": "Revenue Analysis",
-                "page": 1
-            },
-            {
-                "type": "paragraph",
-                "content": "Revenue increased by 15% year-over-year...",
-                "page": 1
-            },
-            {
-                "type": "heading",
-                "level": 2,
-                "content": "Cost Structure",
-                "page": 2
-            },
-            {
-                "type": "paragraph",
-                "content": "Operating expenses remained flat...",
-                "page": 2
-            }
-        ],
-        "metadata": {
-            "page_count": 3
+    "elements": [
+        {
+            "type": "heading",
+            "level": 1,
+            "content": "Introduction",
+            "page": 0
+        },
+        {
+            "type": "paragraph",
+            "content": "This document describes our Q3 results...",
+            "page": 0
+        },
+        {
+            "type": "heading",
+            "level": 2,
+            "content": "Revenue Analysis",
+            "page": 1
+        },
+        {
+            "type": "paragraph",
+            "content": "Revenue increased by 15% year-over-year...",
+            "page": 1
+        },
+        {
+            "type": "heading",
+            "level": 2,
+            "content": "Cost Structure",
+            "page": 2
+        },
+        {
+            "type": "paragraph",
+            "content": "Operating expenses remained flat...",
+            "page": 2
         }
+    ],
+    "metadata": {
+        "page_count": 3
     }
 }
 
 ' Extract all headings
-dim headings = filter(doc.document.elements, e => e.type == "heading")
+dim headings = filter(doc.elements, e => e.type == "heading")
 
 print("Document Structure:")
 for each h in headings
@@ -151,12 +149,12 @@ for each h in headings
 next
 
 ' Count elements by type
-dim heading_count = count(filter(doc.document.elements, e => e.type == "heading"))
-dim para_count = count(filter(doc.document.elements, e => e.type == "paragraph"))
+dim heading_count = count(filter(doc.elements, e => e.type == "heading"))
+dim para_count = count(filter(doc.elements, e => e.type == "paragraph"))
 
 print("")
 print("Statistics:")
-print("Total pages: " + doc.document.metadata.page_count)
+print("Total pages: " + doc.metadata.page_count)
 print("Headings: " + heading_count)
 print("Paragraphs: " + para_count)
 ```
@@ -327,7 +325,7 @@ for each keyword in keywords
     print("Searching for: " + upper(keyword))
     dim found = false
     
-    for each elem in doc.document.elements
+    for each elem in doc.elements
         if lower(elem.content) contains lower(keyword) {
             print("  ✓ Found in " + elem.type + ": " + elem.content)
             found = true

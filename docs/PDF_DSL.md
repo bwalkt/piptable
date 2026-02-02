@@ -99,25 +99,23 @@ import "research_paper.pdf" into paper with { "extract_structure": true }
 
 ' The result is a JSON structure with elements:
 ' {
-'   "document": {
-'     "elements": [
-'       {
-'         "type": "heading",
-'         "level": 1,
-'         "content": "Introduction",
-'         "page": 1,
-'         "bbox": { ... }
-'       },
-'       {
-'         "type": "paragraph",
-'         "content": "This paper presents...",
-'         "page": 1,
-'         "bbox": { ... }
-'       }
-'     ],
-'     "metadata": {
-'       "page_count": 20
+'   "elements": [
+'     {
+'       "type": "heading",
+'       "level": 1,
+'       "content": "Introduction",
+'       "page": 1,
+'       "bbox": { ... }
+'     },
+'     {
+'       "type": "paragraph",
+'       "content": "This paper presents...",
+'       "page": 1,
+'       "bbox": { ... }
 '     }
+'   ],
+'   "metadata": {
+'     "page_count": 20
 '   }
 ' }
 
@@ -139,7 +137,7 @@ import "manual.pdf" into docs with {
 }
 
 ' Process the structured content
-dim headings = filter(docs.document.elements, e => e.type == "heading")
+dim headings = filter(docs.elements, e => e.type == "heading")
 for each h in headings
     print("Level " + h.level + ": " + h.content)
 next
@@ -158,7 +156,7 @@ import "report.pdf" into structure with { "extract_structure": true }
 
 ' Process both
 dim first_table = tables.table_1
-dim heading_count = count(filter(structure.document.elements, e => e.type == "heading"))
+dim heading_count = count(filter(structure.elements, e => e.type == "heading"))
 print("Found table_1 and " + heading_count + " headings")
 ```
 
@@ -210,8 +208,8 @@ Returns a book-style object of tables (`table_1`, `table_2`, ...).
 
 ### Structure Import Result
 Returns a JSON object with:
-- `document.elements`: Array of heading and paragraph elements
-- `document.metadata.page_count`: Total pages in document
+- `elements`: Array of heading and paragraph elements
+- `metadata.page_count`: Total pages in document
 - Each element includes:
   - `type`: "heading" or "paragraph"
   - `content`: The text content
