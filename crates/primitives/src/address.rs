@@ -151,7 +151,10 @@ pub fn cell_range_to_address(sheet_name: Option<&str>, range: CellRange) -> Stri
 /// Sanitize sheet names with special characters.
 pub fn sanitize_sheet_name(name: Option<&str>) -> Option<String> {
     let name = name?;
-    if name.chars().any(|c| c.is_whitespace() || !c.is_ascii_alphanumeric()) {
+    if name
+        .chars()
+        .any(|c| c.is_whitespace() || !c.is_ascii_alphanumeric())
+    {
         return Some(format!("'{}'", name));
     }
     Some(name.to_string())
@@ -167,8 +170,10 @@ pub fn desanitize_sheet_name(name: Option<&str>) -> Option<String> {
 pub fn escape_characters(input: &str) -> String {
     let mut out = String::with_capacity(input.len());
     for ch in input.chars() {
-        if matches!(ch, '\\' | '^' | '$' | '.' | '*' | '+' | '?' | '(' | ')' | '[' | ']' | '{' | '}' | '|')
-        {
+        if matches!(
+            ch,
+            '\\' | '^' | '$' | '.' | '*' | '+' | '?' | '(' | ')' | '[' | ']' | '{' | '}' | '|'
+        ) {
             out.push('\\');
         }
         out.push(ch);
@@ -356,7 +361,10 @@ mod tests {
 
     #[test]
     fn test_sanitize_sheet_name() {
-        assert_eq!(sanitize_sheet_name(Some("Sheet1")), Some("Sheet1".to_string()));
+        assert_eq!(
+            sanitize_sheet_name(Some("Sheet1")),
+            Some("Sheet1".to_string())
+        );
         assert_eq!(
             sanitize_sheet_name(Some("Sheet 1")),
             Some("'Sheet 1'".to_string())
