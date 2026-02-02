@@ -109,13 +109,27 @@ pub struct DagNodeJson {
 pub enum DagError {
     #[error("circular dependency detected")]
     CircularDependency { cycle: Vec<String> },
+    #[error("range dependency too large: {cells} cells (max {max})")]
+    RangeTooLarge { cells: u64, max: u64 },
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone)]
 pub struct Dag {
     nodes: HashMap<String, DagNode>,
     ranges: HashMap<String, CellCoordinateRange>,
     dirty_nodes: HashSet<String>,
+    max_range_cells: u64,
+}
+
+impl Default for Dag {
+    fn default() -> Self {
+        Self {
+            nodes: HashMap::new(),
+            ranges: HashMap::new(),
+            dirty_nodes: HashSet::new(),
+            max_range_cells: 10_000,
+        }
+    }
 }
 
 pub fn is_cell_coordinate_within_cell_range(
@@ -170,12 +184,40 @@ impl Dag {
         Self::default()
     }
 
+    pub fn with_max_range_cells(max_range_cells: u64) -> Self {
+        Self {
+            max_range_cells,
+            ..Self::default()
+        }
+    }
+
+    pub fn max_range_cells(&self) -> u64 {
+        self.max_range_cells
+    }
+
     pub fn add_node_input(
         &mut self,
         formula_cell: NodeRef,
         input_position: NodeRef,
         mark_as_dirty: bool,
     ) -> Result<(), DagError> {
+        if let NodeRef::Range(range) = &input_position {
+            let rows = range
+                .end_row_index
+                .saturating_sub(range.start_row_index)
+                .saturating_add(1) as u64;
+            let cols = range
+                .end_column_index
+                .saturating_sub(range.start_column_index)
+                .saturating_add(1) as u64;
+            let cells = rows.saturating_mul(cols);
+            if cells > self.max_range_cells {
+                return Err(DagError::RangeTooLarge {
+                    cells,
+                    max: self.max_range_cells,
+                });
+            }
+        }
         let formula_key = self.ensure_node(&formula_cell);
         let input_key = self.ensure_node(&input_position);
 
@@ -260,7 +302,6 @@ impl Dag {
             .filter_map(|(key, node)| match &node.position {
                 Some(NodePosition::Cell(cell)) if cell.sheet_id == sheet_id => Some(key.clone()),
                 Some(NodePosition::Range(range)) if range.sheet_id == sheet_id => Some(key.clone()),
-                None if node.kind == DagNodeKind::Static => Some(key.clone()),
                 _ => None,
             })
             .collect();
@@ -280,10 +321,13 @@ impl Dag {
     }
 
     pub fn delete_cell(&mut self, pos: NodeRef) {
+        let key = self.key(&pos);
         self.clear_node_inputs(pos);
+        self.prune_if_orphan(&key);
     }
 
     pub fn remove_cell_from_graph(&mut self, pos: NodeRef) {
+        // Detach this node from its inputs, keep dependents intact.
         let key = self.key(&pos);
         let inputs = if let Some(node) = self.nodes.get_mut(&key) {
             if matches!(node.kind, DagNodeKind::Cell | DagNodeKind::Static) {
@@ -299,9 +343,11 @@ impl Dag {
                 input_node.dependent_keys.remove(&key);
             }
         }
+        self.prune_if_orphan(&key);
     }
 
     pub fn delete_node(&mut self, pos: NodeRef) {
+        // Fully remove a node and its dependency links.
         let key = self.key(&pos);
         self.clear_node_inputs(pos);
         self.nodes.remove(&key);
@@ -310,6 +356,7 @@ impl Dag {
     }
 
     pub fn clear_node_inputs(&mut self, pos: NodeRef) {
+        // Clear incoming edges from inputs; keep dependents referencing this node.
         let key = self.key(&pos);
         let inputs = if let Some(node) = self.nodes.get_mut(&key) {
             if matches!(node.kind, DagNodeKind::Cell | DagNodeKind::Static) {
@@ -486,6 +533,19 @@ impl Dag {
         }
     }
 
+    fn prune_if_orphan(&mut self, key: &str) {
+        let remove = self
+            .nodes
+            .get(key)
+            .map(|node| node.input_keys.is_empty() && node.dependent_keys.is_empty())
+            .unwrap_or(false);
+        if remove {
+            self.nodes.remove(key);
+            self.ranges.remove(key);
+            self.dirty_nodes.remove(key);
+        }
+    }
+
     fn visit_node<F>(&self, pos: NodeRef, callback: F) -> Result<Vec<DagNodeIdentifier>, DagError>
     where
         F: Fn(&DagNode) -> HashSet<String>,
@@ -591,55 +651,53 @@ impl Dag {
     {
         let mut order = Vec::new();
         let mut state: HashMap<String, u8> = HashMap::new();
-        let mut stack: Vec<String> = Vec::new();
+        let mut path_stack: Vec<String> = Vec::new();
 
         for root in roots {
             if !self.nodes.contains_key(&root) {
                 continue;
             }
-            if state.get(&root).copied().unwrap_or(0) == 0 {
-                self.visit_topo(&root, &children, &mut state, &mut stack, &mut order)?;
+            if state.get(&root).copied().unwrap_or(0) != 0 {
+                continue;
+            }
+
+            let mut stack: Vec<(String, bool)> = Vec::new();
+            stack.push((root, false));
+
+            while let Some((key, expanded)) = stack.pop() {
+                if expanded {
+                    state.insert(key.clone(), 2);
+                    order.push(key);
+                    path_stack.pop();
+                    continue;
+                }
+
+                if state.get(&key).copied().unwrap_or(0) == 2 {
+                    continue;
+                }
+
+                if state.get(&key).copied().unwrap_or(0) == 1 {
+                    let mut cycle = path_stack.clone();
+                    cycle.push(key);
+                    return Err(DagError::CircularDependency { cycle });
+                }
+
+                state.insert(key.clone(), 1);
+                path_stack.push(key.clone());
+                stack.push((key.clone(), true));
+
+                if let Some(node) = self.nodes.get(&key) {
+                    for child in children(node) {
+                        if state.get(&child).copied().unwrap_or(0) != 2 {
+                            stack.push((child, false));
+                        }
+                    }
+                }
             }
         }
 
         order.reverse();
         Ok(order)
-    }
-
-    fn visit_topo<F>(
-        &self,
-        key: &str,
-        children: &F,
-        state: &mut HashMap<String, u8>,
-        stack: &mut Vec<String>,
-        order: &mut Vec<String>,
-    ) -> Result<(), DagError>
-    where
-        F: Fn(&DagNode) -> HashSet<String>,
-    {
-        state.insert(key.to_string(), 1);
-        stack.push(key.to_string());
-
-        if let Some(node) = self.nodes.get(key) {
-            for child in children(node) {
-                match state.get(&child).copied().unwrap_or(0) {
-                    0 => {
-                        self.visit_topo(&child, children, state, stack, order)?;
-                    }
-                    1 => {
-                        let mut cycle = stack.clone();
-                        cycle.push(child);
-                        return Err(DagError::CircularDependency { cycle });
-                    }
-                    _ => {}
-                }
-            }
-        }
-
-        stack.pop();
-        state.insert(key.to_string(), 2);
-        order.push(key.to_string());
-        Ok(())
     }
 }
 
@@ -699,5 +757,35 @@ mod tests {
         restored.from_json(nodes);
         assert!(restored.has_node(&a1));
         assert!(restored.has_node(&b1));
+    }
+
+    #[test]
+    fn test_delete_sheet_keeps_static_nodes() {
+        let mut dag = Dag::new();
+        let static_ref = NodeRef::Static(StaticReference {
+            id: "global".to_string(),
+        });
+        let cell = NodeRef::Cell(CellCoordinate::new(1, 0, 0));
+        dag.add_node_input(cell, static_ref.clone(), true).unwrap();
+        dag.delete_sheet(1);
+        assert!(dag.has_node(&static_ref));
+    }
+
+    #[test]
+    fn test_delete_cell_prunes_orphan() {
+        let mut dag = Dag::new();
+        let cell = NodeRef::Cell(CellCoordinate::new(1, 0, 0));
+        dag.mark_cell_as_dirty(cell.clone());
+        dag.delete_cell(cell.clone());
+        assert!(!dag.has_node(&cell));
+    }
+
+    #[test]
+    fn test_range_too_large() {
+        let mut dag = Dag::with_max_range_cells(3);
+        let formula = NodeRef::Cell(CellCoordinate::new(1, 0, 0));
+        let range = NodeRef::Range(CellCoordinateRange::new(1, 0, 0, 1, 1));
+        let err = dag.add_node_input(formula, range, true).unwrap_err();
+        assert!(matches!(err, DagError::RangeTooLarge { .. }));
     }
 }

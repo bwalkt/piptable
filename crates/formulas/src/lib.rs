@@ -192,7 +192,7 @@ impl FormulaEngine {
                     let dep_ref = NodeRef::Cell(cell_to_coordinate_with_sheet(*sheet_id, *addr));
                     self.dag
                         .add_node_input(cell_ref.clone(), dep_ref, true)
-                        .map_err(|_| FormulaError::CircularReference)?;
+                        .map_err(map_dag_error)?;
                 }
                 FormulaDependency::Range { sheet_id, range } => {
                     let range_ref = NodeRef::Range(CellCoordinateRange {
@@ -204,7 +204,7 @@ impl FormulaEngine {
                     });
                     self.dag
                         .add_node_input(cell_ref.clone(), range_ref, true)
-                        .map_err(|_| FormulaError::CircularReference)?;
+                        .map_err(map_dag_error)?;
                 }
                 FormulaDependency::SheetCell { .. } | FormulaDependency::SheetRange { .. } => {
                     // Unresolved sheet names are stored as metadata only.
@@ -242,10 +242,7 @@ impl FormulaEngine {
 
     /// Get dirty nodes in recalculation order.
     pub fn get_dirty_nodes(&mut self) -> Result<Vec<CellAddress>, FormulaError> {
-        let nodes = self
-            .dag
-            .get_dirty_nodes()
-            .map_err(|_| FormulaError::CircularReference)?;
+        let nodes = self.dag.get_dirty_nodes().map_err(map_dag_error)?;
         Ok(nodes
             .into_iter()
             .filter_map(|node| node.position)
@@ -266,10 +263,7 @@ impl FormulaEngine {
 
     /// Get dirty nodes with sheet information in recalculation order.
     pub fn get_dirty_nodes_with_sheet(&mut self) -> Result<Vec<SheetCellAddress>, FormulaError> {
-        let nodes = self
-            .dag
-            .get_dirty_nodes()
-            .map_err(|_| FormulaError::CircularReference)?;
+        let nodes = self.dag.get_dirty_nodes().map_err(map_dag_error)?;
         Ok(nodes
             .into_iter()
             .filter_map(|node| node.position)
@@ -299,7 +293,7 @@ impl FormulaEngine {
         });
         self.dag
             .add_node_input(cell_ref, range_ref, true)
-            .map_err(|_| FormulaError::CircularReference)?;
+            .map_err(map_dag_error)?;
         Ok(())
     }
 
@@ -311,7 +305,7 @@ impl FormulaEngine {
         let nodes = self
             .dag
             .get_dependents(NodeRef::Cell(cell_to_coordinate_with_sheet(0, *cell)))
-            .map_err(|_| FormulaError::CircularReference)?;
+            .map_err(map_dag_error)?;
         Ok(nodes
             .into_iter()
             .filter_map(|node| node.position)
@@ -335,7 +329,7 @@ impl FormulaEngine {
             .get_dependents(NodeRef::Cell(cell_to_coordinate_with_sheet(
                 sheet_id, *cell,
             )))
-            .map_err(|_| FormulaError::CircularReference)?;
+            .map_err(map_dag_error)?;
         Ok(nodes
             .into_iter()
             .filter_map(|node| node.position)
@@ -902,6 +896,15 @@ fn coordinate_to_cell(cell: CellCoordinate) -> CellAddress {
     CellAddress::new(cell.row_index, cell.column_index)
 }
 
+fn map_dag_error(err: piptable_dag::DagError) -> FormulaError {
+    match err {
+        piptable_dag::DagError::CircularDependency { .. } => FormulaError::CircularReference,
+        piptable_dag::DagError::RangeTooLarge { cells, max } => {
+            FormulaError::DependencyRangeTooLarge { cells, max }
+        }
+    }
+}
+
 /// Function definition
 pub struct FunctionDefinition {
     pub min_args: usize,
@@ -997,6 +1000,10 @@ pub enum FormulaError {
     InvalidArgCount(String, String, usize),
     #[error("Circular reference detected")]
     CircularReference,
+    #[error("Dependency error: {0}")]
+    DependencyError(String),
+    #[error("Range dependency too large: {cells} cells (max {max})")]
+    DependencyRangeTooLarge { cells: u64, max: u64 },
 }
 
 /// Resolves sheet names to sheet IDs for dependency tracking.
