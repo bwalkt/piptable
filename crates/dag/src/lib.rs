@@ -143,7 +143,7 @@ pub fn make_key(position: &NodeRef) -> String {
         NodeRef::Cell(cell) => {
             let addr = CellAddress::new(cell.row_index, cell.column_index);
             let address = cell_to_address(Some(addr), false, false, false, false)
-                .unwrap_or_else(|| "".to_string());
+                .unwrap_or_default();
             let mut prefix = String::new();
             if let Some(id) = &cell.data_validation_id {
                 prefix.push_str(id);
@@ -157,9 +157,9 @@ pub fn make_key(position: &NodeRef) -> String {
             let start = CellAddress::new(range.start_row_index, range.start_column_index);
             let end = CellAddress::new(range.end_row_index, range.end_column_index);
             let start_addr = cell_to_address(Some(start), false, false, false, false)
-                .unwrap_or_else(|| "".to_string());
+                .unwrap_or_default();
             let end_addr = cell_to_address(Some(end), false, false, false, false)
-                .unwrap_or_else(|| "".to_string());
+                .unwrap_or_default();
             format!("{}!{}:{}", range.sheet_id, start_addr, end_addr)
         }
     }
@@ -444,7 +444,7 @@ impl Dag {
         let NodeRef::Cell(cell) = position else {
             return false;
         };
-        self.get_node_from_cell_ranges(cell).len() != 0
+        !self.get_node_from_cell_ranges(cell).is_empty()
     }
 
     fn ensure_node(&mut self, position: &NodeRef) -> String {
