@@ -1,6 +1,7 @@
 [workspace]
 resolver = "2"
 members = [
+    "crates/dag",
     "crates/types",
     "crates/core",
     "crates/parser",
@@ -110,6 +111,7 @@ piptable-formulas = { path = "crates/formulas" }
 piptable-utils = { path = "crates/utils" }
 piptable-wasm = { path = "crates/wasm" }
 piptable-formatting = { path = "crates/formatting" }
+piptable-dag = { path = "crates/dag" }
 
 [workspace.lints.rust]
 unsafe_code = "forbid"
