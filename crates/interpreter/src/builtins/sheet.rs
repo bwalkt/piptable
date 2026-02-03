@@ -31,6 +31,17 @@ fn value_to_cell(value: &Value) -> Option<CellValue> {
     }
 }
 
+fn values_to_cells(values: &[Value], line: usize, context: &str) -> PipResult<Vec<CellValue>> {
+    values
+        .iter()
+        .map(|value| {
+            value_to_cell(value).ok_or_else(|| {
+                PipError::runtime(line, format!("Unsupported value type for {context} cell"))
+            })
+        })
+        .collect()
+}
+
 /// Handle sheet manipulation built-in functions.
 pub async fn call_sheet_builtin(
     interpreter: &Interpreter,
@@ -63,6 +74,41 @@ pub async fn call_sheet_builtin(
                 (Value::Sheet(_), _) => {
                     Some(Err(PipError::runtime(line, "Row index must be an integer")))
                 }
+                _ => Some(Err(PipError::runtime(
+                    line,
+                    "First argument must be a sheet",
+                ))),
+            }
+        }
+
+        "sheet_name_rows_by_column" => {
+            if args.len() != 2 {
+                return Some(Err(PipError::runtime(
+                    line,
+                    "sheet_name_rows_by_column() takes exactly 2 arguments",
+                )));
+            }
+            match (&args[0], &args[1]) {
+                (Value::Sheet(sheet), Value::Int(col_idx)) => {
+                    if *col_idx < 0 {
+                        return Some(Err(PipError::runtime(
+                            line,
+                            "Column index cannot be negative",
+                        )));
+                    }
+                    let mut new_sheet = sheet.clone();
+                    match new_sheet.name_rows_by_column(*col_idx as usize) {
+                        Ok(()) => Some(Ok(Value::Sheet(new_sheet))),
+                        Err(e) => Some(Err(PipError::runtime(
+                            line,
+                            format!("Failed to name rows: {}", e),
+                        ))),
+                    }
+                }
+                (Value::Sheet(_), _) => Some(Err(PipError::runtime(
+                    line,
+                    "Column index must be an integer",
+                ))),
                 _ => Some(Err(PipError::runtime(
                     line,
                     "First argument must be a sheet",
@@ -803,6 +849,100 @@ pub async fn call_sheet_builtin(
                 _ => Some(Err(PipError::runtime(
                     line,
                     "Arguments must be (sheet, int, string, value)",
+                ))),
+            }
+        }
+
+        "sheet_set_column_by_name" => {
+            if args.len() != 3 {
+                return Some(Err(PipError::runtime(
+                    line,
+                    "sheet_set_column_by_name() takes exactly 3 arguments (sheet, column_name, values)",
+                )));
+            }
+            match (&args[0], &args[1], &args[2]) {
+                (Value::Sheet(sheet), Value::String(col_name), Value::Array(values)) => {
+                    if let Err(err) = sheet.column_by_name(col_name) {
+                        return Some(Err(PipError::runtime(
+                            line,
+                            format!("Column '{}' not found: {}", col_name, err),
+                        )));
+                    }
+                    if values.len() != sheet.row_count() {
+                        return Some(Err(PipError::runtime(
+                            line,
+                            format!(
+                                "Column '{}' expects {} values (row count), got {}",
+                                col_name,
+                                sheet.row_count(),
+                                values.len()
+                            ),
+                        )));
+                    }
+                    let data = match values_to_cells(values, line, "column") {
+                        Ok(data) => data,
+                        Err(err) => return Some(Err(err)),
+                    };
+
+                    let mut new_sheet = sheet.clone();
+                    match new_sheet.column_update_by_name(col_name, data) {
+                        Ok(()) => Some(Ok(Value::Sheet(new_sheet))),
+                        Err(e) => Some(Err(PipError::runtime(
+                            line,
+                            format!("Failed to set column '{}': {}", col_name, e),
+                        ))),
+                    }
+                }
+                _ => Some(Err(PipError::runtime(
+                    line,
+                    "Arguments must be (sheet, column_name, array)",
+                ))),
+            }
+        }
+
+        "sheet_set_row_by_name" => {
+            if args.len() != 3 {
+                return Some(Err(PipError::runtime(
+                    line,
+                    "sheet_set_row_by_name() takes exactly 3 arguments (sheet, row_name, values)",
+                )));
+            }
+            match (&args[0], &args[1], &args[2]) {
+                (Value::Sheet(sheet), Value::String(row_name), Value::Array(values)) => {
+                    if let Err(err) = sheet.row_by_name(row_name) {
+                        return Some(Err(PipError::runtime(
+                            line,
+                            format!("Row '{}' not found: {}", row_name, err),
+                        )));
+                    }
+                    if values.len() != sheet.col_count() {
+                        return Some(Err(PipError::runtime(
+                            line,
+                            format!(
+                                "Row '{}' expects {} values (column count), got {}",
+                                row_name,
+                                sheet.col_count(),
+                                values.len()
+                            ),
+                        )));
+                    }
+                    let data = match values_to_cells(values, line, "row") {
+                        Ok(data) => data,
+                        Err(err) => return Some(Err(err)),
+                    };
+
+                    let mut new_sheet = sheet.clone();
+                    match new_sheet.row_update_by_name(row_name, data) {
+                        Ok(()) => Some(Ok(Value::Sheet(new_sheet))),
+                        Err(e) => Some(Err(PipError::runtime(
+                            line,
+                            format!("Failed to set row '{}': {}", row_name, e),
+                        ))),
+                    }
+                }
+                _ => Some(Err(PipError::runtime(
+                    line,
+                    "Arguments must be (sheet, row_name, array)",
                 ))),
             }
         }

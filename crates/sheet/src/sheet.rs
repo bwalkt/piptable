@@ -554,6 +554,16 @@ impl Sheet {
         Ok(())
     }
 
+    /// Update a row by name
+    pub fn row_update_by_name<T: Into<CellValue>>(
+        &mut self,
+        name: &str,
+        data: Vec<T>,
+    ) -> Result<()> {
+        let index = self.row_index_by_name(name)?;
+        self.row_update(index, data)
+    }
+
     /// Delete a row at a specific index
     pub fn row_delete(&mut self, index: usize) -> Result<Vec<CellValue>> {
         if index >= self.row_count() {
@@ -682,11 +692,7 @@ impl Sheet {
     }
 
     /// Update a column at a specific index
-    pub fn column_update<T: Into<CellValue> + Clone>(
-        &mut self,
-        index: usize,
-        data: Vec<T>,
-    ) -> Result<()> {
+    pub fn column_update<T: Into<CellValue>>(&mut self, index: usize, data: Vec<T>) -> Result<()> {
         if index >= self.col_count() {
             return Err(SheetError::ColumnIndexOutOfBounds {
                 index,
@@ -713,7 +719,7 @@ impl Sheet {
     }
 
     /// Update a column by name
-    pub fn column_update_by_name<T: Into<CellValue> + Clone>(
+    pub fn column_update_by_name<T: Into<CellValue>>(
         &mut self,
         name: &str,
         data: Vec<T>,

@@ -110,6 +110,25 @@ next
 print("Features complete: " + str(complete))
 print("Features in progress: " + str(in_progress))`
   },
+  named_rows_columns: {
+    description: "Named rows/columns updates",
+    code: `' Named Rows + Columns
+dim employees = [
+  ["id", "name", "salary"],
+  ["EMP001", "Alice", 100],
+  ["EMP002", "Bob", 120]
+]
+
+' Use first row as column names
+employees = sheet_name_columns_by_row(employees, 0)
+employees = sheet_set_column_by_name(employees, "salary", ["salary", 110, 130])
+
+' Use first column as row names
+employees = sheet_name_rows_by_column(employees, 0)
+employees = sheet_set_row_by_name(employees, "EMP002", ["EMP002", "Bobby", 135])
+
+print("EMP002 salary: " + str(sheet_get_by_name(employees, 2, "salary")))`
+  },
   pdf_import: {
     description: "PDF table extraction example",
     code: `' PDF Table Extraction Example

@@ -89,6 +89,7 @@ rows_mut() -> Iterator<Item = &mut Vec<CellValue>>
 row_append<T>(data: Vec<T>) -> Result<()>
 row_insert<T>(index: usize, data: Vec<T>) -> Result<()>
 row_update<T>(index: usize, data: Vec<T>) -> Result<()>
+row_update_by_name<T>(name: &str, data: Vec<T>) -> Result<()>
 row_delete(index: usize) -> Result<Vec<CellValue>>
 row_delete_multi(indices: Vec<usize>) -> Result<()>
 row_delete_where<F>(predicate: F) -> usize

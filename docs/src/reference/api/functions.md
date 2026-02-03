@@ -67,6 +67,11 @@ Note: `len()` is formula-backed. For objects, use `len(keys(obj))` to count fiel
 |----------|-------------|---------|--------|
 | `sheet_map(sheet, operation)` | Transform sheet cell values | `sheet_map(data, "upper")` | ✅ Implemented |
 | `sheet_filter_rows(sheet, column, value)` | Filter sheet rows by column value | `sheet_filter_rows(data, "status", "active")` | ✅ Implemented |
+| `sheet_name_columns_by_row(sheet, row_index)` | Name columns using a header row | `sheet_name_columns_by_row(data, 0)` | ✅ Implemented |
+| `sheet_name_rows_by_column(sheet, col_index)` | Name rows using a key column | `sheet_name_rows_by_column(data, 0)` | ✅ Implemented |
+| `sheet_column_by_name(sheet, name)` | Get a column by name | `sheet_column_by_name(data, "price")` | ✅ Implemented |
+| `sheet_set_column_by_name(sheet, name, values)` | Replace a column by name | `sheet_set_column_by_name(data, "price", ["price", 10, 12])` | ✅ Implemented |
+| `sheet_set_row_by_name(sheet, name, values)` | Replace a row by name | `sheet_set_row_by_name(data, "SKU-1", ["SKU-1", "Widget", 10])` | ✅ Implemented |
 
 **sheet_map operations:**
 - `"upper"` - Convert string cells to uppercase
