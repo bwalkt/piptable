@@ -355,12 +355,10 @@ fn load_demo(name: &str) -> Result<Sheet, Box<dyn std::error::Error>> {
 
             Ok(sheet)
         }
-        _ => {
-            println!(
-                "Unknown demo '{}'. Available demos: basic, financial, stats, lookup",
-                name
-            );
-            Ok(create_default_sheet())
-        }
+        _ => Err(format!(
+            "Unknown demo '{}'. Available demos: basic, financial, stats, lookup",
+            name
+        )
+        .into()),
     }
 }

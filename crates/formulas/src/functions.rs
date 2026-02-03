@@ -36,6 +36,28 @@ fn to_number(value: &Value) -> Option<f64> {
     }
 }
 
+fn read_required_number(value: Option<&Value>) -> Result<f64, ErrorValue> {
+    let value = value.unwrap_or(&Value::Empty);
+    match value {
+        Value::Error(err) => Err(err.clone()),
+        other => to_number(other)
+            .filter(|n| n.is_finite())
+            .ok_or(ErrorValue::Value),
+    }
+}
+
+fn read_optional_count(value: Option<&Value>) -> Result<f64, ErrorValue> {
+    let Some(value) = value else {
+        return Ok(1.0);
+    };
+    match value {
+        Value::Error(err) => Err(err.clone()),
+        other => to_number(other)
+            .filter(|n| n.is_finite())
+            .ok_or(ErrorValue::Value),
+    }
+}
+
 fn to_index(value: &Value) -> Result<usize, ErrorValue> {
     match value {
         Value::Int(n) => {
@@ -367,7 +389,10 @@ pub fn len(values: &[Value]) -> Value {
 /// LEFT implementation.
 pub fn left(values: &[Value]) -> Value {
     let text = values.first().unwrap_or(&Value::Empty);
-    let count = values.get(1).and_then(to_number).unwrap_or(1.0);
+    let count = match read_optional_count(values.get(1)) {
+        Ok(value) => value,
+        Err(err) => return Value::Error(err),
+    };
     if count < 0.0 {
         return Value::Error(ErrorValue::Value);
     }
@@ -384,7 +409,10 @@ pub fn left(values: &[Value]) -> Value {
 /// RIGHT implementation.
 pub fn right(values: &[Value]) -> Value {
     let text = values.first().unwrap_or(&Value::Empty);
-    let count = values.get(1).and_then(to_number).unwrap_or(1.0);
+    let count = match read_optional_count(values.get(1)) {
+        Ok(value) => value,
+        Err(err) => return Value::Error(err),
+    };
     if count < 0.0 {
         return Value::Error(ErrorValue::Value);
     }
@@ -415,12 +443,17 @@ pub fn now(_: &[Value]) -> Value {
 
 /// DATE implementation.
 pub fn date(values: &[Value]) -> Value {
-    let year = values.first().and_then(to_number);
-    let month = values.get(1).and_then(to_number);
-    let day = values.get(2).and_then(to_number);
-
-    let (Some(year), Some(month), Some(day)) = (year, month, day) else {
-        return Value::Error(ErrorValue::Value);
+    let year = match read_required_number(values.first()) {
+        Ok(value) => value,
+        Err(err) => return Value::Error(err),
+    };
+    let month = match read_required_number(values.get(1)) {
+        Ok(value) => value,
+        Err(err) => return Value::Error(err),
+    };
+    let day = match read_required_number(values.get(2)) {
+        Ok(value) => value,
+        Err(err) => return Value::Error(err),
     };
 
     let year = year.floor() as i32;

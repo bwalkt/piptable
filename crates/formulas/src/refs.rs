@@ -33,8 +33,9 @@ pub struct FormulaReference {
 /// Options for converting formula references to relative form.
 #[derive(Debug, Clone, Default)]
 pub struct FormulaToRelativeReferenceOptions {
-    /// Reserved for future exclusion range and circular handling.
+    /// Cell range to exclude from adjustment (not yet implemented).
     pub exclusion_range: Option<(CellAddress, CellAddress)>,
+    /// Whether to ignore circular references during conversion (not yet implemented).
     pub ignore_circular: bool,
 }
 

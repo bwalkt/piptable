@@ -237,12 +237,12 @@ fn excel_serial_for_local_date(year: i32, month: u32, day: u32) -> f64 {
     let naive = date.and_hms_opt(0, 0, 0).expect("valid time");
     let local_dt = chrono::Local
         .from_local_datetime(&naive)
-        .single()
+        .earliest()
         .expect("local datetime");
     let utc = local_dt.with_timezone(&chrono::Utc);
     let unix_seconds = utc.timestamp();
     let unix_days = unix_seconds / 86_400;
-    let time_fraction = (unix_seconds % 86_400) as f64 / 86_400.0;
+    let time_fraction = (unix_seconds.rem_euclid(86_400)) as f64 / 86_400.0;
     (unix_days + 25_569) as f64 + time_fraction
 }
 

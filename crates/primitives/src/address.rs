@@ -5,7 +5,7 @@ use std::collections::HashMap;
 use crate::{CellAddress, CellRange};
 
 /// Position used when resolving row-only or column-only addresses.
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum AddressPosition {
     Start,
     End,
