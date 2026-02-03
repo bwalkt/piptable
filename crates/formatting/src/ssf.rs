@@ -377,8 +377,8 @@ fn excel_pattern_to_chrono(pattern: &str) -> String {
 
 /// Converts an Excel serial date to a UTC datetime.
 fn excel_date_to_datetime(serial: f64) -> Option<DateTime<Utc>> {
-    /// Excel epoch in days since Unix epoch.
-    const EXCEL_EPOCH: i64 = 25569;
+    /// Days between 1899-12-31 (Excel base) and 1970-01-01 (Unix epoch).
+    const EXCEL_EPOCH: i64 = 25568;
     let mut days = serial.floor() as i64;
     if days >= 60 {
         // Excel's 1900 leap year bug: skip the non-existent 1900-02-29

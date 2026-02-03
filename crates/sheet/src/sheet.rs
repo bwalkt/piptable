@@ -708,6 +708,9 @@ impl Sheet {
                 *cell = f(cell);
             }
         }
+        if let Err(err) = self.rebuild_formula_engine() {
+            eprintln!("Warning: formula engine rebuild failed: {err}");
+        }
     }
 
     /// Apply a function to a specific column
@@ -726,6 +729,7 @@ impl Sheet {
             row[col_index] = f(&row[col_index]);
         }
 
+        self.rebuild_formula_engine()?;
         Ok(())
     }
 
@@ -752,6 +756,9 @@ impl Sheet {
         }
         self.data = keep;
         self.invalidate_row_names();
+        if let Err(err) = self.rebuild_formula_engine() {
+            eprintln!("Warning: formula engine rebuild failed: {err}");
+        }
     }
 
     /// Remove columns at the specified indices
@@ -777,6 +784,7 @@ impl Sheet {
         }
 
         self.invalidate_column_names();
+        self.rebuild_formula_engine()?;
         Ok(())
     }
 
@@ -1049,6 +1057,7 @@ impl Sheet {
             }
             self.invalidate_row_names();
         }
+        self.rebuild_formula_engine()?;
         Ok(())
     }
 
@@ -1069,6 +1078,7 @@ impl Sheet {
                 *cell = f(cell);
             }
         }
+        self.rebuild_formula_engine()?;
         Ok(())
     }
 
@@ -1091,6 +1101,9 @@ impl Sheet {
             })
         });
         self.invalidate_row_names();
+        if let Err(err) = self.rebuild_formula_engine() {
+            eprintln!("Warning: formula engine rebuild failed: {err}");
+        }
     }
 
     /// Transpose the sheet (swap rows and columns)
@@ -1122,6 +1135,9 @@ impl Sheet {
 
         // Clear row names as they're no longer valid
         self.row_names = None;
+        if let Err(err) = self.rebuild_formula_engine() {
+            eprintln!("Warning: formula engine rebuild failed: {err}");
+        }
     }
 
     /// Cherry-pick columns: Keep only the specified columns
@@ -1149,6 +1165,7 @@ impl Sheet {
             self.rebuild_column_index();
         }
         self.invalidate_row_names();
+        self.rebuild_formula_engine()?;
 
         Ok(())
     }
@@ -1193,6 +1210,7 @@ impl Sheet {
             ));
         }
 
+        self.rebuild_formula_engine()?;
         Ok(())
     }
 
@@ -1376,6 +1394,7 @@ impl Sheet {
             self.data.clone_from(&other.data);
             self.column_names.clone_from(&other.column_names);
             self.column_index.clone_from(&other.column_index);
+            self.rebuild_formula_engine()?;
             return Ok(());
         }
 
@@ -1416,6 +1435,7 @@ impl Sheet {
         }
 
         self.invalidate_row_names();
+        self.rebuild_formula_engine()?;
         Ok(())
     }
 
@@ -1487,6 +1507,7 @@ impl Sheet {
         }
 
         self.invalidate_row_names();
+        self.rebuild_formula_engine()?;
         Ok(())
     }
 
@@ -1591,6 +1612,7 @@ impl Sheet {
         }
 
         self.invalidate_row_names();
+        self.rebuild_formula_engine()?;
         Ok(())
     }
 }

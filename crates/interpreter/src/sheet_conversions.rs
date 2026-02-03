@@ -65,7 +65,6 @@ pub fn value_to_sheet(value: &Value) -> Result<Sheet, String> {
     }
 }
 
-/// Convert a Value to a CellValue.
 /// Convert a `Value` into a `CellValue`.
 ///
 /// Strings starting with '=' are treated as formulas. To store a literal
@@ -77,7 +76,12 @@ pub fn value_to_cell(value: &Value) -> CellValue {
         Value::Int(n) => CellValue::Int(*n),
         Value::Float(f) => CellValue::Float(*f),
         Value::String(s) => {
-            if s.trim_start().starts_with('=') {
+            let first_non_ws = s.find(|ch: char| !ch.is_whitespace()).unwrap_or(s.len());
+            let (prefix, rest) = s.split_at(first_non_ws);
+            if rest.starts_with("'=") {
+                let unescaped = rest.replacen("'=", "=", 1);
+                CellValue::String(format!("{prefix}{unescaped}"))
+            } else if rest.starts_with('=') {
                 CellValue::formula(s.clone())
             } else {
                 CellValue::String(s.clone())

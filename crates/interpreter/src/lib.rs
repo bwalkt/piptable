@@ -3266,7 +3266,7 @@ mod tests {
     }
 
     #[test]
-    /// Ensures formula strings are escaped when converted to cell values.
+    /// Ensures formula strings can be escaped when converted to cell values.
     fn test_value_to_cell_formula_escape() {
         let formula_value = Value::String("=SUM(A1:A3)".to_string());
         let formula_cell = sheet_conversions::value_to_cell(&formula_value);
@@ -3276,7 +3276,7 @@ mod tests {
 
         let escaped_value = Value::String("'=SUM(A1:A3)".to_string());
         let escaped_cell = sheet_conversions::value_to_cell(&escaped_value);
-        assert!(matches!(escaped_cell, CellValue::String(s) if s == "'=SUM(A1:A3)"));
+        assert!(matches!(escaped_cell, CellValue::String(s) if s == "=SUM(A1:A3)"));
     }
 
     #[tokio::test]
