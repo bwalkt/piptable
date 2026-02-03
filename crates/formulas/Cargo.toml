@@ -5,7 +5,6 @@ edition = "2021"
 
 [dependencies]
 piptable-primitives = { path = "../primitives" }
-piptable-core = { path = "../core" }
 piptable-utils = { path = "../utils" }
 piptable-dag = { path = "../dag" }
 chrono = { workspace = true }

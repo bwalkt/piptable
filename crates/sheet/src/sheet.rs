@@ -1,6 +1,8 @@
 use crate::cell::CellValue;
 use crate::error::{Result, SheetError};
 use indexmap::IndexMap;
+use piptable_formulas::{FormulaEngine, ValueResolver};
+use piptable_primitives::{CellAddress, CellRange, ErrorValue, Value};
 use std::collections::{HashMap, HashSet};
 
 /// A sheet representing a 2D grid of cells (row-major storage)
@@ -11,6 +13,7 @@ pub struct Sheet {
     column_names: Option<Vec<String>>,
     column_index: Option<HashMap<String, usize>>,
     row_names: Option<HashMap<String, usize>>,
+    formula_engine: FormulaEngine,
 }
 
 impl Sheet {
@@ -29,6 +32,7 @@ impl Sheet {
             column_names: None,
             column_index: None,
             row_names: None,
+            formula_engine: FormulaEngine::new(),
         }
     }
 
@@ -46,6 +50,7 @@ impl Sheet {
             column_names: None,
             column_index: None,
             row_names: None,
+            formula_engine: FormulaEngine::new(),
         }
     }
 
@@ -112,6 +117,8 @@ impl Sheet {
     pub fn set<T: Into<CellValue>>(&mut self, row: usize, col: usize, value: T) -> Result<()> {
         let cell = self.get_mut(row, col)?;
         *cell = value.into();
+        self.formula_engine
+            .mark_dirty(&CellAddress::new(row as u32, col as u32));
         Ok(())
     }
 
@@ -158,6 +165,30 @@ impl Sheet {
     pub fn set_a1<T: Into<CellValue>>(&mut self, notation: &str, value: T) -> Result<()> {
         let (row, col) = crate::a1_notation::parse_cell_notation(notation)?;
         self.set(row, col, value)
+    }
+
+    /// Set a formula in a cell using A1-style notation (e.g., "C1", "=SUM(A1:B1)").
+    pub fn set_formula(&mut self, notation: &str, formula: &str) -> Result<()> {
+        let addr = self.get_a1_addr(notation)?;
+        let _ = self.get(addr.row as usize, addr.col as usize)?;
+        self.formula_engine.set_formula(addr, formula)?;
+        self.formula_engine.mark_dirty(&addr);
+        Ok(())
+    }
+
+    /// Evaluate dirty formulas in dependency order and write results into cells.
+    pub fn evaluate_formulas(&mut self) -> Result<()> {
+        let dirty = self.formula_engine.get_dirty_nodes()?;
+        for cell in dirty {
+            let Some(compiled) = self.formula_engine.get_formula(&cell) else {
+                continue;
+            };
+            let resolver = SheetValueResolver::new(self, Some(cell));
+            let value = self.formula_engine.evaluate(compiled, &resolver)?;
+            let cell_value = formula_value_to_cell_value(value);
+            self.set_cell_value_raw(cell.row as usize, cell.col as usize, cell_value)?;
+        }
+        Ok(())
     }
 
     /// Get a sub-sheet using A1-style range notation (e.g., "A1:C3")
@@ -209,6 +240,12 @@ impl Sheet {
         }
 
         Ok(sub_sheet)
+    }
+
+    fn set_cell_value_raw(&mut self, row: usize, col: usize, value: CellValue) -> Result<()> {
+        let cell = self.get_mut(row, col)?;
+        *cell = value;
+        Ok(())
     }
 
     // ===== Row Operations =====
@@ -751,6 +788,7 @@ impl Sheet {
             column_names: None,
             column_index: None,
             row_names: None,
+            formula_engine: FormulaEngine::new(),
         };
 
         // Name columns by header row
@@ -1211,6 +1249,7 @@ impl Sheet {
             column_names: None,
             column_index: None,
             row_names: None,
+            formula_engine: FormulaEngine::new(),
         };
         result.name_columns_by_row(0)?;
 
@@ -1444,6 +1483,82 @@ impl Sheet {
 
         self.invalidate_row_names();
         Ok(())
+    }
+}
+
+struct SheetValueResolver<'a> {
+    sheet: &'a Sheet,
+    current: Option<CellAddress>,
+}
+
+impl<'a> SheetValueResolver<'a> {
+    fn new(sheet: &'a Sheet, current: Option<CellAddress>) -> Self {
+        Self { sheet, current }
+    }
+}
+
+impl ValueResolver for SheetValueResolver<'_> {
+    fn get_cell(&self, addr: &CellAddress) -> Value {
+        let row = addr.row as usize;
+        let col = addr.col as usize;
+        match self.sheet.get(row, col) {
+            Ok(cell) => cell_value_to_formula_value(cell),
+            Err(_) => Value::Error(ErrorValue::Ref),
+        }
+    }
+
+    fn get_range(&self, range: &CellRange) -> Vec<Value> {
+        let range = range.normalized();
+        let mut rows = Vec::new();
+        for row in range.start.row..=range.end.row {
+            let mut cols = Vec::new();
+            for col in range.start.col..=range.end.col {
+                let addr = CellAddress::new(row, col);
+                cols.push(self.get_cell(&addr));
+            }
+            rows.push(Value::Array(cols));
+        }
+        rows
+    }
+
+    fn current_cell(&self) -> Option<CellAddress> {
+        self.current
+    }
+}
+
+fn cell_value_to_formula_value(value: &CellValue) -> Value {
+    match value {
+        CellValue::Null => Value::Empty,
+        CellValue::Bool(v) => Value::Bool(*v),
+        CellValue::Int(v) => Value::Int(*v),
+        CellValue::Float(v) => Value::Float(*v),
+        CellValue::String(v) => Value::String(v.clone()),
+    }
+}
+
+fn formula_value_to_cell_value(value: Value) -> CellValue {
+    match value {
+        Value::Empty => CellValue::Null,
+        Value::Bool(v) => CellValue::Bool(v),
+        Value::Int(v) => CellValue::Int(v),
+        Value::Float(v) => CellValue::Float(v),
+        Value::String(v) => CellValue::String(v),
+        Value::Error(err) => CellValue::String(err.label().to_string()),
+        Value::Array(values) => {
+            let Some(first) = values.first() else {
+                return CellValue::Null;
+            };
+            if values.len() == 1 {
+                return match first {
+                    Value::Array(inner) if inner.len() == 1 => {
+                        formula_value_to_cell_value(inner[0].clone())
+                    }
+                    _ => formula_value_to_cell_value(first.clone()),
+                };
+            }
+            let serialized = serde_json::to_string(&values).unwrap_or_default();
+            CellValue::String(serialized)
+        }
     }
 }
 

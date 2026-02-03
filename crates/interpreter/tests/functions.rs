@@ -247,22 +247,36 @@ async fn test_function_calls_function() {
     assert!(matches!(interp.get_var("x").await, Some(Value::Int(40))));
 }
 
-#[tokio::test]
-async fn test_recursive_function() {
-    let (interp, _) = run_script(
-        r#"
-        function factorial(n)
-            if n <= 1 then
-                return 1
-            else
-                return n * factorial(n - 1)
-            end if
-        end function
-        dim x = factorial(5)
-    "#,
-    )
-    .await;
-    assert!(matches!(interp.get_var("x").await, Some(Value::Int(120))));
+#[test]
+fn test_recursive_function() {
+    let handle = std::thread::Builder::new()
+        .name("recursive-function-test".to_string())
+        .stack_size(8 * 1024 * 1024)
+        .spawn(|| {
+            let runtime = tokio::runtime::Builder::new_current_thread()
+                .enable_all()
+                .build()
+                .expect("runtime");
+            runtime.block_on(async {
+                let (interp, _) = run_script(
+                    r#"
+                    function factorial(n)
+                        if n <= 1 then
+                            return 1
+                        else
+                            return n * factorial(n - 1)
+                        end if
+                    end function
+                    dim x = factorial(5)
+                "#,
+                )
+                .await;
+                assert!(matches!(interp.get_var("x").await, Some(Value::Int(120))));
+            });
+        })
+        .expect("spawn test thread");
+
+    handle.join().expect("join test thread");
 }
 
 /// Verifies that a function's local variable remains local and that the function returns its computed value.

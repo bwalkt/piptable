@@ -389,7 +389,7 @@ pub async fn call_sheet_builtin(
             }
             match (&args[0], &args[1]) {
                 (Value::Sheet(sheet), Value::String(notation)) => match sheet.get_range(notation) {
-                    Ok(sub_sheet) => Some(Ok(Value::Sheet(sub_sheet))),
+                    Ok(sub_sheet) => Some(Ok(Value::Sheet(Box::new(sub_sheet)))),
                     Err(e) => Some(Err(PipError::runtime(
                         line,
                         format!("Invalid range '{}': {}", notation, e),

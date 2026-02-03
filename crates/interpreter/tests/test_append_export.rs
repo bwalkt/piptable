@@ -442,7 +442,10 @@ async fn test_json_append_mode() {
     append_sheet.name_columns_by_row(0).unwrap();
 
     interp
-        .set_var("new_data", piptable_core::Value::Sheet(append_sheet))
+        .set_var(
+            "new_data",
+            piptable_core::Value::Sheet(Box::new(append_sheet)),
+        )
         .await
         .unwrap();
 
@@ -528,7 +531,7 @@ async fn test_sheet_append_mode() {
         sheet.name_columns_by_row(0).unwrap();
 
         interp
-            .set_var("append_data", piptable_core::Value::Sheet(sheet))
+            .set_var("append_data", piptable_core::Value::Sheet(Box::new(sheet)))
             .await
             .unwrap();
 
@@ -585,7 +588,10 @@ async fn test_headerless_csv_append() {
         ]);
 
         interp
-            .set_var("new_data", piptable_core::Value::Sheet(append_sheet))
+            .set_var(
+                "new_data",
+                piptable_core::Value::Sheet(Box::new(append_sheet)),
+            )
             .await
             .unwrap();
 
@@ -645,7 +651,10 @@ async fn test_mixed_header_append_error() {
         ]]);
 
         interp
-            .set_var("new_data", piptable_core::Value::Sheet(headerless_sheet))
+            .set_var(
+                "new_data",
+                piptable_core::Value::Sheet(Box::new(headerless_sheet)),
+            )
             .await
             .unwrap();
 
@@ -696,7 +705,10 @@ async fn test_headerless_tsv_append() {
         ]]);
 
         interp
-            .set_var("new_data", piptable_core::Value::Sheet(append_sheet))
+            .set_var(
+                "new_data",
+                piptable_core::Value::Sheet(Box::new(append_sheet)),
+            )
             .await
             .unwrap();
 
@@ -821,7 +833,10 @@ async fn test_string_data_header_detection() {
         ]]);
 
         interp
-            .set_var("new_data", piptable_core::Value::Sheet(append_sheet))
+            .set_var(
+                "new_data",
+                piptable_core::Value::Sheet(Box::new(append_sheet)),
+            )
             .await
             .unwrap();
 
@@ -866,7 +881,7 @@ async fn test_empty_sheet_append() {
         ]]);
 
         interp
-            .set_var("data", piptable_core::Value::Sheet(data_sheet))
+            .set_var("data", piptable_core::Value::Sheet(Box::new(data_sheet)))
             .await
             .unwrap();
 

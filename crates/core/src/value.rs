@@ -10,6 +10,7 @@ use piptable_types::{Expr, Param};
 
 /// Runtime value in piptable.
 #[derive(Debug, Clone)]
+#[allow(clippy::large_enum_variant)]
 pub enum Value {
     /// Null value.
     Null,
@@ -36,7 +37,7 @@ pub enum Value {
     Table(Vec<Arc<RecordBatch>>),
 
     /// Sheet data (piptable_sheet::Sheet).
-    Sheet(Sheet),
+    Sheet(Box<Sheet>),
 
     /// Function reference.
     Function {
@@ -161,7 +162,7 @@ impl Value {
     #[must_use]
     pub fn as_sheet(&self) -> Option<&Sheet> {
         match self {
-            Self::Sheet(s) => Some(s),
+            Self::Sheet(s) => Some(s.as_ref()),
             _ => None,
         }
     }
@@ -170,7 +171,7 @@ impl Value {
     #[must_use]
     pub fn as_sheet_mut(&mut self) -> Option<&mut Sheet> {
         match self {
-            Self::Sheet(s) => Some(s),
+            Self::Sheet(s) => Some(s.as_mut()),
             _ => None,
         }
     }
@@ -372,10 +373,10 @@ mod tests {
         map.insert("k".to_string(), Value::Int(1));
         assert!(Value::Object(map).is_truthy());
         assert!(!Value::Table(vec![]).is_truthy());
-        assert!(!Value::Sheet(Sheet::new()).is_truthy()); // Empty sheet
+        assert!(!Value::Sheet(Box::new(Sheet::new())).is_truthy()); // Empty sheet
         let mut sheet_with_data = Sheet::new();
         sheet_with_data.row_append(vec!["test"]).unwrap();
-        assert!(Value::Sheet(sheet_with_data).is_truthy()); // Non-empty sheet
+        assert!(Value::Sheet(Box::new(sheet_with_data)).is_truthy()); // Non-empty sheet
         assert!(Value::Function {
             name: "f".to_string(),
             params: vec![],
@@ -398,7 +399,7 @@ mod tests {
         assert_eq!(Value::Array(vec![]).type_name(), "Array");
         assert_eq!(Value::Object(HashMap::new()).type_name(), "Object");
         assert_eq!(Value::Table(vec![]).type_name(), "Table");
-        assert_eq!(Value::Sheet(Sheet::new()).type_name(), "Sheet");
+        assert_eq!(Value::Sheet(Box::new(Sheet::new())).type_name(), "Sheet");
         assert_eq!(
             Value::Function {
                 name: "f".to_string(),
@@ -477,7 +478,7 @@ mod tests {
     #[test]
     fn test_as_sheet() {
         let sheet = Sheet::new();
-        let v = Value::Sheet(sheet);
+        let v = Value::Sheet(Box::new(sheet));
         assert!(v.as_sheet().is_some());
         assert_eq!(v.as_sheet().unwrap().row_count(), 0);
         assert!(Value::Int(42).as_sheet().is_none());

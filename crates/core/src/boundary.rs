@@ -289,7 +289,7 @@ mod tests {
         assert!(matches!(values[6], ToonValue::Object { .. }));
 
         let sheet = Sheet::from_data(vec![vec![1i64, 2i64]]);
-        let toon = value_to_toon(&Value::Sheet(sheet));
+        let toon = value_to_toon(&Value::Sheet(Box::new(sheet)));
         assert!(matches!(toon, ToonValue::Error { code, .. } if code == "SHEET_UNSUPPORTED"));
 
         let func = Value::Function {
