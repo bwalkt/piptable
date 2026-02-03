@@ -18,6 +18,7 @@ function initializeEmbedPlayground() {
     console.error('Embed root element not found');
     return;
   }
+  const root = container;
 
   // Get configuration from URL parameters
   const urlParams = new URLSearchParams(window.location.search);
@@ -31,13 +32,12 @@ function initializeEmbedPlayground() {
   };
 
   // Get allowed origin for postMessage security
-  const allowedOrigin = urlParams.get('origin') || 
-    container.getAttribute('data-origin') || 
-    undefined;
+  const allowedOrigin =
+    urlParams.get('origin') || root.getAttribute('data-origin') || undefined;
 
   // If no code in URL, try to get from data attributes
   if (!currentConfig.code) {
-    currentConfig.code = container.getAttribute('data-code') || 'PRINT "Hello, World!"';
+    currentConfig.code = root.getAttribute('data-code') || 'PRINT "Hello, World!"';
     currentConfig.height = container.getAttribute('data-height') || currentConfig.height;
     currentConfig.readonly = container.getAttribute('data-readonly') === 'true';
     currentConfig.showOutput = container.getAttribute('data-show-output') !== 'false';
@@ -73,7 +73,7 @@ function initializeEmbedPlayground() {
         title={playgroundConfig.title}
         description={playgroundConfig.description}
       />,
-      container
+      root
     );
   }
 
