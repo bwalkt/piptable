@@ -172,6 +172,9 @@ impl Sheet {
     }
 
     /// Set a formula in a cell using A1-style notation (e.g., "C1", "=SUM(A1:B1)").
+    ///
+    /// This stores the formula source and marks the cell dirty; call
+    /// [`Sheet::evaluate_formulas`] to compute cached results.
     pub fn set_formula(&mut self, notation: &str, formula: &str) -> Result<()> {
         let addr = self.get_a1_addr(notation)?;
         let _ = self.get(addr.row as usize, addr.col as usize)?;
@@ -185,7 +188,9 @@ impl Sheet {
         Ok(())
     }
 
-    /// Evaluate dirty formulas in dependency order and write results into cells.
+    /// Evaluate dirty formulas in dependency order and update cached results.
+    ///
+    /// Formula cells keep their source string and store the computed value in the cache.
     pub fn evaluate_formulas(&mut self) -> Result<()> {
         let dirty = self.formula_engine.get_dirty_nodes()?;
         for cell in dirty {

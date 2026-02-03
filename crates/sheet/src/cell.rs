@@ -4,7 +4,9 @@ use std::fmt;
 /// Represents a formula stored in a cell.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct FormulaCell {
+    /// Raw formula string as entered (typically starts with '=').
     pub source: String,
+    /// Cached result from the most recent evaluation, if available.
     pub cached: Option<Box<CellValue>>,
 }
 
@@ -17,6 +19,7 @@ pub enum CellValue {
     Int(i64),
     Float(f64),
     String(String),
+    /// Formula cell storing the source and cached result.
     Formula(FormulaCell),
 }
 
