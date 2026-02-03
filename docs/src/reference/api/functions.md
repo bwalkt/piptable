@@ -67,6 +67,20 @@ Note: `len()` is formula-backed. For objects, use `len(keys(obj))` to count fiel
 |----------|-------------|---------|--------|
 | `sheet_map(sheet, operation)` | Transform sheet cell values | `sheet_map(data, "upper")` | ✅ Implemented |
 | `sheet_filter_rows(sheet, column, value)` | Filter sheet rows by column value | `sheet_filter_rows(data, "status", "active")` | ✅ Implemented |
+| `sheet_row_count(sheet)` | Get number of rows | `sheet_row_count(data)` | ✅ Implemented |
+| `sheet_col_count(sheet)` | Get number of columns | `sheet_col_count(data)` | ✅ Implemented |
+| `sheet_get_a1(sheet, a1)` | Get a cell by A1 notation | `sheet_get_a1(data, "B2")` | ✅ Implemented |
+| `sheet_set_a1(sheet, a1, value)` | Set a cell by A1 notation | `sheet_set_a1(data, "B2", 42)` | ✅ Implemented |
+| `sheet_get_range(sheet, range)` | Get a sub-sheet by A1 range | `sheet_get_range(data, "A1:C5")` | ✅ Implemented |
+| `sheet_get_a1_eval(sheet, a1)` | Get evaluated value for A1 | `sheet_get_a1_eval(data, "C2")` | ✅ Implemented |
+| `sheet_get_cell(sheet, a1)` | Get raw cell value | `sheet_get_cell(data, "C2")` | ✅ Implemented |
+| `sheet_get_cell_value(sheet, a1)` | Get evaluated cell value | `sheet_get_cell_value(data, "C2")` | ✅ Implemented |
+| `sheet_get_by_name(sheet, row, col)` | Get cell by row index and column name | `sheet_get_by_name(data, 2, "price")` | ✅ Implemented |
+| `sheet_set_by_name(sheet, row, col, value)` | Set cell by row index and column name | `sheet_set_by_name(data, 2, "price", 19.99)` | ✅ Implemented |
+| `sheet_select_columns(sheet, columns)` | Keep only specified columns | `sheet_select_columns(data, ["name", "price"])` | ✅ Implemented |
+| `sheet_remove_columns(sheet, columns)` | Remove specified columns | `sheet_remove_columns(data, ["debug"])` | ✅ Implemented |
+| `sheet_remove_empty_rows(sheet)` | Remove empty rows | `sheet_remove_empty_rows(data)` | ✅ Implemented |
+| `sheet_transpose(sheet)` | Transpose rows and columns | `sheet_transpose(data)` | ✅ Implemented |
 | `sheet_name_columns_by_row(sheet, row_index)` | Name columns using a header row | `sheet_name_columns_by_row(data, 0)` | ✅ Implemented |
 | `sheet_name_rows_by_column(sheet, col_index)` | Name rows using a key column | `sheet_name_rows_by_column(data, 0)` | ✅ Implemented |
 | `sheet_column_by_name(sheet, name)` | Get a column by name | `sheet_column_by_name(data, "price")` | ✅ Implemented |
