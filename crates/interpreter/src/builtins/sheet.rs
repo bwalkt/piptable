@@ -183,7 +183,7 @@ pub async fn call_sheet_builtin(
         }
 
         "sheet_remove_duplicates" => {
-            if args.len() > 2 {
+            if args.is_empty() || args.len() > 2 {
                 return Some(Err(PipError::runtime(
                     line,
                     "sheet_remove_duplicates() takes 1 or 2 arguments (sheet, columns?)",
@@ -348,15 +348,61 @@ pub async fn call_sheet_builtin(
             };
 
             let mut options = CleanOptions::default();
+            let mut has_lower = false;
+            let mut has_upper = false;
+            let mut has_null_strategy = false;
             for op in operations {
                 match op.as_str() {
                     "trim" => options.trim = true,
-                    "lower" => options.lower = true,
-                    "upper" => options.upper = true,
+                    "lower" => {
+                        if has_upper {
+                            return Some(Err(PipError::runtime(
+                                line,
+                                "Cannot specify both 'lower' and 'upper' operations",
+                            )));
+                        }
+                        has_lower = true;
+                        options.lower = true;
+                    }
+                    "upper" => {
+                        if has_lower {
+                            return Some(Err(PipError::runtime(
+                                line,
+                                "Cannot specify both 'lower' and 'upper' operations",
+                            )));
+                        }
+                        has_upper = true;
+                        options.upper = true;
+                    }
                     "normalize_whitespace" => options.normalize_whitespace = true,
-                    "empty_to_null" => options.null_strategy = NullStrategy::EmptyToNull,
-                    "null_to_empty" => options.null_strategy = NullStrategy::NullToEmpty,
+                    "empty_to_null" => {
+                        if has_null_strategy {
+                            return Some(Err(PipError::runtime(
+                                line,
+                                "Only one null-handling strategy may be specified",
+                            )));
+                        }
+                        has_null_strategy = true;
+                        options.null_strategy = NullStrategy::EmptyToNull;
+                    }
+                    "null_to_empty" => {
+                        if has_null_strategy {
+                            return Some(Err(PipError::runtime(
+                                line,
+                                "Only one null-handling strategy may be specified",
+                            )));
+                        }
+                        has_null_strategy = true;
+                        options.null_strategy = NullStrategy::NullToEmpty;
+                    }
                     "fill_nulls" => {
+                        if has_null_strategy {
+                            return Some(Err(PipError::runtime(
+                                line,
+                                "Only one null-handling strategy may be specified",
+                            )));
+                        }
+                        has_null_strategy = true;
                         let fill_value = args.get(2).and_then(value_to_cell).ok_or_else(|| {
                             PipError::runtime(line, "fill_nulls requires a fill value")
                         });

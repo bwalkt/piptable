@@ -30,6 +30,20 @@ pub struct CleanOptions {
     pub upper: bool,
     pub normalize_whitespace: bool,
     pub null_strategy: NullStrategy,
+    pub preserve_formulas: bool,
+}
+
+impl Default for CleanOptions {
+    fn default() -> Self {
+        CleanOptions {
+            trim: false,
+            lower: false,
+            upper: false,
+            normalize_whitespace: false,
+            null_strategy: NullStrategy::Keep,
+            preserve_formulas: true,
+        }
+    }
 }
 
 /// Rules supported by `validate_column`.
@@ -165,14 +179,15 @@ impl Sheet {
         let col_index = self.column_index_by_name(column)?;
         let start_row = if self.column_names.is_some() { 1 } else { 0 };
 
-        let phone_regex =
-            if matches!(rule, ValidationRule::Phone) {
-                Some(Regex::new(r"^\+?[0-9().\-\s]{7,}$").map_err(|e| {
+        let phone_regex = if matches!(rule, ValidationRule::Phone) {
+            Some(
+                Regex::new(r"^(?=.*\\d)\\+?[0-9().\\-\\s]{7,}$").map_err(|e| {
                     SheetError::Parse(format!("Invalid phone validation regex: {e}"))
-                })?)
-            } else {
-                None
-            };
+                })?,
+            )
+        } else {
+            None
+        };
         let custom_regex = if let ValidationRule::Regex(pattern) = &rule {
             Some(
                 Regex::new(pattern)
@@ -196,6 +211,9 @@ impl Sheet {
     pub fn clean_data(&mut self, options: &CleanOptions) -> Result<()> {
         for row in &mut self.data {
             for cell in row {
+                if options.preserve_formulas && matches!(cell, CellValue::Formula(_)) {
+                    continue;
+                }
                 let mut updated = match cell.cached_or_self() {
                     CellValue::String(s) => {
                         let mut out = s.clone();

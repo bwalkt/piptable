@@ -77,7 +77,7 @@ uuid = { version = "1", features = ["v4", "serde"] }
 colored = "2"
 rustyline = "14"
 regex = "1"
-validator = "0.18"
+validator = "0.20.0"
 
 # Export formats
 rust_xlsxwriter = "0.79"
