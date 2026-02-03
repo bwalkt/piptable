@@ -26,5 +26,13 @@ scraper = { workspace = true }
 [dev-dependencies]
 tempfile = { workspace = true }
 
+[[example]]
+name = "formula_cookbook"
+path = "../../examples/formula_cookbook.rs"
+
+[[example]]
+name = "formula_playground"
+path = "../../examples/formula_playground.rs"
+
 [lints]
 workspace = true
