@@ -3,12 +3,14 @@ use piptable_formulas::{FormulaEngine, ValueResolver};
 use piptable_primitives::{CellAddress, CellRange, Value};
 use std::collections::HashMap;
 
+/// Benchmark context with a preloaded sheet.
 struct BenchContext {
     cells: HashMap<CellAddress, Value>,
     ranges: HashMap<CellRange, Vec<Value>>,
 }
 
 impl BenchContext {
+    /// Builds a benchmark context with a populated range.
     fn new_with_range(size: usize) -> Self {
         let mut cells = HashMap::new();
         let mut values = Vec::new();
@@ -34,23 +36,28 @@ impl BenchContext {
 }
 
 impl ValueResolver for BenchContext {
+    /// Resolves a single cell for benchmarking.
     fn get_cell(&self, addr: &CellAddress) -> Value {
         self.cells.get(addr).cloned().unwrap_or(Value::Empty)
     }
 
+    /// Resolves a range for benchmarking.
     fn get_range(&self, range: &CellRange) -> Vec<Value> {
         self.ranges.get(range).cloned().unwrap_or_default()
     }
 
+    /// Resolves a cell with a sheet name for benchmarking.
     fn get_sheet_cell(&self, _sheet: &str, addr: &CellAddress) -> Value {
         self.get_cell(addr)
     }
 
+    /// Resolves a range with a sheet name for benchmarking.
     fn get_sheet_range(&self, _sheet: &str, range: &CellRange) -> Vec<Value> {
         self.get_range(range)
     }
 }
 
+/// Benchmarks formula parsing.
 fn bench_parse_formulas(c: &mut Criterion) {
     let mut group = c.benchmark_group("parse");
     let mut engine = FormulaEngine::new();
@@ -80,6 +87,7 @@ fn bench_parse_formulas(c: &mut Criterion) {
     group.finish();
 }
 
+/// Benchmarks formula evaluation.
 fn bench_evaluate_formulas(c: &mut Criterion) {
     let mut group = c.benchmark_group("evaluate");
     let mut engine = FormulaEngine::new();
@@ -118,6 +126,7 @@ fn bench_evaluate_formulas(c: &mut Criterion) {
     group.finish();
 }
 
+/// Benchmarks range operations.
 fn bench_range_operations(c: &mut Criterion) {
     let mut group = c.benchmark_group("range_ops");
     let mut engine = FormulaEngine::new();
@@ -145,6 +154,7 @@ fn bench_range_operations(c: &mut Criterion) {
     group.finish();
 }
 
+/// Benchmarks text operations.
 fn bench_text_operations(c: &mut Criterion) {
     let mut group = c.benchmark_group("text_ops");
     let mut engine = FormulaEngine::new();
@@ -177,6 +187,7 @@ fn bench_text_operations(c: &mut Criterion) {
     group.finish();
 }
 
+/// Benchmarks logical operations.
 fn bench_logical_operations(c: &mut Criterion) {
     let mut group = c.benchmark_group("logical_ops");
     let mut engine = FormulaEngine::new();
@@ -207,6 +218,7 @@ fn bench_logical_operations(c: &mut Criterion) {
     group.finish();
 }
 
+/// Benchmarks cached formula operations.
 fn bench_cache_operations(c: &mut Criterion) {
     let mut group = c.benchmark_group("cache");
     let mut engine = FormulaEngine::new();

@@ -10,13 +10,18 @@
 //! - Python UDF support (with `python` feature)
 
 mod builtins;
+/// Converters between interpreter values and external representations.
 mod converters;
+/// Formula evaluation helpers for the interpreter.
 mod formula;
 pub mod io;
+/// Sheet conversion utilities used by interpreter built-ins.
 mod sheet_conversions;
+/// SQL string builder helpers for DSL queries.
 mod sql_builder;
 
 #[cfg(feature = "python")]
+/// Python UDF integration for the interpreter.
 mod python;
 
 use crate::formula::CachedFormulaEngine;
@@ -38,6 +43,7 @@ use piptable_http::HttpClient;
 use piptable_sql::SqlEngine;
 
 #[cfg(target_arch = "wasm32")]
+/// WASM-specific shims for HTTP and SQL engines.
 mod wasm_support;
 #[cfg(target_arch = "wasm32")]
 use wasm_support::{HttpClient, SqlEngine};
@@ -72,12 +78,14 @@ pub struct FunctionDef {
     pub is_async: bool,
 }
 
+/// Identifies the referenced variable scope and name.
 #[derive(Debug, Clone)]
 struct RefTarget {
     name: String,
     scope_index: usize,
 }
 
+/// Internal binding representation for variables and references.
 #[derive(Debug, Clone)]
 enum VarBinding {
     Value(Box<Value>),
@@ -85,6 +93,7 @@ enum VarBinding {
     RefLValue(RefLValue),
 }
 
+/// Finds the most recent binding for a variable across nested scopes.
 fn find_binding(scopes: &[HashMap<String, VarBinding>], name: &str) -> Option<(usize, VarBinding)> {
     for (idx, scope) in scopes.iter().enumerate().rev() {
         if let Some(binding) = scope.get(name) {
@@ -94,6 +103,7 @@ fn find_binding(scopes: &[HashMap<String, VarBinding>], name: &str) -> Option<(u
     None
 }
 
+/// Resolves a reference chain to the underlying value.
 fn resolve_ref_value(scopes: &[HashMap<String, VarBinding>], target: RefTarget) -> Option<Value> {
     let mut current = target;
     let mut seen: HashSet<(usize, String)> = HashSet::new();
@@ -114,6 +124,7 @@ fn resolve_ref_value(scopes: &[HashMap<String, VarBinding>], target: RefTarget) 
     }
 }
 
+/// Resolves a binding to a value, following references as needed.
 fn resolve_binding_value(
     scopes: &[HashMap<String, VarBinding>],
     binding: VarBinding,
@@ -125,6 +136,7 @@ fn resolve_binding_value(
     }
 }
 
+/// Resolves a reference to the final target binding metadata.
 fn resolve_ref_target_info(
     scopes: &[HashMap<String, VarBinding>],
     target: RefTarget,
@@ -147,6 +159,7 @@ fn resolve_ref_target_info(
     }
 }
 
+/// Flattens an lvalue into a base name and access path.
 fn flatten_lvalue(lvalue: LValue, access: &mut Vec<RefAccess>, line: usize) -> PipResult<String> {
     match lvalue {
         LValue::Variable(name) => Ok(name),
@@ -168,18 +181,21 @@ fn flatten_lvalue(lvalue: LValue, access: &mut Vec<RefAccess>, line: usize) -> P
     }
 }
 
+/// Represents a reference into nested fields or indexes.
 #[derive(Debug, Clone)]
 struct RefLValue {
     base: RefTarget,
     access: Vec<RefAccess>,
 }
 
+/// Accessor used for field/index navigation within a reference.
 #[derive(Debug, Clone)]
 enum RefAccess {
     Field(String),
     Index(i64),
 }
 
+/// Resolves a reference lvalue to its current value.
 fn resolve_ref_lvalue_value(
     scopes: &[HashMap<String, VarBinding>],
     ref_lvalue: RefLValue,
@@ -224,6 +240,7 @@ fn resolve_ref_lvalue_value(
     Some(current)
 }
 
+/// Assigns a new value to a reference lvalue.
 fn assign_ref_lvalue(
     scopes: &mut [HashMap<String, VarBinding>],
     ref_lvalue: RefLValue,
@@ -252,6 +269,7 @@ fn assign_ref_lvalue(
     Ok(())
 }
 
+/// Applies an access path to update a nested value.
 fn apply_ref_access(
     value: Value,
     access: &[RefAccess],
@@ -1424,6 +1442,7 @@ impl Interpreter {
         }
     }
 
+    /// Evaluates addition/concatenation for numeric and string values.
     fn eval_add(&self, left: &Value, right: &Value) -> PipResult<Value> {
         match (left, right) {
             (Value::Int(a), Value::Int(b)) => a
@@ -1441,6 +1460,7 @@ impl Interpreter {
         }
     }
 
+    /// Evaluates subtraction for numeric values.
     fn eval_sub(&self, left: &Value, right: &Value) -> PipResult<Value> {
         match (left, right) {
             (Value::Int(a), Value::Int(b)) => a
@@ -1461,6 +1481,7 @@ impl Interpreter {
         }
     }
 
+    /// Evaluates multiplication for numeric values.
     fn eval_mul(&self, left: &Value, right: &Value) -> PipResult<Value> {
         match (left, right) {
             (Value::Int(a), Value::Int(b)) => a
@@ -1481,6 +1502,7 @@ impl Interpreter {
         }
     }
 
+    /// Evaluates division for numeric values with zero checks.
     fn eval_div(&self, left: &Value, right: &Value) -> PipResult<Value> {
         match (left, right) {
             (Value::Int(a), Value::Int(b)) => {
@@ -1520,6 +1542,7 @@ impl Interpreter {
         }
     }
 
+    /// Evaluates modulo for integer values.
     fn eval_mod(&self, left: &Value, right: &Value) -> PipResult<Value> {
         match (left, right) {
             (Value::Int(a), Value::Int(b)) => {
@@ -1534,6 +1557,7 @@ impl Interpreter {
         }
     }
 
+    /// Evaluates numeric comparison using the provided comparator.
     fn eval_compare<F>(&self, left: &Value, right: &Value, cmp: F) -> PipResult<Value>
     where
         F: Fn(f64, f64) -> bool,
@@ -1545,6 +1569,7 @@ impl Interpreter {
         Ok(Value::Bool(cmp(l, r)))
     }
 
+    /// Performs value equality with numeric coercion rules.
     fn values_equal(&self, left: &Value, right: &Value) -> bool {
         match (left, right) {
             (Value::Null, Value::Null) => true,
@@ -2664,6 +2689,7 @@ impl Interpreter {
     /// Set a variable, searching scopes for existing bindings first.
     /// Use this for assignment statements where we want to update existing variables.
     pub async fn set_var(&self, name: &str, value: Value) -> PipResult<()> {
+        /// Resolved binding location for assignment.
         enum ResolvedBinding {
             Value { name: String, scope_index: usize },
             RefTarget(RefTarget),
@@ -2810,6 +2836,7 @@ impl Interpreter {
 }
 
 impl Default for Interpreter {
+    /// Returns a default interpreter instance.
     fn default() -> Self {
         Self::new()
     }
@@ -3190,6 +3217,7 @@ impl Interpreter {
 // - io.rs: Import/export functions
 // - sheet_conversions.rs: Sheet/Value/Arrow conversion functions
 
+/// Interpreter-specific unit tests.
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -3238,6 +3266,7 @@ mod tests {
     }
 
     #[test]
+    /// Ensures formula strings are escaped when converted to cell values.
     fn test_value_to_cell_formula_escape() {
         let formula_value = Value::String("=SUM(A1:A3)".to_string());
         let formula_cell = sheet_conversions::value_to_cell(&formula_value);

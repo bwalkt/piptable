@@ -203,6 +203,7 @@ pub struct StructureDetector {
 }
 
 impl Default for StructureDetector {
+    /// Returns default structure detection thresholds.
     fn default() -> Self {
         Self {
             heading_ratio_h1: 1.5,
@@ -251,6 +252,7 @@ impl StructureDetector {
         Ok(self.analyze_blocks(blocks, total_pages))
     }
 
+    /// Extracts raw text blocks from a single PDF page.
     fn extract_text_blocks(&self, page: &PdfPage, page_index: usize) -> Result<Vec<TextBlock>> {
         let text = page
             .text()
@@ -281,6 +283,7 @@ impl StructureDetector {
         Ok(blocks)
     }
 
+    /// Analyzes text blocks into structured document elements.
     fn analyze_blocks(&self, blocks: Vec<TextBlock>, page_count: usize) -> StructuredDocument {
         if blocks.is_empty() {
             return StructuredDocument {
@@ -314,6 +317,7 @@ impl StructureDetector {
         }
     }
 
+    /// Groups text blocks into line candidates.
     fn build_lines(&self, blocks: &[TextBlock], avg_font_size: f32) -> Vec<Line> {
         let mut sorted = blocks.to_vec();
         sorted.sort_by(|a, b| {
@@ -346,6 +350,7 @@ impl StructureDetector {
         lines
     }
 
+    /// Groups lines into paragraph or heading elements.
     fn build_paragraphs(&self, lines: &[Line], avg_font_size: f32) -> Vec<DocumentElement> {
         if lines.is_empty() {
             return Vec::new();
@@ -380,6 +385,7 @@ impl StructureDetector {
         elements
     }
 
+    /// Classifies a group of lines as a heading or paragraph.
     fn classify_paragraph(&self, lines: &[Line], avg_font_size: f32) -> DocumentElement {
         let text = join_lines(lines);
         let bbox = lines
@@ -402,6 +408,7 @@ impl StructureDetector {
         DocumentElement::Paragraph { text, page, bbox }
     }
 
+    /// Determines a heading level based on font size and text.
     fn heading_level(&self, line: &Line, avg_font_size: f32) -> Option<u8> {
         if let Some(level) = heading_level_by_pattern(&line.text) {
             return Some(level);
@@ -428,6 +435,7 @@ impl StructureDetector {
 }
 
 #[derive(Debug, Clone)]
+/// Aggregated line of text blocks with layout metadata.
 struct Line {
     text: String,
     bbox: BoundingBox,
@@ -439,6 +447,7 @@ struct Line {
 }
 
 impl Line {
+    /// Creates a line from a single text block.
     fn from_block(block: TextBlock) -> Self {
         let mid_y = (block.bbox.top + block.bbox.bottom) / 2.0;
         Self {
@@ -452,6 +461,7 @@ impl Line {
         }
     }
 
+    /// Adds a block to the line and updates bounds.
     fn push(&mut self, block: TextBlock) {
         if !self.text.is_empty() {
             self.text.push(' ');
@@ -465,6 +475,7 @@ impl Line {
     }
 }
 
+/// Extracts font size, name, and style flags from a text segment.
 fn segment_style(segment: &PdfPageTextSegment<'_>) -> (f32, String, bool, bool) {
     let Ok(chars) = segment.chars() else {
         return (0.0, String::new(), false, false);
@@ -490,6 +501,7 @@ fn segment_style(segment: &PdfPageTextSegment<'_>) -> (f32, String, bool, bool) 
     (font_size, font_name, is_bold, is_italic)
 }
 
+/// Computes the average font size across blocks.
 fn average_font_size(blocks: &[TextBlock]) -> f32 {
     let mut sum = 0.0;
     let mut count = 0.0;
@@ -506,6 +518,7 @@ fn average_font_size(blocks: &[TextBlock]) -> f32 {
     }
 }
 
+/// Computes the median vertical gap between consecutive lines.
 fn median_line_gap(lines: &[Line]) -> Option<f32> {
     if lines.len() < 2 {
         return None;
@@ -532,6 +545,7 @@ fn median_line_gap(lines: &[Line]) -> Option<f32> {
     Some(gaps[gaps.len() / 2])
 }
 
+/// Joins lines into a single text string.
 fn join_lines(lines: &[Line]) -> String {
     let mut out = String::new();
     for (idx, line) in lines.iter().enumerate() {
@@ -543,6 +557,7 @@ fn join_lines(lines: &[Line]) -> String {
     out
 }
 
+/// Resolves a 1-based page range into a valid inclusive span.
 fn resolve_page_range(
     page_range: Option<(usize, usize)>,
     total_pages: usize,
@@ -574,6 +589,7 @@ fn resolve_page_range(
     Ok((start, end))
 }
 
+/// Determines heading level based on textual patterns.
 fn heading_level_by_pattern(text: &str) -> Option<u8> {
     let trimmed = text.trim();
     if trimmed.is_empty() {
@@ -600,30 +616,38 @@ fn heading_level_by_pattern(text: &str) -> Option<u8> {
     None
 }
 
+/// Regex for chapter-style headings (e.g., "Chapter 1").
 fn heading_chapter_regex() -> &'static regex::Regex {
+    /// Cached chapter heading regex.
     static RE: std::sync::OnceLock<regex::Regex> = std::sync::OnceLock::new();
     RE.get_or_init(|| regex::Regex::new(r"(?i)^chapter\s+\d+\b").expect("valid chapter regex"))
 }
 
+/// Regex for numbered headings (e.g., "1.2.3").
 fn heading_numbered_regex() -> &'static regex::Regex {
+    /// Cached numbered heading regex.
     static RE: std::sync::OnceLock<regex::Regex> = std::sync::OnceLock::new();
     RE.get_or_init(|| {
         regex::Regex::new(r"^(\d+(?:\.\d+)*\.)\s+\S").expect("valid numbered heading regex")
     })
 }
 
+/// Regex for roman numeral headings (e.g., "IV. Results").
 fn heading_roman_regex() -> &'static regex::Regex {
+    /// Cached roman numeral heading regex.
     static RE: std::sync::OnceLock<regex::Regex> = std::sync::OnceLock::new();
     RE.get_or_init(|| {
         regex::Regex::new(r"(?i)^([IVXLCDM]+)\.\s+\S").expect("valid roman heading regex")
     })
 }
 
+/// Tests for structure detection heuristics.
 #[cfg(test)]
 mod tests {
     use super::*;
 
     #[test]
+    /// Validates heading detection using font-size heuristics.
     fn test_heading_detection() {
         let detector = StructureDetector::default();
         let blocks = vec![
@@ -674,6 +698,7 @@ mod tests {
     }
 
     #[test]
+    /// Validates grouping of lines into paragraphs.
     fn test_paragraph_grouping() {
         let detector = StructureDetector::default();
         let blocks = vec![
@@ -718,6 +743,7 @@ mod tests {
     }
 
     #[test]
+    /// Validates heading detection using text patterns.
     fn test_heading_pattern_detection() {
         let detector = StructureDetector::default();
         let blocks = vec![

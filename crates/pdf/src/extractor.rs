@@ -17,6 +17,7 @@ pub struct PdfOptions {
 }
 
 impl Default for PdfOptions {
+    /// Returns default PDF extraction options.
     fn default() -> Self {
         Self {
             page_range: None,
@@ -170,11 +171,13 @@ impl PdfExtractor {
         }
     }
 
+    /// Extracts all text from a PDF using the configured backend.
     fn extract_text_from_pdf(&self, path: &Path) -> Result<String> {
         // Always use lopdf for consistent text extraction
         self.extract_text_with_lopdf(path)
     }
 
+    /// Extracts text from a PDF using the lopdf backend.
     fn extract_text_with_lopdf(&self, path: &Path) -> Result<String> {
         let doc = Document::load(path)
             .map_err(|e| PdfError::ParseError(format!("Failed to load PDF: {}", e)))?;
@@ -241,6 +244,7 @@ impl PdfExtractor {
         Ok(all_text)
     }
 
+    /// Extracts text per page using the lopdf backend.
     fn extract_text_per_page_with_lopdf(&self, path: &Path) -> Result<Vec<(usize, String)>> {
         let doc = Document::load(path)
             .map_err(|e| PdfError::ParseError(format!("Failed to load PDF: {}", e)))?;
@@ -303,6 +307,7 @@ impl PdfExtractor {
         Ok(results)
     }
 
+    /// Extracts text via OCR for the specified page indices.
     fn extract_text_with_ocr_for_pages(
         &self,
         path: &Path,

@@ -6,6 +6,7 @@
 use piptable_sheet::{CellValue, Sheet};
 use std::io::{self, Write};
 
+/// Runs the interactive formula playground.
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("╔════════════════════════════════════════════════════════════════════╗");
     println!("║           Piptable Formula Playground - Interactive REPL          ║");
@@ -94,6 +95,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
+/// Creates a default playground sheet.
 fn create_default_sheet() -> Sheet {
     let mut data = Vec::new();
     for _ in 0..10 {
@@ -103,6 +105,7 @@ fn create_default_sheet() -> Sheet {
     Sheet::from_data(data)
 }
 
+/// Displays the current sheet to stdout.
 fn display_sheet(sheet: &Sheet) -> Result<(), Box<dyn std::error::Error>> {
     println!("\n     A      B      C      D      E      F      G      H      I      J");
     println!("   ┌──────┬──────┬──────┬──────┬──────┬──────┬──────┬──────┬──────┬──────┐");
@@ -126,6 +129,7 @@ fn display_sheet(sheet: &Sheet) -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
+/// Formats a sheet cell for display.
 fn format_cell_value(value: &CellValue) -> String {
     match value {
         CellValue::Null => "".to_string(),
@@ -156,6 +160,7 @@ fn format_cell_value(value: &CellValue) -> String {
     }
 }
 
+/// Handles the set command in the playground.
 fn handle_set_command(sheet: &mut Sheet, cell: &str, value: &str) {
     // Try to parse as number first
     let value = value.trim();
@@ -182,6 +187,7 @@ fn handle_set_command(sheet: &mut Sheet, cell: &str, value: &str) {
     }
 }
 
+/// Handles the formula command in the playground.
 fn handle_formula_command(sheet: &mut Sheet, cell: &str, formula: &str) {
     // Ensure formula starts with =
     let formula = if !formula.starts_with('=') {
@@ -196,6 +202,7 @@ fn handle_formula_command(sheet: &mut Sheet, cell: &str, formula: &str) {
     }
 }
 
+/// Prints playground help text.
 fn print_help() {
     println!("\n=== Formula Playground Help ===");
     println!("\nBasic Commands:");
@@ -219,6 +226,7 @@ fn print_help() {
     println!();
 }
 
+/// Loads a named demo sheet.
 fn load_demo(name: &str) -> Result<Sheet, Box<dyn std::error::Error>> {
     match name {
         "basic" => {

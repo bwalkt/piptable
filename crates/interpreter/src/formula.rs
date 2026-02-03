@@ -7,13 +7,17 @@ use piptable_sheet::{CellValue, Sheet};
 use std::sync::OnceLock;
 use std::{collections::HashMap, fmt::Display};
 
+/// Lazily initialized registry for DSL-available formula functions.
 static FORMULA_REGISTRY: OnceLock<FunctionRegistry> = OnceLock::new();
+/// Maximum number of compiled formulas to cache per engine.
 const MAX_FORMULA_CACHE_ENTRIES: usize = 1024;
 
+/// Returns the global formula function registry.
 fn registry() -> &'static FunctionRegistry {
     FORMULA_REGISTRY.get_or_init(FunctionRegistry::default)
 }
 
+/// Formula functions exposed to the DSL by name.
 const DSL_FORMULA_FUNCTIONS: &[&str] = &[
     "SUM",
     "AVERAGE",
@@ -77,6 +81,7 @@ pub fn eval_sheet_formula(sheet: &Sheet, formula: &str, line: usize) -> PipResul
     formula_to_core_with_context(result, line, "sheet_eval_formula", formula)
 }
 
+/// Caches compiled formulas for repeated evaluation.
 pub struct CachedFormulaEngine {
     engine: FormulaEngine,
     cache: HashMap<String, CompiledFormula>,
@@ -248,12 +253,14 @@ pub fn eval_sheet_cell_cached(
     }
 }
 
+/// Resolves formula references against a sheet and optional base cell.
 struct SheetResolver<'a> {
     sheet: &'a Sheet,
     base_cell: Option<CellAddress>,
 }
 
 impl ValueResolver for SheetResolver<'_> {
+    /// Resolves a single cell reference into a formula value.
     fn get_cell(&self, addr: &CellAddress) -> FormulaValue {
         let row = addr.row as usize;
         let col = addr.col as usize;
@@ -263,6 +270,7 @@ impl ValueResolver for SheetResolver<'_> {
         }
     }
 
+    /// Resolves a range reference into a 2D array of formula values.
     fn get_range(&self, range: &CellRange) -> Vec<FormulaValue> {
         let normalized = range.normalized();
         let rows = normalized.rows() as usize;
@@ -282,11 +290,13 @@ impl ValueResolver for SheetResolver<'_> {
         values
     }
 
+    /// Returns the base cell used for relative references, if any.
     fn current_cell(&self) -> Option<CellAddress> {
         self.base_cell
     }
 }
 
+/// Validates that a formula function receives the expected number of arguments.
 fn validate_arg_count(
     min_args: usize,
     max_args: Option<usize>,
@@ -321,6 +331,7 @@ fn validate_arg_count(
     Ok(())
 }
 
+/// Formats a human-readable argument count range.
 fn format_expected_args(min_args: usize, max_args: Option<usize>) -> String {
     match max_args {
         Some(max) if max == min_args => {
@@ -335,6 +346,7 @@ fn format_expected_args(min_args: usize, max_args: Option<usize>) -> String {
     }
 }
 
+/// Converts a sheet cell into a formula engine value.
 fn cell_to_formula(cell: &CellValue) -> FormulaValue {
     match cell {
         CellValue::Null => FormulaValue::Empty,
@@ -349,6 +361,7 @@ fn cell_to_formula(cell: &CellValue) -> FormulaValue {
     }
 }
 
+/// Converts a sheet cell into a DSL runtime value.
 fn cell_to_core(cell: &CellValue) -> Value {
     match cell {
         CellValue::Null => Value::Null,
@@ -363,6 +376,7 @@ fn cell_to_core(cell: &CellValue) -> Value {
     }
 }
 
+/// Converts a DSL runtime value into a formula engine value.
 fn core_to_formula(value: &Value, line: usize) -> PipResult<FormulaValue> {
     match value {
         Value::Null => Ok(FormulaValue::Empty),
@@ -429,6 +443,7 @@ fn core_to_formula(value: &Value, line: usize) -> PipResult<FormulaValue> {
     }
 }
 
+/// Converts a formula engine value into a DSL runtime value.
 fn formula_to_core(value: FormulaValue, line: usize) -> PipResult<Value> {
     match value {
         FormulaValue::Empty => Ok(Value::Null),
@@ -450,6 +465,7 @@ fn formula_to_core(value: FormulaValue, line: usize) -> PipResult<Value> {
     }
 }
 
+/// Converts a formula result into a DSL value with contextualized errors.
 fn formula_to_core_with_context(
     value: FormulaValue,
     line: usize,
@@ -465,6 +481,7 @@ fn formula_to_core_with_context(
     }
 }
 
+/// Formats a formula error with context for diagnostics.
 fn format_formula_error(context: &str, formula: &str, err: impl Display) -> String {
     format!(
         "Formula error in {}: {} (formula: \"{}\")",

@@ -221,6 +221,7 @@ pub fn toon_to_value(toon: &ToonValue) -> Value {
     }
 }
 
+/// Tests for this module.
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -228,6 +229,7 @@ mod tests {
     use piptable_types::{Expr, Literal, Param, ParamMode};
     use std::collections::HashMap;
 
+    /// Verifies sparse encoding selection.
     #[test]
     fn test_sparse_encoding_selection() {
         // Small dense grid should use dense
@@ -246,6 +248,7 @@ mod tests {
         assert!(should_use_sparse(10, 10, 10)); // 10% density
     }
 
+    /// Verifies value to toon mapping.
     #[test]
     fn test_value_to_toon_mapping() {
         // Basic types
@@ -265,6 +268,7 @@ mod tests {
         assert!(matches!(toon, ToonValue::Error { code, .. } if code == "TABLE_UNSUPPORTED"));
     }
 
+    /// Verifies value to toon all variants.
     #[test]
     fn test_value_to_toon_all_variants() {
         let mut obj = HashMap::new();
@@ -313,6 +317,7 @@ mod tests {
         assert!(matches!(toon, ToonValue::Error { code, .. } if code == "LAMBDA_UNSUPPORTED"));
     }
 
+    /// Verifies toon to value variants.
     #[test]
     fn test_toon_to_value_variants() {
         let toon = ToonValue::Null;
@@ -356,6 +361,7 @@ mod tests {
         assert!(matches!(toon_to_value(&toon), Value::String(s) if s == "ERROR: bad"));
     }
 
+    /// Verifies sheet payload dense get cell.
     #[test]
     fn test_sheet_payload_dense_get_cell() {
         let start = CellAddress::new(0, 0);
@@ -381,6 +387,7 @@ mod tests {
         assert!(payload.get_cell(2, 2).is_none());
     }
 
+    /// Verifies sheet payload sparse get cell.
     #[test]
     fn test_sheet_payload_sparse_get_cell() {
         let start = CellAddress::new(0, 0);

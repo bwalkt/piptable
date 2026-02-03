@@ -822,6 +822,7 @@ impl Sheet {
             .map_err(|e| PyRuntimeError::new_err(e.to_string()))
     }
 
+    /// Returns the Python representation string.
     fn __repr__(&self) -> String {
         format!(
             "Sheet(name='{}', rows={}, cols={})",
@@ -831,6 +832,7 @@ impl Sheet {
         )
     }
 
+    /// Returns the number of rows.
     fn __len__(&self) -> usize {
         self.inner.row_count()
     }
@@ -969,6 +971,7 @@ impl Book {
             .map_err(|e| PyRuntimeError::new_err(e.to_string()))
     }
 
+    /// Returns the Python representation string.
     fn __repr__(&self) -> String {
         format!(
             "Book(name='{}', sheets={})",
@@ -977,6 +980,7 @@ impl Book {
         )
     }
 
+    /// Returns the number of rows.
     fn __len__(&self) -> usize {
         self.inner.sheet_count()
     }

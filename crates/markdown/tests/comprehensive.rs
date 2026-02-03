@@ -1,6 +1,7 @@
 use piptable_markdown::extract_tables;
 use piptable_sheet::CellValue;
 
+/// Verifies extraction of multiple tables.
 #[test]
 fn test_multiple_tables() {
     let md = r#"
@@ -35,6 +36,7 @@ Some text between tables.
     assert_eq!(sheet2.col_count(), 3);
 }
 
+/// Verifies type inference for table cells.
 #[test]
 fn test_type_inference() {
     let md = r#"
@@ -62,6 +64,7 @@ fn test_type_inference() {
     assert!(matches!(second_row[4], CellValue::Null));
 }
 
+/// Verifies inline markdown formatting handling.
 #[test]
 fn test_inline_formatting() {
     let md = r#"
@@ -84,6 +87,7 @@ fn test_inline_formatting() {
     assert!(matches!(row2[0], CellValue::String(ref s) if s == "code"));
 }
 
+/// Verifies error when no tables are present.
 #[test]
 fn test_no_tables_error() {
     let md = "# Just a heading\n\nNo tables here.";
@@ -92,6 +96,7 @@ fn test_no_tables_error() {
     assert!(result.unwrap_err().to_string().contains("No tables found"));
 }
 
+/// Verifies min table options filtering.
 #[test]
 fn test_min_table_options_filter() {
     let md = r#"

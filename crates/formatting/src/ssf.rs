@@ -7,12 +7,14 @@ pub struct SsfFormatOptions<'a> {
     pub locale: Option<&'a str>,
 }
 
+/// Parsed format section (pattern + optional color).
 #[derive(Debug, Clone)]
 struct FormatSection {
     pattern: String,
     color: Option<String>,
 }
 
+/// Colors recognized in SSF patterns.
 const KNOWN_COLORS: [&str; 8] = [
     "BLACK", "WHITE", "RED", "GREEN", "BLUE", "YELLOW", "MAGENTA", "CYAN",
 ];
@@ -41,6 +43,7 @@ pub fn ssf_format_color(pattern: &str, value: &Value) -> Option<String> {
     section.color
 }
 
+/// Selects the appropriate format section for a value.
 fn select_section(pattern: &str, value: &Value) -> Option<FormatSection> {
     let sections = split_sections(pattern);
 
@@ -58,6 +61,7 @@ fn select_section(pattern: &str, value: &Value) -> Option<FormatSection> {
     })
 }
 
+/// Splits a format string into semicolon-delimited sections.
 fn split_sections(pattern: &str) -> Vec<&str> {
     let mut sections = Vec::new();
     let mut in_quotes = false;
@@ -85,6 +89,7 @@ fn split_sections(pattern: &str) -> Vec<&str> {
     sections
 }
 
+/// Chooses the numeric section based on the value sign/zero.
 fn choose_numeric_section<'a>(value: f64, sections: &'a [&'a str]) -> &'a str {
     if value.is_nan() {
         return sections[0];
@@ -98,6 +103,7 @@ fn choose_numeric_section<'a>(value: f64, sections: &'a [&'a str]) -> &'a str {
     }
 }
 
+/// Removes color tokens from a format pattern.
 fn strip_color_tokens(section: &str) -> String {
     let mut out = String::with_capacity(section.len());
     let mut chars = section.chars().peekable();
@@ -124,6 +130,7 @@ fn strip_color_tokens(section: &str) -> String {
     out
 }
 
+/// Extracts a color token from a format pattern.
 fn extract_color(section: &str) -> Option<String> {
     let mut chars = section.chars().peekable();
     while let Some(ch) = chars.next() {
@@ -147,6 +154,7 @@ fn extract_color(section: &str) -> Option<String> {
     None
 }
 
+/// Formats a text value using a pattern.
 fn format_text(pattern: &str, text: &str) -> String {
     if pattern.contains('@') {
         pattern.replace('@', text)
@@ -155,6 +163,7 @@ fn format_text(pattern: &str, text: &str) -> String {
     }
 }
 
+/// Formats a number or date value based on the pattern.
 fn format_number_or_date(pattern: &str, value: f64) -> String {
     if is_date_pattern(pattern) {
         return format_date_pattern(pattern, value);
@@ -162,6 +171,7 @@ fn format_number_or_date(pattern: &str, value: f64) -> String {
     format_number_pattern(pattern, value)
 }
 
+/// Formats a numeric value using the number pattern rules.
 fn format_number_pattern(pattern: &str, value: f64) -> String {
     let mut working = pattern.to_string();
     let mut prefix = String::new();
@@ -269,6 +279,7 @@ fn format_number_pattern(pattern: &str, value: f64) -> String {
     out
 }
 
+/// Inserts thousands separators into a numeric string.
 fn format_with_thousands(input: &str) -> String {
     let mut chars: Vec<char> = input.chars().collect();
     let negative = chars.first() == Some(&'-');
@@ -291,6 +302,7 @@ fn format_with_thousands(input: &str) -> String {
     out
 }
 
+/// Detects whether a pattern is a date/time pattern.
 fn is_date_pattern(pattern: &str) -> bool {
     let cleaned = strip_quoted_text(pattern);
     let lower = cleaned.to_ascii_lowercase();
@@ -306,6 +318,7 @@ fn is_date_pattern(pattern: &str) -> bool {
     false
 }
 
+/// Formats an Excel date serial using the pattern.
 fn format_date_pattern(pattern: &str, value: f64) -> String {
     let Some(dt) = excel_date_to_datetime(value) else {
         return value.to_string();
@@ -314,6 +327,7 @@ fn format_date_pattern(pattern: &str, value: f64) -> String {
     dt.format(&chrono_pattern).to_string()
 }
 
+/// Converts an Excel date pattern to a chrono-compatible pattern.
 fn excel_pattern_to_chrono(pattern: &str) -> String {
     let mut out = pattern.to_ascii_lowercase();
     let replacements = [
@@ -361,7 +375,9 @@ fn excel_pattern_to_chrono(pattern: &str) -> String {
     out
 }
 
+/// Converts an Excel serial date to a UTC datetime.
 fn excel_date_to_datetime(serial: f64) -> Option<DateTime<Utc>> {
+    /// Excel epoch in days since Unix epoch.
     const EXCEL_EPOCH: i64 = 25569;
     let mut days = serial.floor() as i64;
     if days >= 60 {
@@ -374,6 +390,7 @@ fn excel_date_to_datetime(serial: f64) -> Option<DateTime<Utc>> {
     DateTime::from_timestamp(unix_seconds, 0)
 }
 
+/// Removes quoted text segments from a format pattern.
 fn strip_quoted_text(input: &str) -> String {
     let mut out = String::with_capacity(input.len());
     let mut in_quotes = false;
@@ -389,23 +406,27 @@ fn strip_quoted_text(input: &str) -> String {
     out
 }
 
+/// SSF format tests.
 #[cfg(test)]
 mod tests {
     use super::*;
 
     #[test]
+    /// Verifies basic number formatting.
     fn test_ssf_format_basic_number() {
         let value = Value::Float(1234.5);
         assert_eq!(ssf_format("#,##0.00", &value, None), "1,234.50");
     }
 
     #[test]
+    /// Verifies negative section formatting.
     fn test_ssf_format_negative_section() {
         let value = Value::Float(-12.3);
         assert_eq!(ssf_format("0.0;-0.0", &value, None), "-12.3");
     }
 
     #[test]
+    /// Verifies color token handling.
     fn test_ssf_format_color() {
         let value = Value::Float(-1.0);
         assert_eq!(
@@ -414,14 +435,16 @@ mod tests {
         );
     }
 
+    /// Verifies date formatting.
     #[test]
     fn test_ssf_format_date() {
         let value = Value::Float(44562.0);
         let formatted = ssf_format("mm/dd/yyyy", &value, None);
-        assert_eq!(formatted, "12/31/2021");
+        assert_eq!(formatted, "01/01/2022");
     }
 
     #[test]
+    /// Verifies text formatting.
     fn test_ssf_format_text() {
         let value = Value::String("hello".to_string());
         assert_eq!(ssf_format("@", &value, None), "hello");

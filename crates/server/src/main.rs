@@ -42,6 +42,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
+/// Server tests.
 #[cfg(test)]
 mod tests {
     use super::*;

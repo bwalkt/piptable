@@ -111,6 +111,7 @@ async fn filter(_interpreter: &Interpreter, args: Vec<Value>, line: usize) -> Pi
     }
 }
 
+/// Tests for array built-ins.
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -41,10 +41,12 @@ pub fn format_date(dt: DateTime<Utc>, pattern: &str) -> String {
     }
 }
 
+/// Datetime helper tests.
 #[cfg(test)]
 mod tests {
     use super::*;
 
+    /// Verifies Excel date conversion.
     #[test]
     fn test_excel_date_conversion() {
         // Test a known date

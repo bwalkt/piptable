@@ -158,6 +158,7 @@ impl ChartSpec {
 }
 
 impl From<ChartType> for ChartKind {
+    /// Converts a chart type into the internal chart kind.
     fn from(ct: ChartType) -> Self {
         match ct {
             ChartType::Bar => Self::Bar,
@@ -197,10 +198,12 @@ pub enum ExportFormat {
     Html,
 }
 
+/// Chart rendering tests.
 #[cfg(test)]
 mod tests {
     use super::*;
 
+    /// Verifies chart spec construction.
     #[test]
     fn test_chart_spec_new() {
         let chart = ChartSpec::new(ChartKind::Bar, "Test Chart");
@@ -208,6 +211,7 @@ mod tests {
         assert!(matches!(chart.chart_type, ChartKind::Bar));
     }
 
+    /// Verifies chart JSON serialization.
     #[test]
     fn test_chart_to_json() {
         let chart = ChartSpec::new(ChartKind::Line, "Test");
@@ -216,6 +220,7 @@ mod tests {
         assert!(json.contains("line"));
     }
 
+    /// Verifies chart HTML rendering.
     #[test]
     fn test_chart_to_html() {
         let chart = ChartSpec::new(ChartKind::Pie, "Pie Chart");

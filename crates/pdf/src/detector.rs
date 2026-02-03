@@ -2,12 +2,14 @@ use lazy_static::lazy_static;
 use regex::Regex;
 
 lazy_static! {
-    // Column separator patterns
+    /// Regex for column separators.
     static ref COLUMN_SEPARATOR: Regex = Regex::new(r"(\s{2,}|\t+|\|)+").unwrap();
 
-    // Row patterns - includes ASCII box-drawing and Unicode box-drawing characters
+    /// Regex for row separator lines (ASCII and Unicode box-drawing).
     static ref HORIZONTAL_RULE: Regex = Regex::new(r"^[\s\-=+|\u{2500}-\u{257F}]{3,}$").unwrap();
+    /// Regex for numeric-looking cells.
     static ref NUMERIC_PATTERN: Regex = Regex::new(r"\d+(\.\d+)?").unwrap();
+    /// Regex for uppercase header cells.
     static ref HEADER_PATTERN: Regex = Regex::new(r"^[A-Z][A-Z\s]+$").unwrap();
 }
 
@@ -26,6 +28,7 @@ pub struct TableDetector {
 }
 
 impl Default for TableDetector {
+    /// Builds a table detector with default heuristics.
     fn default() -> Self {
         Self {
             min_rows: 2,
@@ -61,6 +64,7 @@ impl TableDetector {
         tables
     }
 
+    /// Attempts to extract a table starting at the given line index.
     fn extract_table_at(&self, lines: &[&str], start: usize) -> Option<TableRegion> {
         let mut rows = Vec::new();
         let mut consistent_columns = None;
@@ -125,6 +129,7 @@ impl TableDetector {
         }
     }
 
+    /// Parses a single line into columns if it resembles a row.
     fn parse_row(&self, line: &str) -> Option<Vec<String>> {
         // Split by column separators
         let mut parts: Vec<String> = COLUMN_SEPARATOR
