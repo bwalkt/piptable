@@ -3241,7 +3241,9 @@ mod tests {
     fn test_value_to_cell_formula_escape() {
         let formula_value = Value::String("=SUM(A1:A3)".to_string());
         let formula_cell = sheet_conversions::value_to_cell(&formula_value);
-        assert!(matches!(formula_cell, CellValue::Formula(formula) if formula.source == "=SUM(A1:A3)"));
+        assert!(
+            matches!(formula_cell, CellValue::Formula(formula) if formula.source == "=SUM(A1:A3)")
+        );
 
         let escaped_value = Value::String("'=SUM(A1:A3)".to_string());
         let escaped_cell = sheet_conversions::value_to_cell(&escaped_value);
