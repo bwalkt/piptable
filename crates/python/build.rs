@@ -2,6 +2,7 @@ use std::env;
 use std::path::PathBuf;
 use std::process::Command;
 
+/// Configures linker flags for the PyO3 Python build.
 fn main() {
     // Tell cargo to rerun this build script if Python environment changes
     println!("cargo:rerun-if-env-changed=PYO3_PYTHON");
@@ -237,6 +238,7 @@ if sys.platform == 'darwin':
     }
 }
 
+/// Emits cargo linker directives for python-config flags.
 fn emit_linker_flags(flags: Vec<&str>) {
     let mut skip_next = false;
     for (i, flag) in flags.iter().enumerate() {

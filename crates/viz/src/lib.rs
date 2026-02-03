@@ -124,12 +124,12 @@ impl ChartSpec {
 <body>
     <canvas id="chart"></canvas>
     <script>
-        const spec = {json};
-        const isArea = {is_area};
+        let spec = {json};
+        let isArea = {is_area};
         if (isArea) {{
             spec.data.datasets = spec.data.datasets.map(ds => ({{ ...ds, fill: true }}));
         }}
-        const ctx = document.getElementById('chart').getContext('2d');
+        let ctx = document.getElementById('chart').getContext('2d');
         new Chart(ctx, {{
             type: '{chart_type}',
             data: spec.data,
@@ -158,6 +158,7 @@ impl ChartSpec {
 }
 
 impl From<ChartType> for ChartKind {
+    /// Converts a chart type into the internal chart kind.
     fn from(ct: ChartType) -> Self {
         match ct {
             ChartType::Bar => Self::Bar,
@@ -197,11 +198,13 @@ pub enum ExportFormat {
     Html,
 }
 
+/// Chart rendering tests.
 #[cfg(test)]
 mod tests {
     use super::*;
 
     #[test]
+    /// Verifies chart spec construction.
     fn test_chart_spec_new() {
         let chart = ChartSpec::new(ChartKind::Bar, "Test Chart");
         assert_eq!(chart.title, "Test Chart");
@@ -209,6 +212,7 @@ mod tests {
     }
 
     #[test]
+    /// Verifies chart JSON serialization.
     fn test_chart_to_json() {
         let chart = ChartSpec::new(ChartKind::Line, "Test");
         let json = chart.to_json().unwrap();
@@ -217,6 +221,7 @@ mod tests {
     }
 
     #[test]
+    /// Verifies chart HTML rendering.
     fn test_chart_to_html() {
         let chart = ChartSpec::new(ChartKind::Pie, "Pie Chart");
         let html = chart.to_html();

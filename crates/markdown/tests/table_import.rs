@@ -1,5 +1,6 @@
 use piptable_markdown::{extract_tables, MarkdownTables};
 
+/// Verifies table headers and rows extraction.
 #[test]
 fn markdown_table_extracts_headers_and_rows() {
     let md = r#"| Name | Qty |
@@ -16,6 +17,7 @@ fn markdown_table_extracts_headers_and_rows() {
     assert_eq!(table.rows[0], vec!["Apple", "10"]);
 }
 
+/// Verifies conversion of tables to sheets.
 #[test]
 fn markdown_tables_to_sheets() {
     let md = r#"| A | B |

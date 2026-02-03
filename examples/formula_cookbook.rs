@@ -10,6 +10,7 @@ macro_rules! row {
     };
 }
 
+/// Runs the formula cookbook example.
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("=== Piptable Formula Cookbook ===\n");
 

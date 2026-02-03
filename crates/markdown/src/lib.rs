@@ -1,4 +1,5 @@
 pub mod error;
+/// Markdown table parsing utilities.
 mod table;
 
 use error::{MarkdownError, Result};
@@ -55,6 +56,7 @@ fn table_to_sheet(table: &MarkdownTable) -> Result<Sheet> {
     Ok(sheet)
 }
 
+/// Converts a markdown cell string into a typed cell value.
 fn to_cell_value(text: &str) -> CellValue {
     let trimmed = text.trim();
 

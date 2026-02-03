@@ -21,6 +21,7 @@ pub struct MarkdownOptions {
 }
 
 impl Default for MarkdownOptions {
+    /// Returns default markdown table extraction options.
     fn default() -> Self {
         Self {
             min_table_rows: 2,
@@ -63,6 +64,7 @@ impl MarkdownTables {
     }
 }
 
+/// Collects markdown tables from the AST.
 fn collect_tables<'a>(node: &'a AstNode<'a>, tables: &mut Vec<MarkdownTable>) -> Result<()> {
     for child in node.children() {
         match &child.data.borrow().value {
@@ -77,6 +79,7 @@ fn collect_tables<'a>(node: &'a AstNode<'a>, tables: &mut Vec<MarkdownTable>) ->
     Ok(())
 }
 
+/// Extracts a single markdown table from a table node.
 fn extract_table<'a>(table_node: &'a AstNode<'a>) -> Result<MarkdownTable> {
     let mut headers: Option<Vec<String>> = None;
     let mut rows = Vec::new();
@@ -98,6 +101,7 @@ fn extract_table<'a>(table_node: &'a AstNode<'a>) -> Result<MarkdownTable> {
     Ok(MarkdownTable { headers, rows })
 }
 
+/// Extracts text cells from a table row node.
 fn extract_table_row<'a>(row_node: &'a AstNode<'a>) -> Vec<String> {
     let mut cells = Vec::new();
     for cell in row_node.children() {
@@ -108,12 +112,14 @@ fn extract_table_row<'a>(row_node: &'a AstNode<'a>) -> Vec<String> {
     cells
 }
 
+/// Extracts concatenated text from a markdown node.
 fn extract_text<'a>(node: &'a AstNode<'a>) -> String {
     let mut text = String::new();
     collect_text(node, &mut text);
     text
 }
 
+/// Recursively collects text from markdown nodes.
 fn collect_text<'a>(node: &'a AstNode<'a>, output: &mut String) {
     match &node.data.borrow().value {
         NodeValue::Text(text) => {

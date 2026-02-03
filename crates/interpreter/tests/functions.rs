@@ -2,6 +2,7 @@
 
 #![allow(clippy::needless_raw_string_hashes)]
 
+/// Shared test helpers.
 mod common {
     include!("common_impl.txt");
 }
@@ -247,6 +248,7 @@ async fn test_function_calls_function() {
     assert!(matches!(interp.get_var("x").await, Some(Value::Int(40))));
 }
 
+/// Validates recursion works with a large stack size.
 #[test]
 fn test_recursive_function() {
     let handle = std::thread::Builder::new()

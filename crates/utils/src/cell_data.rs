@@ -2,6 +2,7 @@
 
 use serde_json::Value as JsonValue;
 
+/// Retrieves a field using a short or long key fallback.
 fn get_field<'a>(value: Option<&'a JsonValue>, short: &str, long: &str) -> Option<&'a JsonValue> {
     let JsonValue::Object(map) = value? else {
         return None;
@@ -64,11 +65,13 @@ pub fn get_extended_value_error(ext_value: Option<&JsonValue>) -> Option<&JsonVa
     get_field(ext_value, "ev", "errorValue")
 }
 
+/// Cell data helper tests.
 #[cfg(test)]
 mod tests {
     use super::*;
     use serde_json::json;
 
+/// Verifies cell value fallback keys.
     #[test]
     fn test_cell_value_fallbacks() {
         let cell = json!({"ue": 1, "userEnteredValue": 2, "fv": "x"});
@@ -76,6 +79,7 @@ mod tests {
         assert_eq!(get_cell_formatted_value(Some(&cell)).unwrap(), &json!("x"));
     }
 
+/// Verifies style id fallback keys.
     #[test]
     fn test_style_id_fallback() {
         let style = json!({"styleId": "abc"});

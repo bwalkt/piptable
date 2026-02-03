@@ -1,9 +1,14 @@
 //! Built-in functions for the piptable interpreter.
 
+/// Array-related built-in functions.
 mod array;
+/// Core interpreter built-in functions.
 mod core;
+/// Math-related built-in functions.
 mod math;
+/// Sheet-related built-in functions.
 mod sheet;
+/// String-related built-in functions.
 mod string;
 
 use crate::Interpreter;

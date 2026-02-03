@@ -327,6 +327,7 @@ impl Interpreter {
         }
     }
 
+    /// Renders a literal value to SQL syntax.
     pub(crate) fn literal_to_sql(&self, lit: &Literal) -> String {
         match lit {
             Literal::Null => "NULL".to_string(),
@@ -351,6 +352,7 @@ impl Interpreter {
         }
     }
 
+    /// Maps a binary operator to its SQL representation.
     pub(crate) fn binary_op_to_sql(&self, op: BinaryOp) -> &'static str {
         match op {
             BinaryOp::Add => "+",
@@ -372,6 +374,7 @@ impl Interpreter {
         }
     }
 
+    /// Renders a runtime value to a SQL literal.
     pub(crate) fn value_to_sql(&self, val: &Value) -> String {
         match val {
             Value::Null => "NULL".to_string(),

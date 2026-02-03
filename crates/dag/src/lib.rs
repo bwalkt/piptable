@@ -73,6 +73,7 @@ pub enum NodeRef {
     Static(StaticReference),
 }
 
+/// Internal classification of DAG node storage.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum DagNodeKind {
     Cell,
@@ -132,6 +133,7 @@ impl Dag {
 }
 
 impl Default for Dag {
+    /// Returns an empty DAG with default limits.
     fn default() -> Self {
         Self {
             nodes: HashMap::new(),
@@ -653,6 +655,7 @@ impl Dag {
             .collect()
     }
 
+    /// Ensures a node exists for the given position and returns its key.
     fn ensure_node(&mut self, position: &NodeRef) -> String {
         let key = self.key(position);
         if self.nodes.contains_key(&key) {
@@ -686,6 +689,7 @@ impl Dag {
         key
     }
 
+    /// Marks a node as dirty if it represents a cell.
     fn mark_as_dirty_key(&mut self, key: &str) {
         if let Some(node) = self.nodes.get(key) {
             if node.kind == DagNodeKind::Cell {
@@ -694,6 +698,7 @@ impl Dag {
         }
     }
 
+    /// Removes a node if it has no inputs or dependents.
     fn prune_if_orphan(&mut self, key: &str) {
         let remove = self
             .nodes
@@ -708,6 +713,7 @@ impl Dag {
         }
     }
 
+    /// Visits a node and returns identifiers of reachable nodes.
     fn visit_node<F>(&self, pos: NodeRef, callback: F) -> Result<Vec<DagNodeIdentifier>, DagError>
     where
         F: Fn(&DagNode) -> HashSet<String>,
@@ -717,6 +723,7 @@ impl Dag {
         Ok(self.identifiers_from_keys(&nodes))
     }
 
+    /// Converts keys into node identifiers.
     fn identifiers_from_keys(&self, keys: &[String]) -> Vec<DagNodeIdentifier> {
         keys.iter()
             .filter_map(|key| self.nodes.get(key))
@@ -724,6 +731,7 @@ impl Dag {
             .collect()
     }
 
+    /// Builds a node identifier for export.
     fn node_identifier(&self, node: &DagNode) -> DagNodeIdentifier {
         DagNodeIdentifier {
             key: node.key.clone(),
@@ -731,6 +739,7 @@ impl Dag {
         }
     }
 
+    /// Builds a JSON-ready representation of a node.
     fn node_to_json(&self, node: &DagNode) -> DagNodeJson {
         let input_keys = node
             .input_keys
@@ -753,6 +762,7 @@ impl Dag {
         }
     }
 
+    /// Finds range nodes that include the given cell.
     fn get_node_from_cell_ranges(&self, cell: &CellCoordinate) -> Vec<CellCoordinateRange> {
         let mut valid_ranges = Vec::new();
         let Some(sheet_rows) = self.ranges_by_row.get(&cell.sheet_id) else {
@@ -778,6 +788,7 @@ impl Dag {
         valid_ranges
     }
 
+    /// Adds a range key to the row index.
     fn add_range_index(&mut self, key: &str, range: &CellCoordinateRange) {
         let sheet = self.ranges_by_row.entry(range.sheet_id).or_default();
         let start = range.start_row_index.min(range.end_row_index);
@@ -790,6 +801,7 @@ impl Dag {
         }
     }
 
+    /// Removes a range key from the row index.
     fn remove_range_index(&mut self, key: &str) {
         for sheet in self.ranges_by_row.values_mut() {
             for keys in sheet.values_mut() {
@@ -798,6 +810,7 @@ impl Dag {
         }
     }
 
+    /// Returns dependent keys including range parents.
     fn dependents_with_ranges(&self, node: &DagNode) -> HashSet<String> {
         let mut dependents = node.dependent_keys.clone();
         if let Some(NodePosition::Cell(cell)) = &node.position {
@@ -811,6 +824,7 @@ impl Dag {
         dependents
     }
 
+    /// Detects whether a path exists between two nodes.
     fn has_path(&self, from_key: &str, to_key: &str) -> bool {
         if from_key == to_key {
             return true;
@@ -837,6 +851,7 @@ impl Dag {
         false
     }
 
+    /// Performs a topological sort from the given roots.
     fn topological_sort<F>(&self, roots: Vec<String>, children: F) -> Result<Vec<String>, DagError>
     where
         F: Fn(&DagNode) -> HashSet<String>,
@@ -893,10 +908,12 @@ impl Dag {
     }
 }
 
+/// DAG unit tests.
 #[cfg(test)]
 mod tests {
     use super::*;
 
+/// Verifies dependency tracking and dirty nodes.
     #[test]
     fn test_add_dependency_and_dirty_nodes() {
         let mut dag = Dag::new();
@@ -910,6 +927,7 @@ mod tests {
         assert!(dirty.iter().any(|node| node.key == dag.key(&b1)));
     }
 
+/// Verifies dependents for range nodes.
     #[test]
     fn test_range_dependents() {
         let mut dag = Dag::new();
@@ -924,6 +942,7 @@ mod tests {
         assert!(dirty.iter().any(|node| node.key == dag.key(&c1)));
     }
 
+/// Verifies circular dependency detection.
     #[test]
     fn test_circular_dependency_detection() {
         let mut dag = Dag::new();
@@ -935,6 +954,7 @@ mod tests {
         assert!(matches!(err, DagError::CircularDependency { .. }));
     }
 
+/// Verifies DAG JSON roundtrip.
     #[test]
     fn test_to_json_roundtrip() {
         let mut dag = Dag::new();
@@ -951,6 +971,7 @@ mod tests {
         assert!(restored.has_node(&b1));
     }
 
+/// Verifies static nodes survive sheet deletion.
     #[test]
     fn test_delete_sheet_keeps_static_nodes() {
         let mut dag = Dag::new();
@@ -963,6 +984,7 @@ mod tests {
         assert!(dag.has_node(&static_ref));
     }
 
+/// Verifies orphan nodes are pruned.
     #[test]
     fn test_delete_cell_prunes_orphan() {
         let mut dag = Dag::new();
@@ -972,6 +994,7 @@ mod tests {
         assert!(!dag.has_node(&cell));
     }
 
+/// Verifies range size limits are enforced.
     #[test]
     fn test_range_too_large() {
         let mut dag = Dag::with_max_range_cells(3);

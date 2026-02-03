@@ -80,11 +80,13 @@ pub fn validate_formula(toon_bytes: &[u8]) -> Result<Vec<u8>, JsValue> {
 
 // Helper functions
 
+/// Compiles a formula and returns msgpack-encoded bytecode.
 fn compile_formula(engine: &mut FormulaEngine, formula: &str) -> Result<Vec<u8>, String> {
     let compiled = engine.compile(formula).map_err(|e| e.to_string())?;
     rmp_serde::to_vec(&compiled).map_err(|e| e.to_string())
 }
 
+/// Evaluates compiled formula bytecode against the provided context.
 fn evaluate_bytecode(
     engine: &FormulaEngine,
     bytecode: &[u8],
@@ -97,6 +99,7 @@ fn evaluate_bytecode(
     Ok(ToonValue::from(value))
 }
 
+/// Builds the evaluation context for a sheet payload.
 fn create_eval_context(
     sheet: &SheetPayload,
     globals: Option<HashMap<String, ToonValue>>,
@@ -119,6 +122,7 @@ fn create_eval_context(
     }
 }
 
+/// Applies a cell update to a dense or sparse sheet payload.
 fn apply_cell_update(
     sheet: &mut SheetPayload,
     update: CellUpdate,
@@ -260,6 +264,7 @@ pub fn apply_range_bytes(toon_bytes: &[u8]) -> Result<Vec<u8>, String> {
     encode_response(&response, toon_bytes)
 }
 
+/// Returns true if the buffer appears to be JSON.
 fn is_json_bytes(bytes: &[u8]) -> bool {
     let mut first = None;
     for b in bytes {
@@ -271,6 +276,7 @@ fn is_json_bytes(bytes: &[u8]) -> bool {
     matches!(first, Some(b'{') | Some(b'['))
 }
 
+/// Decodes a request from JSON or msgpack.
 fn decode_request<T: serde::de::DeserializeOwned>(toon_bytes: &[u8]) -> Result<T, String> {
     if is_json_bytes(toon_bytes) {
         serde_json::from_slice(toon_bytes).map_err(|e| format!("JSON parse error: {}", e))
@@ -279,6 +285,7 @@ fn decode_request<T: serde::de::DeserializeOwned>(toon_bytes: &[u8]) -> Result<T
     }
 }
 
+/// Encodes a response to JSON or msgpack.
 fn encode_response<T: serde::Serialize>(
     response: &T,
     toon_bytes: &[u8],
@@ -290,6 +297,7 @@ fn encode_response<T: serde::Serialize>(
     }
 }
 
+/// Formula evaluation context for WASM sheet payloads.
 struct WasmEvalContext {
     sheet: SheetPayload,
     #[allow(dead_code)]
@@ -299,6 +307,7 @@ struct WasmEvalContext {
 }
 
 impl ValueResolver for WasmEvalContext {
+    /// Resolves a single cell for formula evaluation.
     fn get_cell(&self, addr: &CellAddress) -> Value {
         let toon = match &self.sheet {
             SheetPayload::Sparse { .. } => self
@@ -314,6 +323,7 @@ impl ValueResolver for WasmEvalContext {
         toon.into()
     }
 
+    /// Resolves a range for formula evaluation.
     fn get_range(&self, range: &CellRange) -> Vec<Value> {
         let normalized = range.normalized();
         let rows = normalized.rows() as usize;
@@ -333,10 +343,12 @@ impl ValueResolver for WasmEvalContext {
         values
     }
 
+    /// Returns a sheet cell value (sheet name ignored).
     fn get_sheet_cell(&self, _sheet: &str, addr: &CellAddress) -> Value {
         self.get_cell(addr)
     }
 
+    /// Returns a sheet range (sheet name ignored).
     fn get_sheet_range(&self, _sheet: &str, range: &CellRange) -> Vec<Value> {
         self.get_range(range)
     }

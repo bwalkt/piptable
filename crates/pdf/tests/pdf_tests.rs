@@ -4,6 +4,7 @@ use std::io::Write;
 use std::path::Path;
 use tempfile::NamedTempFile;
 
+/// Verifies basic table extraction from PDFs.
 #[test]
 fn test_extract_tables_basic() {
     // This test would require actual PDF files to be meaningful
@@ -13,6 +14,7 @@ fn test_extract_tables_basic() {
     assert!(result.is_err());
 }
 
+/// Verifies table extraction honors options.
 #[test]
 fn test_extract_tables_with_options() {
     let options = PdfOptions {
@@ -28,6 +30,7 @@ fn test_extract_tables_with_options() {
     assert!(result.is_err());
 }
 
+/// Verifies default PDF options.
 #[test]
 fn test_pdf_options_default() {
     let options = PdfOptions::default();
@@ -39,6 +42,7 @@ fn test_pdf_options_default() {
     assert!(!options.extract_structure);
 }
 
+/// Verifies structured extraction for PDFs.
 #[test]
 #[ignore = "Requires PDFium system dependencies for structure extraction"]
 fn test_extract_structure_basic() {
@@ -57,6 +61,7 @@ fn test_extract_structure_basic() {
     assert!(json["document"]["elements"].is_array());
 }
 
+/// Verifies page range and header options.
 #[test]
 fn test_pdf_options_page_range_and_headers() {
     let file_path =
@@ -84,12 +89,14 @@ fn test_pdf_options_page_range_and_headers() {
 }
 
 // Helper function to create a temporary text file for testing
+/// Creates a temporary text file for OCR tests.
 fn create_temp_text_file(content: &str) -> NamedTempFile {
     let mut temp_file = NamedTempFile::new().expect("Failed to create temp file");
     write!(temp_file, "{}", content).expect("Failed to write to temp file");
     temp_file
 }
 
+/// Verifies table detection on text input.
 #[test]
 #[ignore] // TODO: Add assertions once PDF file creation is implemented
 fn test_table_detection_basic() {
@@ -105,6 +112,7 @@ fn test_table_detection_basic() {
     // 4. Sheet conversion
 }
 
+/// Verifies cell value parsing from table extraction.
 #[test]
 #[ignore] // TODO: Add assertions once PDF file creation is implemented
 fn test_cell_value_parsing() {
@@ -121,6 +129,7 @@ fn test_cell_value_parsing() {
     // - Empty/Null: "" -> CellValue::Null
 }
 
+/// Verifies OCR dependency detection.
 #[test]
 #[ignore = "Requires OCR system dependencies (tesseract, leptonica, pdfium)"]
 fn test_ocr_dependency_detection() {
@@ -166,6 +175,7 @@ fn test_ocr_dependency_detection() {
     }
 }
 
+/// Compares OCR and text extraction paths.
 #[test]
 #[ignore = "Requires creating actual PDF content"]
 fn test_ocr_vs_text_extraction() {
@@ -192,6 +202,7 @@ fn test_ocr_vs_text_extraction() {
     assert!(ocr_enabled_options.ocr_enabled);
 }
 
+/// Ensures OCR errors propagate to callers.
 #[test]
 #[ignore = "Requires OCR dependencies for meaningful error propagation testing"]
 fn test_ocr_error_propagation() {
@@ -244,6 +255,7 @@ fn test_ocr_error_propagation() {
     }
 }
 
+/// Verifies fallback behavior when OCR fails.
 #[test]
 fn test_ocr_fallback_behavior() {
     // Test the specific scenario identified in Codex review:
@@ -307,6 +319,7 @@ fn test_ocr_fallback_behavior() {
     }
 }
 
+/// Verifies text extraction when OCR is disabled.
 #[test]
 fn test_text_extraction_with_no_ocr() {
     // Baseline test: text extraction without OCR should work normally
@@ -340,6 +353,7 @@ fn test_text_extraction_with_no_ocr() {
     }
 }
 
+/// Verifies structured error classification.
 #[test]
 fn test_structured_error_classification() {
     // Test that our structured error types work correctly
@@ -391,6 +405,7 @@ fn test_structured_error_classification() {
     );
 }
 
+/// Verifies end-to-end OCR extraction flow.
 #[test]
 #[ignore = "Requires system dependencies or mocked OCR for true end-to-end validation"]
 fn test_end_to_end_ocr_flow() {

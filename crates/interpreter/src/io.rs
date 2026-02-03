@@ -813,6 +813,7 @@ pub fn import_multi_files(paths: &[String], options: &ImportOptions) -> Result<V
     }
 }
 
+/// Resolves whether to treat the first row as headers.
 fn resolve_has_headers(options: &ImportOptions) -> bool {
     options
         .detect_headers
@@ -820,18 +821,22 @@ fn resolve_has_headers(options: &ImportOptions) -> bool {
         .unwrap_or(true)
 }
 
+/// Resolves the minimum row count for table extraction.
 fn resolve_min_table_rows(options: &ImportOptions) -> usize {
     options.min_table_rows.unwrap_or(2)
 }
 
+/// Resolves the minimum column count for table extraction.
 fn resolve_min_table_cols(options: &ImportOptions) -> usize {
     options.min_table_cols.unwrap_or(2)
 }
 
+/// Resolves whether to extract PDF structure alongside tables.
 fn resolve_extract_structure(options: &ImportOptions) -> bool {
     options.extract_structure.unwrap_or(false)
 }
 
+/// Parses a 1-based page range like "1-3" or a single page like "2".
 #[cfg(not(target_arch = "wasm32"))]
 fn parse_page_range(range: &str) -> Result<Option<(usize, usize)>, String> {
     let trimmed = range.trim();

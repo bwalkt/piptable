@@ -178,60 +178,70 @@ impl Value {
 }
 
 impl Default for Value {
+    /// Returns `Value::Null`.
     fn default() -> Self {
         Self::Null
     }
 }
 
 impl From<bool> for Value {
+    /// Converts a bool into a `Value`.
     fn from(b: bool) -> Self {
         Self::Bool(b)
     }
 }
 
 impl From<i64> for Value {
+    /// Converts an i64 into a `Value`.
     fn from(n: i64) -> Self {
         Self::Int(n)
     }
 }
 
 impl From<i32> for Value {
+    /// Converts an i32 into a `Value`.
     fn from(n: i32) -> Self {
         Self::Int(i64::from(n))
     }
 }
 
 impl From<f64> for Value {
+    /// Converts an f64 into a `Value`.
     fn from(f: f64) -> Self {
         Self::Float(f)
     }
 }
 
 impl From<String> for Value {
+    /// Converts a String into a `Value`.
     fn from(s: String) -> Self {
         Self::String(s)
     }
 }
 
 impl From<&str> for Value {
+    /// Converts a &str into a `Value`.
     fn from(s: &str) -> Self {
         Self::String(s.to_string())
     }
 }
 
 impl<T: Into<Value>> From<Vec<T>> for Value {
+    /// Converts a Vec into a `Value::Array`.
     fn from(v: Vec<T>) -> Self {
         Self::Array(v.into_iter().map(Into::into).collect())
     }
 }
 
 impl From<HashMap<String, Value>> for Value {
+    /// Converts a map into a `Value::Object`.
     fn from(m: HashMap<String, Value>) -> Self {
         Self::Object(m)
     }
 }
 
 impl Serialize for Value {
+    /// Serializes the value to JSON-compatible output.
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: serde::Serializer,
@@ -261,6 +271,7 @@ impl Serialize for Value {
 }
 
 impl<'de> Deserialize<'de> for Value {
+    /// Deserializes a JSON-compatible value into `Value`.
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
         D: serde::Deserializer<'de>,
@@ -333,6 +344,7 @@ impl Value {
     }
 }
 
+/// Tests for this module.
 #[cfg(test)]
 mod tests {
     #![allow(clippy::approx_constant)]
@@ -342,6 +354,7 @@ mod tests {
     // is_null tests
     // ========================================================================
 
+/// Verifies is null.
     #[test]
     fn test_is_null() {
         assert!(Value::Null.is_null());
@@ -354,6 +367,7 @@ mod tests {
     // is_truthy tests
     // ========================================================================
 
+/// Verifies value is truthy.
     #[test]
     fn test_value_is_truthy() {
         assert!(!Value::Null.is_truthy());
@@ -389,6 +403,7 @@ mod tests {
     // type_name tests
     // ========================================================================
 
+/// Verifies value type name.
     #[test]
     fn test_value_type_name() {
         assert_eq!(Value::Null.type_name(), "Null");
@@ -415,6 +430,7 @@ mod tests {
     // as_* accessor tests
     // ========================================================================
 
+/// Verifies as bool.
     #[test]
     fn test_as_bool() {
         assert_eq!(Value::Bool(true).as_bool(), Some(true));
@@ -423,6 +439,7 @@ mod tests {
         assert_eq!(Value::Null.as_bool(), None);
     }
 
+/// Verifies as int.
     #[test]
     fn test_as_int() {
         assert_eq!(Value::Int(42).as_int(), Some(42));
@@ -431,6 +448,7 @@ mod tests {
         assert_eq!(Value::Null.as_int(), None);
     }
 
+/// Verifies as float.
     #[test]
     fn test_as_float() {
         assert_eq!(Value::Float(3.14).as_float(), Some(3.14));
@@ -439,6 +457,7 @@ mod tests {
         assert_eq!(Value::Null.as_float(), None);
     }
 
+/// Verifies as str.
     #[test]
     fn test_as_str() {
         assert_eq!(Value::String("hello".to_string()).as_str(), Some("hello"));
@@ -446,6 +465,7 @@ mod tests {
         assert_eq!(Value::Null.as_str(), None);
     }
 
+/// Verifies as array.
     #[test]
     fn test_as_array() {
         let arr = vec![Value::Int(1), Value::Int(2)];
@@ -455,6 +475,7 @@ mod tests {
         assert!(Value::Int(42).as_array().is_none());
     }
 
+/// Verifies as object.
     #[test]
     fn test_as_object() {
         let mut map = HashMap::new();
@@ -468,6 +489,7 @@ mod tests {
         assert!(Value::Int(42).as_object().is_none());
     }
 
+/// Verifies as table.
     #[test]
     fn test_as_table() {
         let v = Value::Table(vec![]);
@@ -475,6 +497,7 @@ mod tests {
         assert!(Value::Int(42).as_table().is_none());
     }
 
+/// Verifies as sheet.
     #[test]
     fn test_as_sheet() {
         let sheet = Sheet::new();
@@ -488,6 +511,7 @@ mod tests {
     // Default impl test
     // ========================================================================
 
+/// Verifies default.
     #[test]
     fn test_default() {
         let v = Value::default();
@@ -498,6 +522,7 @@ mod tests {
     // From conversions tests
     // ========================================================================
 
+/// Verifies value from conversions.
     #[test]
     fn test_value_from_conversions() {
         let v: Value = true.into();
@@ -531,6 +556,7 @@ mod tests {
     // JSON conversion tests
     // ========================================================================
 
+/// Verifies from json.
     #[test]
     fn test_from_json() {
         assert!(Value::from_json(serde_json::Value::Null).is_null());
@@ -560,6 +586,7 @@ mod tests {
         ));
     }
 
+/// Verifies to json.
     #[test]
     fn test_to_json() {
         assert_eq!(Value::Null.to_json().unwrap(), serde_json::Value::Null);
@@ -588,6 +615,7 @@ mod tests {
         assert_eq!(obj.to_json().unwrap(), serde_json::json!({"key": 42}));
     }
 
+/// Verifies to json errors.
     #[test]
     fn test_to_json_errors() {
         // Table is not JSON-serializable
@@ -615,6 +643,7 @@ mod tests {
     // Serialize/Deserialize tests
     // ========================================================================
 
+/// Verifies serialize.
     #[test]
     fn test_serialize() {
         let v = Value::Int(42);
@@ -634,6 +663,7 @@ mod tests {
         assert_eq!(json, "null");
     }
 
+/// Verifies serialize errors.
     #[test]
     fn test_serialize_errors() {
         // Table cannot be serialized
@@ -649,6 +679,7 @@ mod tests {
         assert!(serde_json::to_string(&v).is_err());
     }
 
+/// Verifies deserialize.
     #[test]
     fn test_deserialize() {
         let v: Value = serde_json::from_str("42").unwrap();

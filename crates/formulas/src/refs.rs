@@ -622,4 +622,37 @@ mod tests {
         assert_eq!(refs[0].kind, ReferenceKind::Range);
         assert_eq!(refs[1].mode, ReferenceMode::Absolute);
     }
+
+    #[test]
+    fn test_formula_to_relative_reference_empty_formula() {
+        let source = CellAddress::new(0, 0);
+        let dest = CellAddress::new(5, 5);
+        let out = formula_to_relative_reference("", source, dest, None);
+        assert_eq!(out, "");
+    }
+
+    #[test]
+    fn test_formula_to_relative_reference_string_only() {
+        let source = CellAddress::new(0, 0);
+        let dest = CellAddress::new(2, 3);
+        let out = formula_to_relative_reference("=\"A1\"", source, dest, None);
+        assert_eq!(out, "=\"A1\"");
+        assert!(extract_references("=\"A1\"").is_empty());
+    }
+
+    #[test]
+    fn test_formula_to_relative_reference_large_row_and_column() {
+        let source = CellAddress::new(0, 0);
+        let dest = CellAddress::new(1, 1);
+        let out = formula_to_relative_reference("=XFD1048576", source, dest, None);
+        assert_eq!(out, "=XFE1048577");
+    }
+
+    #[test]
+    fn test_formula_to_relative_reference_mixed_range() {
+        let source = CellAddress::new(0, 0);
+        let dest = CellAddress::new(1, 1);
+        let out = formula_to_relative_reference("=SUM($A1:B$2)", source, dest, None);
+        assert_eq!(out, "=SUM($A2:C$2)");
+    }
 }

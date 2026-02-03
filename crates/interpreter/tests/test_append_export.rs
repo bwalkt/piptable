@@ -201,6 +201,7 @@ async fn test_tsv_append_mode() {
     assert_eq!(lines.len(), 4); // header + 3 data rows
 }
 
+/// Verifies distinct append mode removes duplicates.
 #[test]
 fn test_append_distinct_mode() {
     use piptable_interpreter::io::{export_sheet_with_mode, ExportMode};
@@ -249,6 +250,7 @@ fn test_append_distinct_mode() {
     assert!(!content.contains("Alice Updated")); // Should not have updated Alice
 }
 
+/// Verifies append-or-update behavior updates existing rows.
 #[test]
 fn test_append_or_update_mode() {
     use piptable_interpreter::io::{export_sheet_with_mode, ExportMode};
@@ -296,6 +298,7 @@ fn test_append_or_update_mode() {
     assert!(!content.contains("Bob,200")); // Should not have original Bob
 }
 
+/// Ensures append-or-update works without header rows.
 #[test]
 fn test_append_or_update_with_column_names_no_header_row() {
     use piptable_interpreter::io::{export_sheet_with_mode, ExportMode};
@@ -337,6 +340,7 @@ fn test_append_or_update_with_column_names_no_header_row() {
     assert!(!content.contains("1,Alice,100")); // Should not have original Alice
 }
 
+/// Ensures header detection works for string-only CSVs.
 #[test]
 fn test_string_only_csv_header_detection() {
     use piptable_interpreter::io::{export_sheet_with_mode, ExportMode};
@@ -381,6 +385,7 @@ fn test_string_only_csv_header_detection() {
     assert_eq!(header_count, 1, "Header should only appear once");
 }
 
+/// Ensures distinct append ignores header rows as keys.
 #[test]
 fn test_append_distinct_ignores_header_keys() {
     use piptable_interpreter::io::{export_sheet_with_mode, ExportMode};
@@ -901,6 +906,7 @@ async fn test_empty_sheet_append() {
     assert!(content.contains("1,Test"));
 }
 
+/// Validates key column bounds for append/update modes.
 #[test]
 fn test_key_column_bounds_validation() {
     use piptable_interpreter::io::{export_sheet_with_mode, ExportMode};
@@ -941,6 +947,7 @@ fn test_key_column_bounds_validation() {
     assert!(result.is_ok());
 }
 
+/// Validates key column bounds for append/update modes.
 #[test]
 fn test_key_column_bounds_validation_update_mode() {
     use piptable_interpreter::io::{export_sheet_with_mode, ExportMode};

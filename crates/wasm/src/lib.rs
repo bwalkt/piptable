@@ -12,6 +12,7 @@ pub mod spreadsheet;
 #[wasm_bindgen]
 extern "C" {
     #[wasm_bindgen(js_namespace = console)]
+    /// Logs a message to the browser console.
     fn log(s: &str);
 }
 
@@ -51,6 +52,7 @@ pub struct ExecResult {
 pub struct PipTableParser;
 
 impl Default for PipTableParser {
+    /// Returns a default parser instance.
     fn default() -> Self {
         Self::new()
     }
@@ -215,6 +217,7 @@ Eve,32,Seattle,Marketing"#,
     serde_wasm_bindgen::to_value(&data).map_err(|e| JsValue::from_str(&e.to_string()))
 }
 
+/// Converts a sheet cell to JSON.
 fn cell_to_json(cell: &CellValue) -> serde_json::Value {
     match cell {
         CellValue::Null => serde_json::Value::Null,
@@ -238,6 +241,7 @@ fn cell_to_json(cell: &CellValue) -> serde_json::Value {
     }
 }
 
+/// Converts a sheet to JSON (records or array form).
 fn sheet_to_json(sheet: &Sheet) -> serde_json::Value {
     let rows: Vec<serde_json::Value> = sheet
         .data()
@@ -250,6 +254,7 @@ fn sheet_to_json(sheet: &Sheet) -> serde_json::Value {
     serde_json::Value::Array(rows)
 }
 
+/// Converts record batches to JSON.
 fn table_to_json(batches: &[Arc<RecordBatch>]) -> serde_json::Value {
     let mut total_rows: usize = 0;
     for batch in batches {
@@ -281,6 +286,7 @@ fn table_to_json(batches: &[Arc<RecordBatch>]) -> serde_json::Value {
     serde_json::Value::Object(out)
 }
 
+/// Converts an interpreter value to JSON.
 fn value_to_json(value: &Value) -> serde_json::Value {
     match value {
         Value::Null => serde_json::Value::Null,
@@ -308,6 +314,7 @@ fn value_to_json(value: &Value) -> serde_json::Value {
     }
 }
 
+/// Validates statement usage in the browser environment.
 fn validate_statement(stmt: &Statement) -> Result<(), String> {
     match stmt {
         Statement::Import { line, .. } => Err(format!(
@@ -408,6 +415,7 @@ fn validate_statement(stmt: &Statement) -> Result<(), String> {
     }
 }
 
+/// Validates expression usage in the browser environment.
 fn validate_expr(expr: &Expr) -> Result<(), String> {
     match expr {
         Expr::Fetch { .. } => Err("fetch is not supported in the playground".to_string()),
@@ -479,6 +487,7 @@ fn validate_expr(expr: &Expr) -> Result<(), String> {
     }
 }
 
+/// Validates lvalue usage in the browser environment.
 fn validate_lvalue(target: &piptable_core::LValue) -> Result<(), String> {
     match target {
         piptable_core::LValue::Variable(_) => Ok(()),
@@ -490,6 +499,7 @@ fn validate_lvalue(target: &piptable_core::LValue) -> Result<(), String> {
     }
 }
 
+/// Validates a full program for browser compatibility.
 fn validate_program(program: &Program) -> Result<(), String> {
     for stmt in &program.statements {
         validate_statement(stmt)?;
@@ -575,12 +585,14 @@ async fn run_code_inner(code: &str) -> ExecResult {
     }
 }
 
+/// WASM-specific unit tests.
 #[cfg(test)]
 mod tests {
     use super::run_code_inner;
     use futures::executor::block_on;
 
     #[test]
+    /// Ensures parse errors are surfaced to JS.
     fn run_code_reports_parse_errors() {
         let result = block_on(run_code_inner("dim x ="));
         assert!(!result.success);

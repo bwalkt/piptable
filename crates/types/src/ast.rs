@@ -648,6 +648,7 @@ impl Program {
 }
 
 impl Default for Program {
+    /// Returns an empty program.
     fn default() -> Self {
         Self::new()
     }
@@ -662,17 +663,20 @@ pub enum JoinCondition {
     OnColumns { left: String, right: String },
 }
 
+/// AST tests.
 #[cfg(test)]
 mod tests {
     use super::*;
 
     #[test]
+    /// Verifies Program::new creates an empty program.
     fn test_program_new() {
         let program = Program::new();
         assert!(program.statements.is_empty());
     }
 
     #[test]
+    /// Verifies literal serialization.
     fn test_literal_serialization() {
         let lit = Literal::Int(42);
         let json = serde_json::to_string(&lit).unwrap();

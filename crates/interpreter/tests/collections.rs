@@ -2,6 +2,7 @@
 
 #![allow(clippy::needless_raw_string_hashes)]
 
+/// Shared test helpers.
 mod common {
     include!("common_impl.txt");
 }

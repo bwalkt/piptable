@@ -137,11 +137,13 @@ impl SqlEngine {
 }
 
 impl Default for SqlEngine {
+    /// Returns a default SQL engine instance.
     fn default() -> Self {
         Self::new()
     }
 }
 
+/// SQL engine tests.
 #[cfg(test)]
 mod tests {
     use super::*;

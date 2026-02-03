@@ -272,6 +272,7 @@ fn value_to_py(py: Python<'_>, value: &Value) -> PyResult<PyObject> {
             "Lambda values cannot be converted to Python",
         )),
         Value::Sheet(sheet) => {
+            /// Converts a sheet cell to a Python object.
             fn cell_to_py(py: Python<'_>, cell: &piptable_sheet::CellValue) -> PyResult<PyObject> {
                 match cell.cached_or_self() {
                     piptable_sheet::CellValue::Null => Ok(py.None()),
@@ -326,8 +327,8 @@ fn value_to_py(py: Python<'_>, value: &Value) -> PyResult<PyObject> {
     }
 }
 
-/// Convert a Python object to a piptable Value.
 #[allow(clippy::only_used_in_recursion)]
+/// Convert a Python object to a piptable Value.
 fn py_to_value(py: Python<'_>, obj: &Bound<'_, PyAny>) -> PyResult<Value> {
     if obj.is_none() {
         return Ok(Value::Null);
@@ -514,6 +515,7 @@ fn arrow_value_to_py(py: Python<'_>, array: &dyn Array, row: usize) -> PyResult<
     }
 }
 
+/// Tests for Python runtime integration.
 #[cfg(test)]
 mod tests {
     use super::*;

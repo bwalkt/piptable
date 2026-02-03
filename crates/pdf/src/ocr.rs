@@ -10,6 +10,7 @@ pub struct OcrEngine {
 }
 
 impl Default for OcrEngine {
+    /// Returns a default OCR engine configuration.
     fn default() -> Self {
         Self {
             language: "eng".to_string(),
@@ -177,10 +178,12 @@ impl OcrEngine {
     }
 }
 
+/// Tests for OCR engine configuration.
 #[cfg(test)]
 mod tests {
     use super::*;
 
+    /// Ensures the default OCR engine initializes.
     #[test]
     fn test_ocr_engine_creation() {
         let engine = OcrEngine::default();
@@ -188,18 +191,21 @@ mod tests {
         assert_eq!(engine.dpi, 300);
     }
 
+    /// Ensures custom language selection is stored.
     #[test]
     fn test_ocr_engine_with_language() {
         let engine = OcrEngine::new("fra");
         assert_eq!(engine.language, "fra");
     }
 
+    /// Ensures DPI configuration is stored.
     #[test]
     fn test_ocr_engine_with_dpi() {
         let engine = OcrEngine::default().with_dpi(600);
         assert_eq!(engine.dpi, 600);
     }
 
+    /// Ensures OCR necessity detection works for scanned PDFs.
     #[test]
     fn test_needs_ocr_detection() {
         // Minimal text should trigger OCR need
