@@ -179,15 +179,14 @@ impl Sheet {
         let col_index = self.column_index_by_name(column)?;
         let start_row = if self.column_names.is_some() { 1 } else { 0 };
 
-        let phone_regex = if matches!(rule, ValidationRule::Phone) {
-            Some(
-                Regex::new(r"^(?=.*\\d)\\+?[0-9().\\-\\s]{7,}$").map_err(|e| {
+        let phone_regex =
+            if matches!(rule, ValidationRule::Phone) {
+                Some(Regex::new(r"^\\+?[0-9().\\-\\s]{7,}$").map_err(|e| {
                     SheetError::Parse(format!("Invalid phone validation regex: {e}"))
-                })?,
-            )
-        } else {
-            None
-        };
+                })?)
+            } else {
+                None
+            };
         let custom_regex = if let ValidationRule::Regex(pattern) = &rule {
             Some(
                 Regex::new(pattern)
@@ -884,7 +883,9 @@ impl Sheet {
 
         match rule {
             ValidationRule::Email => value.validate_email(),
-            ValidationRule::Phone => phone_regex.map(|re| re.is_match(&value)).unwrap_or(false),
+            ValidationRule::Phone => phone_regex
+                .map(|re| re.is_match(&value) && value.chars().any(|ch| ch.is_ascii_digit()))
+                .unwrap_or(false),
             ValidationRule::Range { min, max } => value
                 .parse::<f64>()
                 .map(|v| v >= *min && v <= *max)
