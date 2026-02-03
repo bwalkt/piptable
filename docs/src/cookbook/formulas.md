@@ -21,6 +21,21 @@ DSL implementation for lookup formulas.
 Aggregate functions like `SUM`, `AVERAGE`, `MIN`, and `MAX` accept arrays or
 ranges.
 
+## MVP Formula Set
+
+For the evaluator MVP, start with these functions:
+
+- `SUM`
+- `AVERAGE`
+- `COUNT`
+- `MIN`
+- `MAX`
+- `IF`
+- `CONCAT`
+- `LEFT`
+- `LEN`
+- `TODAY`
+
 ## Lookup and Reference Formulas
 
 Lookup formulas operate on arrays or sheet ranges:
@@ -52,6 +67,13 @@ dim block = offset(products, 1, 0, 1, 2)  ' returns [["Banana", 0.75]]
 `XLOOKUP` supports binary search for sorted arrays with `search_mode = 2` (ascending) or `-2` (descending).
 
 ## Evaluate Formulas Against Sheets
+
+Use formulas stored in a sheet and evaluate the whole sheet:
+
+```piptable
+dim s = sheet_set_formula(sales, "C1", "=SUM(A1:B1)")
+dim s = sheet_evaluate_formulas(s)
+```
 
 Retrieve raw formula text or computed values:
 
