@@ -708,7 +708,9 @@ impl Sheet {
                 *cell = f(cell);
             }
         }
-        let _ = self.rebuild_formula_engine();
+        if let Err(err) = self.rebuild_formula_engine() {
+            eprintln!("Warning: formula engine rebuild failed: {err}");
+        }
     }
 
     /// Apply a function to a specific column
@@ -754,7 +756,9 @@ impl Sheet {
         }
         self.data = keep;
         self.invalidate_row_names();
-        let _ = self.rebuild_formula_engine();
+        if let Err(err) = self.rebuild_formula_engine() {
+            eprintln!("Warning: formula engine rebuild failed: {err}");
+        }
     }
 
     /// Remove columns at the specified indices
@@ -1097,7 +1101,9 @@ impl Sheet {
             })
         });
         self.invalidate_row_names();
-        let _ = self.rebuild_formula_engine();
+        if let Err(err) = self.rebuild_formula_engine() {
+            eprintln!("Warning: formula engine rebuild failed: {err}");
+        }
     }
 
     /// Transpose the sheet (swap rows and columns)
@@ -1129,7 +1135,9 @@ impl Sheet {
 
         // Clear row names as they're no longer valid
         self.row_names = None;
-        let _ = self.rebuild_formula_engine();
+        if let Err(err) = self.rebuild_formula_engine() {
+            eprintln!("Warning: formula engine rebuild failed: {err}");
+        }
     }
 
     /// Cherry-pick columns: Keep only the specified columns

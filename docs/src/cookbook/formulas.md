@@ -75,6 +75,9 @@ dim s = sheet_set_formula(sales, "C1", "=SUM(A1:B1)")
 dim s = sheet_evaluate_formulas(s)
 ```
 
+To store a literal string that begins with "=", prefix it with a single quote
+(`"'="`).
+
 Retrieve raw formula text or computed values:
 
 ```piptable
