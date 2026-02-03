@@ -170,6 +170,7 @@ impl Sheet {
     /// Set a formula in a cell using A1-style notation (e.g., "C1", "=SUM(A1:B1)").
     pub fn set_formula(&mut self, notation: &str, formula: &str) -> Result<()> {
         let addr = self.get_a1_addr(notation)?;
+        let _ = self.get(addr.row as usize, addr.col as usize)?;
         self.formula_engine.set_formula(addr, formula)?;
         self.formula_engine.mark_dirty(&addr);
         Ok(())
