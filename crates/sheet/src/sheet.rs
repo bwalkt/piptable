@@ -241,12 +241,7 @@ impl Sheet {
         Ok(sub_sheet)
     }
 
-    fn set_cell_value_raw(
-        &mut self,
-        row: usize,
-        col: usize,
-        value: CellValue,
-    ) -> Result<()> {
+    fn set_cell_value_raw(&mut self, row: usize, col: usize, value: CellValue) -> Result<()> {
         let cell = self.get_mut(row, col)?;
         *cell = value;
         Ok(())
