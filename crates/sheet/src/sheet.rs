@@ -3,7 +3,43 @@ use crate::error::{Result, SheetError};
 use indexmap::IndexMap;
 use piptable_formulas::{FormulaEngine, ValueResolver};
 use piptable_primitives::{CellAddress, CellRange, ErrorValue, Value};
+use regex::Regex;
 use std::collections::{HashMap, HashSet};
+use validator::ValidateEmail;
+
+/// Strategy for handling null or empty values during cleaning.
+#[derive(Debug, Clone)]
+pub enum NullStrategy {
+    Keep,
+    EmptyToNull,
+    NullToEmpty,
+    FillWith(CellValue),
+}
+
+impl Default for NullStrategy {
+    fn default() -> Self {
+        NullStrategy::Keep
+    }
+}
+
+/// Options for bulk data cleaning.
+#[derive(Debug, Clone, Default)]
+pub struct CleanOptions {
+    pub trim: bool,
+    pub lower: bool,
+    pub upper: bool,
+    pub normalize_whitespace: bool,
+    pub null_strategy: NullStrategy,
+}
+
+/// Rules supported by `validate_column`.
+#[derive(Debug, Clone)]
+pub enum ValidationRule {
+    Email,
+    Phone,
+    Range { min: f64, max: f64 },
+    Regex(String),
+}
 
 /// A sheet representing a 2D grid of cells (row-major storage)
 #[derive(Debug, Clone)]
@@ -81,6 +117,133 @@ impl Sheet {
     #[must_use]
     pub fn is_empty(&self) -> bool {
         self.data.is_empty()
+    }
+
+    /// Remove duplicate rows based on the provided column names.
+    /// Returns the number of rows removed.
+    pub fn remove_duplicates_by_columns(&mut self, columns: &[&str]) -> Result<usize> {
+        let start_row = if self.column_names.is_some() { 1 } else { 0 };
+        let indices: Vec<usize> = if columns.is_empty() {
+            (0..self.col_count()).collect()
+        } else {
+            columns
+                .iter()
+                .map(|name| self.column_index_by_name(name))
+                .collect::<Result<Vec<_>>>()?
+        };
+
+        let mut seen = HashSet::new();
+        let mut new_data = Vec::with_capacity(self.data.len());
+        let mut removed = 0usize;
+
+        if start_row == 1 && !self.data.is_empty() {
+            new_data.push(self.data[0].clone());
+        }
+
+        for (_row_idx, row) in self.data.iter().enumerate().skip(start_row) {
+            let mut key = String::new();
+            for &col in &indices {
+                let cell = row.get(col).unwrap_or(&CellValue::Null);
+                key.push_str(&Self::cell_key(cell));
+                key.push('\x1f');
+            }
+            if seen.insert(key) {
+                new_data.push(row.clone());
+            } else {
+                removed += 1;
+            }
+        }
+
+        self.data = new_data;
+        self.invalidate_row_names();
+        self.rebuild_formula_engine()?;
+        Ok(removed)
+    }
+
+    /// Validate a column and return the row indices that fail the rule.
+    pub fn validate_column(&self, column: &str, rule: ValidationRule) -> Result<Vec<usize>> {
+        let col_index = self.column_index_by_name(column)?;
+        let start_row = if self.column_names.is_some() { 1 } else { 0 };
+
+        let phone_regex =
+            if matches!(rule, ValidationRule::Phone) {
+                Some(Regex::new(r"^\+?[0-9().\-\s]{7,}$").map_err(|e| {
+                    SheetError::Parse(format!("Invalid phone validation regex: {e}"))
+                })?)
+            } else {
+                None
+            };
+        let custom_regex = if let ValidationRule::Regex(pattern) = &rule {
+            Some(
+                Regex::new(pattern)
+                    .map_err(|e| SheetError::Parse(format!("Invalid validation regex: {e}")))?,
+            )
+        } else {
+            None
+        };
+
+        let mut invalid = Vec::new();
+        for (row_idx, row) in self.data.iter().enumerate().skip(start_row) {
+            let cell = row.get(col_index).unwrap_or(&CellValue::Null);
+            if !Self::cell_matches_rule(cell, &rule, phone_regex.as_ref(), custom_regex.as_ref()) {
+                invalid.push(row_idx);
+            }
+        }
+        Ok(invalid)
+    }
+
+    /// Clean data in-place using the provided options.
+    pub fn clean_data(&mut self, options: &CleanOptions) -> Result<()> {
+        for row in &mut self.data {
+            for cell in row {
+                let mut updated = match cell.cached_or_self() {
+                    CellValue::String(s) => {
+                        let mut out = s.clone();
+                        if options.trim {
+                            out = out.trim().to_string();
+                        }
+                        if options.normalize_whitespace {
+                            out = Self::normalize_whitespace(&out);
+                        }
+                        if options.upper {
+                            out = out.to_uppercase();
+                        } else if options.lower {
+                            out = out.to_lowercase();
+                        }
+                        CellValue::String(out)
+                    }
+                    _ => cell.clone(),
+                };
+
+                if matches!(options.null_strategy, NullStrategy::EmptyToNull) {
+                    if let CellValue::String(s) = &updated {
+                        if s.is_empty() {
+                            updated = CellValue::Null;
+                        }
+                    }
+                }
+
+                match &options.null_strategy {
+                    NullStrategy::NullToEmpty => {
+                        if matches!(updated.cached_or_self(), CellValue::Null) {
+                            updated = CellValue::String(String::new());
+                        }
+                    }
+                    NullStrategy::FillWith(value) => {
+                        if matches!(updated.cached_or_self(), CellValue::Null) {
+                            updated = value.clone();
+                        }
+                    }
+                    _ => {}
+                }
+
+                *cell = updated;
+            }
+        }
+
+        self.invalidate_row_names();
+        self.rebuild_formula_engine()?;
+        Ok(())
     }
 
     // ===== Cell Access =====
@@ -659,6 +822,57 @@ impl Sheet {
             .ok_or_else(|| SheetError::RowNotFound {
                 name: name.to_string(),
             })
+    }
+
+    fn normalize_whitespace(input: &str) -> String {
+        let mut out = String::with_capacity(input.len());
+        let mut last_was_space = false;
+        for ch in input.chars() {
+            if ch.is_whitespace() {
+                if !last_was_space {
+                    out.push(' ');
+                    last_was_space = true;
+                }
+            } else {
+                out.push(ch);
+                last_was_space = false;
+            }
+        }
+        out.trim().to_string()
+    }
+
+    fn cell_key(cell: &CellValue) -> String {
+        match cell.cached_or_self() {
+            CellValue::Null => "N".to_string(),
+            CellValue::Bool(b) => format!("B{b}"),
+            CellValue::Int(i) => format!("I{i}"),
+            CellValue::Float(f) => format!("F{f:?}"),
+            CellValue::String(s) => format!("S{s}"),
+            CellValue::Formula(formula) => format!("FML{}", formula.source),
+        }
+    }
+
+    fn cell_matches_rule(
+        cell: &CellValue,
+        rule: &ValidationRule,
+        phone_regex: Option<&Regex>,
+        custom_regex: Option<&Regex>,
+    ) -> bool {
+        let value = match cell.cached_or_self() {
+            CellValue::Null => return false,
+            CellValue::String(s) => s.clone(),
+            other => other.as_str(),
+        };
+
+        match rule {
+            ValidationRule::Email => value.validate_email(),
+            ValidationRule::Phone => phone_regex.map(|re| re.is_match(&value)).unwrap_or(false),
+            ValidationRule::Range { min, max } => value
+                .parse::<f64>()
+                .map(|v| v >= *min && v <= *max)
+                .unwrap_or(false),
+            ValidationRule::Regex(_) => custom_regex.map(|re| re.is_match(&value)).unwrap_or(false),
+        }
     }
 
     fn invalidate_column_names(&mut self) {

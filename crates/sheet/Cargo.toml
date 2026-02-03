@@ -16,6 +16,8 @@ indexmap = { workspace = true }
 arrow = { workspace = true }
 piptable-primitives = { workspace = true }
 piptable-formulas = { workspace = true }
+regex = { workspace = true }
+validator = { workspace = true }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 calamine = { workspace = true }

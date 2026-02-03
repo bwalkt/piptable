@@ -2,7 +2,7 @@
 
 use crate::{formula, Interpreter};
 use piptable_core::{PipError, PipResult, Value};
-use piptable_sheet::CellValue;
+use piptable_sheet::{CellValue, CleanOptions, NullStrategy, ValidationRule};
 
 /// Convert a CellValue to a Value
 fn cell_to_value(cell: &CellValue) -> Value {
@@ -179,6 +179,222 @@ pub async fn call_sheet_builtin(
                     Some(Ok(Value::Sheet(new_sheet)))
                 }
                 _ => Some(Err(PipError::runtime(line, "Argument must be a sheet"))),
+            }
+        }
+
+        "sheet_remove_duplicates" => {
+            if args.len() > 2 {
+                return Some(Err(PipError::runtime(
+                    line,
+                    "sheet_remove_duplicates() takes 1 or 2 arguments (sheet, columns?)",
+                )));
+            }
+            let columns: Vec<&str> = if args.len() == 2 {
+                match &args[1] {
+                    Value::String(name) => vec![name.as_str()],
+                    Value::Array(values) => {
+                        let mut names = Vec::with_capacity(values.len());
+                        for value in values {
+                            match value {
+                                Value::String(s) => names.push(s.as_str()),
+                                _ => {
+                                    return Some(Err(PipError::runtime(
+                                        line,
+                                        "Column names must be strings",
+                                    )))
+                                }
+                            }
+                        }
+                        names
+                    }
+                    _ => {
+                        return Some(Err(PipError::runtime(
+                            line,
+                            "Second argument must be a column name or array of names",
+                        )))
+                    }
+                }
+            } else {
+                Vec::new()
+            };
+
+            match &args[0] {
+                Value::Sheet(sheet) => {
+                    let mut new_sheet = sheet.clone();
+                    match new_sheet.remove_duplicates_by_columns(&columns) {
+                        Ok(_) => Some(Ok(Value::Sheet(new_sheet))),
+                        Err(e) => Some(Err(PipError::runtime(
+                            line,
+                            format!("Failed to remove duplicates: {}", e),
+                        ))),
+                    }
+                }
+                _ => Some(Err(PipError::runtime(
+                    line,
+                    "First argument must be a sheet",
+                ))),
+            }
+        }
+
+        "sheet_validate_column" => {
+            if args.len() < 3 || args.len() > 5 {
+                return Some(Err(PipError::runtime(
+                    line,
+                    "sheet_validate_column() takes 3-5 arguments (sheet, column, rule, ...)",
+                )));
+            }
+            let (sheet, column, rule) = match (&args[0], &args[1], &args[2]) {
+                (Value::Sheet(sheet), Value::String(column), Value::String(rule)) => {
+                    (sheet, column, rule)
+                }
+                _ => {
+                    return Some(Err(PipError::runtime(
+                        line,
+                        "Arguments must be (sheet, column_name, rule)",
+                    )))
+                }
+            };
+
+            let validation_rule = match rule.as_str() {
+                "email" => ValidationRule::Email,
+                "phone" => ValidationRule::Phone,
+                "range" => {
+                    if args.len() < 5 {
+                        return Some(Err(PipError::runtime(
+                            line,
+                            "range validation requires min and max arguments",
+                        )));
+                    }
+                    let min = match &args[3] {
+                        Value::Int(i) => *i as f64,
+                        Value::Float(f) => *f,
+                        _ => {
+                            return Some(Err(PipError::runtime(line, "range min must be a number")))
+                        }
+                    };
+                    let max = match &args[4] {
+                        Value::Int(i) => *i as f64,
+                        Value::Float(f) => *f,
+                        _ => {
+                            return Some(Err(PipError::runtime(line, "range max must be a number")))
+                        }
+                    };
+                    ValidationRule::Range { min, max }
+                }
+                "regex" => {
+                    if args.len() < 4 {
+                        return Some(Err(PipError::runtime(
+                            line,
+                            "regex validation requires a pattern argument",
+                        )));
+                    }
+                    match &args[3] {
+                        Value::String(pattern) => ValidationRule::Regex(pattern.clone()),
+                        _ => {
+                            return Some(Err(PipError::runtime(
+                                line,
+                                "regex pattern must be a string",
+                            )))
+                        }
+                    }
+                }
+                _ => {
+                    return Some(Err(PipError::runtime(
+                        line,
+                        "Unknown rule. Supported: email, phone, range, regex",
+                    )))
+                }
+            };
+
+            match sheet.validate_column(column, validation_rule) {
+                Ok(rows) => Some(Ok(Value::Array(
+                    rows.into_iter().map(|r| Value::Int(r as i64)).collect(),
+                ))),
+                Err(e) => Some(Err(PipError::runtime(
+                    line,
+                    format!("Failed to validate column: {}", e),
+                ))),
+            }
+        }
+
+        "sheet_clean_data" => {
+            if args.len() < 2 || args.len() > 3 {
+                return Some(Err(PipError::runtime(
+                    line,
+                    "sheet_clean_data() takes 2-3 arguments (sheet, operations, fill_value?)",
+                )));
+            }
+
+            let operations = match &args[1] {
+                Value::String(op) => vec![op.clone()],
+                Value::Array(values) => {
+                    let mut ops = Vec::with_capacity(values.len());
+                    for value in values {
+                        match value {
+                            Value::String(s) => ops.push(s.clone()),
+                            _ => {
+                                return Some(Err(PipError::runtime(
+                                    line,
+                                    "Operations must be strings",
+                                )))
+                            }
+                        }
+                    }
+                    ops
+                }
+                _ => {
+                    return Some(Err(PipError::runtime(
+                        line,
+                        "Operations must be a string or array of strings",
+                    )))
+                }
+            };
+
+            let mut options = CleanOptions::default();
+            for op in operations {
+                match op.as_str() {
+                    "trim" => options.trim = true,
+                    "lower" => options.lower = true,
+                    "upper" => options.upper = true,
+                    "normalize_whitespace" => options.normalize_whitespace = true,
+                    "empty_to_null" => options.null_strategy = NullStrategy::EmptyToNull,
+                    "null_to_empty" => options.null_strategy = NullStrategy::NullToEmpty,
+                    "fill_nulls" => {
+                        let fill_value = args.get(2).and_then(value_to_cell).ok_or_else(|| {
+                            PipError::runtime(line, "fill_nulls requires a fill value")
+                        });
+                        match fill_value {
+                            Ok(value) => options.null_strategy = NullStrategy::FillWith(value),
+                            Err(err) => return Some(Err(err)),
+                        }
+                    }
+                    _ => {
+                        return Some(Err(PipError::runtime(
+                            line,
+                            format!(
+                                "Unknown operation '{}'. Supported: trim, lower, upper, normalize_whitespace, empty_to_null, null_to_empty, fill_nulls",
+                                op
+                            ),
+                        )))
+                    }
+                }
+            }
+
+            match &args[0] {
+                Value::Sheet(sheet) => {
+                    let mut new_sheet = sheet.clone();
+                    match new_sheet.clean_data(&options) {
+                        Ok(()) => Some(Ok(Value::Sheet(new_sheet))),
+                        Err(e) => Some(Err(PipError::runtime(
+                            line,
+                            format!("Failed to clean data: {}", e),
+                        ))),
+                    }
+                }
+                _ => Some(Err(PipError::runtime(
+                    line,
+                    "First argument must be a sheet",
+                ))),
             }
         }
 
