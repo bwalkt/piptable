@@ -267,9 +267,9 @@ fn process_sales_data() -> Result<()> {
 | `sheet['A1'] = value` | `sheet.set_a1("A1", value)` |
 | `sheet['A1:C3']` | `sheet.get_range("A1:C3")` |
 | `sheet.column["Name"]` | `sheet.column_by_name("Name")` |
-| `sheet.column["Name"] = [...]` | `sheet.column_update_by_name("Name", values)` |
+| `sheet.column["Name"] = [...]` | `sheet.set_column_by_name("Name", values)` |
 | `sheet.row["Row1"]` | `sheet.row_by_name("Row1")` |
-| `sheet.row["Row1"] = [...]` | `sheet.row_update_by_name("Row1", values)` |
+| `sheet.row["Row1"] = [...]` | `sheet.set_row_by_name("Row1", values)` |
 | `sheet.map(func)` | `sheet.map(func)` |
 | `sheet.filter()` | `sheet.filter_rows()` |
 | `del sheet.column['a', 'c']` | `sheet.remove_columns(&["a", "c"])` |
