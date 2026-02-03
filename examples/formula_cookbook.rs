@@ -2,7 +2,13 @@
 //!
 //! This file contains practical examples of using formulas in piptable-sheet.
 
-use piptable_sheet::Sheet;
+use piptable_sheet::{CellValue, Sheet};
+
+macro_rules! row {
+    ($($value:expr),* $(,)?) => {
+        vec![$(CellValue::from($value)),*]
+    };
+}
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("=== Piptable Formula Cookbook ===\n");
@@ -23,10 +29,10 @@ fn basic_arithmetic_example() -> Result<(), Box<dyn std::error::Error>> {
     println!("------------------------------");
 
     let mut sheet = Sheet::from_data(vec![
-        vec!["Price", "Quantity", "Total", "Tax Rate", "Tax", "Final"],
-        vec![100, 5, 0, 0.08, 0, 0],
-        vec![250, 2, 0, 0.08, 0, 0],
-        vec![75, 10, 0, 0.08, 0, 0],
+        row!["Price", "Quantity", "Total", "Tax Rate", "Tax", "Final"],
+        row![100, 5, 0, 0.08, 0, 0],
+        row![250, 2, 0, 0.08, 0, 0],
+        row![75, 10, 0, 0.08, 0, 0],
     ]);
 
     // Calculate totals
@@ -65,12 +71,12 @@ fn financial_calculations() -> Result<(), Box<dyn std::error::Error>> {
     println!("-------------------------");
 
     let mut sheet = Sheet::from_data(vec![
-        vec!["Month", "Revenue", "Expenses", "Profit", "Margin %"],
-        vec!["Jan", 10000, 7000, 0, 0],
-        vec!["Feb", 12000, 8000, 0, 0],
-        vec!["Mar", 15000, 9000, 0, 0],
-        vec!["Apr", 11000, 7500, 0, 0],
-        vec!["Total", 0, 0, 0, 0],
+        row!["Month", "Revenue", "Expenses", "Profit", "Margin %"],
+        row!["Jan", 10000, 7000, 0, 0],
+        row!["Feb", 12000, 8000, 0, 0],
+        row!["Mar", 15000, 9000, 0, 0],
+        row!["Apr", 11000, 7500, 0, 0],
+        row!["Total", 0, 0, 0, 0],
     ]);
 
     // Calculate profit for each month
@@ -111,15 +117,15 @@ fn data_analysis_example() -> Result<(), Box<dyn std::error::Error>> {
     println!("----------------------------------");
 
     let mut sheet = Sheet::from_data(vec![
-        vec!["Student", "Test1", "Test2", "Test3", "Average", "Grade"],
-        vec!["Alice", 85, 90, 88, 0, ""],
-        vec!["Bob", 78, 82, 85, 0, ""],
-        vec!["Carol", 92, 95, 94, 0, ""],
-        vec!["David", 70, 75, 72, 0, ""],
-        vec!["Statistics", 0, 0, 0, 0, ""],
-        vec!["Average", 0, 0, 0, 0, ""],
-        vec!["Max", 0, 0, 0, 0, ""],
-        vec!["Min", 0, 0, 0, 0, ""],
+        row!["Student", "Test1", "Test2", "Test3", "Average", "Grade"],
+        row!["Alice", 85, 90, 88, 0, ""],
+        row!["Bob", 78, 82, 85, 0, ""],
+        row!["Carol", 92, 95, 94, 0, ""],
+        row!["David", 70, 75, 72, 0, ""],
+        row!["Statistics", 0, 0, 0, 0, ""],
+        row!["Average", 0, 0, 0, 0, ""],
+        row!["Max", 0, 0, 0, 0, ""],
+        row!["Min", 0, 0, 0, 0, ""],
     ]);
 
     // Calculate student averages
@@ -191,10 +197,10 @@ fn string_manipulation_example() -> Result<(), Box<dyn std::error::Error>> {
     println!("----------------------");
 
     let mut sheet = Sheet::from_data(vec![
-        vec!["First Name", "Last Name", "Full Name", "Email", "Username"],
-        vec!["john", "doe", "", "", ""],
-        vec!["jane", "smith", "", "", ""],
-        vec!["bob", "wilson", "", "", ""],
+        row!["First Name", "Last Name", "Full Name", "Email", "Username"],
+        row!["john", "doe", "", "", ""],
+        row!["jane", "smith", "", "", ""],
+        row!["bob", "wilson", "", "", ""],
     ]);
 
     for row in 2..=4 {
@@ -258,17 +264,17 @@ fn conditional_logic_example() -> Result<(), Box<dyn std::error::Error>> {
     println!("--------------------");
 
     let mut sheet = Sheet::from_data(vec![
-        vec![
+        row![
             "Product",
             "Stock",
             "Reorder Level",
             "Status",
-            "Order Quantity",
+            "Order Quantity"
         ],
-        vec!["Widget A", 50, 100, "", 0],
-        vec!["Widget B", 150, 100, "", 0],
-        vec!["Widget C", 25, 50, "", 0],
-        vec!["Widget D", 200, 150, "", 0],
+        row!["Widget A", 50, 100, "", 0],
+        row!["Widget B", 150, 100, "", 0],
+        row!["Widget C", 25, 50, "", 0],
+        row!["Widget D", 200, 150, "", 0],
     ]);
 
     for row in 2..=5 {
@@ -329,10 +335,10 @@ fn dynamic_spreadsheet_example() -> Result<(), Box<dyn std::error::Error>> {
     println!("-----------------------------------------------");
 
     let mut sheet = Sheet::from_data(vec![
-        vec!["Metric", "Q1", "Q2", "Q3", "Q4", "Total", "Average"],
-        vec!["Sales", 1000, 1200, 1500, 1800, 0, 0],
-        vec!["Costs", 600, 700, 800, 900, 0, 0],
-        vec!["Profit", 0, 0, 0, 0, 0, 0],
+        row!["Metric", "Q1", "Q2", "Q3", "Q4", "Total", "Average"],
+        row!["Sales", 1000, 1200, 1500, 1800, 0, 0],
+        row!["Costs", 600, 700, 800, 900, 0, 0],
+        row!["Profit", 0, 0, 0, 0, 0, 0],
     ]);
 
     // Set up profit calculations

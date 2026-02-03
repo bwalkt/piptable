@@ -201,8 +201,9 @@ fn test_formula_error_propagation() -> Result<(), Box<dyn std::error::Error>> {
     // The formula should evaluate but produce an error value
     match sheet.get_a1("C1")? {
         CellValue::Formula(formula) => {
-            assert!(formula.cached.is_some());
-            // The cached value should indicate an error (e.g., infinity or error string)
+            assert!(
+                matches!(formula.cached.as_deref(), Some(CellValue::String(s)) if s == "#DIV/0!")
+            );
         }
         _ => panic!("expected formula cell"),
     }

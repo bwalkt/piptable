@@ -136,8 +136,9 @@ fn format_cell_value(value: &CellValue) -> String {
             }
         }
         CellValue::String(s) => {
-            if s.len() > 6 {
-                format!("{}…", &s[..5])
+            if s.chars().count() > 6 {
+                let preview: String = s.chars().take(5).collect();
+                format!("{}…", preview)
             } else {
                 s.clone()
             }
@@ -154,6 +155,13 @@ fn format_cell_value(value: &CellValue) -> String {
 
 fn handle_set_command(sheet: &mut Sheet, cell: &str, value: &str) {
     // Try to parse as number first
+    let value = value.trim();
+    let value = if value.len() >= 2 && value.starts_with('"') && value.ends_with('"') {
+        &value[1..value.len() - 1]
+    } else {
+        value
+    };
+
     let cell_value = if let Ok(int_val) = value.parse::<i64>() {
         CellValue::Int(int_val)
     } else if let Ok(float_val) = value.parse::<f64>() {
