@@ -244,12 +244,14 @@ fn infer_column_type(rows: &[&Vec<CellValue>], col_idx: usize) -> DataType {
         if col_idx >= row.len() {
             continue;
         }
-        match &row[col_idx] {
+        let cell = row[col_idx].cached_or_self();
+        match cell {
             CellValue::Null => {}
             CellValue::Bool(_) => has_bool = true,
             CellValue::Int(_) => has_int = true,
             CellValue::Float(_) => has_float = true,
             CellValue::String(_) => has_string = true,
+            CellValue::Formula(_) => has_string = true,
         }
     }
 
@@ -273,21 +275,21 @@ fn build_arrow_array(rows: &[&Vec<CellValue>], col_idx: usize, dtype: &DataType)
         DataType::Boolean => {
             let values: Vec<Option<bool>> = rows
                 .iter()
-                .map(|row| row.get(col_idx).and_then(CellValue::as_bool))
+                .map(|row| row.get(col_idx).and_then(|cell| cell.as_bool()))
                 .collect();
             Arc::new(BooleanArray::from(values))
         }
         DataType::Int64 => {
             let values: Vec<Option<i64>> = rows
                 .iter()
-                .map(|row| row.get(col_idx).and_then(CellValue::as_int))
+                .map(|row| row.get(col_idx).and_then(|cell| cell.as_int()))
                 .collect();
             Arc::new(Int64Array::from(values))
         }
         DataType::Float64 => {
             let values: Vec<Option<f64>> = rows
                 .iter()
-                .map(|row| row.get(col_idx).and_then(CellValue::as_float))
+                .map(|row| row.get(col_idx).and_then(|cell| cell.as_float()))
                 .collect();
             Arc::new(Float64Array::from(values))
         }

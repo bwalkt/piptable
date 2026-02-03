@@ -292,6 +292,12 @@ fn value_to_py(py: Python<'_>, value: &Value) -> PyResult<PyObject> {
                             piptable_sheet::CellValue::String(s) => {
                                 s.into_pyobject(py)?.to_owned().into_any().unbind()
                             }
+                            piptable_sheet::CellValue::Formula(formula) => formula
+                                .source
+                                .into_pyobject(py)?
+                                .to_owned()
+                                .into_any()
+                                .unbind(),
                         };
                         dict.set_item(key, py_value)?;
                     }
@@ -318,6 +324,12 @@ fn value_to_py(py: Python<'_>, value: &Value) -> PyResult<PyObject> {
                             piptable_sheet::CellValue::String(s) => {
                                 s.into_pyobject(py)?.to_owned().into_any().unbind()
                             }
+                            piptable_sheet::CellValue::Formula(formula) => formula
+                                .source
+                                .into_pyobject(py)?
+                                .to_owned()
+                                .into_any()
+                                .unbind(),
                         };
                         row_list.append(py_value)?;
                     }

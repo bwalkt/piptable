@@ -384,6 +384,18 @@ impl Sheet {
                             ))
                         })?;
                     }
+                    CellValue::Formula(formula) => {
+                        let text = formula.source.trim();
+                        let formula_text = text.strip_prefix('=').unwrap_or(text);
+                        worksheet
+                            .write_formula(row_num, col_num, formula_text)
+                            .map_err(|e| {
+                                SheetError::Io(std::io::Error::new(
+                                    std::io::ErrorKind::Other,
+                                    e.to_string(),
+                                ))
+                            })?;
+                    }
                 }
             }
         }
@@ -517,6 +529,18 @@ impl Book {
                                     e.to_string(),
                                 ))
                             })?;
+                        }
+                        CellValue::Formula(formula) => {
+                            let text = formula.source.trim();
+                            let formula_text = text.strip_prefix('=').unwrap_or(text);
+                            worksheet
+                                .write_formula(row_num, col_num, formula_text)
+                                .map_err(|e| {
+                                    SheetError::Io(std::io::Error::new(
+                                        std::io::ErrorKind::Other,
+                                        e.to_string(),
+                                    ))
+                                })?;
                         }
                     }
                 }

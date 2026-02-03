@@ -1,6 +1,13 @@
 use serde::{Deserialize, Serialize};
 use std::fmt;
 
+/// Represents a formula stored in a cell.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct FormulaCell {
+    pub source: String,
+    pub cached: Option<Box<CellValue>>,
+}
+
 /// Represents a cell value in a sheet
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(untagged)]
@@ -10,60 +17,90 @@ pub enum CellValue {
     Int(i64),
     Float(f64),
     String(String),
+    Formula(FormulaCell),
 }
 
 impl CellValue {
+    /// Create a formula cell value.
+    #[must_use]
+    pub fn formula<S: Into<String>>(source: S) -> Self {
+        CellValue::Formula(FormulaCell {
+            source: source.into(),
+            cached: None,
+        })
+    }
+
+    /// Return the cached value for formulas, or self for non-formulas.
+    #[must_use]
+    pub fn cached_or_self(&self) -> &CellValue {
+        match self {
+            CellValue::Formula(formula) => formula.cached.as_deref().unwrap_or(self),
+            _ => self,
+        }
+    }
+
+    /// Set the cached value for a formula.
+    pub fn set_cached(&mut self, value: CellValue) {
+        if let CellValue::Formula(formula) = self {
+            formula.cached = Some(Box::new(value));
+        }
+    }
+
     /// Check if the value is null
     #[must_use]
     pub fn is_null(&self) -> bool {
-        matches!(self, CellValue::Null)
+        matches!(self.cached_or_self(), CellValue::Null)
     }
 
     /// Try to get the value as a boolean
     #[must_use]
     pub fn as_bool(&self) -> Option<bool> {
-        match self {
+        match self.cached_or_self() {
             CellValue::Bool(b) => Some(*b),
             CellValue::Int(i) => Some(*i != 0),
             CellValue::Float(f) => Some(*f != 0.0),
             CellValue::String(s) => s.parse().ok(),
             CellValue::Null => None,
+            CellValue::Formula(_) => None,
         }
     }
 
     /// Try to get the value as an integer
     #[must_use]
     pub fn as_int(&self) -> Option<i64> {
-        match self {
+        match self.cached_or_self() {
             CellValue::Int(i) => Some(*i),
             CellValue::Float(f) => Some(*f as i64),
             CellValue::Bool(b) => Some(i64::from(*b)),
             CellValue::String(s) => s.parse().ok(),
             CellValue::Null => None,
+            CellValue::Formula(_) => None,
         }
     }
 
     /// Try to get the value as a float
     #[must_use]
     pub fn as_float(&self) -> Option<f64> {
-        match self {
+        match self.cached_or_self() {
             CellValue::Float(f) => Some(*f),
             CellValue::Int(i) => Some(*i as f64),
             CellValue::Bool(b) => Some(if *b { 1.0 } else { 0.0 }),
             CellValue::String(s) => s.parse().ok(),
             CellValue::Null => None,
+            CellValue::Formula(_) => None,
         }
     }
 
     /// Get the value as a string
     #[must_use]
     pub fn as_str(&self) -> String {
-        match self {
+        match self.cached_or_self() {
             CellValue::Null => String::new(),
             CellValue::Bool(b) => b.to_string(),
             CellValue::Int(i) => i.to_string(),
             CellValue::Float(f) => f.to_string(),
             CellValue::String(s) => s.clone(),
+            CellValue::Formula(formula) => formula.source.clone(),
         }
     }
 
@@ -76,6 +113,11 @@ impl CellValue {
         // Check for null/empty
         if trimmed.is_empty() {
             return CellValue::Null;
+        }
+
+        // Check for formulas
+        if trimmed.starts_with('=') {
+            return CellValue::formula(trimmed.to_string());
         }
 
         // Check for boolean (note: "1"/"0" are parsed as Int, not Bool)
@@ -108,12 +150,13 @@ impl Default for CellValue {
 
 impl fmt::Display for CellValue {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
+        match self.cached_or_self() {
             CellValue::Null => write!(f, ""),
             CellValue::Bool(b) => write!(f, "{b}"),
             CellValue::Int(i) => write!(f, "{i}"),
             CellValue::Float(fl) => write!(f, "{fl}"),
             CellValue::String(s) => write!(f, "{s}"),
+            CellValue::Formula(formula) => write!(f, "{}", formula.source),
         }
     }
 }
@@ -207,6 +250,16 @@ mod tests {
             CellValue::parse("hello"),
             CellValue::String("hello".to_string())
         );
+    }
+
+    #[test]
+    fn test_parse_formula() {
+        let value = CellValue::parse("=SUM(A1:B1)");
+        assert!(matches!(
+            value,
+            CellValue::Formula(FormulaCell { source, .. })
+                if source == "=SUM(A1:B1)"
+        ));
     }
 
     #[test]

@@ -2011,6 +2011,17 @@ impl Interpreter {
                                 CellValue::Int(i) => Value::Int(*i),
                                 CellValue::Float(f) => Value::Float(*f),
                                 CellValue::Bool(b) => Value::Bool(*b),
+                                CellValue::Formula(formula) => match formula.cached.as_deref() {
+                                    Some(cached) => match cached {
+                                        CellValue::Null => Value::Null,
+                                        CellValue::String(s) => Value::String(s.clone()),
+                                        CellValue::Int(i) => Value::Int(*i),
+                                        CellValue::Float(f) => Value::Float(*f),
+                                        CellValue::Bool(b) => Value::Bool(*b),
+                                        CellValue::Formula(_) => Value::Null,
+                                    },
+                                    None => Value::String(formula.source.clone()),
+                                },
                             })
                             .collect();
 
@@ -2046,6 +2057,17 @@ impl Interpreter {
                             CellValue::Int(i) => Ok(Value::Int(*i)),
                             CellValue::Float(f) => Ok(Value::Float(*f)),
                             CellValue::Bool(b) => Ok(Value::Bool(*b)),
+                            CellValue::Formula(formula) => match formula.cached.as_deref() {
+                                Some(cached) => match cached {
+                                    CellValue::Null => Ok(Value::Null),
+                                    CellValue::String(s) => Ok(Value::String(s.clone())),
+                                    CellValue::Int(i) => Ok(Value::Int(*i)),
+                                    CellValue::Float(f) => Ok(Value::Float(*f)),
+                                    CellValue::Bool(b) => Ok(Value::Bool(*b)),
+                                    CellValue::Formula(_) => Ok(Value::Null),
+                                },
+                                None => Ok(Value::String(formula.source.clone())),
+                            },
                         }
                     }
                     _ => Err(PipError::runtime(

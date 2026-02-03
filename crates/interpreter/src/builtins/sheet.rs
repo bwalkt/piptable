@@ -12,6 +12,10 @@ fn cell_to_value(cell: &CellValue) -> Value {
         CellValue::Int(i) => Value::Int(*i),
         CellValue::Float(f) => Value::Float(*f),
         CellValue::Bool(b) => Value::Bool(*b),
+        CellValue::Formula(formula) => match formula.cached.as_deref() {
+            Some(cached) => cell_to_value(cached),
+            None => Value::String(formula.source.clone()),
+        },
     }
 }
 
@@ -282,8 +286,10 @@ pub async fn call_sheet_builtin(
             match (&args[0], &args[1]) {
                 (Value::Sheet(sheet), Value::String(notation)) => match sheet.get_a1(notation) {
                     Ok(cell) => {
-                        let is_formula =
-                            matches!(cell, CellValue::String(s) if s.trim_start().starts_with('='));
+                        let is_formula = matches!(
+                            cell,
+                            CellValue::String(s) if s.trim_start().starts_with('=')
+                        ) || matches!(cell, CellValue::Formula(_));
                         Some(Ok(Value::Bool(is_formula)))
                     }
                     Err(e) => Some(Err(PipError::runtime(

@@ -25,6 +25,14 @@ fn cell_to_json_value(cell: CellValue) -> serde_json::Value {
             }
         }
         CellValue::String(s) => JsonValue::String(s),
+        CellValue::Formula(formula) => {
+            let mut obj = serde_json::Map::new();
+            obj.insert("formula".to_string(), JsonValue::String(formula.source));
+            if let Some(cached) = formula.cached {
+                obj.insert("cached".to_string(), cell_to_json_value(*cached));
+            }
+            JsonValue::Object(obj)
+        }
     }
 }
 

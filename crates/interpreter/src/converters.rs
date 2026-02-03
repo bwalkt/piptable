@@ -91,11 +91,12 @@ pub fn sheet_to_arrow(sheet: &Sheet, skip_first_row: usize) -> PipResult<RecordB
         for row_idx in skip_first_row..sheet.row_count() {
             if let Some(row) = sheet.data().get(row_idx) {
                 if let Some(cell) = row.get(col_idx) {
-                    match cell {
+                    match cell.cached_or_self() {
                         CellValue::Int(_) => has_int = true,
                         CellValue::Float(_) => has_float = true,
                         CellValue::Bool(_) => has_bool = true,
                         CellValue::String(_) => has_string = true,
+                        CellValue::Formula(_) => has_string = true,
                         CellValue::Null => {}
                     }
                 }
@@ -110,12 +111,13 @@ pub fn sheet_to_arrow(sheet: &Sheet, skip_first_row: usize) -> PipResult<RecordB
                 for row_idx in skip_first_row..sheet.row_count() {
                     if let Some(row) = sheet.data().get(row_idx) {
                         if let Some(cell) = row.get(col_idx) {
-                            match cell {
+                            match cell.cached_or_self() {
                                 CellValue::String(s) => values.push(Some(s.clone())),
                                 CellValue::Int(i) => values.push(Some(i.to_string())),
                                 CellValue::Float(f) => values.push(Some(f.to_string())),
                                 CellValue::Bool(b) => values.push(Some(b.to_string())),
                                 CellValue::Null => values.push(None),
+                                CellValue::Formula(_) => values.push(None),
                             }
                         } else {
                             values.push(None);
@@ -131,7 +133,7 @@ pub fn sheet_to_arrow(sheet: &Sheet, skip_first_row: usize) -> PipResult<RecordB
                 for row_idx in skip_first_row..sheet.row_count() {
                     if let Some(row) = sheet.data().get(row_idx) {
                         if let Some(cell) = row.get(col_idx) {
-                            match cell {
+                            match cell.cached_or_self() {
                                 CellValue::Float(f) => values.push(Some(*f)),
                                 CellValue::Int(i) => values.push(Some(*i as f64)),
                                 CellValue::Bool(b) => values.push(Some(if *b { 1.0 } else { 0.0 })),
@@ -151,7 +153,7 @@ pub fn sheet_to_arrow(sheet: &Sheet, skip_first_row: usize) -> PipResult<RecordB
                 for row_idx in skip_first_row..sheet.row_count() {
                     if let Some(row) = sheet.data().get(row_idx) {
                         if let Some(cell) = row.get(col_idx) {
-                            match cell {
+                            match cell.cached_or_self() {
                                 CellValue::Int(i) => values.push(Some(*i)),
                                 CellValue::Bool(b) => values.push(Some(if *b { 1 } else { 0 })),
                                 _ => values.push(None),
@@ -170,7 +172,7 @@ pub fn sheet_to_arrow(sheet: &Sheet, skip_first_row: usize) -> PipResult<RecordB
                 for row_idx in skip_first_row..sheet.row_count() {
                     if let Some(row) = sheet.data().get(row_idx) {
                         if let Some(cell) = row.get(col_idx) {
-                            match cell {
+                            match cell.cached_or_self() {
                                 CellValue::Bool(b) => values.push(Some(*b)),
                                 _ => values.push(None),
                             }
@@ -329,12 +331,13 @@ pub fn consolidate_book(
                         for col_name in &all_columns {
                             let val = record
                                 .get(col_name.as_str())
-                                .map(|cell| match cell {
+                                .map(|cell| match cell.cached_or_self() {
                                     CellValue::Null => Value::Null,
                                     CellValue::String(s) => Value::String(s.clone()),
                                     CellValue::Int(i) => Value::Int(*i),
                                     CellValue::Float(f) => Value::Float(*f),
                                     CellValue::Bool(b) => Value::Bool(*b),
+                                    CellValue::Formula(_) => Value::Null,
                                 })
                                 .unwrap_or(Value::Null);
                             new_row.insert(col_name.clone(), val);

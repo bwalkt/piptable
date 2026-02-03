@@ -351,6 +351,11 @@ impl Sheet {
 
 /// Parse a cell value from text, attempting to convert to appropriate type
 fn parse_cell_value(text: &str) -> CellValue {
+    // Handle formulas
+    if text.starts_with('=') {
+        return CellValue::formula(text.to_string());
+    }
+
     // Try to parse as integer (but preserve leading zeros as strings)
     if let Ok(i) = text.parse::<i64>() {
         // Check if the string has leading zeros (except for "0" itself)
