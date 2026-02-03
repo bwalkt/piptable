@@ -6,9 +6,12 @@
 use serde::{Deserialize, Serialize};
 use std::fmt;
 
+/// Address and A1 reference helpers.
 pub mod address;
+/// TOON wire types for WASM/interop.
 pub mod toon;
 
+/// Re-export address helpers and types.
 pub use address::*;
 
 /// A cell address in the spreadsheet (e.g., A1, B2, etc.)

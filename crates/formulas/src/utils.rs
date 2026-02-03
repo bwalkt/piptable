@@ -129,6 +129,7 @@ pub fn is_a_formula(text: &str) -> bool {
     text_str.starts_with('=') || is_alternate_formula(&text_str)
 }
 
+/// Check for alternate formula prefixes (e.g., @, +, - forms).
 pub fn is_alternate_formula(text: &str) -> bool {
     if text.starts_with('@') {
         return true;

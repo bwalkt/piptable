@@ -330,6 +330,7 @@ pub fn count(values: &[Value]) -> Value {
     Value::Int(count as i64)
 }
 
+/// CONCATENATE implementation.
 pub fn concat(values: &[Value]) -> Value {
     let mut first_error: Option<ErrorValue> = None;
     let mut result = String::new();
@@ -363,6 +364,7 @@ pub fn len(values: &[Value]) -> Value {
     }
 }
 
+/// LEFT implementation.
 pub fn left(values: &[Value]) -> Value {
     let text = values.first().unwrap_or(&Value::Empty);
     let count = values.get(1).and_then(to_number).unwrap_or(1.0);
@@ -379,6 +381,7 @@ pub fn left(values: &[Value]) -> Value {
     }
 }
 
+/// RIGHT implementation.
 pub fn right(values: &[Value]) -> Value {
     let text = values.first().unwrap_or(&Value::Empty);
     let count = values.get(1).and_then(to_number).unwrap_or(1.0);
@@ -397,17 +400,20 @@ pub fn right(values: &[Value]) -> Value {
     }
 }
 
+/// TODAY implementation.
 pub fn today(_: &[Value]) -> Value {
     let local = Local::now();
     let date = local.date_naive();
     date_to_local(date, 0, 0, 0)
 }
 
+/// NOW implementation.
 pub fn now(_: &[Value]) -> Value {
     let local = Local::now();
     local_to_excel(Some(local))
 }
 
+/// DATE implementation.
 pub fn date(values: &[Value]) -> Value {
     let year = values.first().and_then(to_number);
     let month = values.get(1).and_then(to_number);
@@ -998,6 +1004,7 @@ pub fn min(values: &[Value]) -> Value {
     }
 }
 
+/// IF implementation.
 pub fn if_fn(values: &[Value]) -> Value {
     if values.len() < 2 {
         return Value::Error(ErrorValue::Value);
@@ -1018,6 +1025,7 @@ pub fn if_fn(values: &[Value]) -> Value {
     }
 }
 
+/// AND implementation.
 pub fn and_fn(values: &[Value]) -> Value {
     let mut any_false = false;
     let mut first_error: Option<ErrorValue> = None;
@@ -1040,6 +1048,7 @@ pub fn and_fn(values: &[Value]) -> Value {
     Value::Bool(!any_false)
 }
 
+/// OR implementation.
 pub fn or_fn(values: &[Value]) -> Value {
     let mut any_true = false;
     let mut first_error: Option<ErrorValue> = None;
@@ -1062,6 +1071,7 @@ pub fn or_fn(values: &[Value]) -> Value {
     Value::Bool(any_true)
 }
 
+/// NOT implementation.
 pub fn not_fn(values: &[Value]) -> Value {
     let value = values.first().unwrap_or(&Value::Empty);
     match coerce_to_bool(value) {
@@ -1070,6 +1080,7 @@ pub fn not_fn(values: &[Value]) -> Value {
     }
 }
 
+/// Coerce a value to a boolean, returning a formula error when invalid.
 pub fn coerce_to_bool(value: &Value) -> Result<bool, ErrorValue> {
     match value {
         Value::Bool(b) => Ok(*b),
@@ -1594,6 +1605,7 @@ pub fn offset(values: &[Value]) -> Value {
     Value::Array(out)
 }
 
+/// Placeholder for unsupported functions.
 pub fn not_implemented(_: &[Value]) -> Value {
     Value::Error(ErrorValue::NA)
 }

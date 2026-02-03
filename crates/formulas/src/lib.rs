@@ -9,15 +9,21 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::hash::{Hash, Hasher};
 
+/// Built-in formula function implementations.
 pub mod functions;
+/// Formula parser and AST helpers.
 pub mod parser;
+/// Reference extraction and normalization helpers.
 pub mod refs;
+/// Utility helpers for formula strings.
 pub mod utils;
 
+/// Re-export reference helpers and types.
 pub use refs::{
     extract_references, formula_to_relative_reference, FormulaReference,
     FormulaToRelativeReferenceOptions, ReferenceKind, ReferenceMode,
 };
+/// Re-export formula string utilities.
 pub use utils::{
     balance_formula, balance_parentheses, balance_quotes, is_a_formula, is_alternate_formula,
     is_balanced_parenthesis, is_valid_formula, validate_formula,
@@ -1089,6 +1095,7 @@ pub trait SheetIdResolver {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+/// Supported parameter type categories for functions.
 pub enum ParamType {
     Any,
     Number,
@@ -1098,6 +1105,7 @@ pub enum ParamType {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+/// Supported return type categories for functions.
 pub enum ReturnType {
     Any,
     Number,
@@ -1106,15 +1114,18 @@ pub enum ReturnType {
     Range,
 }
 
+/// Function implementation signature used by the registry.
 pub type FunctionImpl = fn(&[Value]) -> Value;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+/// Metadata describing a formula function.
 pub struct FunctionMetadata {
     pub params: Vec<ParamType>,
     pub variadic: Option<ParamType>,
     pub return_type: ReturnType,
 }
 
+/// Resolves cell and range references during evaluation.
 pub trait ValueResolver {
     fn get_cell(&self, addr: &CellAddress) -> Value;
     fn get_range(&self, range: &CellRange) -> Vec<Value>;
@@ -1130,12 +1141,14 @@ pub trait ValueResolver {
 }
 
 #[derive(Default)]
+/// Evaluation context with pre-resolved cell and range values.
 pub struct EvalContext {
     cells: HashMap<CellAddress, Value>,
     ranges: HashMap<CellRange, Vec<Value>>,
 }
 
 impl EvalContext {
+    /// Build a context from a map of cell values.
     pub fn with_cells(cells: HashMap<CellAddress, Value>) -> Self {
         Self {
             cells,
@@ -1143,6 +1156,7 @@ impl EvalContext {
         }
     }
 
+    /// Build a context from a map of range values.
     pub fn with_ranges(ranges: HashMap<CellRange, Vec<Value>>) -> Self {
         Self {
             cells: HashMap::new(),

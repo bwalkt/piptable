@@ -4,12 +4,14 @@ use std::collections::HashMap;
 
 use crate::{CellAddress, CellRange};
 
+/// Position used when resolving row-only or column-only addresses.
 #[derive(Debug, Clone, Copy)]
 pub enum AddressPosition {
     Start,
     End,
 }
 
+/// Options for resolving an address into a concrete cell.
 #[derive(Debug, Clone, Copy)]
 pub struct AddressToCellOptions {
     pub position: AddressPosition,
@@ -27,7 +29,9 @@ impl Default for AddressToCellOptions {
     }
 }
 
+/// Maximum row count supported by A1 parsing.
 pub const MAX_ROW_COUNT: u32 = 1_048_576;
+/// Maximum column count supported by A1 parsing.
 pub const MAX_COLUMN_COUNT: u32 = 16_384;
 
 /// Convert a cell to a single-cell range.

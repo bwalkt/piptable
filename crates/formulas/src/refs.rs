@@ -2,6 +2,7 @@ use regex::Regex;
 
 use piptable_primitives::CellAddress;
 
+/// Kind of reference found in a formula.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ReferenceKind {
     Cell,
@@ -12,6 +13,7 @@ pub enum ReferenceKind {
     R1C1Range,
 }
 
+/// Addressing mode for a reference.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ReferenceMode {
     Relative,
@@ -19,6 +21,7 @@ pub enum ReferenceMode {
     Mixed,
 }
 
+/// Parsed reference with source text and metadata.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct FormulaReference {
     pub text: String,
@@ -27,6 +30,7 @@ pub struct FormulaReference {
     pub mode: ReferenceMode,
 }
 
+/// Options for converting formula references to relative form.
 #[derive(Debug, Clone, Default)]
 pub struct FormulaToRelativeReferenceOptions {
     /// Reserved for future exclusion range and circular handling.
@@ -61,6 +65,7 @@ enum A1Ref {
     Row(A1Row),
 }
 
+/// Convert A1 references in a formula to be relative to a new cell.
 pub fn formula_to_relative_reference(
     formula: &str,
     source_cell: CellAddress,
@@ -84,6 +89,7 @@ pub fn formula_to_relative_reference(
     updated
 }
 
+/// Extract A1 references from a formula string.
 pub fn extract_references(formula: &str) -> Vec<FormulaReference> {
     let mut matches: Vec<(usize, FormulaReference)> = Vec::new();
 

@@ -75,4 +75,5 @@ pub enum SheetError {
     Formula(#[from] FormulaError),
 }
 
+/// Result type for sheet operations.
 pub type Result<T> = std::result::Result<T, SheetError>;

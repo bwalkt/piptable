@@ -1,3 +1,4 @@
+use chrono::TimeZone;
 use piptable_sheet::{CellValue, Sheet};
 
 #[test]
@@ -182,10 +183,15 @@ fn test_formula_with_date_functions() -> Result<(), Box<dyn std::error::Error>> 
     sheet.set_formula("D1", "=DATE(A1, B1, C1)")?;
     sheet.evaluate_formulas()?;
 
-    // DATE returns days since epoch
+    // DATE returns an Excel serial date based on local midnight.
     let result = sheet.get_a1("D1")?.as_float();
     assert!(result.is_some());
-    assert!(result.unwrap() > 0.0); // Should be a positive number of days
+    let result = result.unwrap();
+    let expected = excel_serial_for_local_date(2024, 1, 15);
+    assert!(
+        (result - expected).abs() < 1e-6,
+        "Expected {expected}, got {result}"
+    );
 
     Ok(())
 }
@@ -215,7 +221,7 @@ fn test_formula_error_propagation() -> Result<(), Box<dyn std::error::Error>> {
 fn test_formula_absolute_references() -> Result<(), Box<dyn std::error::Error>> {
     let mut sheet = Sheet::from_data(vec![vec![1, 2, 0], vec![3, 4, 0], vec![5, 6, 0]]);
 
-    // Test absolute reference (though our parser may not distinguish yet)
+    // Test absolute reference parsing; add copy/fill coverage when supported.
     sheet.set_formula("C1", "=$A$1+B1")?;
     sheet.set_formula("C2", "=$A$1+B2")?;
     sheet.evaluate_formulas()?;
@@ -224,6 +230,20 @@ fn test_formula_absolute_references() -> Result<(), Box<dyn std::error::Error>> 
     assert_eq!(sheet.get_a1("C2")?.as_float(), Some(5.0)); // 1 + 4
 
     Ok(())
+}
+
+fn excel_serial_for_local_date(year: i32, month: u32, day: u32) -> f64 {
+    let date = chrono::NaiveDate::from_ymd_opt(year, month, day).expect("valid date");
+    let naive = date.and_hms_opt(0, 0, 0).expect("valid time");
+    let local_dt = chrono::Local
+        .from_local_datetime(&naive)
+        .single()
+        .expect("local datetime");
+    let utc = local_dt.with_timezone(&chrono::Utc);
+    let unix_seconds = utc.timestamp();
+    let unix_days = unix_seconds / 86_400;
+    let time_fraction = (unix_seconds % 86_400) as f64 / 86_400.0;
+    (unix_days + 25_569) as f64 + time_fraction
 }
 
 #[test]
