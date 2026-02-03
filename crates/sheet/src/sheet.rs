@@ -23,7 +23,7 @@ impl Default for NullStrategy {
 }
 
 /// Options for bulk data cleaning.
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone)]
 pub struct CleanOptions {
     pub trim: bool,
     pub lower: bool,
