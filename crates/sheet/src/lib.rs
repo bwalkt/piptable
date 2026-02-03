@@ -105,10 +105,16 @@ mod toon;
 #[cfg(not(target_arch = "wasm32"))]
 mod xlsx;
 
+/// Re-export book types and options.
 pub use book::{Book, ConsolidateOptions, FileLoadOptions};
+/// Re-export cell value type.
 pub use cell::CellValue;
+/// Re-export CSV options.
 pub use csv::CsvOptions;
+/// Re-export sheet error types.
 pub use error::{Result, SheetError};
+/// Re-export sheet type.
 pub use sheet::Sheet;
 #[cfg(not(target_arch = "wasm32"))]
+/// Re-export XLSX read options (non-WASM only).
 pub use xlsx::XlsxReadOptions;

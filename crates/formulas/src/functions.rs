@@ -15,7 +15,7 @@ fn date_to_local(date: chrono::NaiveDate, hour: u32, minute: u32, second: u32) -
     let Some(naive) = date.and_hms_opt(hour, minute, second) else {
         return Value::Error(ErrorValue::Value);
     };
-    let local_dt = Local.from_local_datetime(&naive).single();
+    let local_dt = Local.from_local_datetime(&naive).earliest();
     local_to_excel(local_dt)
 }
 
@@ -33,6 +33,28 @@ fn to_number(value: &Value) -> Option<f64> {
         Value::Int(n) => Some(*n as f64),
         Value::Float(f) => Some(*f),
         _ => None,
+    }
+}
+
+fn read_required_number(value: Option<&Value>) -> Result<f64, ErrorValue> {
+    let value = value.unwrap_or(&Value::Empty);
+    match value {
+        Value::Error(err) => Err(err.clone()),
+        other => to_number(other)
+            .filter(|n| n.is_finite())
+            .ok_or(ErrorValue::Value),
+    }
+}
+
+fn read_optional_count(value: Option<&Value>) -> Result<f64, ErrorValue> {
+    let Some(value) = value else {
+        return Ok(1.0);
+    };
+    match value {
+        Value::Error(err) => Err(err.clone()),
+        other => to_number(other)
+            .filter(|n| n.is_finite())
+            .ok_or(ErrorValue::Value),
     }
 }
 
@@ -330,6 +352,7 @@ pub fn count(values: &[Value]) -> Value {
     Value::Int(count as i64)
 }
 
+/// CONCATENATE implementation.
 pub fn concat(values: &[Value]) -> Value {
     let mut first_error: Option<ErrorValue> = None;
     let mut result = String::new();
@@ -363,9 +386,13 @@ pub fn len(values: &[Value]) -> Value {
     }
 }
 
+/// LEFT implementation.
 pub fn left(values: &[Value]) -> Value {
     let text = values.first().unwrap_or(&Value::Empty);
-    let count = values.get(1).and_then(to_number).unwrap_or(1.0);
+    let count = match read_optional_count(values.get(1)) {
+        Ok(value) => value,
+        Err(err) => return Value::Error(err),
+    };
     if count < 0.0 {
         return Value::Error(ErrorValue::Value);
     }
@@ -379,9 +406,13 @@ pub fn left(values: &[Value]) -> Value {
     }
 }
 
+/// RIGHT implementation.
 pub fn right(values: &[Value]) -> Value {
     let text = values.first().unwrap_or(&Value::Empty);
-    let count = values.get(1).and_then(to_number).unwrap_or(1.0);
+    let count = match read_optional_count(values.get(1)) {
+        Ok(value) => value,
+        Err(err) => return Value::Error(err),
+    };
     if count < 0.0 {
         return Value::Error(ErrorValue::Value);
     }
@@ -397,24 +428,32 @@ pub fn right(values: &[Value]) -> Value {
     }
 }
 
+/// TODAY implementation.
 pub fn today(_: &[Value]) -> Value {
     let local = Local::now();
     let date = local.date_naive();
     date_to_local(date, 0, 0, 0)
 }
 
+/// NOW implementation.
 pub fn now(_: &[Value]) -> Value {
     let local = Local::now();
     local_to_excel(Some(local))
 }
 
+/// DATE implementation.
 pub fn date(values: &[Value]) -> Value {
-    let year = values.first().and_then(to_number);
-    let month = values.get(1).and_then(to_number);
-    let day = values.get(2).and_then(to_number);
-
-    let (Some(year), Some(month), Some(day)) = (year, month, day) else {
-        return Value::Error(ErrorValue::Value);
+    let year = match read_required_number(values.first()) {
+        Ok(value) => value,
+        Err(err) => return Value::Error(err),
+    };
+    let month = match read_required_number(values.get(1)) {
+        Ok(value) => value,
+        Err(err) => return Value::Error(err),
+    };
+    let day = match read_required_number(values.get(2)) {
+        Ok(value) => value,
+        Err(err) => return Value::Error(err),
     };
 
     let year = year.floor() as i32;
@@ -998,6 +1037,7 @@ pub fn min(values: &[Value]) -> Value {
     }
 }
 
+/// IF implementation.
 pub fn if_fn(values: &[Value]) -> Value {
     if values.len() < 2 {
         return Value::Error(ErrorValue::Value);
@@ -1018,6 +1058,7 @@ pub fn if_fn(values: &[Value]) -> Value {
     }
 }
 
+/// AND implementation.
 pub fn and_fn(values: &[Value]) -> Value {
     let mut any_false = false;
     let mut first_error: Option<ErrorValue> = None;
@@ -1040,6 +1081,7 @@ pub fn and_fn(values: &[Value]) -> Value {
     Value::Bool(!any_false)
 }
 
+/// OR implementation.
 pub fn or_fn(values: &[Value]) -> Value {
     let mut any_true = false;
     let mut first_error: Option<ErrorValue> = None;
@@ -1062,6 +1104,7 @@ pub fn or_fn(values: &[Value]) -> Value {
     Value::Bool(any_true)
 }
 
+/// NOT implementation.
 pub fn not_fn(values: &[Value]) -> Value {
     let value = values.first().unwrap_or(&Value::Empty);
     match coerce_to_bool(value) {
@@ -1070,6 +1113,7 @@ pub fn not_fn(values: &[Value]) -> Value {
     }
 }
 
+/// Coerce a value to a boolean, returning a formula error when invalid.
 pub fn coerce_to_bool(value: &Value) -> Result<bool, ErrorValue> {
     match value {
         Value::Bool(b) => Ok(*b),
@@ -1594,6 +1638,7 @@ pub fn offset(values: &[Value]) -> Value {
     Value::Array(out)
 }
 
+/// Placeholder for unsupported functions.
 pub fn not_implemented(_: &[Value]) -> Value {
     Value::Error(ErrorValue::NA)
 }
