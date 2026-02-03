@@ -13,11 +13,12 @@ interface EmbedConfig {
 
 // Function to initialize embedded playground from URL parameters or postMessage
 function initializeEmbedPlayground() {
-  const container = document.getElementById('embed-root');
-  if (!container) {
+  const root = document.getElementById('embed-root');
+  if (!root) {
     console.error('Embed root element not found');
     return;
   }
+  const container = root as HTMLElement;
 
   // Get configuration from URL parameters
   const urlParams = new URLSearchParams(window.location.search);
@@ -31,18 +32,17 @@ function initializeEmbedPlayground() {
   };
 
   // Get allowed origin for postMessage security
-  const allowedOrigin = urlParams.get('origin') || 
-    container.getAttribute('data-origin') || 
-    undefined;
+  const allowedOrigin =
+    urlParams.get('origin') || root.getAttribute('data-origin') || undefined;
 
   // If no code in URL, try to get from data attributes
   if (!currentConfig.code) {
-    currentConfig.code = container.getAttribute('data-code') || 'PRINT "Hello, World!"';
-    currentConfig.height = container.getAttribute('data-height') || currentConfig.height;
-    currentConfig.readonly = container.getAttribute('data-readonly') === 'true';
-    currentConfig.showOutput = container.getAttribute('data-show-output') !== 'false';
-    currentConfig.title = container.getAttribute('data-title') || undefined;
-    currentConfig.description = container.getAttribute('data-description') || undefined;
+    currentConfig.code = root.getAttribute('data-code') || 'PRINT "Hello, World!"';
+    currentConfig.height = root.getAttribute('data-height') || currentConfig.height;
+    currentConfig.readonly = root.getAttribute('data-readonly') === 'true';
+    currentConfig.showOutput = root.getAttribute('data-show-output') !== 'false';
+    currentConfig.title = root.getAttribute('data-title') || undefined;
+    currentConfig.description = root.getAttribute('data-description') || undefined;
   }
 
   // Listen for configuration updates via postMessage (for dynamic examples)
