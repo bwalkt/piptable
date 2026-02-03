@@ -156,13 +156,13 @@ export api_spec to "openapi-endpoints.json"
 Markdown tables automatically detect data types:
 
 | Feature  | Example       | Detected Type |
-| -------- | ------- | ------------- |
+|----------|---------------|---------------|
 | Integers | `42`          | Int           |
 | Decimals | `3.14`        | Float         |
 | Booleans | `true`        | Bool          |
 | Nulls    | `null`, `N/A` | Null          |
 | Text     | `hello`       | String        |
-| Emojis   | `✅`, `❌`    | String        |
+| Emojis   | `✅`, `❌`     | String        |
 
 ### Inline Formatting
 
@@ -193,15 +193,10 @@ dim doc = import "analysis.md" into book
 
 ' Count and process each table
 dim table_count = 0
-for i = 1 to 10  ' Check up to 10 tables
-    dim table_name = "table_" + str(i)
-    if doc.has_key(table_name) then
-        table_count = table_count + 1
-        dim table = doc[table_name]
-        print("Table " + str(i) + ": " + str(table.row_count()) + " rows, " + str(table.col_count()) + " columns")
-    else
-        break  ' No more tables
-    end if
+for key in doc.keys()
+    table_count = table_count + 1
+    dim table = doc[key]
+    print(key + ": " + str(table.row_count()) + " rows, " + str(table.col_count()) + " columns")
 next
 
 print("Total tables found: " + str(table_count))

@@ -114,7 +114,7 @@ pub use csv::CsvOptions;
 /// Re-export sheet error types.
 pub use error::{Result, SheetError};
 /// Re-export sheet type.
-pub use sheet::Sheet;
+pub use sheet::{CleanOptions, NullStrategy, Sheet, ValidationRule};
 #[cfg(not(target_arch = "wasm32"))]
 /// Re-export XLSX read options (non-WASM only).
 pub use xlsx::XlsxReadOptions;
