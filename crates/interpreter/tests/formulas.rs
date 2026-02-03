@@ -125,7 +125,11 @@ async fn test_sheet_formula_eval_helpers() {
 #[tokio::test]
 async fn test_sheet_set_and_evaluate_formulas() {
     let mut interp = Interpreter::new();
-    let sheet = Sheet::from_data(vec![vec![CellValue::Int(1), CellValue::Int(2), CellValue::Null]]);
+    let sheet = Sheet::from_data(vec![vec![
+        CellValue::Int(1),
+        CellValue::Int(2),
+        CellValue::Null,
+    ]]);
     interp
         .set_var("s", Value::Sheet(Box::new(sheet)))
         .await

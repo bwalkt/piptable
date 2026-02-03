@@ -396,10 +396,7 @@ pub async fn call_sheet_builtin(
                         ))),
                     }
                 }
-                _ => Some(Err(PipError::runtime(
-                    line,
-                    "Arguments must be (sheet)",
-                ))),
+                _ => Some(Err(PipError::runtime(line, "Arguments must be (sheet)"))),
             }
         }
 
