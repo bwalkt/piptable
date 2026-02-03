@@ -79,6 +79,7 @@ struct RefTarget {
 }
 
 #[derive(Debug, Clone)]
+#[allow(clippy::large_enum_variant)]
 enum VarBinding {
     Value(Value),
     Ref(RefTarget),
