@@ -1,5 +1,7 @@
 use thiserror::Error;
 
+use piptable_formulas::FormulaError;
+
 /// Errors that can occur during sheet operations
 #[derive(Error, Debug)]
 pub enum SheetError {
@@ -68,6 +70,9 @@ pub enum SheetError {
 
     #[error("Arrow error: {0}")]
     Arrow(#[from] arrow::error::ArrowError),
+
+    #[error("Formula error: {0}")]
+    Formula(#[from] FormulaError),
 }
 
 pub type Result<T> = std::result::Result<T, SheetError>;

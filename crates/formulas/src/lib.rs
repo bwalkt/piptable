@@ -127,6 +127,7 @@ pub enum UnaryOperator {
 }
 
 /// Formula compilation and caching engine
+#[derive(Debug, Clone)]
 pub struct FormulaEngine {
     /// Cache of compiled formulas
     cache: HashMap<SheetCellAddress, CompiledFormula>,
@@ -532,6 +533,7 @@ impl FormulaEngine {
 }
 
 /// Registry of available functions
+#[derive(Debug, Clone)]
 pub struct FunctionRegistry {
     functions: HashMap<String, FunctionDefinition>,
 }
@@ -979,6 +981,7 @@ fn map_dag_error(err: piptable_dag::DagError) -> FormulaError {
 }
 
 /// Function definition
+#[derive(Debug, Clone)]
 pub struct FunctionDefinition {
     pub min_args: usize,
     pub max_args: Option<usize>,
