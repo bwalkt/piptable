@@ -435,12 +435,12 @@ mod tests {
         );
     }
 
-    #[test]
     /// Verifies date formatting.
+    #[test]
     fn test_ssf_format_date() {
         let value = Value::Float(44562.0);
         let formatted = ssf_format("mm/dd/yyyy", &value, None);
-        assert_eq!(formatted, "12/31/2021");
+        assert_eq!(formatted, "01/01/2022");
     }
 
     #[test]

@@ -1,4 +1,8 @@
 //! Cell data access helpers with short/long key fallback.
+//!
+//! Short keys are context-specific (e.g., `fv` can mean formatted or formula
+//! value depending on the JSON shape), so helpers should be used on the
+//! appropriate structure.
 
 use serde_json::Value as JsonValue;
 

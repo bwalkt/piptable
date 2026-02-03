@@ -947,7 +947,7 @@ fn test_key_column_bounds_validation() {
     assert!(result.is_ok());
 }
 
-/// Validates key column bounds for append/update modes.
+/// Validates key column bounds for append-or-update mode.
 #[test]
 fn test_key_column_bounds_validation_update_mode() {
     use piptable_interpreter::io::{export_sheet_with_mode, ExportMode};
@@ -975,4 +975,15 @@ fn test_key_column_bounds_validation_update_mode() {
     assert!(result
         .unwrap_err()
         .contains("Key column index 3 is out of bounds"));
+
+    // Test with valid key column index
+    let result = export_sheet_with_mode(
+        &new_sheet,
+        &csv_path.display().to_string(),
+        ExportMode::AppendOrUpdate {
+            key_column: Some(1), // This should work - column index 1 is valid
+        },
+    );
+
+    assert!(result.is_ok());
 }

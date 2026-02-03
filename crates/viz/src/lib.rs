@@ -124,12 +124,12 @@ impl ChartSpec {
 <body>
     <canvas id="chart"></canvas>
     <script>
-        let spec = {json};
-        let isArea = {is_area};
+        const spec = {json};
+        const isArea = {is_area};
         if (isArea) {{
             spec.data.datasets = spec.data.datasets.map(ds => ({{ ...ds, fill: true }}));
         }}
-        let ctx = document.getElementById('chart').getContext('2d');
+        const ctx = document.getElementById('chart').getContext('2d');
         new Chart(ctx, {{
             type: '{chart_type}',
             data: spec.data,
@@ -203,16 +203,16 @@ pub enum ExportFormat {
 mod tests {
     use super::*;
 
-    #[test]
     /// Verifies chart spec construction.
+    #[test]
     fn test_chart_spec_new() {
         let chart = ChartSpec::new(ChartKind::Bar, "Test Chart");
         assert_eq!(chart.title, "Test Chart");
         assert!(matches!(chart.chart_type, ChartKind::Bar));
     }
 
-    #[test]
     /// Verifies chart JSON serialization.
+    #[test]
     fn test_chart_to_json() {
         let chart = ChartSpec::new(ChartKind::Line, "Test");
         let json = chart.to_json().unwrap();
@@ -220,8 +220,8 @@ mod tests {
         assert!(json.contains("line"));
     }
 
-    #[test]
     /// Verifies chart HTML rendering.
+    #[test]
     fn test_chart_to_html() {
         let chart = ChartSpec::new(ChartKind::Pie, "Pie Chart");
         let html = chart.to_html();
