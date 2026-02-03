@@ -195,11 +195,11 @@ impl Sheet {
             let resolver = SheetValueResolver::new(self, Some(cell));
             let value = self.formula_engine.evaluate(compiled, &resolver)?;
             let cell_value = formula_value_to_cell_value(value);
-            if let Ok(existing) = self.get_mut(cell.row as usize, cell.col as usize) {
-                if let CellValue::Formula(formula) = existing {
-                    formula.cached = Some(Box::new(cell_value));
-                    continue;
-                }
+            if let Ok(CellValue::Formula(formula)) =
+                self.get_mut(cell.row as usize, cell.col as usize)
+            {
+                formula.cached = Some(Box::new(cell_value));
+                continue;
             }
             self.set_cell_value_raw(cell.row as usize, cell.col as usize, cell_value)?;
         }
