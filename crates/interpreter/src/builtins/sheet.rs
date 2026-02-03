@@ -243,16 +243,13 @@ pub async fn call_sheet_builtin(
                     "sheet_validate_column() takes 3-5 arguments (sheet, column, rule, ...)",
                 )));
             }
-            let (sheet, column, rule) = match (&args[0], &args[1], &args[2]) {
-                (Value::Sheet(sheet), Value::String(column), Value::String(rule)) => {
-                    (sheet, column, rule)
-                }
-                _ => {
-                    return Some(Err(PipError::runtime(
-                        line,
-                        "Arguments must be (sheet, column_name, rule)",
-                    )))
-                }
+            let (Value::Sheet(sheet), Value::String(column), Value::String(rule)) =
+                (&args[0], &args[1], &args[2])
+            else {
+                return Some(Err(PipError::runtime(
+                    line,
+                    "Arguments must be (sheet, column_name, rule)",
+                )));
             };
 
             let validation_rule = match rule.as_str() {
