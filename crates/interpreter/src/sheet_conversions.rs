@@ -11,7 +11,7 @@ use std::sync::Arc;
 /// Convert a Value to a Sheet.
 pub fn value_to_sheet(value: &Value) -> Result<Sheet, String> {
     match value {
-        Value::Sheet(sheet) => Ok(sheet.clone()),
+        Value::Sheet(sheet) => Ok(*sheet.clone()),
         Value::Array(rows) => {
             let mut sheet = Sheet::new();
 

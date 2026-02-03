@@ -795,7 +795,7 @@ pub fn import_multi_files(paths: &[String], options: &ImportOptions) -> Result<V
         }
 
         let sheet = import_sheet(path, None, options)?;
-        sheets.insert(name, Value::Sheet(sheet));
+        sheets.insert(name, Value::Sheet(Box::new(sheet)));
     }
 
     if sheets.len() == 1 {
@@ -947,7 +947,7 @@ pub fn import_markdown_book(path: &str, options: &ImportOptions) -> Result<Value
                     .map_err(|e| format!("Failed to name columns: {}", e))?;
             }
             let name = format!("table_{}", idx + 1);
-            book.insert(name, Value::Sheet(sheet));
+            book.insert(name, Value::Sheet(Box::new(sheet)));
         }
 
         Ok(Value::Object(book))

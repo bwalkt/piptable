@@ -66,7 +66,7 @@ async fn test_sheet_formula_eval_helpers() {
         vec![CellValue::Int(2), CellValue::Null],
     ]);
     interp
-        .set_var("s", Value::Sheet(sheet))
+        .set_var("s", Value::Sheet(Box::new(sheet)))
         .await
         .expect("set sheet");
 
@@ -133,7 +133,7 @@ async fn test_r1c1_formula_support() {
         ],
     ]);
     interp
-        .set_var("s", Value::Sheet(sheet))
+        .set_var("s", Value::Sheet(Box::new(sheet)))
         .await
         .expect("set sheet");
 
@@ -162,7 +162,7 @@ async fn test_sheet_formula_edge_cases() {
         CellValue::String("=SUM(A1:A2)".to_string()),
     ]]);
     interp
-        .set_var("s", Value::Sheet(sheet))
+        .set_var("s", Value::Sheet(Box::new(sheet)))
         .await
         .expect("set sheet");
 
@@ -206,7 +206,7 @@ async fn test_sheet_formula_edge_cases() {
         CellValue::String("=SUM(A1,1)".to_string()),
     ]]);
     interp
-        .set_var("s2", Value::Sheet(sheet2))
+        .set_var("s2", Value::Sheet(Box::new(sheet2)))
         .await
         .expect("set sheet2");
     let program = PipParser::parse_str(
