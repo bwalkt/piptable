@@ -54,6 +54,11 @@ sales = sheet_set_column_by_name(sales, "Price", ["Price", 24.99, 19.99, 29.99])
 sales = sheet_name_rows_by_column(sales, 0)  // Use first column as row names
 sales = sheet_set_row_by_name(sales, "SKU-002", ["SKU-002", "Widget", 19.99])
 
+// Data quality helpers
+sales = sheet_remove_duplicates(sales, ["SKU"])
+dim invalid_emails = sheet_validate_column(sales, "Email", "email")
+sales = sheet_clean_data(sales, ["trim", "lower", "empty_to_null"])
+
 // Sheet transformations
 sales = sheet_transpose(sales)                    // Transpose rows/columns
 sales = sheet_select_columns(sales, ["Name", "Price", "Stock"])
