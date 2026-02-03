@@ -71,7 +71,7 @@ mod tests {
     use super::*;
     use serde_json::json;
 
-/// Verifies cell value fallback keys.
+    /// Verifies cell value fallback keys.
     #[test]
     fn test_cell_value_fallbacks() {
         let cell = json!({"ue": 1, "userEnteredValue": 2, "fv": "x"});
@@ -79,7 +79,7 @@ mod tests {
         assert_eq!(get_cell_formatted_value(Some(&cell)).unwrap(), &json!("x"));
     }
 
-/// Verifies style id fallback keys.
+    /// Verifies style id fallback keys.
     #[test]
     fn test_style_id_fallback() {
         let style = json!({"styleId": "abc"});

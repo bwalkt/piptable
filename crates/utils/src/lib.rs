@@ -83,7 +83,7 @@ pub fn parse_value(s: &str) -> Value {
 mod tests {
     use super::*;
 
-/// Verifies column name/number conversions.
+    /// Verifies column name/number conversions.
     #[test]
     fn test_column_conversions() {
         assert_eq!(column_index_to_letter(0), "A");
@@ -103,7 +103,7 @@ mod tests {
         assert_eq!(column_letter_to_index("AAA").unwrap(), 702);
     }
 
-/// Verifies value parsing helpers.
+    /// Verifies value parsing helpers.
     #[test]
     fn test_parse_value() {
         assert_eq!(parse_value(""), Value::Empty);

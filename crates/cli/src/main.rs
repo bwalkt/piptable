@@ -532,7 +532,7 @@ mod tests {
     // parse_cli_value tests
     // ========================================================================
 
-/// Verifies null literal parsing.
+    /// Verifies null literal parsing.
     #[test]
     fn test_parse_cli_value_null() {
         assert!(matches!(parse_cli_value("null"), Value::Null));
@@ -540,7 +540,7 @@ mod tests {
         assert!(matches!(parse_cli_value("Null"), Value::Null));
     }
 
-/// Verifies boolean literal parsing.
+    /// Verifies boolean literal parsing.
     #[test]
     fn test_parse_cli_value_bool() {
         assert!(matches!(parse_cli_value("true"), Value::Bool(true)));
@@ -549,7 +549,7 @@ mod tests {
         assert!(matches!(parse_cli_value("FALSE"), Value::Bool(false)));
     }
 
-/// Verifies integer literal parsing.
+    /// Verifies integer literal parsing.
     #[test]
     fn test_parse_cli_value_int() {
         assert!(matches!(parse_cli_value("42"), Value::Int(42)));
@@ -557,7 +557,7 @@ mod tests {
         assert!(matches!(parse_cli_value("0"), Value::Int(0)));
     }
 
-/// Verifies float literal parsing.
+    /// Verifies float literal parsing.
     #[test]
     fn test_parse_cli_value_float() {
         match parse_cli_value("3.14") {
@@ -570,7 +570,7 @@ mod tests {
         }
     }
 
-/// Verifies string literal parsing.
+    /// Verifies string literal parsing.
     #[test]
     fn test_parse_cli_value_string() {
         assert!(matches!(parse_cli_value("hello"), Value::String(s) if s == "hello"));
@@ -582,7 +582,7 @@ mod tests {
     // format_value tests
     // ========================================================================
 
-/// Verifies formatting for primitive values.
+    /// Verifies formatting for primitive values.
     #[test]
     fn test_format_value_primitives() {
         assert_eq!(format_value(&Value::Null), "null");
@@ -593,7 +593,7 @@ mod tests {
         assert_eq!(format_value(&Value::String("hello".to_string())), "hello");
     }
 
-/// Verifies formatting for array values.
+    /// Verifies formatting for array values.
     #[test]
     fn test_format_value_array() {
         let arr = Value::Array(vec![Value::Int(1), Value::Int(2), Value::Int(3)]);
@@ -603,7 +603,7 @@ mod tests {
         assert_eq!(format_value(&empty), "[]");
     }
 
-/// Verifies formatting for object values.
+    /// Verifies formatting for object values.
     #[test]
     fn test_format_value_object() {
         let mut map = HashMap::new();
@@ -612,7 +612,7 @@ mod tests {
         assert_eq!(format_value(&obj), "{key: value}");
     }
 
-/// Verifies formatting for function values.
+    /// Verifies formatting for function values.
     #[test]
     fn test_format_value_function() {
         let func = Value::Function {
@@ -640,7 +640,7 @@ mod tests {
     // CSV escaping tests
     // ========================================================================
 
-/// Verifies CSV escaping for simple values.
+    /// Verifies CSV escaping for simple values.
     #[test]
     fn test_csv_escape_simple() {
         use arrow::array::{Int64Array, StringArray};
@@ -654,7 +654,7 @@ mod tests {
         assert_eq!(csv_value(&str_arr, 0), "hello");
     }
 
-/// Verifies CSV escaping for special characters.
+    /// Verifies CSV escaping for special characters.
     #[test]
     fn test_csv_escape_special_chars() {
         use arrow::array::StringArray;
@@ -676,7 +676,7 @@ mod tests {
     // CLI argument parsing tests
     // ========================================================================
 
-/// Verifies CLI parsing for file execution.
+    /// Verifies CLI parsing for file execution.
     #[test]
     fn test_cli_parse_file() {
         let cli = Cli::parse_from(["pip", "script.pip"]);
@@ -685,7 +685,7 @@ mod tests {
         assert!(cli.execute.is_none());
     }
 
-/// Verifies CLI parsing for inline execution.
+    /// Verifies CLI parsing for inline execution.
     #[test]
     fn test_cli_parse_execute() {
         let cli = Cli::parse_from(["pip", "-e", "dim x = 42"]);
@@ -693,14 +693,14 @@ mod tests {
         assert!(cli.file.is_none());
     }
 
-/// Verifies CLI parsing for interactive mode.
+    /// Verifies CLI parsing for interactive mode.
     #[test]
     fn test_cli_parse_interactive() {
         let cli = Cli::parse_from(["pip", "-i"]);
         assert!(cli.interactive);
     }
 
-/// Verifies CLI parsing for output format.
+    /// Verifies CLI parsing for output format.
     #[test]
     fn test_cli_parse_format() {
         let cli = Cli::parse_from(["pip", "-f", "json", "-e", "dim x = 1"]);
@@ -713,7 +713,7 @@ mod tests {
         assert!(matches!(cli.format, OutputFormat::Table));
     }
 
-/// Verifies CLI parsing for variable definitions.
+    /// Verifies CLI parsing for variable definitions.
     #[test]
     fn test_cli_parse_vars() {
         let cli = Cli::parse_from(["pip", "-D", "KEY=value", "-D", "NUM=42", "-e", "dim x = 1"]);
@@ -722,7 +722,7 @@ mod tests {
         assert_eq!(cli.vars[1], "NUM=42");
     }
 
-/// Verifies CLI parsing for verbose flag.
+    /// Verifies CLI parsing for verbose flag.
     #[test]
     fn test_cli_parse_verbose() {
         let cli = Cli::parse_from(["pip", "-v", "-e", "dim x = 1"]);
@@ -760,7 +760,7 @@ mod tests {
     // array_value_to_json tests
     // ========================================================================
 
-/// Verifies JSON conversion for boolean arrays.
+    /// Verifies JSON conversion for boolean arrays.
     #[test]
     fn test_array_value_to_json_boolean() {
         use arrow::array::BooleanArray;
@@ -770,7 +770,7 @@ mod tests {
         assert_eq!(array_value_to_json(&arr, 2), serde_json::Value::Null);
     }
 
-/// Verifies JSON conversion for integer arrays.
+    /// Verifies JSON conversion for integer arrays.
     #[test]
     fn test_array_value_to_json_integers() {
         use arrow::array::{Int16Array, Int32Array, Int64Array, Int8Array};
@@ -791,7 +791,7 @@ mod tests {
         );
     }
 
-/// Verifies JSON conversion for unsigned arrays.
+    /// Verifies JSON conversion for unsigned arrays.
     #[test]
     fn test_array_value_to_json_unsigned() {
         use arrow::array::{UInt16Array, UInt32Array, UInt64Array, UInt8Array};
@@ -815,7 +815,7 @@ mod tests {
         );
     }
 
-/// Verifies JSON conversion for float arrays.
+    /// Verifies JSON conversion for float arrays.
     #[test]
     fn test_array_value_to_json_floats() {
         use arrow::array::{Float32Array, Float64Array};
@@ -837,7 +837,7 @@ mod tests {
         }
     }
 
-/// Verifies JSON conversion for NaN floats.
+    /// Verifies JSON conversion for NaN floats.
     #[test]
     fn test_array_value_to_json_float_nan() {
         use arrow::array::Float64Array;
@@ -846,7 +846,7 @@ mod tests {
         assert_eq!(array_value_to_json(&arr, 0), serde_json::Value::Null);
     }
 
-/// Verifies JSON conversion for string arrays.
+    /// Verifies JSON conversion for string arrays.
     #[test]
     fn test_array_value_to_json_strings() {
         use arrow::array::{LargeStringArray, StringArray};
@@ -872,14 +872,14 @@ mod tests {
     // table_to_json tests
     // ========================================================================
 
-/// Verifies JSON conversion for empty tables.
+    /// Verifies JSON conversion for empty tables.
     #[test]
     fn test_table_to_json_empty() {
         let result = table_to_json(&[]).unwrap();
         assert!(result.is_empty());
     }
 
-/// Verifies JSON conversion for populated tables.
+    /// Verifies JSON conversion for populated tables.
     #[test]
     fn test_table_to_json_with_data() {
         use arrow::array::{Int64Array, StringArray};
@@ -913,7 +913,7 @@ mod tests {
     // print_table_csv tests
     // ========================================================================
 
-/// Verifies CSV output for empty tables.
+    /// Verifies CSV output for empty tables.
     #[test]
     fn test_print_table_csv_empty() {
         let result = print_table_csv(&[]);
@@ -924,7 +924,7 @@ mod tests {
     // format_value Table variant test
     // ========================================================================
 
-/// Verifies formatting for table values.
+    /// Verifies formatting for table values.
     #[test]
     fn test_format_value_table() {
         use arrow::array::Int64Array;
@@ -942,7 +942,7 @@ mod tests {
         assert_eq!(format_value(&table), "<Table: 3 rows>");
     }
 
-/// Verifies formatting for empty tables.
+    /// Verifies formatting for empty tables.
     #[test]
     fn test_format_value_empty_table() {
         let table = Value::Table(vec![]);
@@ -953,7 +953,7 @@ mod tests {
     // dirs_history_path test
     // ========================================================================
 
-/// Verifies history path resolution.
+    /// Verifies history path resolution.
     #[test]
     fn test_dirs_history_path() {
         // Just verify it doesn't panic - result depends on system

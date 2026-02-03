@@ -354,7 +354,7 @@ mod tests {
     // is_null tests
     // ========================================================================
 
-/// Verifies is null.
+    /// Verifies is null.
     #[test]
     fn test_is_null() {
         assert!(Value::Null.is_null());
@@ -367,7 +367,7 @@ mod tests {
     // is_truthy tests
     // ========================================================================
 
-/// Verifies value is truthy.
+    /// Verifies value is truthy.
     #[test]
     fn test_value_is_truthy() {
         assert!(!Value::Null.is_truthy());
@@ -403,7 +403,7 @@ mod tests {
     // type_name tests
     // ========================================================================
 
-/// Verifies value type name.
+    /// Verifies value type name.
     #[test]
     fn test_value_type_name() {
         assert_eq!(Value::Null.type_name(), "Null");
@@ -430,7 +430,7 @@ mod tests {
     // as_* accessor tests
     // ========================================================================
 
-/// Verifies as bool.
+    /// Verifies as bool.
     #[test]
     fn test_as_bool() {
         assert_eq!(Value::Bool(true).as_bool(), Some(true));
@@ -439,7 +439,7 @@ mod tests {
         assert_eq!(Value::Null.as_bool(), None);
     }
 
-/// Verifies as int.
+    /// Verifies as int.
     #[test]
     fn test_as_int() {
         assert_eq!(Value::Int(42).as_int(), Some(42));
@@ -448,7 +448,7 @@ mod tests {
         assert_eq!(Value::Null.as_int(), None);
     }
 
-/// Verifies as float.
+    /// Verifies as float.
     #[test]
     fn test_as_float() {
         assert_eq!(Value::Float(3.14).as_float(), Some(3.14));
@@ -457,7 +457,7 @@ mod tests {
         assert_eq!(Value::Null.as_float(), None);
     }
 
-/// Verifies as str.
+    /// Verifies as str.
     #[test]
     fn test_as_str() {
         assert_eq!(Value::String("hello".to_string()).as_str(), Some("hello"));
@@ -465,7 +465,7 @@ mod tests {
         assert_eq!(Value::Null.as_str(), None);
     }
 
-/// Verifies as array.
+    /// Verifies as array.
     #[test]
     fn test_as_array() {
         let arr = vec![Value::Int(1), Value::Int(2)];
@@ -475,7 +475,7 @@ mod tests {
         assert!(Value::Int(42).as_array().is_none());
     }
 
-/// Verifies as object.
+    /// Verifies as object.
     #[test]
     fn test_as_object() {
         let mut map = HashMap::new();
@@ -489,7 +489,7 @@ mod tests {
         assert!(Value::Int(42).as_object().is_none());
     }
 
-/// Verifies as table.
+    /// Verifies as table.
     #[test]
     fn test_as_table() {
         let v = Value::Table(vec![]);
@@ -497,7 +497,7 @@ mod tests {
         assert!(Value::Int(42).as_table().is_none());
     }
 
-/// Verifies as sheet.
+    /// Verifies as sheet.
     #[test]
     fn test_as_sheet() {
         let sheet = Sheet::new();
@@ -511,7 +511,7 @@ mod tests {
     // Default impl test
     // ========================================================================
 
-/// Verifies default.
+    /// Verifies default.
     #[test]
     fn test_default() {
         let v = Value::default();
@@ -522,7 +522,7 @@ mod tests {
     // From conversions tests
     // ========================================================================
 
-/// Verifies value from conversions.
+    /// Verifies value from conversions.
     #[test]
     fn test_value_from_conversions() {
         let v: Value = true.into();
@@ -556,7 +556,7 @@ mod tests {
     // JSON conversion tests
     // ========================================================================
 
-/// Verifies from json.
+    /// Verifies from json.
     #[test]
     fn test_from_json() {
         assert!(Value::from_json(serde_json::Value::Null).is_null());
@@ -586,7 +586,7 @@ mod tests {
         ));
     }
 
-/// Verifies to json.
+    /// Verifies to json.
     #[test]
     fn test_to_json() {
         assert_eq!(Value::Null.to_json().unwrap(), serde_json::Value::Null);
@@ -615,7 +615,7 @@ mod tests {
         assert_eq!(obj.to_json().unwrap(), serde_json::json!({"key": 42}));
     }
 
-/// Verifies to json errors.
+    /// Verifies to json errors.
     #[test]
     fn test_to_json_errors() {
         // Table is not JSON-serializable
@@ -643,7 +643,7 @@ mod tests {
     // Serialize/Deserialize tests
     // ========================================================================
 
-/// Verifies serialize.
+    /// Verifies serialize.
     #[test]
     fn test_serialize() {
         let v = Value::Int(42);
@@ -663,7 +663,7 @@ mod tests {
         assert_eq!(json, "null");
     }
 
-/// Verifies serialize errors.
+    /// Verifies serialize errors.
     #[test]
     fn test_serialize_errors() {
         // Table cannot be serialized
@@ -679,7 +679,7 @@ mod tests {
         assert!(serde_json::to_string(&v).is_err());
     }
 
-/// Verifies deserialize.
+    /// Verifies deserialize.
     #[test]
     fn test_deserialize() {
         let v: Value = serde_json::from_str("42").unwrap();

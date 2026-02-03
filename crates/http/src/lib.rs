@@ -168,7 +168,7 @@ mod tests {
     // FetchOptions tests
     // ========================================================================
 
-/// Verifies default fetch options.
+    /// Verifies default fetch options.
     #[test]
     fn test_fetch_options_default() {
         let opts = FetchOptions::default();
@@ -178,7 +178,7 @@ mod tests {
         assert!(opts.timeout_secs.is_none());
     }
 
-/// Verifies fetch options with provided values.
+    /// Verifies fetch options with provided values.
     #[test]
     fn test_fetch_options_with_values() {
         let mut headers = HashMap::new();
@@ -201,14 +201,14 @@ mod tests {
     // HttpMethod tests
     // ========================================================================
 
-/// Verifies default HTTP method.
+    /// Verifies default HTTP method.
     #[test]
     fn test_http_method_default() {
         let method = HttpMethod::default();
         assert!(matches!(method, HttpMethod::Get));
     }
 
-/// Verifies HTTP method variants.
+    /// Verifies HTTP method variants.
     #[test]
     fn test_http_method_variants() {
         // Just ensure all variants are accessible
@@ -219,7 +219,7 @@ mod tests {
         let _ = HttpMethod::Patch;
     }
 
-/// Verifies HTTP method debug formatting.
+    /// Verifies HTTP method debug formatting.
     #[test]
     fn test_http_method_debug() {
         let method = HttpMethod::Get;
@@ -227,7 +227,7 @@ mod tests {
         assert_eq!(debug, "Get");
     }
 
-/// Verifies HTTP method cloning.
+    /// Verifies HTTP method cloning.
     #[test]
     fn test_http_method_clone() {
         let method = HttpMethod::Post;
@@ -239,14 +239,14 @@ mod tests {
     // HttpClient construction tests
     // ========================================================================
 
-/// Verifies HTTP client creation.
+    /// Verifies HTTP client creation.
     #[test]
     fn test_http_client_new() {
         let client = HttpClient::new();
         assert!(client.is_ok());
     }
 
-/// Verifies HTTP client timeout configuration.
+    /// Verifies HTTP client timeout configuration.
     #[test]
     fn test_http_client_with_timeout() {
         let client = HttpClient::with_timeout(10);
@@ -256,7 +256,7 @@ mod tests {
         assert!(client.is_ok());
     }
 
-/// Verifies default HTTP client construction.
+    /// Verifies default HTTP client construction.
     #[test]
     fn test_http_client_default() {
         // Default impl should succeed
@@ -267,7 +267,7 @@ mod tests {
     // FetchOptions Clone/Debug tests
     // ========================================================================
 
-/// Verifies fetch options cloning.
+    /// Verifies fetch options cloning.
     #[test]
     fn test_fetch_options_clone() {
         let opts = FetchOptions {
@@ -281,7 +281,7 @@ mod tests {
         assert_eq!(cloned.body, Some("test".to_string()));
     }
 
-/// Verifies fetch options debug formatting.
+    /// Verifies fetch options debug formatting.
     #[test]
     fn test_fetch_options_debug() {
         let opts = FetchOptions::default();

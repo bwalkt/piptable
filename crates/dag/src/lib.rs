@@ -913,7 +913,7 @@ impl Dag {
 mod tests {
     use super::*;
 
-/// Verifies dependency tracking and dirty nodes.
+    /// Verifies dependency tracking and dirty nodes.
     #[test]
     fn test_add_dependency_and_dirty_nodes() {
         let mut dag = Dag::new();
@@ -927,7 +927,7 @@ mod tests {
         assert!(dirty.iter().any(|node| node.key == dag.key(&b1)));
     }
 
-/// Verifies dependents for range nodes.
+    /// Verifies dependents for range nodes.
     #[test]
     fn test_range_dependents() {
         let mut dag = Dag::new();
@@ -942,7 +942,7 @@ mod tests {
         assert!(dirty.iter().any(|node| node.key == dag.key(&c1)));
     }
 
-/// Verifies circular dependency detection.
+    /// Verifies circular dependency detection.
     #[test]
     fn test_circular_dependency_detection() {
         let mut dag = Dag::new();
@@ -954,7 +954,7 @@ mod tests {
         assert!(matches!(err, DagError::CircularDependency { .. }));
     }
 
-/// Verifies DAG JSON roundtrip.
+    /// Verifies DAG JSON roundtrip.
     #[test]
     fn test_to_json_roundtrip() {
         let mut dag = Dag::new();
@@ -971,7 +971,7 @@ mod tests {
         assert!(restored.has_node(&b1));
     }
 
-/// Verifies static nodes survive sheet deletion.
+    /// Verifies static nodes survive sheet deletion.
     #[test]
     fn test_delete_sheet_keeps_static_nodes() {
         let mut dag = Dag::new();
@@ -984,7 +984,7 @@ mod tests {
         assert!(dag.has_node(&static_ref));
     }
 
-/// Verifies orphan nodes are pruned.
+    /// Verifies orphan nodes are pruned.
     #[test]
     fn test_delete_cell_prunes_orphan() {
         let mut dag = Dag::new();
@@ -994,7 +994,7 @@ mod tests {
         assert!(!dag.has_node(&cell));
     }
 
-/// Verifies range size limits are enforced.
+    /// Verifies range size limits are enforced.
     #[test]
     fn test_range_too_large() {
         let mut dag = Dag::with_max_range_cells(3);

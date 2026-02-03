@@ -46,7 +46,7 @@ pub fn format_date(dt: DateTime<Utc>, pattern: &str) -> String {
 mod tests {
     use super::*;
 
-/// Verifies Excel date conversion.
+    /// Verifies Excel date conversion.
     #[test]
     fn test_excel_date_conversion() {
         // Test a known date
