@@ -851,6 +851,17 @@ pub async fn call_sheet_builtin(
             }
             match (&args[0], &args[1], &args[2]) {
                 (Value::Sheet(sheet), Value::String(col_name), Value::Array(values)) => {
+                    if values.len() != sheet.row_count() {
+                        return Some(Err(PipError::runtime(
+                            line,
+                            format!(
+                                "Column '{}' expects {} values (row count), got {}",
+                                col_name,
+                                sheet.row_count(),
+                                values.len()
+                            ),
+                        )));
+                    }
                     let mut data = Vec::with_capacity(values.len());
                     for value in values {
                         let cell = value_to_cell(value).ok_or_else(|| {
@@ -863,7 +874,7 @@ pub async fn call_sheet_builtin(
                     }
 
                     let mut new_sheet = sheet.clone();
-                    match new_sheet.set_column_by_name(col_name, data) {
+                    match new_sheet.column_update_by_name(col_name, data) {
                         Ok(()) => Some(Ok(Value::Sheet(new_sheet))),
                         Err(e) => Some(Err(PipError::runtime(
                             line,
@@ -887,6 +898,17 @@ pub async fn call_sheet_builtin(
             }
             match (&args[0], &args[1], &args[2]) {
                 (Value::Sheet(sheet), Value::String(row_name), Value::Array(values)) => {
+                    if values.len() != sheet.col_count() {
+                        return Some(Err(PipError::runtime(
+                            line,
+                            format!(
+                                "Row '{}' expects {} values (column count), got {}",
+                                row_name,
+                                sheet.col_count(),
+                                values.len()
+                            ),
+                        )));
+                    }
                     let mut data = Vec::with_capacity(values.len());
                     for value in values {
                         let cell = value_to_cell(value).ok_or_else(|| {
@@ -899,7 +921,7 @@ pub async fn call_sheet_builtin(
                     }
 
                     let mut new_sheet = sheet.clone();
-                    match new_sheet.set_row_by_name(row_name, data) {
+                    match new_sheet.row_update_by_name(row_name, data) {
                         Ok(()) => Some(Ok(Value::Sheet(new_sheet))),
                         Err(e) => Some(Err(PipError::runtime(
                             line,
