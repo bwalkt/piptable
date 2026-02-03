@@ -1,5 +1,5 @@
 //! Formula Cookbook Examples
-//! 
+//!
 //! This file contains practical examples of using formulas in piptable-sheet.
 
 use piptable_sheet::Sheet;
@@ -130,7 +130,10 @@ fn data_analysis_example() -> Result<(), Box<dyn std::error::Error>> {
         )?;
         sheet.set_formula(
             &format!("F{}", row),
-            &format!("=IF(E{}>90,\"A\",IF(E{}>80,\"B\",IF(E{}>70,\"C\",\"D\")))", row, row, row),
+            &format!(
+                "=IF(E{}>90,\"A\",IF(E{}>80,\"B\",IF(E{}>70,\"C\",\"D\")))",
+                row, row, row
+            ),
         )?;
     }
 
@@ -167,12 +170,14 @@ fn data_analysis_example() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     println!("\nClass Statistics:");
-    println!("Test 1: Avg={:.1}, Max={:.0}, Min={:.0}",
+    println!(
+        "Test 1: Avg={:.1}, Max={:.0}, Min={:.0}",
         sheet.get_a1("B7")?.as_float().unwrap_or(0.0),
         sheet.get_a1("B8")?.as_float().unwrap_or(0.0),
         sheet.get_a1("B9")?.as_float().unwrap_or(0.0)
     );
-    println!("Overall Class Average: {:.1}",
+    println!(
+        "Overall Class Average: {:.1}",
         sheet.get_a1("E7")?.as_float().unwrap_or(0.0)
     );
     println!();
@@ -203,7 +208,10 @@ fn string_manipulation_example() -> Result<(), Box<dyn std::error::Error>> {
         // Generate email
         sheet.set_formula(
             &format!("D{}", row),
-            &format!("=CONCATENATE(LOWER(A{}), \".\", LOWER(B{}), \"@company.com\")", row, row),
+            &format!(
+                "=CONCATENATE(LOWER(A{}), \".\", LOWER(B{}), \"@company.com\")",
+                row, row
+            ),
         )?;
 
         // Create username (first initial + last name)
@@ -217,20 +225,27 @@ fn string_manipulation_example() -> Result<(), Box<dyn std::error::Error>> {
 
     // Print results
     println!("User Information:");
-    println!("{:<12} {:<12} {:<20} {:<25} {:<10}",
-        "First", "Last", "Full Name", "Email", "Username");
+    println!(
+        "{:<12} {:<12} {:<20} {:<25} {:<10}",
+        "First", "Last", "Full Name", "Email", "Username"
+    );
     println!("{}", "-".repeat(79));
-    
+
     for row in 2..=4 {
         let first = sheet.get(row, 0)?;
         let last = sheet.get(row, 1)?;
         let full = sheet.get(row, 2)?;
         let email = sheet.get(row, 3)?;
         let username = sheet.get(row, 4)?;
-        
-        println!("{:<12} {:<12} {:<20} {:<25} {:<10}",
-            first.as_str(), last.as_str(), full.as_str(), 
-            email.as_str(), username.as_str());
+
+        println!(
+            "{:<12} {:<12} {:<20} {:<25} {:<10}",
+            first.as_str(),
+            last.as_str(),
+            full.as_str(),
+            email.as_str(),
+            username.as_str()
+        );
     }
     println!();
 
@@ -243,7 +258,13 @@ fn conditional_logic_example() -> Result<(), Box<dyn std::error::Error>> {
     println!("--------------------");
 
     let mut sheet = Sheet::from_data(vec![
-        vec!["Product", "Stock", "Reorder Level", "Status", "Order Quantity"],
+        vec![
+            "Product",
+            "Stock",
+            "Reorder Level",
+            "Status",
+            "Order Quantity",
+        ],
         vec!["Widget A", 50, 100, "", 0],
         vec!["Widget B", 150, 100, "", 0],
         vec!["Widget C", 25, 50, "", 0],
@@ -254,8 +275,10 @@ fn conditional_logic_example() -> Result<(), Box<dyn std::error::Error>> {
         // Check stock status
         sheet.set_formula(
             &format!("D{}", row),
-            &format!("=IF(B{}<C{}, \"REORDER\", IF(B{}<C{}*1.5, \"LOW\", \"OK\"))", 
-                row, row, row, row),
+            &format!(
+                "=IF(B{}<C{}, \"REORDER\", IF(B{}<C{}*1.5, \"LOW\", \"OK\"))",
+                row, row, row, row
+            ),
         )?;
 
         // Calculate order quantity if needed
@@ -269,8 +292,10 @@ fn conditional_logic_example() -> Result<(), Box<dyn std::error::Error>> {
 
     // Print inventory status
     println!("Inventory Status Report:");
-    println!("{:<12} {:>8} {:>14} {:<10} {:>15}",
-        "Product", "Stock", "Reorder Level", "Status", "Order Quantity");
+    println!(
+        "{:<12} {:>8} {:>14} {:<10} {:>15}",
+        "Product", "Stock", "Reorder Level", "Status", "Order Quantity"
+    );
     println!("{}", "-".repeat(65));
 
     for row in 2..=5 {
@@ -280,9 +305,18 @@ fn conditional_logic_example() -> Result<(), Box<dyn std::error::Error>> {
         let status = sheet.get(row, 3)?;
         let order_qty = sheet.get(row, 4)?.as_float().unwrap_or(0.0) as i64;
 
-        println!("{:<12} {:>8} {:>14} {:<10} {:>15}",
-            product.as_str(), stock, reorder, status.as_str(), 
-            if order_qty > 0 { order_qty.to_string() } else { "-".to_string() });
+        println!(
+            "{:<12} {:>8} {:>14} {:<10} {:>15}",
+            product.as_str(),
+            stock,
+            reorder,
+            status.as_str(),
+            if order_qty > 0 {
+                order_qty.to_string()
+            } else {
+                "-".to_string()
+            }
+        );
     }
     println!();
 
@@ -338,8 +372,10 @@ fn dynamic_spreadsheet_example() -> Result<(), Box<dyn std::error::Error>> {
 
 /// Helper function to print quarterly data
 fn print_quarterly_data(sheet: &Sheet) -> Result<(), Box<dyn std::error::Error>> {
-    println!("{:<8} {:>6} {:>6} {:>6} {:>6} {:>8} {:>8}",
-        "Metric", "Q1", "Q2", "Q3", "Q4", "Total", "Average");
+    println!(
+        "{:<8} {:>6} {:>6} {:>6} {:>6} {:>8} {:>8}",
+        "Metric", "Q1", "Q2", "Q3", "Q4", "Total", "Average"
+    );
     println!("{}", "-".repeat(50));
 
     for row in 2..=4 {

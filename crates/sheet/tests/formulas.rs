@@ -50,11 +50,7 @@ fn test_circular_reference_error() -> Result<(), Box<dyn std::error::Error>> {
 
 #[test]
 fn test_formula_with_multiple_functions() -> Result<(), Box<dyn std::error::Error>> {
-    let mut sheet = Sheet::from_data(vec![
-        vec![1, 2, 3, 0],
-        vec![4, 5, 6, 0],
-        vec![7, 8, 9, 0],
-    ]);
+    let mut sheet = Sheet::from_data(vec![vec![1, 2, 3, 0], vec![4, 5, 6, 0], vec![7, 8, 9, 0]]);
 
     // Test AVERAGE of a range
     sheet.set_formula("D1", "=AVERAGE(A1:C2)")?;
@@ -101,10 +97,7 @@ fn test_formula_with_string_functions() -> Result<(), Box<dyn std::error::Error>
     // Test CONCATENATE
     sheet.set_formula("C1", "=CONCATENATE(A1, \" \", B1)")?;
     sheet.evaluate_formulas()?;
-    assert_eq!(
-        sheet.get_a1("C1")?.as_str(),
-        "hello world"
-    );
+    assert_eq!(sheet.get_a1("C1")?.as_str(), "hello world");
 
     // Test UPPER and LOWER
     sheet.set_formula("D1", "=UPPER(A1)")?;
@@ -219,11 +212,7 @@ fn test_formula_error_propagation() -> Result<(), Box<dyn std::error::Error>> {
 
 #[test]
 fn test_formula_absolute_references() -> Result<(), Box<dyn std::error::Error>> {
-    let mut sheet = Sheet::from_data(vec![
-        vec![1, 2, 0],
-        vec![3, 4, 0],
-        vec![5, 6, 0],
-    ]);
+    let mut sheet = Sheet::from_data(vec![vec![1, 2, 0], vec![3, 4, 0], vec![5, 6, 0]]);
 
     // Test absolute reference (though our parser may not distinguish yet)
     sheet.set_formula("C1", "=$A$1+B1")?;
