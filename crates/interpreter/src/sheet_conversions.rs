@@ -76,9 +76,7 @@ pub fn value_to_cell(value: &Value) -> CellValue {
         Value::Int(n) => CellValue::Int(*n),
         Value::Float(f) => CellValue::Float(*f),
         Value::String(s) => {
-            let first_non_ws = s
-                .find(|ch: char| !ch.is_whitespace())
-                .unwrap_or(s.len());
+            let first_non_ws = s.find(|ch: char| !ch.is_whitespace()).unwrap_or(s.len());
             let (prefix, rest) = s.split_at(first_non_ws);
             if rest.starts_with("'=") {
                 let unescaped = rest.replacen("'=", "=", 1);
