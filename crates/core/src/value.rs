@@ -10,6 +10,7 @@ use piptable_types::{Expr, Param};
 
 /// Runtime value in piptable.
 #[derive(Debug, Clone)]
+#[allow(clippy::large_enum_variant)]
 pub enum Value {
     /// Null value.
     Null,
