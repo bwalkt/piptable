@@ -666,7 +666,10 @@ mod tests {
             }
         });
         let (level, text) = heading.expect("expected heading");
-        assert_eq!(*level, 1, "Expected H1 for bold text with font ratio >= 1.5");
+        assert_eq!(
+            *level, 1,
+            "Expected H1 for bold text with font ratio >= 1.5"
+        );
         assert_eq!(text, "Report Title");
     }
 

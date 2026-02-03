@@ -22,7 +22,12 @@ fn write_cell_formula(
     worksheet
         .write_formula(row, col, formula_text)
         .map(|_| ())
-        .map_err(|e| SheetError::Io(std::io::Error::new(std::io::ErrorKind::Other, e.to_string())))
+        .map_err(|e| {
+            SheetError::Io(std::io::Error::new(
+                std::io::ErrorKind::Other,
+                e.to_string(),
+            ))
+        })
 }
 
 /// Options for reading Excel files
