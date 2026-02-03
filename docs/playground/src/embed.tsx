@@ -13,12 +13,12 @@ interface EmbedConfig {
 
 // Function to initialize embedded playground from URL parameters or postMessage
 function initializeEmbedPlayground() {
-  const container = document.getElementById('embed-root');
-  if (!container) {
+  const root = document.getElementById('embed-root');
+  if (!root) {
     console.error('Embed root element not found');
     return;
   }
-  const root = container;
+  const container = root as HTMLElement;
 
   // Get configuration from URL parameters
   const urlParams = new URLSearchParams(window.location.search);
@@ -38,11 +38,11 @@ function initializeEmbedPlayground() {
   // If no code in URL, try to get from data attributes
   if (!currentConfig.code) {
     currentConfig.code = root.getAttribute('data-code') || 'PRINT "Hello, World!"';
-    currentConfig.height = container.getAttribute('data-height') || currentConfig.height;
-    currentConfig.readonly = container.getAttribute('data-readonly') === 'true';
-    currentConfig.showOutput = container.getAttribute('data-show-output') !== 'false';
-    currentConfig.title = container.getAttribute('data-title') || undefined;
-    currentConfig.description = container.getAttribute('data-description') || undefined;
+    currentConfig.height = root.getAttribute('data-height') || currentConfig.height;
+    currentConfig.readonly = root.getAttribute('data-readonly') === 'true';
+    currentConfig.showOutput = root.getAttribute('data-show-output') !== 'false';
+    currentConfig.title = root.getAttribute('data-title') || undefined;
+    currentConfig.description = root.getAttribute('data-description') || undefined;
   }
 
   // Listen for configuration updates via postMessage (for dynamic examples)
@@ -73,7 +73,7 @@ function initializeEmbedPlayground() {
         title={playgroundConfig.title}
         description={playgroundConfig.description}
       />,
-      root
+      container
     );
   }
 
