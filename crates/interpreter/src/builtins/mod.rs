@@ -81,6 +81,8 @@ pub fn is_builtin(name: &str) -> bool {
             | "sheet_get_cell_value"
             | "is_sheet_cell_formula"
             | "sheet_eval_formula"
+            | "sheet_set_formula"
+            | "sheet_evaluate_formulas"
             | "sheet_set_a1"
             | "sheet_get_range"
             | "sheet_column_by_name"

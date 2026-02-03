@@ -353,6 +353,56 @@ pub async fn call_sheet_builtin(
             }
         }
 
+        "sheet_set_formula" => {
+            if args.len() != 3 {
+                return Some(Err(PipError::runtime(
+                    line,
+                    "sheet_set_formula() takes exactly 3 arguments (sheet, notation, formula)",
+                )));
+            }
+            match (&args[0], &args[1], &args[2]) {
+                (Value::Sheet(sheet), Value::String(notation), Value::String(formula_text)) => {
+                    let mut sheet_clone = sheet.clone();
+                    match sheet_clone.set_formula(notation, formula_text) {
+                        Ok(()) => Some(Ok(Value::Sheet(sheet_clone))),
+                        Err(e) => Some(Err(PipError::runtime(
+                            line,
+                            format!("Failed to set formula '{}': {}", notation, e),
+                        ))),
+                    }
+                }
+                _ => Some(Err(PipError::runtime(
+                    line,
+                    "Arguments must be (sheet, string, string)",
+                ))),
+            }
+        }
+
+        "sheet_evaluate_formulas" => {
+            if args.len() != 1 {
+                return Some(Err(PipError::runtime(
+                    line,
+                    "sheet_evaluate_formulas() takes exactly 1 argument (sheet)",
+                )));
+            }
+            match &args[0] {
+                Value::Sheet(sheet) => {
+                    let mut sheet_clone = sheet.clone();
+                    match sheet_clone.evaluate_formulas() {
+                        Ok(()) => Some(Ok(Value::Sheet(sheet_clone))),
+                        Err(e) => Some(Err(PipError::runtime(
+                            line,
+                            format!("Failed to evaluate formulas: {}", e),
+                        ))),
+                    }
+                }
+                _ => Some(Err(PipError::runtime(
+                    line,
+                    "Arguments must be (sheet)",
+                ))),
+            }
+        }
+
         "sheet_set_a1" => {
             if args.len() != 3 {
                 return Some(Err(PipError::runtime(

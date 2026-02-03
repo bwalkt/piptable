@@ -123,6 +123,29 @@ async fn test_sheet_formula_eval_helpers() {
 }
 
 #[tokio::test]
+async fn test_sheet_set_and_evaluate_formulas() {
+    let mut interp = Interpreter::new();
+    let sheet = Sheet::from_data(vec![vec![CellValue::Int(1), CellValue::Int(2), CellValue::Null]]);
+    interp
+        .set_var("s", Value::Sheet(Box::new(sheet)))
+        .await
+        .expect("set sheet");
+
+    let script = r#"
+        dim s = sheet_set_formula(s, "C1", "=SUM(A1:B1)")
+        dim s = sheet_evaluate_formulas(s)
+        dim total = sheet_get_cell_value(s, "C1")
+    "#;
+    let program = PipParser::parse_str(script).expect("parse script");
+    interp.eval(program).await.expect("eval script");
+
+    assert!(matches!(
+        interp.get_var("total").await,
+        Some(Value::Float(f)) if (f - 3.0).abs() < 1e-9
+    ));
+}
+
+#[tokio::test]
 async fn test_r1c1_formula_support() {
     let mut interp = Interpreter::new();
     let sheet = Sheet::from_data(vec![
