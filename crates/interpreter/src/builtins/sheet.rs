@@ -31,6 +31,17 @@ fn value_to_cell(value: &Value) -> Option<CellValue> {
     }
 }
 
+fn values_to_cells(values: &[Value], line: usize, context: &str) -> PipResult<Vec<CellValue>> {
+    values
+        .iter()
+        .map(|value| {
+            value_to_cell(value).ok_or_else(|| {
+                PipError::runtime(line, format!("Unsupported value type for {context} cell"))
+            })
+        })
+        .collect()
+}
+
 /// Handle sheet manipulation built-in functions.
 pub async fn call_sheet_builtin(
     interpreter: &Interpreter,
@@ -868,16 +879,10 @@ pub async fn call_sheet_builtin(
                             ),
                         )));
                     }
-                    let mut data = Vec::with_capacity(values.len());
-                    for value in values {
-                        let cell = value_to_cell(value).ok_or_else(|| {
-                            PipError::runtime(line, "Unsupported value type for column cell")
-                        });
-                        match cell {
-                            Ok(cell) => data.push(cell),
-                            Err(err) => return Some(Err(err)),
-                        }
-                    }
+                    let data = match values_to_cells(values, line, "column") {
+                        Ok(data) => data,
+                        Err(err) => return Some(Err(err)),
+                    };
 
                     let mut new_sheet = sheet.clone();
                     match new_sheet.column_update_by_name(col_name, data) {
@@ -921,16 +926,10 @@ pub async fn call_sheet_builtin(
                             ),
                         )));
                     }
-                    let mut data = Vec::with_capacity(values.len());
-                    for value in values {
-                        let cell = value_to_cell(value).ok_or_else(|| {
-                            PipError::runtime(line, "Unsupported value type for row cell")
-                        });
-                        match cell {
-                            Ok(cell) => data.push(cell),
-                            Err(err) => return Some(Err(err)),
-                        }
-                    }
+                    let data = match values_to_cells(values, line, "row") {
+                        Ok(data) => data,
+                        Err(err) => return Some(Err(err)),
+                    };
 
                     let mut new_sheet = sheet.clone();
                     match new_sheet.row_update_by_name(row_name, data) {
