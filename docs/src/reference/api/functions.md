@@ -72,6 +72,11 @@ Note: `len()` is formula-backed. For objects, use `len(keys(obj))` to count fiel
 | `sheet_column_by_name(sheet, name)` | Get a column by name | `sheet_column_by_name(data, "price")` | ✅ Implemented |
 | `sheet_set_column_by_name(sheet, name, values)` | Replace a column by name | `sheet_set_column_by_name(data, "price", ["price", 10, 12])` | ✅ Implemented |
 | `sheet_set_row_by_name(sheet, name, values)` | Replace a row by name | `sheet_set_row_by_name(data, "SKU-1", ["SKU-1", "Widget", 10])` | ✅ Implemented |
+| `sheet_remove_duplicates(sheet, [columns])` | Remove duplicate rows by key columns | `sheet_remove_duplicates(data, ["id"])` | ✅ Implemented |
+| `sheet_validate_column(sheet, name, rule, ...)` | Validate a column (email/phone/range/regex) | `sheet_validate_column(data, "email", "email")` | ✅ Implemented |
+| `sheet_clean_data(sheet, operations, [fill])` | Clean data in bulk | `sheet_clean_data(data, ["trim", "lower"])` | ✅ Implemented |
+| `sheet_set_formula(sheet, cell, formula)` | Store a formula in a cell | `sheet_set_formula(data, "C1", "=SUM(A1:B1)")` | ✅ Implemented |
+| `sheet_evaluate_formulas(sheet)` | Evaluate all formulas in a sheet | `sheet_evaluate_formulas(data)` | ✅ Implemented |
 
 **sheet_map operations:**
 - `"upper"` - Convert string cells to uppercase
@@ -82,6 +87,12 @@ Note: `len()` is formula-backed. For objects, use `len(keys(obj))` to count fiel
 - Filters rows where the specified column matches the given value
 - Preserves the header row
 - Returns a new sheet with only matching rows
+
+**sheet_clean_data operations:**
+- `"trim"` - Trim whitespace
+- `"lower"` / `"upper"` - Normalize case (mutually exclusive)
+- `"normalize_whitespace"` - Collapse internal whitespace
+- `"empty_to_null"` / `"null_to_empty"` / `"fill_nulls"` - Null handling
 
 ### Lookup Functions (Formula-backed)
 

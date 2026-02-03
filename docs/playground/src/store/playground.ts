@@ -129,6 +129,40 @@ employees = sheet_set_row_by_name(employees, "EMP002", ["EMP002", "Bobby", 135])
 
 print("EMP002 salary: " + str(sheet_get_by_name(employees, 2, "salary")))`
   },
+  data_quality: {
+    description: "Data quality helpers",
+    code: `' Data quality
+dim rows = [
+  ["id", "email", "name"],
+  ["1", "Alice@Example.com", " Alice "],
+  ["1", "Alice@Example.com", " Alice "],
+  ["2", "bad-email", "Bob"]
+]
+
+rows = sheet_name_columns_by_row(rows, 0)
+rows = sheet_remove_duplicates(rows, ["id"])
+dim invalid = sheet_validate_column(rows, "email", "email")
+rows = sheet_clean_data(rows, ["trim", "lower"])
+
+print("Invalid rows: " + str(invalid))
+print(rows)`
+  },
+  sheet_formulas: {
+    description: "Sheet formulas",
+    code: `' Sheet formulas
+dim sales = [
+  ["A", "B", "Total"],
+  [10, 20, ""],
+  [5, 7, ""]
+]
+
+sales = sheet_set_formula(sales, "C2", "=A2+B2")
+sales = sheet_set_formula(sales, "C3", "=A3+B3")
+sales = sheet_evaluate_formulas(sales)
+
+print("C2 = " + str(sheet_get_cell_value(sales, "C2")))
+print("C3 = " + str(sheet_get_cell_value(sales, "C3")))`
+  },
   pdf_import: {
     description: "PDF table extraction example",
     code: `' PDF Table Extraction Example
