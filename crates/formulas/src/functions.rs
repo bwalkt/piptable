@@ -15,7 +15,7 @@ fn date_to_local(date: chrono::NaiveDate, hour: u32, minute: u32, second: u32) -
     let Some(naive) = date.and_hms_opt(hour, minute, second) else {
         return Value::Error(ErrorValue::Value);
     };
-    let local_dt = Local.from_local_datetime(&naive).single();
+    let local_dt = Local.from_local_datetime(&naive).earliest();
     local_to_excel(local_dt)
 }
 
