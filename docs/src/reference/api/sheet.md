@@ -90,7 +90,6 @@ row_append<T>(data: Vec<T>) -> Result<()>
 row_insert<T>(index: usize, data: Vec<T>) -> Result<()>
 row_update<T>(index: usize, data: Vec<T>) -> Result<()>
 row_update_by_name<T>(name: &str, data: Vec<T>) -> Result<()>
-set_row_by_name<T>(name: &str, data: Vec<T>) -> Result<()>
 row_delete(index: usize) -> Result<Vec<CellValue>>
 row_delete_multi(indices: Vec<usize>) -> Result<()>
 row_delete_where<F>(predicate: F) -> usize
@@ -127,7 +126,6 @@ column_append<T>(data: Vec<T>) -> Result<()>
 column_insert<T>(index: usize, data: Vec<T>, name: Option<String>) -> Result<()>
 column_update<T>(index: usize, data: Vec<T>) -> Result<()>
 column_update_by_name<T>(name: &str, data: Vec<T>) -> Result<()>
-set_column_by_name<T>(name: &str, data: Vec<T>) -> Result<()>
 column_delete(index: usize) -> Result<Vec<CellValue>>
 column_delete_by_name(name: &str) -> Result<Vec<CellValue>>
 column_delete_multi_by_name(names: &[&str]) -> Result<()>
