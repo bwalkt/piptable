@@ -68,6 +68,22 @@ dim computed = sheet_get_cell_value(sales, "B2")
 dim total = sheet_eval_formula(sales, "SUM(A1:A10)")
 ```
 
+In Rust, you can store formulas directly on the sheet and compute cached results:
+
+```rust
+use piptable_sheet::Sheet;
+
+let mut sheet = Sheet::from_data(vec![vec![0, 0, 0]]);
+sheet.set_a1("A1", 1)?;
+sheet.set_a1("B1", 2)?;
+
+sheet.set_formula("C1", "=SUM(A1:B1)")?;
+sheet.evaluate_formulas()?;
+
+let cell = sheet.get_a1("C1")?;
+assert_eq!(cell.as_float(), Some(3.0));
+```
+
 ## Formula Engine (Rust)
 
 Use the `piptable-formulas` crate directly for programmatic formula evaluation.

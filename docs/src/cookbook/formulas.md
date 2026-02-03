@@ -85,6 +85,6 @@ dim relative = sheet_get_cell_value(sales, "B2")  ' "=R[-1]C[-1]" in B2
 
 Notes:
 - `sheet_get_cell_value` evaluates formulas stored as strings in cells (e.g., `"=SUM(A1:A2)"`).
-- When a formula references a cell that contains another formula string, it is treated as a string value (no recursive evaluation yet).
+- In the Rust API, formulas set with `set_formula` are stored as a formula cell with a cached result. Formula references use the cached value.
 - Formula errors include context and the original formula text (e.g., `Formula error in sheet_eval_formula: ... (formula: "...")`).
   For lookups, a not-found result is a formula error (e.g., `#N/A`) unless you pass `if_not_found` to `xlookup`.
