@@ -66,6 +66,10 @@ pub fn value_to_sheet(value: &Value) -> Result<Sheet, String> {
 }
 
 /// Convert a Value to a CellValue.
+/// Convert a `Value` into a `CellValue`.
+///
+/// Strings starting with '=' are treated as formulas. To store a literal
+/// leading '=', prefix the string with a single quote.
 pub fn value_to_cell(value: &Value) -> CellValue {
     match value {
         Value::Null => CellValue::Null,

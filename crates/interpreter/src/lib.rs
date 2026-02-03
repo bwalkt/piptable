@@ -1995,7 +1995,6 @@ impl Interpreter {
                 }
                 match (&arg_vals[0], &arg_vals[1]) {
                     (Value::Sheet(sheet), Value::String(col_name)) => {
-                        use piptable_sheet::CellValue;
                         let column = sheet.column_by_name(col_name).map_err(|e| {
                             PipError::runtime(
                                 line,
@@ -2005,24 +2004,7 @@ impl Interpreter {
 
                         let array: Vec<Value> = column
                             .iter()
-                            .map(|cell| match cell {
-                                CellValue::Null => Value::Null,
-                                CellValue::String(s) => Value::String(s.clone()),
-                                CellValue::Int(i) => Value::Int(*i),
-                                CellValue::Float(f) => Value::Float(*f),
-                                CellValue::Bool(b) => Value::Bool(*b),
-                                CellValue::Formula(formula) => match formula.cached.as_deref() {
-                                    Some(cached) => match cached {
-                                        CellValue::Null => Value::Null,
-                                        CellValue::String(s) => Value::String(s.clone()),
-                                        CellValue::Int(i) => Value::Int(*i),
-                                        CellValue::Float(f) => Value::Float(*f),
-                                        CellValue::Bool(b) => Value::Bool(*b),
-                                        CellValue::Formula(_) => Value::Null,
-                                    },
-                                    None => Value::String(formula.source.clone()),
-                                },
-                            })
+                            .map(|cell| sheet_conversions::cell_to_value(cell.clone()))
                             .collect();
 
                         Ok(Value::Array(array))
@@ -2037,7 +2019,6 @@ impl Interpreter {
                 }
                 match (&arg_vals[0], &arg_vals[1], &arg_vals[2]) {
                     (Value::Sheet(sheet), Value::Int(row), Value::String(col_name)) => {
-                        use piptable_sheet::CellValue;
                         if *row < 0 {
                             return Err(PipError::runtime(line, "Row index cannot be negative"));
                         }
@@ -2051,24 +2032,7 @@ impl Interpreter {
                             )
                         })?;
 
-                        match cell {
-                            CellValue::Null => Ok(Value::Null),
-                            CellValue::String(s) => Ok(Value::String(s.clone())),
-                            CellValue::Int(i) => Ok(Value::Int(*i)),
-                            CellValue::Float(f) => Ok(Value::Float(*f)),
-                            CellValue::Bool(b) => Ok(Value::Bool(*b)),
-                            CellValue::Formula(formula) => match formula.cached.as_deref() {
-                                Some(cached) => match cached {
-                                    CellValue::Null => Ok(Value::Null),
-                                    CellValue::String(s) => Ok(Value::String(s.clone())),
-                                    CellValue::Int(i) => Ok(Value::Int(*i)),
-                                    CellValue::Float(f) => Ok(Value::Float(*f)),
-                                    CellValue::Bool(b) => Ok(Value::Bool(*b)),
-                                    CellValue::Formula(_) => Ok(Value::Null),
-                                },
-                                None => Ok(Value::String(formula.source.clone())),
-                            },
-                        }
+                        Ok(sheet_conversions::cell_to_value(cell.clone()))
                     }
                     _ => Err(PipError::runtime(
                         line,

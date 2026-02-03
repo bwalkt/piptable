@@ -1,5 +1,5 @@
 use crate::book::Book;
-use crate::cell::CellValue;
+use crate::cell::{CellValue, FormulaCell};
 use crate::error::{Result, SheetError};
 use crate::sheet::Sheet;
 use calamine::{
@@ -10,6 +10,20 @@ use rust_xlsxwriter::{Workbook, Worksheet};
 use std::fs::File;
 use std::io::BufReader;
 use std::path::Path;
+
+fn write_cell_formula(
+    worksheet: &mut Worksheet,
+    row: u32,
+    col: u16,
+    formula: &FormulaCell,
+) -> Result<()> {
+    let text = formula.source.trim();
+    let formula_text = text.strip_prefix('=').unwrap_or(text);
+    worksheet
+        .write_formula(row, col, formula_text)
+        .map(|_| ())
+        .map_err(|e| SheetError::Io(std::io::Error::new(std::io::ErrorKind::Other, e.to_string())))
+}
 
 /// Options for reading Excel files
 #[derive(Debug, Clone, Default)]
@@ -385,16 +399,7 @@ impl Sheet {
                         })?;
                     }
                     CellValue::Formula(formula) => {
-                        let text = formula.source.trim();
-                        let formula_text = text.strip_prefix('=').unwrap_or(text);
-                        worksheet
-                            .write_formula(row_num, col_num, formula_text)
-                            .map_err(|e| {
-                                SheetError::Io(std::io::Error::new(
-                                    std::io::ErrorKind::Other,
-                                    e.to_string(),
-                                ))
-                            })?;
+                        write_cell_formula(worksheet, row_num, col_num, formula)?;
                     }
                 }
             }
@@ -531,16 +536,7 @@ impl Book {
                             })?;
                         }
                         CellValue::Formula(formula) => {
-                            let text = formula.source.trim();
-                            let formula_text = text.strip_prefix('=').unwrap_or(text);
-                            worksheet
-                                .write_formula(row_num, col_num, formula_text)
-                                .map_err(|e| {
-                                    SheetError::Io(std::io::Error::new(
-                                        std::io::ErrorKind::Other,
-                                        e.to_string(),
-                                    ))
-                                })?;
+                            write_cell_formula(worksheet, row_num, col_num, formula)?;
                         }
                     }
                 }

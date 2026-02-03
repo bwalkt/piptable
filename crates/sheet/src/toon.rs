@@ -339,7 +339,14 @@ fn format_toon_value(value: &CellValue) -> String {
                 s.clone()
             }
         }
-        CellValue::Formula(formula) => formula.source.clone(),
+        CellValue::Formula(formula) => {
+            let s = &formula.source;
+            if s.contains(',') || s.contains('\n') || s.contains('"') {
+                format!("\"{}\"", s.replace('"', "\"\""))
+            } else {
+                s.clone()
+            }
+        }
     }
 }
 

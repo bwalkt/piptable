@@ -337,7 +337,9 @@ pub fn consolidate_book(
                                     CellValue::Int(i) => Value::Int(*i),
                                     CellValue::Float(f) => Value::Float(*f),
                                     CellValue::Bool(b) => Value::Bool(*b),
-                                    CellValue::Formula(_) => Value::Null,
+                                    CellValue::Formula(formula) => {
+                                        Value::String(formula.source.clone())
+                                    }
                                 })
                                 .unwrap_or(Value::Null);
                             new_row.insert(col_name.clone(), val);

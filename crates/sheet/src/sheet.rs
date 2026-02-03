@@ -316,6 +316,7 @@ impl Sheet {
             let row_idx = self.row_count().saturating_sub(1);
             self.mark_dirty_range(row_idx, 0, row_idx, self.col_count().saturating_sub(1));
         }
+        self.rebuild_formula_engine()?;
         Ok(())
     }
 
@@ -343,6 +344,7 @@ impl Sheet {
         if self.col_count() > 0 {
             self.mark_dirty_range(index, 0, index, self.col_count().saturating_sub(1));
         }
+        self.rebuild_formula_engine()?;
         Ok(())
     }
 
@@ -368,6 +370,7 @@ impl Sheet {
         if self.col_count() > 0 {
             self.mark_dirty_range(index, 0, index, self.col_count().saturating_sub(1));
         }
+        self.rebuild_formula_engine()?;
         Ok(())
     }
 
@@ -381,7 +384,9 @@ impl Sheet {
         }
 
         self.invalidate_row_names();
-        Ok(self.data.remove(index))
+        let removed = self.data.remove(index);
+        self.rebuild_formula_engine()?;
+        Ok(removed)
     }
 
     /// Delete multiple rows by indices (in descending order to maintain indices)
@@ -390,8 +395,16 @@ impl Sheet {
         indices.reverse();
 
         for index in indices {
-            self.row_delete(index)?;
+            if index >= self.row_count() {
+                return Err(SheetError::RowIndexOutOfBounds {
+                    index,
+                    count: self.row_count(),
+                });
+            }
+            self.data.remove(index);
         }
+        self.invalidate_row_names();
+        self.rebuild_formula_engine()?;
         Ok(())
     }
 
@@ -403,6 +416,7 @@ impl Sheet {
         let original_len = self.data.len();
         self.data.retain(|row| !predicate(row));
         self.invalidate_row_names();
+        let _ = self.rebuild_formula_engine();
         original_len - self.data.len()
     }
 
@@ -451,6 +465,7 @@ impl Sheet {
         if self.row_count() > 0 && self.col_count() > 0 {
             self.mark_dirty_range(0, col_idx, self.row_count().saturating_sub(1), col_idx);
         }
+        self.rebuild_formula_engine()?;
         Ok(())
     }
 
@@ -482,6 +497,7 @@ impl Sheet {
         if self.row_count() > 0 {
             self.mark_dirty_range(0, index, self.row_count().saturating_sub(1), index);
         }
+        self.rebuild_formula_engine()?;
         Ok(())
     }
 
@@ -512,6 +528,7 @@ impl Sheet {
         if self.row_count() > 0 {
             self.mark_dirty_range(0, index, self.row_count().saturating_sub(1), index);
         }
+        self.rebuild_formula_engine()?;
         Ok(())
     }
 
@@ -537,6 +554,7 @@ impl Sheet {
         let removed: Vec<CellValue> = self.data.iter_mut().map(|row| row.remove(index)).collect();
 
         self.invalidate_column_names();
+        self.rebuild_formula_engine()?;
         Ok(removed)
     }
 
@@ -558,9 +576,19 @@ impl Sheet {
         indices.reverse();
 
         for index in indices {
-            self.column_delete(index)?;
+            if index >= self.col_count() {
+                return Err(SheetError::ColumnIndexOutOfBounds {
+                    index,
+                    count: self.col_count(),
+                });
+            }
+            for row in &mut self.data {
+                row.remove(index);
+            }
         }
 
+        self.invalidate_column_names();
+        self.rebuild_formula_engine()?;
         Ok(())
     }
 
@@ -640,6 +668,32 @@ impl Sheet {
 
     fn invalidate_row_names(&mut self) {
         self.row_names = None;
+    }
+
+    fn rebuild_formula_engine(&mut self) -> Result<()> {
+        let mut engine = FormulaEngine::new();
+        let mut first_error: Option<SheetError> = None;
+        for (row_idx, row) in self.data.iter_mut().enumerate() {
+            for (col_idx, cell) in row.iter_mut().enumerate() {
+                if let CellValue::Formula(formula) = cell {
+                    formula.cached = None;
+                    let addr = CellAddress::new(row_idx as u32, col_idx as u32);
+                    if let Err(err) = engine.set_formula(addr, &formula.source) {
+                        if first_error.is_none() {
+                            first_error = Some(err.into());
+                        }
+                        continue;
+                    }
+                    engine.mark_dirty(&addr);
+                }
+            }
+        }
+        self.formula_engine = engine;
+        if let Some(err) = first_error {
+            Err(err)
+        } else {
+            Ok(())
+        }
     }
 
     // ===== Transformation =====
