@@ -195,6 +195,24 @@ pub fn eval_sheet_cell(sheet: &Sheet, notation: &str, line: usize) -> PipResult<
             })?;
             formula_to_core_with_context(result, line, "sheet_eval_formula", s)
         }
+        CellValue::Formula(formula) => {
+            let base_cell = sheet.get_a1_addr(notation).map_err(|e| {
+                PipError::runtime(line, format!("Invalid cell notation '{}': {}", notation, e))
+            })?;
+            let mut engine = FormulaEngine::new();
+            let source = formula.source.trim_start();
+            let compiled = engine.compile(source).map_err(|e| {
+                PipError::runtime(line, format_formula_error("sheet_eval_formula", source, e))
+            })?;
+            let resolver = SheetResolver {
+                sheet,
+                base_cell: Some(base_cell),
+            };
+            let result = engine.evaluate(&compiled, &resolver).map_err(|e| {
+                PipError::runtime(line, format_formula_error("sheet_eval_formula", source, e))
+            })?;
+            formula_to_core_with_context(result, line, "sheet_eval_formula", source)
+        }
         _ => Ok(cell_to_core(cell)),
     }
 }
@@ -216,6 +234,15 @@ pub fn eval_sheet_cell_cached(
             let context = format!("cell {}", notation);
             let compiled = engine.compile_cached(s, line, &context)?;
             engine.evaluate(&compiled, sheet, Some(base_cell), line, &context, s)
+        }
+        CellValue::Formula(formula) => {
+            let base_cell = sheet.get_a1_addr(notation).map_err(|e| {
+                PipError::runtime(line, format!("Invalid cell notation '{}': {}", notation, e))
+            })?;
+            let context = format!("cell {}", notation);
+            let source = formula.source.trim_start();
+            let compiled = engine.compile_cached(source, line, &context)?;
+            engine.evaluate(&compiled, sheet, Some(base_cell), line, &context, source)
         }
         _ => Ok(cell_to_core(cell)),
     }
@@ -315,6 +342,10 @@ fn cell_to_formula(cell: &CellValue) -> FormulaValue {
         CellValue::Int(i) => FormulaValue::Int(*i),
         CellValue::Float(f) => FormulaValue::Float(*f),
         CellValue::String(s) => FormulaValue::String(s.clone()),
+        CellValue::Formula(formula) => match formula.cached.as_deref() {
+            Some(cached) => cell_to_formula(cached),
+            None => FormulaValue::String(formula.source.clone()),
+        },
     }
 }
 
@@ -325,6 +356,10 @@ fn cell_to_core(cell: &CellValue) -> Value {
         CellValue::Int(i) => Value::Int(*i),
         CellValue::Float(f) => Value::Float(*f),
         CellValue::String(s) => Value::String(s.clone()),
+        CellValue::Formula(formula) => match formula.cached.as_deref() {
+            Some(cached) => cell_to_core(cached),
+            None => Value::String(formula.source.clone()),
+        },
     }
 }
 

@@ -224,6 +224,17 @@ fn cell_to_json(cell: &CellValue) -> serde_json::Value {
             .map(serde_json::Value::Number)
             .unwrap_or(serde_json::Value::Null),
         CellValue::String(s) => serde_json::Value::String(s.clone()),
+        CellValue::Formula(formula) => {
+            let mut obj = serde_json::Map::new();
+            obj.insert(
+                "formula".to_string(),
+                serde_json::Value::String(formula.source.clone()),
+            );
+            if let Some(cached) = &formula.cached {
+                obj.insert("cached".to_string(), cell_to_json(cached));
+            }
+            serde_json::Value::Object(obj)
+        }
     }
 }
 

@@ -1995,7 +1995,6 @@ impl Interpreter {
                 }
                 match (&arg_vals[0], &arg_vals[1]) {
                     (Value::Sheet(sheet), Value::String(col_name)) => {
-                        use piptable_sheet::CellValue;
                         let column = sheet.column_by_name(col_name).map_err(|e| {
                             PipError::runtime(
                                 line,
@@ -2005,13 +2004,7 @@ impl Interpreter {
 
                         let array: Vec<Value> = column
                             .iter()
-                            .map(|cell| match cell {
-                                CellValue::Null => Value::Null,
-                                CellValue::String(s) => Value::String(s.clone()),
-                                CellValue::Int(i) => Value::Int(*i),
-                                CellValue::Float(f) => Value::Float(*f),
-                                CellValue::Bool(b) => Value::Bool(*b),
-                            })
+                            .map(|cell| sheet_conversions::cell_to_value(cell.clone()))
                             .collect();
 
                         Ok(Value::Array(array))
@@ -2026,7 +2019,6 @@ impl Interpreter {
                 }
                 match (&arg_vals[0], &arg_vals[1], &arg_vals[2]) {
                     (Value::Sheet(sheet), Value::Int(row), Value::String(col_name)) => {
-                        use piptable_sheet::CellValue;
                         if *row < 0 {
                             return Err(PipError::runtime(line, "Row index cannot be negative"));
                         }
@@ -2040,13 +2032,7 @@ impl Interpreter {
                             )
                         })?;
 
-                        match cell {
-                            CellValue::Null => Ok(Value::Null),
-                            CellValue::String(s) => Ok(Value::String(s.clone())),
-                            CellValue::Int(i) => Ok(Value::Int(*i)),
-                            CellValue::Float(f) => Ok(Value::Float(*f)),
-                            CellValue::Bool(b) => Ok(Value::Bool(*b)),
-                        }
+                        Ok(sheet_conversions::cell_to_value(cell.clone()))
                     }
                     _ => Err(PipError::runtime(
                         line,
@@ -3249,6 +3235,19 @@ mod tests {
         interp.eval(program).await.unwrap();
         let value = interp.get_var("name").await;
         assert!(matches!(value, Some(Value::String(s)) if s == "hello"));
+    }
+
+    #[test]
+    fn test_value_to_cell_formula_escape() {
+        let formula_value = Value::String("=SUM(A1:A3)".to_string());
+        let formula_cell = sheet_conversions::value_to_cell(&formula_value);
+        assert!(
+            matches!(formula_cell, CellValue::Formula(formula) if formula.source == "=SUM(A1:A3)")
+        );
+
+        let escaped_value = Value::String("'=SUM(A1:A3)".to_string());
+        let escaped_cell = sheet_conversions::value_to_cell(&escaped_value);
+        assert!(matches!(escaped_cell, CellValue::String(s) if s == "'=SUM(A1:A3)"));
     }
 
     #[tokio::test]

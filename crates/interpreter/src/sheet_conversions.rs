@@ -66,13 +66,23 @@ pub fn value_to_sheet(value: &Value) -> Result<Sheet, String> {
 }
 
 /// Convert a Value to a CellValue.
+/// Convert a `Value` into a `CellValue`.
+///
+/// Strings starting with '=' are treated as formulas. To store a literal
+/// leading '=', prefix the string with a single quote.
 pub fn value_to_cell(value: &Value) -> CellValue {
     match value {
         Value::Null => CellValue::Null,
         Value::Bool(b) => CellValue::Bool(*b),
         Value::Int(n) => CellValue::Int(*n),
         Value::Float(f) => CellValue::Float(*f),
-        Value::String(s) => CellValue::String(s.clone()),
+        Value::String(s) => {
+            if s.trim_start().starts_with('=') {
+                CellValue::formula(s.clone())
+            } else {
+                CellValue::String(s.clone())
+            }
+        }
         Value::Array(arr) => {
             // Convert array to JSON string representation
             let json = serde_json::to_string(arr).unwrap_or_else(|_| "[]".to_string());
@@ -260,6 +270,10 @@ pub fn cell_to_value(cell: CellValue) -> Value {
         CellValue::Int(i) => Value::Int(i),
         CellValue::Float(f) => Value::Float(f),
         CellValue::String(s) => Value::String(s),
+        CellValue::Formula(formula) => match formula.cached {
+            Some(cached) => cell_to_value(*cached),
+            None => Value::String(formula.source),
+        },
     }
 }
 
@@ -278,7 +292,7 @@ pub fn infer_sheet_column_type(
         if col_idx >= row.len() {
             continue;
         }
-        match &row[col_idx] {
+        match row[col_idx].cached_or_self() {
             CellValue::Int(_) => {
                 has_int = true;
                 all_null = false;
@@ -292,6 +306,10 @@ pub fn infer_sheet_column_type(
                 all_null = false;
             }
             CellValue::String(_) => {
+                has_string = true;
+                all_null = false;
+            }
+            CellValue::Formula(_) => {
                 has_string = true;
                 all_null = false;
             }
@@ -323,10 +341,11 @@ pub fn build_sheet_arrow_array(
             let values: Vec<Option<bool>> = rows
                 .iter()
                 .map(|row| {
-                    row.get(col_idx).and_then(|cell| match cell {
-                        CellValue::Bool(b) => Some(*b),
-                        _ => None,
-                    })
+                    row.get(col_idx)
+                        .and_then(|cell| match cell.cached_or_self() {
+                            CellValue::Bool(b) => Some(*b),
+                            _ => None,
+                        })
                 })
                 .collect();
             Ok(Arc::new(BooleanArray::from(values)))
@@ -335,10 +354,11 @@ pub fn build_sheet_arrow_array(
             let values: Vec<Option<i64>> = rows
                 .iter()
                 .map(|row| {
-                    row.get(col_idx).and_then(|cell| match cell {
-                        CellValue::Int(i) => Some(*i),
-                        _ => None,
-                    })
+                    row.get(col_idx)
+                        .and_then(|cell| match cell.cached_or_self() {
+                            CellValue::Int(i) => Some(*i),
+                            _ => None,
+                        })
                 })
                 .collect();
             Ok(Arc::new(Int64Array::from(values)))
@@ -347,11 +367,12 @@ pub fn build_sheet_arrow_array(
             let values: Vec<Option<f64>> = rows
                 .iter()
                 .map(|row| {
-                    row.get(col_idx).and_then(|cell| match cell {
-                        CellValue::Float(f) => Some(*f),
-                        CellValue::Int(i) => Some(*i as f64),
-                        _ => None,
-                    })
+                    row.get(col_idx)
+                        .and_then(|cell| match cell.cached_or_self() {
+                            CellValue::Float(f) => Some(*f),
+                            CellValue::Int(i) => Some(*i as f64),
+                            _ => None,
+                        })
                 })
                 .collect();
             Ok(Arc::new(Float64Array::from(values)))
@@ -360,13 +381,15 @@ pub fn build_sheet_arrow_array(
             let values: Vec<Option<String>> = rows
                 .iter()
                 .map(|row| {
-                    row.get(col_idx).and_then(|cell| match cell {
-                        CellValue::String(s) => Some(s.clone()),
-                        CellValue::Int(i) => Some(i.to_string()),
-                        CellValue::Float(f) => Some(f.to_string()),
-                        CellValue::Bool(b) => Some(b.to_string()),
-                        CellValue::Null => None,
-                    })
+                    row.get(col_idx)
+                        .and_then(|cell| match cell.cached_or_self() {
+                            CellValue::String(s) => Some(s.clone()),
+                            CellValue::Int(i) => Some(i.to_string()),
+                            CellValue::Float(f) => Some(f.to_string()),
+                            CellValue::Bool(b) => Some(b.to_string()),
+                            CellValue::Null => None,
+                            CellValue::Formula(_) => None,
+                        })
                 })
                 .collect();
             Ok(Arc::new(StringArray::from(values)))

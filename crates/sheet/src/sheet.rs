@@ -115,6 +115,10 @@ impl Sheet {
 
     /// Set a cell value by row and column index (0-based)
     pub fn set<T: Into<CellValue>>(&mut self, row: usize, col: usize, value: T) -> Result<()> {
+        if matches!(self.get(row, col)?, CellValue::Formula(_)) {
+            self.formula_engine
+                .remove_formula(&CellAddress::new(row as u32, col as u32));
+        }
         let cell = self.get_mut(row, col)?;
         *cell = value.into();
         self.formula_engine
@@ -168,15 +172,25 @@ impl Sheet {
     }
 
     /// Set a formula in a cell using A1-style notation (e.g., "C1", "=SUM(A1:B1)").
+    ///
+    /// This stores the formula source and marks the cell dirty; call
+    /// [`Sheet::evaluate_formulas`] to compute cached results.
     pub fn set_formula(&mut self, notation: &str, formula: &str) -> Result<()> {
         let addr = self.get_a1_addr(notation)?;
         let _ = self.get(addr.row as usize, addr.col as usize)?;
+        self.set_cell_value_raw(
+            addr.row as usize,
+            addr.col as usize,
+            CellValue::formula(formula.to_string()),
+        )?;
         self.formula_engine.set_formula(addr, formula)?;
         self.formula_engine.mark_dirty(&addr);
         Ok(())
     }
 
-    /// Evaluate dirty formulas in dependency order and write results into cells.
+    /// Evaluate dirty formulas in dependency order and update cached results.
+    ///
+    /// Formula cells keep their source string and store the computed value in the cache.
     pub fn evaluate_formulas(&mut self) -> Result<()> {
         let dirty = self.formula_engine.get_dirty_nodes()?;
         for cell in dirty {
@@ -186,6 +200,12 @@ impl Sheet {
             let resolver = SheetValueResolver::new(self, Some(cell));
             let value = self.formula_engine.evaluate(compiled, &resolver)?;
             let cell_value = formula_value_to_cell_value(value);
+            if let Ok(CellValue::Formula(formula)) =
+                self.get_mut(cell.row as usize, cell.col as usize)
+            {
+                formula.cached = Some(Box::new(cell_value));
+                continue;
+            }
             self.set_cell_value_raw(cell.row as usize, cell.col as usize, cell_value)?;
         }
         Ok(())
@@ -248,6 +268,21 @@ impl Sheet {
         Ok(())
     }
 
+    fn mark_dirty_range(
+        &mut self,
+        start_row: usize,
+        start_col: usize,
+        end_row: usize,
+        end_col: usize,
+    ) {
+        for row in start_row..=end_row {
+            for col in start_col..=end_col {
+                self.formula_engine
+                    .mark_dirty(&CellAddress::new(row as u32, col as u32));
+            }
+        }
+    }
+
     // ===== Row Operations =====
 
     /// Get an entire row by index (0-based)
@@ -277,6 +312,11 @@ impl Sheet {
         }
 
         self.data.push(row);
+        if self.col_count() > 0 {
+            let row_idx = self.row_count().saturating_sub(1);
+            self.mark_dirty_range(row_idx, 0, row_idx, self.col_count().saturating_sub(1));
+        }
+        self.rebuild_formula_engine()?;
         Ok(())
     }
 
@@ -301,6 +341,10 @@ impl Sheet {
 
         self.data.insert(index, row);
         self.invalidate_row_names();
+        if self.col_count() > 0 {
+            self.mark_dirty_range(index, 0, index, self.col_count().saturating_sub(1));
+        }
+        self.rebuild_formula_engine()?;
         Ok(())
     }
 
@@ -323,6 +367,10 @@ impl Sheet {
         }
 
         self.data[index] = row;
+        if self.col_count() > 0 {
+            self.mark_dirty_range(index, 0, index, self.col_count().saturating_sub(1));
+        }
+        self.rebuild_formula_engine()?;
         Ok(())
     }
 
@@ -336,7 +384,9 @@ impl Sheet {
         }
 
         self.invalidate_row_names();
-        Ok(self.data.remove(index))
+        let removed = self.data.remove(index);
+        self.rebuild_formula_engine()?;
+        Ok(removed)
     }
 
     /// Delete multiple rows by indices (in descending order to maintain indices)
@@ -345,8 +395,16 @@ impl Sheet {
         indices.reverse();
 
         for index in indices {
-            self.row_delete(index)?;
+            if index >= self.row_count() {
+                return Err(SheetError::RowIndexOutOfBounds {
+                    index,
+                    count: self.row_count(),
+                });
+            }
+            self.data.remove(index);
         }
+        self.invalidate_row_names();
+        self.rebuild_formula_engine()?;
         Ok(())
     }
 
@@ -358,6 +416,7 @@ impl Sheet {
         let original_len = self.data.len();
         self.data.retain(|row| !predicate(row));
         self.invalidate_row_names();
+        let _ = self.rebuild_formula_engine();
         original_len - self.data.len()
     }
 
@@ -402,6 +461,11 @@ impl Sheet {
         }
 
         self.invalidate_column_names();
+        let col_idx = self.col_count().saturating_sub(1);
+        if self.row_count() > 0 && self.col_count() > 0 {
+            self.mark_dirty_range(0, col_idx, self.row_count().saturating_sub(1), col_idx);
+        }
+        self.rebuild_formula_engine()?;
         Ok(())
     }
 
@@ -430,6 +494,10 @@ impl Sheet {
         }
 
         self.invalidate_column_names();
+        if self.row_count() > 0 {
+            self.mark_dirty_range(0, index, self.row_count().saturating_sub(1), index);
+        }
+        self.rebuild_formula_engine()?;
         Ok(())
     }
 
@@ -457,6 +525,10 @@ impl Sheet {
             row[index] = value.into();
         }
 
+        if self.row_count() > 0 {
+            self.mark_dirty_range(0, index, self.row_count().saturating_sub(1), index);
+        }
+        self.rebuild_formula_engine()?;
         Ok(())
     }
 
@@ -482,6 +554,7 @@ impl Sheet {
         let removed: Vec<CellValue> = self.data.iter_mut().map(|row| row.remove(index)).collect();
 
         self.invalidate_column_names();
+        self.rebuild_formula_engine()?;
         Ok(removed)
     }
 
@@ -503,9 +576,19 @@ impl Sheet {
         indices.reverse();
 
         for index in indices {
-            self.column_delete(index)?;
+            if index >= self.col_count() {
+                return Err(SheetError::ColumnIndexOutOfBounds {
+                    index,
+                    count: self.col_count(),
+                });
+            }
+            for row in &mut self.data {
+                row.remove(index);
+            }
         }
 
+        self.invalidate_column_names();
+        self.rebuild_formula_engine()?;
         Ok(())
     }
 
@@ -585,6 +668,32 @@ impl Sheet {
 
     fn invalidate_row_names(&mut self) {
         self.row_names = None;
+    }
+
+    fn rebuild_formula_engine(&mut self) -> Result<()> {
+        let mut engine = FormulaEngine::new();
+        let mut first_error: Option<SheetError> = None;
+        for (row_idx, row) in self.data.iter_mut().enumerate() {
+            for (col_idx, cell) in row.iter_mut().enumerate() {
+                if let CellValue::Formula(formula) = cell {
+                    formula.cached = None;
+                    let addr = CellAddress::new(row_idx as u32, col_idx as u32);
+                    if let Err(err) = engine.set_formula(addr, &formula.source) {
+                        if first_error.is_none() {
+                            first_error = Some(err.into());
+                        }
+                        continue;
+                    }
+                    engine.mark_dirty(&addr);
+                }
+            }
+        }
+        self.formula_engine = engine;
+        if let Some(err) = first_error {
+            Err(err)
+        } else {
+            Ok(())
+        }
     }
 
     // ===== Transformation =====
@@ -975,7 +1084,7 @@ impl Sheet {
     /// Remove empty rows (rows where all cells are null or empty strings)
     pub fn remove_empty_rows(&mut self) {
         self.data.retain(|row| {
-            !row.iter().all(|cell| match cell {
+            !row.iter().all(|cell| match cell.cached_or_self() {
                 CellValue::Null => true,
                 CellValue::String(s) if s.is_empty() => true,
                 _ => false,
@@ -1527,12 +1636,13 @@ impl ValueResolver for SheetValueResolver<'_> {
 }
 
 fn cell_value_to_formula_value(value: &CellValue) -> Value {
-    match value {
+    match value.cached_or_self() {
         CellValue::Null => Value::Empty,
         CellValue::Bool(v) => Value::Bool(*v),
         CellValue::Int(v) => Value::Int(*v),
         CellValue::Float(v) => Value::Float(*v),
         CellValue::String(v) => Value::String(v.clone()),
+        CellValue::Formula(_) => Value::Error(ErrorValue::Value),
     }
 }
 
@@ -1746,5 +1856,12 @@ mod tests {
             records[2].get("value").unwrap(),
             &CellValue::String("two".to_string())
         );
+    }
+
+    #[test]
+    fn test_uncached_formula_resolves_to_error_value() {
+        let cell = CellValue::formula("=A1+1");
+        let value = cell_value_to_formula_value(&cell);
+        assert!(matches!(value, Value::Error(ErrorValue::Value)));
     }
 }

@@ -272,27 +272,38 @@ fn value_to_py(py: Python<'_>, value: &Value) -> PyResult<PyObject> {
             "Lambda values cannot be converted to Python",
         )),
         Value::Sheet(sheet) => {
+            fn cell_to_py(py: Python<'_>, cell: &piptable_sheet::CellValue) -> PyResult<PyObject> {
+                match cell.cached_or_self() {
+                    piptable_sheet::CellValue::Null => Ok(py.None()),
+                    piptable_sheet::CellValue::Bool(b) => {
+                        Ok(b.into_pyobject(py)?.to_owned().into_any().unbind())
+                    }
+                    piptable_sheet::CellValue::Int(i) => {
+                        Ok(i.into_pyobject(py)?.to_owned().into_any().unbind())
+                    }
+                    piptable_sheet::CellValue::Float(f) => {
+                        Ok(f.into_pyobject(py)?.to_owned().into_any().unbind())
+                    }
+                    piptable_sheet::CellValue::String(s) => {
+                        Ok(s.into_pyobject(py)?.to_owned().into_any().unbind())
+                    }
+                    piptable_sheet::CellValue::Formula(formula) => Ok(formula
+                        .source
+                        .clone()
+                        .into_pyobject(py)?
+                        .to_owned()
+                        .into_any()
+                        .unbind()),
+                }
+            }
+
             // Convert Sheet to list of dicts (like to_records)
             if let Some(records) = sheet.to_records() {
                 let list = PyList::empty(py);
                 for record in records {
                     let dict = PyDict::new(py);
                     for (key, cell) in record {
-                        let py_value = match cell {
-                            piptable_sheet::CellValue::Null => py.None(),
-                            piptable_sheet::CellValue::Bool(b) => {
-                                b.into_pyobject(py)?.to_owned().into_any().unbind()
-                            }
-                            piptable_sheet::CellValue::Int(i) => {
-                                i.into_pyobject(py)?.to_owned().into_any().unbind()
-                            }
-                            piptable_sheet::CellValue::Float(f) => {
-                                f.into_pyobject(py)?.to_owned().into_any().unbind()
-                            }
-                            piptable_sheet::CellValue::String(s) => {
-                                s.into_pyobject(py)?.to_owned().into_any().unbind()
-                            }
-                        };
+                        let py_value = cell_to_py(py, &cell)?;
                         dict.set_item(key, py_value)?;
                     }
                     list.append(dict)?;
@@ -304,21 +315,7 @@ fn value_to_py(py: Python<'_>, value: &Value) -> PyResult<PyObject> {
                 for row in sheet.to_array() {
                     let row_list = PyList::empty(py);
                     for cell in row {
-                        let py_value = match cell {
-                            piptable_sheet::CellValue::Null => py.None(),
-                            piptable_sheet::CellValue::Bool(b) => {
-                                b.into_pyobject(py)?.to_owned().into_any().unbind()
-                            }
-                            piptable_sheet::CellValue::Int(i) => {
-                                i.into_pyobject(py)?.to_owned().into_any().unbind()
-                            }
-                            piptable_sheet::CellValue::Float(f) => {
-                                f.into_pyobject(py)?.to_owned().into_any().unbind()
-                            }
-                            piptable_sheet::CellValue::String(s) => {
-                                s.into_pyobject(py)?.to_owned().into_any().unbind()
-                            }
-                        };
+                        let py_value = cell_to_py(py, &cell)?;
                         row_list.append(py_value)?;
                     }
                     list.append(row_list)?;

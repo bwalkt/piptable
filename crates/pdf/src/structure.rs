@@ -649,8 +649,8 @@ mod tests {
                     right: 200.0,
                     bottom: 590.0,
                 },
-                page: 1,
-                font_size: 12.0,
+                page: 2,
+                font_size: 6.0,
                 font_name: "Test".to_string(),
                 is_bold: false,
                 is_italic: false,
@@ -658,14 +658,19 @@ mod tests {
         ];
 
         let doc = detector.analyze_blocks(blocks, 2);
-        assert!(!doc.elements.is_empty());
-        match &doc.elements[0] {
-            DocumentElement::Heading { level, text, .. } => {
-                assert_eq!(*level, 2);
-                assert_eq!(text, "Report Title");
+        let heading = doc.elements.iter().find_map(|element| {
+            if let DocumentElement::Heading { level, text, .. } = element {
+                Some((level, text))
+            } else {
+                None
             }
-            _ => panic!("expected heading"),
-        }
+        });
+        let (level, text) = heading.expect("expected heading");
+        assert_eq!(
+            *level, 1,
+            "Expected H1 for bold text with font ratio >= 1.5"
+        );
+        assert_eq!(text, "Report Title");
     }
 
     #[test]

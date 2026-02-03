@@ -270,8 +270,20 @@ fn json_value_to_cell(value: &Value) -> CellValue {
             }
         }
         Value::String(s) => CellValue::String(s.clone()),
-        // For arrays and objects, convert to string representation
-        Value::Array(_) | Value::Object(_) => CellValue::String(value.to_string()),
+        Value::Object(obj) => {
+            if let Some(Value::String(formula)) = obj.get("formula") {
+                let cached = obj
+                    .get("cached")
+                    .map(|cached| Box::new(json_value_to_cell(cached)));
+                return CellValue::Formula(crate::cell::FormulaCell {
+                    source: formula.clone(),
+                    cached,
+                });
+            }
+            CellValue::String(value.to_string())
+        }
+        // For arrays and non-formula objects, convert to string representation
+        Value::Array(_) => CellValue::String(value.to_string()),
     }
 }
 
@@ -289,6 +301,14 @@ fn cell_to_json_value(cell: &CellValue) -> Value {
                 .unwrap_or_else(|| Value::String(f.to_string()))
         }
         CellValue::String(s) => Value::String(s.clone()),
+        CellValue::Formula(formula) => {
+            let mut obj = serde_json::Map::new();
+            obj.insert("formula".to_string(), Value::String(formula.source.clone()));
+            if let Some(cached) = &formula.cached {
+                obj.insert("cached".to_string(), cell_to_json_value(cached));
+            }
+            Value::Object(obj)
+        }
     }
 }
 

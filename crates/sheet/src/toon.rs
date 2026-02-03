@@ -306,6 +306,10 @@ fn parse_toon_value(s: &str) -> CellValue {
         return CellValue::Bool(false);
     }
 
+    if trimmed.starts_with('=') {
+        return CellValue::formula(trimmed.to_string());
+    }
+
     // Check for integer
     if let Ok(i) = trimmed.parse::<i64>() {
         return CellValue::Int(i);
@@ -329,6 +333,14 @@ fn format_toon_value(value: &CellValue) -> String {
         CellValue::Float(f) => f.to_string(),
         CellValue::String(s) => {
             // Quote strings that contain commas, newlines, or quotes
+            if s.contains(',') || s.contains('\n') || s.contains('"') {
+                format!("\"{}\"", s.replace('"', "\"\""))
+            } else {
+                s.clone()
+            }
+        }
+        CellValue::Formula(formula) => {
+            let s = &formula.source;
             if s.contains(',') || s.contains('\n') || s.contains('"') {
                 format!("\"{}\"", s.replace('"', "\"\""))
             } else {
