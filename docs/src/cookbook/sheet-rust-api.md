@@ -48,6 +48,11 @@ sales = sheet_name_columns_by_row(sales, 0)  // Use first row as headers
 dim name_column = sheet_column_by_name(sales, "Name")
 dim price = sheet_get_by_name(sales, 2, "Price")  // Row 2, Price column
 sales = sheet_set_by_name(sales, 2, "Price", 29.99)
+sales = sheet_set_column_by_name(sales, "Price", ["Price", 24.99, 19.99, 29.99])
+
+// Row operations (requires named rows)
+sales = sheet_name_rows_by_column(sales, 0)  // Use first column as row names
+sales = sheet_set_row_by_name(sales, "SKU-002", ["SKU-002", "Widget", 19.99])
 
 // Sheet transformations
 sales = sheet_transpose(sales)                    // Transpose rows/columns

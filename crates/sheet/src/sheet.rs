@@ -554,6 +554,21 @@ impl Sheet {
         Ok(())
     }
 
+    /// Update a row by name
+    pub fn row_update_by_name<T: Into<CellValue>>(
+        &mut self,
+        name: &str,
+        data: Vec<T>,
+    ) -> Result<()> {
+        let index = self.row_index_by_name(name)?;
+        self.row_update(index, data)
+    }
+
+    /// Set a row by name (alias for row_update_by_name)
+    pub fn set_row_by_name<T: Into<CellValue>>(&mut self, name: &str, data: Vec<T>) -> Result<()> {
+        self.row_update_by_name(name, data)
+    }
+
     /// Delete a row at a specific index
     pub fn row_delete(&mut self, index: usize) -> Result<Vec<CellValue>> {
         if index >= self.row_count() {
@@ -720,6 +735,15 @@ impl Sheet {
     ) -> Result<()> {
         let index = self.column_index_by_name(name)?;
         self.column_update(index, data)
+    }
+
+    /// Set a column by name (alias for column_update_by_name)
+    pub fn set_column_by_name<T: Into<CellValue> + Clone>(
+        &mut self,
+        name: &str,
+        data: Vec<T>,
+    ) -> Result<()> {
+        self.column_update_by_name(name, data)
     }
 
     /// Delete a column at a specific index

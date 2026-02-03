@@ -93,6 +93,39 @@ fn test_named_column_access() -> Result<()> {
 }
 
 #[test]
+fn test_set_column_by_name() -> Result<()> {
+    let mut sheet = Sheet::from_data(vec![
+        vec!["Name", "Age"],
+        vec!["Alice", "30"],
+        vec!["Bob", "25"],
+    ]);
+    sheet.name_columns_by_row(0)?;
+
+    sheet.set_column_by_name("Age", vec!["Age", "31", "26"])?;
+    assert_eq!(sheet.get_by_name(1, "Age")?.as_str(), "31");
+    assert_eq!(sheet.get_by_name(2, "Age")?.as_str(), "26");
+
+    Ok(())
+}
+
+#[test]
+fn test_set_row_by_name() -> Result<()> {
+    let mut sheet = Sheet::from_data(vec![
+        vec!["EMP001", "Alice", "30"],
+        vec!["EMP002", "Bob", "25"],
+        vec!["EMP003", "Charlie", "35"],
+    ]);
+    sheet.name_rows_by_column(0)?;
+
+    sheet.set_row_by_name("EMP002", vec!["EMP002", "Bobby", "26"])?;
+    let row = sheet.row_by_name("EMP002")?;
+    assert_eq!(row[1].as_str(), "Bobby");
+    assert_eq!(row[2].as_str(), "26");
+
+    Ok(())
+}
+
+#[test]
 fn test_map_operation() -> Result<()> {
     let mut sheet = Sheet::from_data(vec![vec![1, 2, 3], vec![4, 5, 6], vec![7, 8, 9]]);
 

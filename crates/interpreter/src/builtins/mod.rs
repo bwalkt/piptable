@@ -69,6 +69,7 @@ pub fn is_builtin(name: &str) -> bool {
             | "str" | "int" | "float"
             // sheet
             | "sheet_name_columns_by_row"
+            | "sheet_name_rows_by_column"
             | "sheet_transpose"
             | "sheet_select_columns"
             | "sheet_remove_columns"
@@ -91,6 +92,8 @@ pub fn is_builtin(name: &str) -> bool {
             | "sheet_column_by_name"
             | "sheet_get_by_name"
             | "sheet_set_by_name"
+            | "sheet_set_column_by_name"
+            | "sheet_set_row_by_name"
             | "sheet_map"
             | "sheet_filter_rows"
             // array
