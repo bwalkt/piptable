@@ -1,6 +1,7 @@
 //! Sheet/Book module for piptable
 //!
-//! Provides a pyexcel-like API for working with tabular data.
+//! Provides a pyexcel-like API for working with tabular data, including support for
+//! Excel-style formulas, multiple file formats, and data manipulation operations.
 //!
 //! # Examples
 //!
@@ -17,6 +18,28 @@
 //!
 //! assert_eq!(sheet.row_count(), 3);
 //! assert_eq!(sheet.col_count(), 3);
+//! ```
+//!
+//! ## Using formulas
+//!
+//! ```
+//! use piptable_sheet::Sheet;
+//!
+//! let mut sheet = Sheet::from_data(vec![
+//!     vec![10, 20, 0],
+//!     vec![30, 40, 0],
+//! ]);
+//!
+//! // Add formulas
+//! sheet.set_formula("C1", "=A1+B1").unwrap();
+//! sheet.set_formula("C2", "=SUM(A2:B2)").unwrap();
+//!
+//! // Evaluate all formulas
+//! sheet.evaluate_formulas().unwrap();
+//!
+//! // Access results
+//! assert_eq!(sheet.get_a1("C1").unwrap().as_float(), Some(30.0));
+//! assert_eq!(sheet.get_a1("C2").unwrap().as_float(), Some(70.0));
 //! ```
 //!
 //! ## Loading from CSV
@@ -52,6 +75,20 @@
 //!
 //! assert_eq!(book.sheet_count(), 2);
 //! ```
+//!
+//! # Formula Support
+//!
+//! The library includes a comprehensive formula engine supporting:
+//! - Basic arithmetic operations (+, -, *, /, ^)
+//! - Mathematical functions (SUM, AVERAGE, MIN, MAX, ROUND, etc.)
+//! - String functions (CONCATENATE, UPPER, LOWER, TRIM, etc.)
+//! - Logical functions (IF, AND, OR, NOT)
+//! - Date/time functions (DATE, NOW, TODAY)
+//! - Lookup functions (VLOOKUP, HLOOKUP, INDEX, MATCH)
+//! - Statistical functions (COUNT, COUNTA, STDEV, VAR)
+//!
+//! Formulas support cell references (A1, B2), ranges (A1:B3), and automatic
+//! recalculation when dependent cells change.
 
 mod a1_notation;
 mod book;
