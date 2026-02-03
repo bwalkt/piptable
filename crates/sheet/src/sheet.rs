@@ -1642,7 +1642,7 @@ fn cell_value_to_formula_value(value: &CellValue) -> Value {
         CellValue::Int(v) => Value::Int(*v),
         CellValue::Float(v) => Value::Float(*v),
         CellValue::String(v) => Value::String(v.clone()),
-        CellValue::Formula(formula) => Value::String(formula.source.clone()),
+        CellValue::Formula(_) => Value::Error(ErrorValue::Value),
     }
 }
 
@@ -1856,5 +1856,12 @@ mod tests {
             records[2].get("value").unwrap(),
             &CellValue::String("two".to_string())
         );
+    }
+
+    #[test]
+    fn test_uncached_formula_resolves_to_error_value() {
+        let cell = CellValue::formula("=A1+1");
+        let value = cell_value_to_formula_value(&cell);
+        assert!(matches!(value, Value::Error(ErrorValue::Value)));
     }
 }

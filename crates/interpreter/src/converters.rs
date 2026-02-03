@@ -117,7 +117,9 @@ pub fn sheet_to_arrow(sheet: &Sheet, skip_first_row: usize) -> PipResult<RecordB
                                 CellValue::Float(f) => values.push(Some(f.to_string())),
                                 CellValue::Bool(b) => values.push(Some(b.to_string())),
                                 CellValue::Null => values.push(None),
-                                CellValue::Formula(_) => values.push(None),
+                                CellValue::Formula(formula) => {
+                                    values.push(Some(formula.source.clone()))
+                                }
                             }
                         } else {
                             values.push(None);

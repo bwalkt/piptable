@@ -43,6 +43,14 @@ fn cell_value_to_py(py: Python<'_>, value: &RustCellValue) -> PyObject {
         RustCellValue::Int(i) => i.into_pyobject(py).unwrap().to_owned().into_any().unbind(),
         RustCellValue::Float(f) => f.into_pyobject(py).unwrap().to_owned().into_any().unbind(),
         RustCellValue::String(s) => s.into_pyobject(py).unwrap().to_owned().into_any().unbind(),
+        RustCellValue::Formula(formula) => formula
+            .source
+            .clone()
+            .into_pyobject(py)
+            .unwrap()
+            .to_owned()
+            .into_any()
+            .unbind(),
     }
 }
 
