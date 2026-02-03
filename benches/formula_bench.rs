@@ -10,7 +10,7 @@ struct BenchContext {
 }
 
 impl BenchContext {
-/// Builds a benchmark context with a populated range.
+    /// Builds a benchmark context with a populated range.
     fn new_with_range(size: usize) -> Self {
         let mut cells = HashMap::new();
         let mut values = Vec::new();
@@ -36,22 +36,22 @@ impl BenchContext {
 }
 
 impl ValueResolver for BenchContext {
-/// Resolves a single cell for benchmarking.
+    /// Resolves a single cell for benchmarking.
     fn get_cell(&self, addr: &CellAddress) -> Value {
         self.cells.get(addr).cloned().unwrap_or(Value::Empty)
     }
 
-/// Resolves a range for benchmarking.
+    /// Resolves a range for benchmarking.
     fn get_range(&self, range: &CellRange) -> Vec<Value> {
         self.ranges.get(range).cloned().unwrap_or_default()
     }
 
-/// Resolves a cell with a sheet name for benchmarking.
+    /// Resolves a cell with a sheet name for benchmarking.
     fn get_sheet_cell(&self, _sheet: &str, addr: &CellAddress) -> Value {
         self.get_cell(addr)
     }
 
-/// Resolves a range with a sheet name for benchmarking.
+    /// Resolves a range with a sheet name for benchmarking.
     fn get_sheet_range(&self, _sheet: &str, range: &CellRange) -> Vec<Value> {
         self.get_range(range)
     }
