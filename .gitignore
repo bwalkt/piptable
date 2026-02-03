@@ -37,3 +37,7 @@ session.md
 
 # Local SheetXL reference snapshot (not tracked)
 docs/src/specs/sheetxl/
+# Generated docs artifacts
+docs/PDF_COOKBOOK.html
+docs/PDF_DSL.html
+docs/playground/PDF_EXAMPLES.html
