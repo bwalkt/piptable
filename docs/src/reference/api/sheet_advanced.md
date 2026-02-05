@@ -8,7 +8,7 @@ Access and modify cells using Excel-style notation.
 
 ### Basic Cell Access
 
-```rust
+```text
 // Get cell value
 let value = sheet.get_a1("A1")?;
 let value = sheet.get_a1("B2")?;
@@ -24,7 +24,7 @@ let cell = sheet.get_a1_mut("B2")?;
 
 ### Range Access
 
-```rust
+```text
 // Get a sub-sheet from a range
 let sub_sheet = sheet.get_range("A1:C3")?;
 let sub_sheet = sheet.get_range("B2:D5")?;
@@ -48,7 +48,7 @@ Name rows and columns for easier access.
 
 ### Named Columns
 
-```rust
+```text
 // Use first row as column names
 sheet.name_columns_by_row(0)?;
 
@@ -71,7 +71,7 @@ sheet.format_column_by_name("Age", |cell| {
 
 ### Named Rows
 
-```rust
+```text
 // Use first column as row names
 sheet.name_rows_by_column(0)?;
 
@@ -98,7 +98,7 @@ Apply functions to entire sheets or specific regions.
 
 ### Map Operations
 
-```rust
+```text
 // Apply function to all cells
 sheet.map(|cell| {
     match cell {
@@ -125,7 +125,7 @@ sheet.column_map_by_name("Price", |cell| {
 
 ### Filter Operations
 
-```rust
+```text
 // Filter rows with index
 sheet.filter_rows(|idx, row| {
     // Keep rows where first column > 5
@@ -144,7 +144,7 @@ sheet.remove_empty_rows();
 
 ### Format Operations
 
-```rust
+```text
 // Format specific column
 sheet.format_column(0, |cell| {
     CellValue::String(cell.as_str().to_uppercase())
@@ -161,7 +161,7 @@ sheet.format_column_by_name("Date", |cell| {
 
 ### Cherry-Pick Columns
 
-```rust
+```text
 // Keep only specified columns
 sheet.select_columns(&["Name", "Age", "City"])?;
 
@@ -171,7 +171,7 @@ sheet.remove_columns(&["TempColumn", "Debug"])?;
 
 ### Column Operations
 
-```rust
+```text
 // Remove columns at specific indices
 sheet.remove_columns_at(&[2, 4, 5])?;
 
@@ -186,21 +186,21 @@ sheet.column_insert(1, vec!["New", "Column", "Data"])?;
 
 ### Transpose
 
-```rust
+```text
 // Swap rows and columns
 sheet.transpose();
 ```
 
 ### Remove Empty Data
 
-```rust
+```text
 // Remove rows where all cells are null or empty
 sheet.remove_empty_rows();
 ```
 
 ## Complete Example
 
-```rust
+```text
 use piptable_sheet::{Sheet, CellValue};
 
 fn process_sales_data() -> Result<()> {

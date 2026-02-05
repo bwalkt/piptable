@@ -6,7 +6,7 @@ The Book API provides methods for working with collections of sheets, similar to
 
 ### Constructors
 
-```rust
+```text
 Book::new() -> Book
 Book::with_name(name: &str) -> Book
 Book::from_files<P>(paths: &[P]) -> Result<Book>
@@ -51,7 +51,7 @@ end if
 
 ### Accessing Sheets
 
-```rust
+```text
 get_sheet(name: &str) -> Result<&Sheet>
 get_sheet_mut(name: &str) -> Result<&mut Sheet>
 get_sheet_by_index(index: usize) -> Result<&Sheet>
@@ -74,7 +74,7 @@ dim current = book.active_sheet()
 
 ### Adding and Removing Sheets
 
-```rust
+```text
 add_sheet(name: &str, sheet: Sheet) -> Result<()>
 add_empty_sheet(name: &str) -> Result<&mut Sheet>
 remove_sheet(name: &str) -> Result<Sheet>
@@ -104,7 +104,7 @@ book.set_active_sheet("Summary")
 
 ### Merging Books
 
-```rust
+```text
 merge(other: Book)
 ```
 
@@ -125,7 +125,7 @@ end for
 
 ### Consolidating Sheets
 
-```rust
+```text
 consolidate() -> Result<Sheet>
 consolidate_with_options(options: ConsolidateOptions) -> Result<Sheet>
 ```
@@ -133,7 +133,7 @@ consolidate_with_options(options: ConsolidateOptions) -> Result<Sheet>
 Combines all sheets in a book into a single sheet by stacking rows.
 
 **ConsolidateOptions:**
-```rust
+```text
 ConsolidateOptions {
     headers: bool,              // First row contains headers (default: true)
     source_column: Option<String>, // Add column with source sheet name
@@ -155,7 +155,7 @@ dim combined = book.consolidate_with_options(options)
 
 ## Iteration
 
-```rust
+```text
 sheets() -> Iterator<Item = (&str, &Sheet)>
 sheets_mut() -> Iterator<Item = (&str, &mut Sheet)>
 ```
@@ -177,7 +177,7 @@ end for
 
 When loading multiple files into a book:
 
-```rust
+```text
 LoadOptions {
     headers: bool,           // Treat first row as headers
     delimiter: Option<char>, // CSV delimiter

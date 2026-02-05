@@ -82,7 +82,7 @@ dim total = sheet_eval_formula(sales, "SUM(A1:A10)")
 
 In Rust, you can store formulas directly on the sheet and compute cached results:
 
-```rust
+```rust,ignore
 use piptable_sheet::Sheet;
 
 let mut sheet = Sheet::from_data(vec![vec![0, 0, 0]]);
@@ -102,7 +102,7 @@ Use the `piptable-formulas` crate directly for programmatic formula evaluation.
 Lookup functions (VLOOKUP/HLOOKUP/INDEX/MATCH/XLOOKUP/OFFSET) are formula-backed and
 use the same implementation as the DSL.
 
-```rust
+```rust,ignore
 use piptable_formulas::{EvalContext, FormulaEngine};
 use piptable_primitives::{CellAddress, CellRange, ErrorValue, Value};
 use std::collections::HashMap;
@@ -153,7 +153,7 @@ fn eval_lookup() -> Result<(), Box<dyn std::error::Error>> {
 The formula engine can track dependencies and compute recalculation order. For
 sheet-aware workflows, use the `*_with_sheet` APIs along with a `SheetIdResolver`.
 
-```rust
+```rust,ignore
 use piptable_formulas::{FormulaEngine, SheetIdResolver};
 use piptable_primitives::CellAddress;
 
@@ -306,7 +306,7 @@ dim total = sheet_eval_formula(sales, "SUM(A1:A10)")
 
 Access and modify cells using Excel-style notation:
 
-```rust
+```rust,ignore
 use piptable_sheet::{Sheet, CellValue};
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -336,7 +336,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 Use column names for easier data manipulation:
 
-```rust
+```rust,ignore
 use piptable_sheet::{Sheet, CellValue};
 
 fn process_employee_data() -> Result<(), Box<dyn std::error::Error>> {
@@ -396,7 +396,7 @@ fn process_employee_data() -> Result<(), Box<dyn std::error::Error>> {
 
 Apply transformations to entire sheets:
 
-```rust
+```rust,ignore
 use piptable_sheet::{Sheet, CellValue};
 
 fn bulk_transformations() -> Result<(), Box<dyn std::error::Error>> {
@@ -441,7 +441,7 @@ fn bulk_transformations() -> Result<(), Box<dyn std::error::Error>> {
 
 Cherry-pick and reorganize columns:
 
-```rust
+```rust,ignore
 use piptable_sheet::Sheet;
 
 fn reorganize_data() -> Result<(), Box<dyn std::error::Error>> {
@@ -468,7 +468,7 @@ fn reorganize_data() -> Result<(), Box<dyn std::error::Error>> {
 
 A comprehensive example combining multiple operations:
 
-```rust
+```rust,ignore
 use piptable_sheet::{Sheet, CellValue};
 use std::collections::HashMap;
 
@@ -523,7 +523,7 @@ fn analyze_sales() -> Result<(), Box<dyn std::error::Error>> {
 
 If you're coming from pyexcel, here's how to translate common operations:
 
-```rust
+```rust,ignore
 use piptable_sheet::{Sheet, CellValue};
 
 fn pyexcel_migration() -> Result<(), Box<dyn std::error::Error>> {

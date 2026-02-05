@@ -6,7 +6,7 @@ The Sheet API provides methods for working with 2D tabular data. A Sheet represe
 
 ### Constructors
 
-```rust
+```text
 Sheet::new() -> Sheet
 Sheet::with_name(name: &str) -> Sheet
 Sheet::from_data<T>(data: Vec<Vec<T>>) -> Sheet
@@ -52,7 +52,7 @@ end if
 
 ### Accessing Cells
 
-```rust
+```text
 get(row: usize, col: usize) -> Result<&CellValue>
 get_by_name(row: usize, col_name: &str) -> Result<&CellValue>
 set<T>(row: usize, col: usize, value: T) -> Result<()>
@@ -76,7 +76,7 @@ sheet.set_by_name(0, "price", 42.50)
 
 ### Accessing Rows
 
-```rust
+```text
 row(index: usize) -> Result<&Vec<CellValue>>
 row_by_name(name: &str) -> Result<&Vec<CellValue>>
 rows() -> Iterator<Item = &Vec<CellValue>>
@@ -85,7 +85,7 @@ rows_mut() -> Iterator<Item = &mut Vec<CellValue>>
 
 ### Modifying Rows
 
-```rust
+```text
 row_append<T>(data: Vec<T>) -> Result<()>
 row_insert<T>(index: usize, data: Vec<T>) -> Result<()>
 row_update<T>(index: usize, data: Vec<T>) -> Result<()>
@@ -114,14 +114,14 @@ sheet.row_delete_where(|row| row[2].as_float().unwrap_or(0.0) < 10.0)
 
 ### Accessing Columns
 
-```rust
+```text
 column(index: usize) -> Result<Vec<CellValue>>
 column_by_name(name: &str) -> Result<Vec<CellValue>>
 ```
 
 ### Modifying Columns
 
-```rust
+```text
 column_append<T>(data: Vec<T>) -> Result<()>
 column_insert<T>(index: usize, data: Vec<T>, name: Option<String>) -> Result<()>
 column_update<T>(index: usize, data: Vec<T>) -> Result<()>
@@ -149,7 +149,7 @@ sheet.column_delete_multi_by_name(["col1", "col2"])
 
 ### Map Operations
 
-```rust
+```text
 map<F>(f: F)  // Apply function to all cells
 map_range<F>(range: &str, f: F) -> Result<()>  // Apply function to a range (A1 or R1C1)
 column_map<F>(col_index: usize, f: F) -> Result<()>
@@ -174,13 +174,13 @@ sheet.column_map_by_name("price", |cell| match cell {
 
 ### Data Cleaning
 
-```rust
+```text
 clean_data(options: &CleanOptions) -> Result<()>
 clean_data_range(range: &str, options: &CleanOptions) -> Result<()>  // A1 or R1C1
 ```
 
 **Examples:**
-```rust
+```text
 let mut options = CleanOptions::default();
 options.trim = true;
 options.lower = true;
@@ -192,7 +192,7 @@ sheet.clean_data_range("A2:C10", &options)?;
 
 ### Filter Operations
 
-```rust
+```text
 filter_rows<F>(predicate: F)  // Keep rows matching predicate
 remove_columns_at(indices: &[usize]) -> Result<()>
 ```
@@ -210,7 +210,7 @@ sheet.remove_columns_at([0, 4, 5])
 
 PipTable supports SQL-style joins between sheets:
 
-```rust
+```text
 inner_join(other: &Sheet, key: &str) -> Result<Sheet>
 inner_join_on(other: &Sheet, left_key: &str, right_key: &str) -> Result<Sheet>
 left_join(other: &Sheet, key: &str) -> Result<Sheet>
@@ -249,7 +249,7 @@ dim result = products.full_join(inventory, "product_id")
 
 Append adds rows from another sheet:
 
-```rust
+```text
 append(other: &Sheet) -> Result<()>
 append_distinct(other: &Sheet, key: &str) -> Result<()>
 ```
@@ -267,7 +267,7 @@ users append distinct new_users on "email"
 
 Upsert updates existing rows or inserts new ones based on a key:
 
-```rust
+```text
 upsert(other: &Sheet, key: &str) -> Result<()>
 ```
 
@@ -281,7 +281,7 @@ products upsert new_products on "sku"
 
 ### Conversion Methods
 
-```rust
+```text
 to_array() -> Vec<Vec<CellValue>>
 to_dict() -> Option<IndexMap<String, Vec<CellValue>>>
 to_records() -> Option<Vec<IndexMap<String, CellValue>>>
@@ -301,7 +301,7 @@ dim records = sheet.to_records()
 
 ## Column and Row Naming
 
-```rust
+```text
 name_columns_by_row(row_index: usize) -> Result<()>
 name_rows_by_column(col_index: usize) -> Result<()>
 ```

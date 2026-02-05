@@ -20,14 +20,14 @@ Supported value envelope:
 ### CellAddr
 Zero-based coordinates:
 
-```
+```text
 { r: u32, c: u32 }
 ```
 
 ### Range
 Inclusive bounds:
 
-```
+```text
 { s: CellAddr, e: CellAddr }
 ```
 
@@ -36,7 +36,7 @@ Inclusive bounds:
 ### Dense (row-major)
 Use when the range is small or mostly populated.
 
-```
+```text
 {
   range: { s: {r,c}, e: {r,c} },
   values: [Value]  // length = rows * cols, row-major
@@ -46,7 +46,7 @@ Use when the range is small or mostly populated.
 ### Sparse
 Use when most cells are empty/null.
 
-```
+```text
 {
   range: { s: {r,c}, e: {r,c} },
   items: [ { r: u32, c: u32, v: Value } ]
@@ -60,7 +60,7 @@ Use when most cells are empty/null.
 ## 3) Compile + Eval Requests
 
 ### CompileRequest
-```
+```text
 {
   formulas: [ { kind: "text", f: string } ],
   options?: { locale?: string, decimal?: string }
@@ -68,7 +68,7 @@ Use when most cells are empty/null.
 ```
 
 ### CompileResponse
-```
+```text
 {
   compiled: [ { kind: "bc", b: bytes } ],
   errors: [ { idx: u32, msg: string } ]
@@ -76,7 +76,7 @@ Use when most cells are empty/null.
 ```
 
 ### EvalRequest
-```
+```text
 {
   compiled: [ { kind: "bc", b: bytes } ],
   sheet: (dense | sparse),
@@ -85,7 +85,7 @@ Use when most cells are empty/null.
 ```
 
 ### EvalResponse
-```
+```text
 {
   results: [Value],
   errors: [ { idx: u32, msg: string } ]

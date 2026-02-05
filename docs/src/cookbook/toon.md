@@ -19,7 +19,7 @@ TOON is a columnar format that includes:
 
 import "data.toon" into data
 print "Loaded " + str(len(data)) + " typed records from TOON"
-```
+```text
 
 ### TOON File Structure Example
 ```
@@ -29,7 +29,7 @@ print "Loaded " + str(len(data)) + " typed records from TOON"
 # Alice 30 75000.50 true
 # Bob 25 65000.00 false
 # Charlie 35 85000.75 true
-```
+```text
 
 ### Process TOON with Type Safety
 ```piptable
@@ -65,7 +65,7 @@ dim results: table = query(
   WHERE price > 20.00
   ORDER BY name
 )
-```
+```text
 
 ### Joining TOON with Other Formats
 ```piptable
@@ -101,7 +101,7 @@ dim low_stock: table = query(
 )
 
 print "Found " + str(len(low_stock)) + " items below reorder point"
-```
+```text
 
 ## Converting Between Formats
 
@@ -160,7 +160,7 @@ const evalResp = await wasmEvalMany(evalReq);
 
 const values = evalResp.results.map(convertFromToonValue);
 console.log(values); // [3, 3]
-```
+```text
 
 ### Sparse Sheet Payload (Manual)
 ```javascript
@@ -196,7 +196,7 @@ dim json_ready: table = query(
 )
 
 export json_ready to "output.json"
-```
+```text
 
 ## Working with Complex TOON Data
 
@@ -248,7 +248,7 @@ dim summary: table = query(
 )
 
 export summary to "sales_summary.toon"
-```
+```text
 
 ## TOON Schema Validation
 
@@ -317,7 +317,7 @@ dim optimized: table = query(
 )
 
 export optimized to "filtered.toon"
-```
+```text
 
 ## TOON Best Practices
 

@@ -211,7 +211,7 @@ pip sales_analysis.pip
 
 Expected output:
 
-```
+```text
 Loading sales data...
 Loaded 10 sales records
 

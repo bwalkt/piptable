@@ -77,7 +77,7 @@ pip hello.pip
 ```
 
 Output:
-```
+```text
 Hello, World!
 Sum of numbers: 15
 User: Alice from NYC

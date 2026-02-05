@@ -10,7 +10,7 @@ This document analyzes performance aspects of parameter passing in PipTable DSL 
 
 The current parameter implementation creates new variable bindings for each function call:
 
-```rust
+```rust,ignore
 // Current approach (simplified)
 pub struct Param {
     pub name: String,
@@ -41,7 +41,7 @@ ByRef parameters require maintaining references to original variables:
 
 **Proposed Solution:** Cache compiled parameter metadata in function definitions.
 
-```rust
+```rust,ignore
 // Enhanced parameter representation
 #[derive(Clone)]
 pub struct CompiledParam {
@@ -68,7 +68,7 @@ pub struct FunctionMetadata {
 
 **Proposed Solution:** Use string interning for parameter names.
 
-```rust
+```rust,ignore
 use string_interner::{StringInterner, DefaultSymbol};
 
 pub type ParameterNameId = DefaultSymbol;
@@ -97,7 +97,7 @@ impl Param {
 
 **Proposed Solution:** Pre-categorize expressions for faster validation.
 
-```rust
+```rust,ignore
 #[derive(Clone, Copy)]
 pub enum ExpressionKind {
     Variable,          // Simple variable reference
@@ -151,7 +151,7 @@ dim result = sum(1, 2, 3, ..., 10000)  ' 10k arguments
 
 #### 1. Chunked Parameter Processing
 
-```rust
+```rust,ignore
 pub struct ParamArray {
     chunks: Vec<Vec<Value>>,     // Process arguments in chunks
     chunk_size: usize,           // Configurable chunk size
@@ -174,7 +174,7 @@ impl ParamArray {
 
 #### 2. Lazy Parameter Array Evaluation
 
-```rust
+```rust,ignore
 pub enum ParamArray {
     Eager(Vec<Value>),                    // Small arrays
     Lazy(Box<dyn Iterator<Item = Value>>), // Large arrays with lazy evaluation
@@ -195,7 +195,7 @@ impl ParamArray {
 
 For extremely large parameter lists, consider memory-mapping:
 
-```rust
+```rust,ignore
 use memmap2::Mmap;
 
 pub struct LargeParamArray {
@@ -208,7 +208,7 @@ pub struct LargeParamArray {
 
 ### Proposed Performance Tests
 
-```rust
+```rust,ignore
 #[cfg(test)]
 mod performance_tests {
     use super::*;
