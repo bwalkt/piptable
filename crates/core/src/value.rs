@@ -357,6 +357,7 @@ impl Value {
 mod tests {
     #![allow(clippy::approx_constant)]
     use super::*;
+    use piptable_sheet::CellValue;
 
     // ========================================================================
     // is_null tests
