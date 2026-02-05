@@ -190,6 +190,26 @@ sheet.clean_data(&options)?;
 sheet.clean_data_range("A2:C10", &options)?;
 ```
 
+## Sheet Merge Operations
+
+```text
+append(other: &Sheet) -> Result<()>
+concat_columns(other: &Sheet) -> Result<Sheet>
+sheet1 + sheet2  // Append rows (Result<Sheet>)
+sheet1 | sheet2  // Concatenate columns (Result<Sheet>)
+```
+
+**Notes:**
+- `append` stacks rows (aligns by column names when available).
+- `concat_columns` requires equal row counts; duplicate column names are suffixed.
+ - Operators are available in the Rust API.
+
+**Examples (Rust):**
+```text
+let combined_rows = (&sheet1 + &sheet2)?;
+let combined_cols = (&sheet1 | &sheet2)?;
+```
+
 ### Filter Operations
 
 ```text

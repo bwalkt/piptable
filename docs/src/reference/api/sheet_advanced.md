@@ -169,6 +169,16 @@ sheet.select_columns(&["Name", "Age", "City"])?;
 sheet.remove_columns(&["TempColumn", "Debug"])?;
 ```
 
+### Sheet Arithmetic (Rust only)
+
+```text
+// Append rows (like UNION ALL)
+let merged_rows = (&sheet1 + &sheet2)?;
+
+// Concatenate columns (requires same row count)
+let merged_cols = (&sheet1 | &sheet2)?;
+```
+
 ### Column Operations
 
 ```text

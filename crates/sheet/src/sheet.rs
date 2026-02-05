@@ -1826,6 +1826,56 @@ impl Sheet {
         Ok(())
     }
 
+    /// Concatenate columns from another sheet (like a horizontal merge).
+    ///
+    /// Row counts must match. If both sheets have named columns, names are
+    /// preserved and right-side duplicates are suffixed with _1, _2, etc.
+    pub fn concat_columns(&self, other: &Sheet) -> Result<Sheet> {
+        if self.row_count() != other.row_count() {
+            return Err(SheetError::LengthMismatch {
+                expected: self.row_count(),
+                actual: other.row_count(),
+            });
+        }
+
+        let mut data = Vec::with_capacity(self.row_count());
+        for (left, right) in self.data.iter().zip(other.data.iter()) {
+            let mut row = Vec::with_capacity(left.len() + right.len());
+            row.extend(left.iter().cloned());
+            row.extend(right.iter().cloned());
+            data.push(row);
+        }
+
+        let mut result = Sheet::from_data(data);
+        result.set_name(&format!("{}_concat", self.name));
+
+        if let (Some(left_names), Some(right_names)) = (&self.column_names, &other.column_names) {
+            let mut names = left_names.clone();
+            let mut used: HashSet<String> = names.iter().cloned().collect();
+            for name in right_names {
+                let mut candidate = name.clone();
+                if used.contains(&candidate) {
+                    let mut suffix = 1;
+                    loop {
+                        let next = format!("{candidate}_{suffix}");
+                        if !used.contains(&next) {
+                            candidate = next;
+                            break;
+                        }
+                        suffix += 1;
+                    }
+                }
+                used.insert(candidate.clone());
+                names.push(candidate);
+            }
+            result.column_names = Some(names);
+            result.rebuild_column_index();
+        }
+
+        result.rebuild_formula_engine()?;
+        Ok(result)
+    }
+
     /// Upsert rows from another sheet by key column.
     ///
     /// Updates existing rows (by key) and inserts new rows.
@@ -1929,6 +1979,41 @@ impl Sheet {
         self.invalidate_row_names();
         self.rebuild_formula_engine()?;
         Ok(())
+    }
+}
+
+impl std::ops::Add for Sheet {
+    type Output = Result<Sheet>;
+
+    fn add(mut self, rhs: Sheet) -> Self::Output {
+        self.append(&rhs)?;
+        Ok(self)
+    }
+}
+
+impl<'a, 'b> std::ops::Add<&'b Sheet> for &'a Sheet {
+    type Output = Result<Sheet>;
+
+    fn add(self, rhs: &'b Sheet) -> Self::Output {
+        let mut out = self.clone();
+        out.append(rhs)?;
+        Ok(out)
+    }
+}
+
+impl std::ops::BitOr for Sheet {
+    type Output = Result<Sheet>;
+
+    fn bitor(self, rhs: Sheet) -> Self::Output {
+        self.concat_columns(&rhs)
+    }
+}
+
+impl<'a, 'b> std::ops::BitOr<&'b Sheet> for &'a Sheet {
+    type Output = Result<Sheet>;
+
+    fn bitor(self, rhs: &'b Sheet) -> Self::Output {
+        self.concat_columns(rhs)
     }
 }
 
@@ -2169,6 +2254,39 @@ mod tests {
             &CellValue::String("bob".to_string())
         );
         assert_eq!(sheet.get(2, 1).unwrap(), &CellValue::String("".to_string()));
+    }
+
+    #[test]
+    fn test_concat_columns_and_operators() {
+        let mut left = Sheet::from_data(vec![
+            vec![CellValue::String("A".to_string()), CellValue::String("B".to_string())],
+            vec![CellValue::Int(1), CellValue::Int(2)],
+        ]);
+        left.name_columns_by_row(0).unwrap();
+        let mut right = Sheet::from_data(vec![
+            vec![CellValue::String("B".to_string()), CellValue::String("C".to_string())],
+            vec![CellValue::Int(3), CellValue::Int(4)],
+        ]);
+        right.name_columns_by_row(0).unwrap();
+
+        let merged = left.concat_columns(&right).unwrap();
+        assert_eq!(merged.col_count(), 4);
+        let names = merged.column_names().unwrap();
+        assert_eq!(
+            names,
+            &vec![
+                "A".to_string(),
+                "B".to_string(),
+                "B_1".to_string(),
+                "C".to_string()
+            ]
+        );
+
+        let append = (&left + &right).unwrap();
+        assert_eq!(append.row_count(), 3);
+
+        let columns = (&left | &right).unwrap();
+        assert_eq!(columns.col_count(), 4);
     }
 
     #[test]

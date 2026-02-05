@@ -2,6 +2,8 @@
 
 The Book API provides methods for working with collections of sheets, similar to Excel workbooks or multi-sheet spreadsheets.
 
+> Note: These Book operations are available in the Rust API. The DSL currently exposes only import/export into books.
+
 ## Creating Books
 
 ### Constructors
@@ -11,6 +13,7 @@ Book::new() -> Book
 Book::with_name(name: &str) -> Book
 Book::from_files<P>(paths: &[P]) -> Result<Book>
 Book::from_files_with_options<P>(paths: &[P], options: LoadOptions) -> Result<Book>
+Book::from_dict<T>(sheets: IndexMap<String, Vec<Vec<T>>>) -> Result<Book>
 ```
 
 **Examples:**
@@ -36,6 +39,7 @@ dim excel = import "data.xlsx" into book
 | `is_empty()` | Check if empty | `bool` |
 | `sheet_names()` | List of sheet names | `Vec<&str>` |
 | `has_sheet(name)` | Check sheet exists | `bool` |
+| `to_dict()` | Convert to sheet-name map | `IndexMap<String, Vec<Vec<CellValue>>>` |
 
 **Examples:**
 ```piptable
@@ -106,9 +110,11 @@ book.set_active_sheet("Summary")
 
 ```text
 merge(other: Book)
+book1 + book2  // Merge books (same as merge)
 ```
 
 Merges another book into this one, handling name conflicts by appending suffixes.
+The `+` operator returns a new book.
 
 **Examples:**
 ```piptable
@@ -138,6 +144,37 @@ ConsolidateOptions {
     headers: bool,              // First row contains headers (default: true)
     source_column: Option<String>, // Add column with source sheet name
 }
+```
+
+### Bulk Sheet Operations (Rust only)
+
+```text
+for_each_sheet<F>(&self, f: F)
+for_each_sheet_mut<F>(&mut self, f: F)
+try_for_each_sheet_mut<F, E>(&mut self, f: F) -> Result<(), E>
+```
+
+**Examples (Rust):**
+```text
+book.for_each_sheet(|sheet| {
+    println!("{} rows", sheet.row_count());
+});
+
+book.for_each_sheet_mut(|sheet| {
+    sheet.remove_empty_rows();
+});
+```
+
+### Dictionary Conversion (Rust only)
+
+```text
+let book_dict = IndexMap::from([
+    ("Sheet1".to_string(), vec![vec![1, 2], vec![3, 4]]),
+    ("Sheet2".to_string(), vec![vec![5, 6], vec![7, 8]]),
+]);
+
+let book = Book::from_dict(book_dict)?;
+let roundtrip = book.to_dict();
 ```
 
 **Examples:**
