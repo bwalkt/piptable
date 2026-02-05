@@ -8,7 +8,7 @@ use crate::Interpreter;
 use piptable_core::{PipError, PipResult, Value};
 use piptable_sheet::Book;
 
-fn expect_book<'a>(value: &'a Value, line: usize) -> PipResult<&'a Book> {
+fn expect_book(value: &Value, line: usize) -> PipResult<&Book> {
     match value {
         Value::Book(book) => Ok(book),
         _ => Err(PipError::runtime(line, "First argument must be a Book")),
@@ -118,9 +118,9 @@ fn book_get_sheet_by_index(args: Vec<Value>, line: usize) -> PipResult<Value> {
     if index < 0 {
         return Err(PipError::runtime(line, "Index cannot be negative"));
     }
-    let sheet = book.get_sheet_by_index(index as usize).map_err(|e| {
-        PipError::runtime(line, format!("Failed to get sheet by index: {}", e))
-    })?;
+    let sheet = book
+        .get_sheet_by_index(index as usize)
+        .map_err(|e| PipError::runtime(line, format!("Failed to get sheet by index: {}", e)))?;
     Ok(Value::Sheet(Box::new(sheet.clone())))
 }
 
@@ -150,9 +150,9 @@ fn book_set_active_sheet(args: Vec<Value>, line: usize) -> PipResult<Value> {
         .as_str()
         .ok_or_else(|| PipError::runtime(line, "Sheet name must be a string"))?;
     let mut new_book = book.clone();
-    new_book.set_active_sheet(name).map_err(|e| {
-        PipError::runtime(line, format!("Failed to set active sheet: {}", e))
-    })?;
+    new_book
+        .set_active_sheet(name)
+        .map_err(|e| PipError::runtime(line, format!("Failed to set active sheet: {}", e)))?;
     Ok(Value::Book(Box::new(new_book)))
 }
 
@@ -227,9 +227,9 @@ fn book_rename_sheet(args: Vec<Value>, line: usize) -> PipResult<Value> {
         .as_str()
         .ok_or_else(|| PipError::runtime(line, "New name must be a string"))?;
     let mut new_book = book.clone();
-    new_book.rename_sheet(old_name, new_name).map_err(|e| {
-        PipError::runtime(line, format!("Failed to rename sheet: {}", e))
-    })?;
+    new_book
+        .rename_sheet(old_name, new_name)
+        .map_err(|e| PipError::runtime(line, format!("Failed to rename sheet: {}", e)))?;
     Ok(Value::Book(Box::new(new_book)))
 }
 
@@ -241,14 +241,11 @@ fn book_merge(args: Vec<Value>, line: usize) -> PipResult<Value> {
         ));
     }
     let book = expect_book(&args[0], line)?;
-    let other = match &args[1] {
-        Value::Book(other) => other,
-        _ => {
-            return Err(PipError::runtime(
-                line,
-                "book_merge() requires a Book as the second argument",
-            ));
-        }
+    let Value::Book(other) = &args[1] else {
+        return Err(PipError::runtime(
+            line,
+            "book_merge() requires a Book as the second argument",
+        ));
     };
     let mut new_book = book.clone();
     new_book.merge((**other).clone());
@@ -387,8 +384,7 @@ fn book_from_files_impl(
     };
 
     let opts = file_load_options_from_value(options, line)?;
-    let book = piptable_sheet::Book::from_files_with_options(&paths, opts).map_err(|e| {
-        PipError::runtime(line, format!("Failed to load book from files: {}", e))
-    })?;
+    let book = piptable_sheet::Book::from_files_with_options(&paths, opts)
+        .map_err(|e| PipError::runtime(line, format!("Failed to load book from files: {}", e)))?;
     Ok(Value::Book(Box::new(book)))
 }

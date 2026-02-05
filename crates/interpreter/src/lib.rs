@@ -9,9 +9,9 @@
 //! - Integration with SQL and HTTP engines
 //! - Python UDF support (with `python` feature)
 
-mod builtins;
 /// Book conversion utilities used by interpreter methods.
 mod book_conversions;
+mod builtins;
 /// Converters between interpreter values and external representations.
 mod converters;
 /// Formula evaluation helpers for the interpreter.
@@ -27,8 +27,7 @@ mod sql_builder;
 mod python;
 
 use crate::book_conversions::{
-    active_sheet_name, book_to_value_dict, consolidate_options_from_value,
-    value_to_sheet_for_book,
+    active_sheet_name, book_to_value_dict, consolidate_options_from_value, value_to_sheet_for_book,
 };
 use crate::formula::CachedFormulaEngine;
 use crate::sheet_conversions::{build_sheet_arrow_array, cell_to_value, infer_sheet_column_type};
@@ -1007,8 +1006,7 @@ impl Interpreter {
                 // Short-circuit evaluation for AND/OR
                 if matches!(op, BinaryOp::And | BinaryOp::Or) {
                     let left_val = self.eval_expr(left).await?;
-                    let allow_short_circuit =
-                        !matches!(left_val, Value::Sheet(_) | Value::Book(_));
+                    let allow_short_circuit = !matches!(left_val, Value::Sheet(_) | Value::Book(_));
                     if allow_short_circuit {
                         if matches!(op, BinaryOp::And) {
                             if !left_val.is_truthy() {
@@ -1503,9 +1501,8 @@ impl Interpreter {
                 Ok(Value::Book(Box::new(merged)))
             }
             (Value::Sheet(left_sheet), Value::Sheet(right_sheet)) => {
-                let merged = (left_sheet.as_ref() + right_sheet.as_ref()).map_err(|e| {
-                    PipError::runtime(0, format!("Sheet append failed: {}", e))
-                })?;
+                let merged = (left_sheet.as_ref() + right_sheet.as_ref())
+                    .map_err(|e| PipError::runtime(0, format!("Sheet append failed: {}", e)))?;
                 Ok(Value::Sheet(Box::new(merged)))
             }
             (Value::Int(a), Value::Int(b)) => a
@@ -1839,10 +1836,7 @@ impl Interpreter {
                         converters::consolidate_book(book_obj, source_col.as_deref())
                             .map_err(|e| PipError::runtime(line, e))
                     }
-                    _ => Err(PipError::runtime(
-                        line,
-                        "consolidate() requires a book",
-                    )),
+                    _ => Err(PipError::runtime(line, "consolidate() requires a book")),
                 }
             }
             #[cfg(feature = "python")]
@@ -3462,20 +3456,17 @@ impl Interpreter {
                     .as_str()
                     .ok_or_else(|| PipError::runtime(0, "New name must be a string"))?;
                 let mut new_book = book.clone();
-                new_book.rename_sheet(old_name, new_name).map_err(|e| {
-                    PipError::runtime(0, format!("Failed to rename sheet: {}", e))
-                })?;
+                new_book
+                    .rename_sheet(old_name, new_name)
+                    .map_err(|e| PipError::runtime(0, format!("Failed to rename sheet: {}", e)))?;
                 Ok(Value::Book(Box::new(new_book)))
             }
             "merge" => {
                 if args.len() != 1 {
                     return Err(PipError::runtime(0, "merge() takes exactly 1 argument"));
                 }
-                let other = match &args[0] {
-                    Value::Book(other) => other,
-                    _ => {
-                        return Err(PipError::runtime(0, "merge() requires a Book argument"));
-                    }
+                let Value::Book(other) = &args[0] else {
+                    return Err(PipError::runtime(0, "merge() requires a Book argument"));
                 };
                 let mut new_book = book.clone();
                 new_book.merge((**other).clone());
@@ -3498,9 +3489,9 @@ impl Interpreter {
                     ));
                 }
                 let options = consolidate_options_from_value(Some(&args[0]), 0)?;
-                let sheet = book.consolidate_with_options(options).map_err(|e| {
-                    PipError::runtime(0, format!("Failed to consolidate: {}", e))
-                })?;
+                let sheet = book
+                    .consolidate_with_options(options)
+                    .map_err(|e| PipError::runtime(0, format!("Failed to consolidate: {}", e)))?;
                 Ok(Value::Sheet(Box::new(sheet)))
             }
             "for_each_sheet" => {
@@ -3511,10 +3502,7 @@ impl Interpreter {
                     ));
                 }
                 let Value::Lambda { params, body } = &args[0] else {
-                    return Err(PipError::runtime(
-                        0,
-                        "for_each_sheet() requires a lambda",
-                    ));
+                    return Err(PipError::runtime(0, "for_each_sheet() requires a lambda"));
                 };
                 if params.len() != 1 {
                     return Err(PipError::runtime(
