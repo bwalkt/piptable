@@ -477,10 +477,10 @@ impl std::ops::Add for Book {
     }
 }
 
-impl<'a, 'b> std::ops::Add<&'b Book> for &'a Book {
+impl std::ops::Add<&Book> for &Book {
     type Output = Book;
 
-    fn add(self, rhs: &'b Book) -> Self::Output {
+    fn add(self, rhs: &Book) -> Self::Output {
         let mut out = self.clone();
         out.merge(rhs.clone());
         out

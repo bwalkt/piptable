@@ -1991,10 +1991,10 @@ impl std::ops::Add for Sheet {
     }
 }
 
-impl<'a, 'b> std::ops::Add<&'b Sheet> for &'a Sheet {
+impl std::ops::Add<&Sheet> for &Sheet {
     type Output = Result<Sheet>;
 
-    fn add(self, rhs: &'b Sheet) -> Self::Output {
+    fn add(self, rhs: &Sheet) -> Self::Output {
         let mut out = self.clone();
         out.append(rhs)?;
         Ok(out)
@@ -2009,10 +2009,10 @@ impl std::ops::BitOr for Sheet {
     }
 }
 
-impl<'a, 'b> std::ops::BitOr<&'b Sheet> for &'a Sheet {
+impl std::ops::BitOr<&Sheet> for &Sheet {
     type Output = Result<Sheet>;
 
-    fn bitor(self, rhs: &'b Sheet) -> Self::Output {
+    fn bitor(self, rhs: &Sheet) -> Self::Output {
         self.concat_columns(rhs)
     }
 }
