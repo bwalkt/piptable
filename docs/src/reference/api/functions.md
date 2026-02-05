@@ -65,7 +65,6 @@ Note: `len()` is formula-backed. For objects, use `len(keys(obj))` to count fiel
 
 | Function | Description | Example | Status |
 |----------|-------------|---------|--------|
-| `sheet_map(sheet, operation)` | Transform sheet cell values | `sheet_map(data, "upper")` | ✅ Implemented |
 | `sheet_filter_rows(sheet, column, value)` | Filter sheet rows by column value | `sheet_filter_rows(data, "status", "active")` | ✅ Implemented |
 | `sheet_row_count(sheet)` | Get number of rows | `sheet_row_count(data)` | ✅ Implemented |
 | `sheet_col_count(sheet)` | Get number of columns | `sheet_col_count(data)` | ✅ Implemented |
@@ -109,7 +108,8 @@ Note: `len()` is formula-backed. For objects, use `len(keys(obj))` to count fiel
 - `"trim"` - Trim whitespace
 - `"lower"` / `"upper"` - Normalize case (mutually exclusive)
 - `"normalize_whitespace"` - Collapse internal whitespace
-- `"empty_to_null"` / `"null_to_empty"` / `"fill_nulls"` - Null handling
+- `"empty_to_null"` / `"null_to_empty"` - Null handling
+- `"fill_nulls"` - Null handling (requires `[fill]` value)
 
 ### Lookup Functions (Formula-backed)
 
