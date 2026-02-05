@@ -406,7 +406,10 @@ fn book_to_json(book: &piptable_sheet::Book) -> Result<serde_json::Value> {
                         CellValue::String(s) => JsonValue::String(s.clone()),
                         CellValue::Formula(formula) => {
                             let mut obj = serde_json::Map::new();
-                            obj.insert("formula".to_string(), JsonValue::String(formula.source.clone()));
+                            obj.insert(
+                                "formula".to_string(),
+                                JsonValue::String(formula.source.clone()),
+                            );
                             if let Some(cached) = &formula.cached {
                                 obj.insert(
                                     "cached".to_string(),
@@ -711,7 +714,10 @@ mod tests {
         let mut book = piptable_sheet::Book::new();
         let sheet = piptable_sheet::Sheet::from_data(vec![vec!["A", "B"], vec!["1", "2"]]);
         book.add_sheet("Sheet1", sheet).unwrap();
-        assert_eq!(format_value(&Value::Book(Box::new(book))), "<Book: Book1 (1 sheets)>");
+        assert_eq!(
+            format_value(&Value::Book(Box::new(book))),
+            "<Book: Book1 (1 sheets)>"
+        );
     }
 
     // ========================================================================
