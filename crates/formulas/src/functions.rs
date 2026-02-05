@@ -728,6 +728,15 @@ mod tests {
     }
 
     #[test]
+    fn test_not_error_cases() {
+        let result = not_fn(&[Value::String("x".to_string())]);
+        assert_eq!(result, Value::Error(ErrorValue::Value));
+
+        let result = not_fn(&[Value::Float(f64::NAN)]);
+        assert_eq!(result, Value::Error(ErrorValue::Num));
+    }
+
+    #[test]
     fn test_vlookup_and_hlookup() {
         let table = Value::Array(vec![
             Value::Array(vec![Value::String("A".to_string()), Value::Int(10)]),
@@ -844,6 +853,18 @@ mod tests {
             rounddown(&[Value::Float(-3.9), Value::Int(0)]),
             Value::Float(-3.0)
         );
+        assert_eq!(
+            round(&[Value::Float(1234.0), Value::Int(-2)]),
+            Value::Float(1200.0)
+        );
+        assert_eq!(
+            roundup(&[Value::Float(1234.0), Value::Int(-2)]),
+            Value::Float(1300.0)
+        );
+        assert_eq!(
+            rounddown(&[Value::Float(1234.0), Value::Int(-2)]),
+            Value::Float(1200.0)
+        );
     }
 
     #[test]
@@ -893,12 +914,17 @@ mod tests {
             proper(&[Value::String("hello world".to_string())]),
             Value::String("Hello World".to_string())
         );
+        assert_eq!(
+            proper(&[Value::String("mIXed-case".to_string())]),
+            Value::String("Mixed-Case".to_string())
+        );
     }
 
     #[test]
     fn test_is_functions() {
         assert_eq!(isblank(&[Value::Empty]), Value::Bool(true));
         assert_eq!(isblank(&[Value::Int(0)]), Value::Bool(false));
+        assert_eq!(isblank(&[Value::String(String::new())]), Value::Bool(false));
 
         assert_eq!(
             iserror(&[Value::Error(ErrorValue::Div0)]),
@@ -932,6 +958,14 @@ mod tests {
         assert_eq!(even(&[Value::Float(-1.5)]), Value::Float(-2.0));
         assert_eq!(even(&[Value::Float(-2.1)]), Value::Float(-4.0));
         assert_eq!(odd(&[Value::Float(-2.5)]), Value::Float(-3.0));
+        assert_eq!(
+            even(&[Value::String("x".to_string())]),
+            Value::Error(ErrorValue::Value)
+        );
+        assert_eq!(
+            odd(&[Value::String("x".to_string())]),
+            Value::Error(ErrorValue::Value)
+        );
     }
 
     #[test]
@@ -966,8 +1000,21 @@ mod tests {
 
         let log_result = log(&[Value::Float(100.0)]);
         assert!(matches!(log_result, Value::Float(f) if (f - 2.0).abs() < 1e-10));
+        assert_eq!(
+            log(&[Value::Float(100.0), Value::Float(1.0)]),
+            Value::Error(ErrorValue::Num)
+        );
+        assert_eq!(
+            log(&[Value::Float(-1.0), Value::Float(10.0)]),
+            Value::Error(ErrorValue::Num)
+        );
+        assert_eq!(
+            log(&[Value::Float(10.0), Value::Float(-2.0)]),
+            Value::Error(ErrorValue::Num)
+        );
 
         assert_eq!(log10(&[Value::Float(1000.0)]), Value::Float(3.0));
+        assert_eq!(log10(&[Value::Float(0.0)]), Value::Error(ErrorValue::Num));
     }
 
     #[test]
@@ -994,6 +1041,9 @@ mod tests {
             randbetween(&[Value::Int(10), Value::Int(1)]),
             Value::Error(ErrorValue::Value)
         );
+
+        let result = randbetween(&[Value::Float(1.9), Value::Float(3.1)]);
+        assert!(matches!(result, Value::Int(n) if n >= 1 && n <= 3));
     }
 }
 
