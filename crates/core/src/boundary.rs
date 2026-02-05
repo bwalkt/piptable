@@ -182,6 +182,13 @@ pub fn value_to_toon(value: &Value) -> ToonValue {
                 ),
             }
         }
+        Value::Book(book) => ToonValue::Error {
+            code: "BOOK_UNSUPPORTED".to_string(),
+            msg: format!(
+                "Book with {} sheets cannot cross boundary directly",
+                book.sheet_count()
+            ),
+        },
         Value::Function { name, .. } => ToonValue::Error {
             code: "FUNCTION_UNSUPPORTED".to_string(),
             msg: format!("Function '{}' cannot cross WASM boundary", name),

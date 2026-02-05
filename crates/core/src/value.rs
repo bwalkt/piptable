@@ -1,7 +1,7 @@
 //! Runtime value types for piptable.
 
 use arrow::array::RecordBatch;
-use piptable_sheet::Sheet;
+use piptable_sheet::{Book, Sheet};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -38,6 +38,8 @@ pub enum Value {
 
     /// Sheet data (piptable_sheet::Sheet).
     Sheet(Box<Sheet>),
+    /// Book data (piptable_sheet::Book).
+    Book(Box<Book>),
 
     /// Function reference.
     Function {
@@ -70,6 +72,7 @@ impl Value {
             Self::Object(o) => !o.is_empty(),
             Self::Table(t) => !t.is_empty(),
             Self::Sheet(s) => s.row_count() > 0,
+            Self::Book(b) => b.sheet_count() > 0,
             Self::Function { .. } => true,
             Self::Lambda { .. } => true,
         }
@@ -88,6 +91,7 @@ impl Value {
             Self::Object(_) => "Object",
             Self::Table(_) => "Table",
             Self::Sheet(_) => "Sheet",
+            Self::Book(_) => "Book",
             Self::Function { .. } => "Function",
             Self::Lambda { .. } => "Lambda",
         }
@@ -260,6 +264,9 @@ impl Serialize for Value {
             Self::Sheet(_) => Err(serde::ser::Error::custom(
                 "Sheet values are not JSON-serializable",
             )),
+            Self::Book(_) => Err(serde::ser::Error::custom(
+                "Book values are not JSON-serializable",
+            )),
             Self::Function { name, .. } => Err(serde::ser::Error::custom(format!(
                 "Function '{name}' is not JSON-serializable"
             ))),
@@ -338,6 +345,7 @@ impl Value {
             }
             Self::Table(_) => Err("Table values are not JSON-serializable"),
             Self::Sheet(_) => Err("Sheet values are not JSON-serializable"),
+            Self::Book(_) => Err("Book values are not JSON-serializable"),
             Self::Function { .. } => Err("Function values are not JSON-serializable"),
             Self::Lambda { .. } => Err("Lambda expressions are not JSON-serializable"),
         }
@@ -388,9 +396,18 @@ mod tests {
         assert!(Value::Object(map).is_truthy());
         assert!(!Value::Table(vec![]).is_truthy());
         assert!(!Value::Sheet(Box::new(Sheet::new())).is_truthy()); // Empty sheet
+        assert!(!Value::Book(Box::new(Book::new())).is_truthy()); // Empty book
         let mut sheet_with_data = Sheet::new();
         sheet_with_data.row_append(vec!["test"]).unwrap();
         assert!(Value::Sheet(Box::new(sheet_with_data)).is_truthy()); // Non-empty sheet
+        assert!(
+            Value::Book(Box::new(Book::from_dict({
+                let mut m = HashMap::new();
+                m.insert("Sheet1".to_string(), vec![vec![1]]);
+                m
+            }).unwrap()))
+            .is_truthy()
+        );
         assert!(Value::Function {
             name: "f".to_string(),
             params: vec![],
@@ -415,6 +432,7 @@ mod tests {
         assert_eq!(Value::Object(HashMap::new()).type_name(), "Object");
         assert_eq!(Value::Table(vec![]).type_name(), "Table");
         assert_eq!(Value::Sheet(Box::new(Sheet::new())).type_name(), "Sheet");
+        assert_eq!(Value::Book(Box::new(Book::new())).type_name(), "Book");
         assert_eq!(
             Value::Function {
                 name: "f".to_string(),

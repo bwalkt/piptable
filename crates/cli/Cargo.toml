@@ -17,6 +17,7 @@ python = ["piptable-interpreter/python"]
 
 [dependencies]
 piptable-core = { workspace = true }
+piptable-sheet = { workspace = true }
 piptable-parser = { workspace = true }
 piptable-interpreter = { workspace = true }
 tokio = { workspace = true }

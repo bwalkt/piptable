@@ -60,6 +60,7 @@ pub async fn call_core_builtin(
                     let total: usize = batches.iter().map(|b| b.num_rows()).sum();
                     Value::Int(total as i64)
                 }
+                Value::Book(book) => Value::Int(book.sheet_count() as i64),
                 _ => {
                     return Some(Err(PipError::runtime(
                         line,
@@ -92,6 +93,14 @@ pub async fn call_core_builtin(
                     let keys: Vec<Value> = obj.keys().map(|k| Value::String(k.clone())).collect();
                     Some(Ok(Value::Array(keys)))
                 }
+                Value::Book(book) => {
+                    let keys: Vec<Value> = book
+                        .sheet_names()
+                        .into_iter()
+                        .map(|k| Value::String(k.to_string()))
+                        .collect();
+                    Some(Ok(Value::Array(keys)))
+                }
                 _ => Some(Err(PipError::runtime(
                     line,
                     format!("keys() expects object, got {}", args[0].type_name()),
@@ -109,6 +118,13 @@ pub async fn call_core_builtin(
             match &args[0] {
                 Value::Object(obj) => {
                     let values: Vec<Value> = obj.values().cloned().collect();
+                    Some(Ok(Value::Array(values)))
+                }
+                Value::Book(book) => {
+                    let values: Vec<Value> = book
+                        .sheets()
+                        .map(|(_, sheet)| Value::Sheet(Box::new(sheet.clone())))
+                        .collect();
                     Some(Ok(Value::Array(values)))
                 }
                 _ => Some(Err(PipError::runtime(

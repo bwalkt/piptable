@@ -61,6 +61,30 @@ Note: `len()` is formula-backed. For objects, use `len(keys(obj))` to count fiel
 | `values(object)` | Get object values | `values({"a": 1, "b": 2})` → `[1, 2]` | ✅ Implemented |
 | `consolidate(book)` | Consolidate book sheets | `consolidate(book)` | ✅ Implemented |
 
+### Book Functions
+
+| Function | Description | Example | Status |
+|----------|-------------|---------|--------|
+| `book_sheet_names(book)` | List sheet names | `book_sheet_names(excel)` | ✅ Implemented |
+| `book_sheet_count(book)` | Count sheets | `book_sheet_count(excel)` | ✅ Implemented |
+| `book_has_sheet(book, name)` | Check for a sheet | `book_has_sheet(excel, "Summary")` | ✅ Implemented |
+| `book_get_sheet(book, name)` | Get sheet by name | `book_get_sheet(excel, "Data")` | ✅ Implemented |
+| `book_get_sheet_by_index(book, idx)` | Get sheet by index | `book_get_sheet_by_index(excel, 0)` | ✅ Implemented |
+| `book_active_sheet(book)` | Get active sheet | `book_active_sheet(excel)` | ✅ Implemented |
+| `book_set_active_sheet(book, name)` | Set active sheet | `book_set_active_sheet(excel, "Summary")` | ✅ Implemented |
+| `book_add_sheet(book, name, sheet)` | Add a sheet | `book_add_sheet(excel, "Extra", data)` | ✅ Implemented |
+| `book_remove_sheet(book, name)` | Remove a sheet | `book_remove_sheet(excel, "Temp")` | ✅ Implemented |
+| `book_rename_sheet(book, old, new)` | Rename a sheet | `book_rename_sheet(excel, "Sheet1", "Main")` | ✅ Implemented |
+| `book_merge(book, other)` | Merge books | `book_merge(book1, book2)` | ✅ Implemented |
+| `book_to_dict(book)` | Convert to dictionary | `book_to_dict(excel)` | ✅ Implemented |
+| `book_from_dict(map)` | Create book from dictionary | `book_from_dict({ "Sheet1": [[1,2]] })` | ✅ Implemented |
+| `book_sheets(book)` | Get sheets as an array | `book_sheets(excel)` | ✅ Implemented |
+| `book_add_empty_sheet(book, name)` | Add empty sheet | `book_add_empty_sheet(excel, "Temp")` | ✅ Implemented |
+| `book_consolidate(book)` | Consolidate sheets | `book_consolidate(excel)` | ✅ Implemented |
+| `book_consolidate_with_options(book, options)` | Consolidate with options | `book_consolidate_with_options(excel, {"add_source_column": true})` | ✅ Implemented |
+| `book_from_files(paths)` | Load multiple files into a book | `book_from_files(["a.csv", "b.csv"])` | ✅ Implemented |
+| `book_from_files_with_options(paths, options)` | Load files with options | `book_from_files_with_options(["a.csv"], {"has_headers": false})` | ✅ Implemented |
+
 ### Sheet Functions
 
 | Function | Description | Example | Status |

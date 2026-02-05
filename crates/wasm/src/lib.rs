@@ -308,6 +308,13 @@ fn value_to_json(value: &Value) -> serde_json::Value {
             serde_json::Value::Object(out)
         }
         Value::Sheet(sheet) => sheet_to_json(sheet),
+        Value::Book(book) => {
+            let mut out = serde_json::Map::new();
+            for (name, sheet) in book.sheets() {
+                out.insert(name.to_string(), sheet_to_json(sheet));
+            }
+            serde_json::Value::Object(out)
+        }
         Value::Table(batches) => table_to_json(batches),
         Value::Function { name, .. } => serde_json::Value::String(format!("<function {}>", name)),
         Value::Lambda { .. } => serde_json::Value::String("<lambda>".to_string()),

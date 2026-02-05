@@ -317,6 +317,23 @@ fn print_value(value: &Value, format: OutputFormat) -> Result<()> {
                 }
             }
         },
+        Value::Book(book) => match format {
+            OutputFormat::Json => {
+                let json = book_to_json(book)?;
+                println!("{}", serde_json::to_string_pretty(&json)?);
+            }
+            OutputFormat::Csv | OutputFormat::Table => {
+                println!("<Book: {} sheets>", book.sheet_count());
+                for (name, sheet) in book.sheets() {
+                    println!(
+                        "{}: <Sheet: {}x{}>",
+                        name,
+                        sheet.row_count(),
+                        sheet.col_count()
+                    );
+                }
+            }
+        },
         _ => {
             println!("{}", format_value(value));
         }
@@ -359,10 +376,62 @@ fn format_value(value: &Value) -> String {
         Value::Sheet(sheet) => {
             format!("<Sheet: {}x{}>", sheet.row_count(), sheet.col_count())
         }
+        Value::Book(book) => {
+            format!("<Book: {} ({} sheets)>", book.name(), book.sheet_count())
+        }
         Value::Lambda { params, .. } => {
             format!("<Lambda: |{}|>", params.join(", "))
         }
     }
+}
+
+fn book_to_json(book: &piptable_sheet::Book) -> Result<serde_json::Value> {
+    use piptable_sheet::CellValue;
+    use serde_json::Value as JsonValue;
+    let mut map = serde_json::Map::new();
+    for (name, sheet) in book.sheets() {
+        let rows: Vec<JsonValue> = sheet
+            .data()
+            .iter()
+            .map(|row| {
+                let cells: Vec<JsonValue> = row
+                    .iter()
+                    .map(|cell| match cell {
+                        CellValue::Null => JsonValue::Null,
+                        CellValue::Bool(b) => JsonValue::Bool(*b),
+                        CellValue::Int(i) => JsonValue::Number((*i).into()),
+                        CellValue::Float(f) => serde_json::Number::from_f64(*f)
+                            .map(JsonValue::Number)
+                            .unwrap_or(JsonValue::Null),
+                        CellValue::String(s) => JsonValue::String(s.clone()),
+                        CellValue::Formula(formula) => {
+                            let mut obj = serde_json::Map::new();
+                            obj.insert("formula".to_string(), JsonValue::String(formula.source.clone()));
+                            if let Some(cached) = &formula.cached {
+                                obj.insert(
+                                    "cached".to_string(),
+                                    match cached.as_ref() {
+                                        CellValue::Null => JsonValue::Null,
+                                        CellValue::Bool(b) => JsonValue::Bool(*b),
+                                        CellValue::Int(i) => JsonValue::Number((*i).into()),
+                                        CellValue::Float(f) => serde_json::Number::from_f64(*f)
+                                            .map(JsonValue::Number)
+                                            .unwrap_or(JsonValue::Null),
+                                        CellValue::String(s) => JsonValue::String(s.clone()),
+                                        CellValue::Formula(_) => JsonValue::Null,
+                                    },
+                                );
+                            }
+                            JsonValue::Object(obj)
+                        }
+                    })
+                    .collect();
+                JsonValue::Array(cells)
+            })
+            .collect();
+        map.insert(name.to_string(), JsonValue::Array(rows));
+    }
+    Ok(JsonValue::Object(map))
 }
 
 /// Convert Arrow batches to JSON.
@@ -634,6 +703,15 @@ mod tests {
             is_async: false,
         };
         assert_eq!(format_value(&func), "<Function: add(a, b)>");
+    }
+
+    /// Verifies formatting for book values.
+    #[test]
+    fn test_format_value_book() {
+        let mut book = piptable_sheet::Book::new();
+        let sheet = piptable_sheet::Sheet::from_data(vec![vec!["A", "B"], vec!["1", "2"]]);
+        book.add_sheet("Sheet1", sheet).unwrap();
+        assert_eq!(format_value(&Value::Book(Box::new(book))), "<Book: Book1 (1 sheets)>");
     }
 
     // ========================================================================
