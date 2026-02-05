@@ -16,7 +16,7 @@ mod converters;
 mod formula;
 pub mod io;
 /// Sheet conversion utilities used by interpreter built-ins.
-mod sheet_conversions;
+pub mod sheet_conversions;
 /// SQL string builder helpers for DSL queries.
 mod sql_builder;
 
