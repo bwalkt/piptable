@@ -261,3 +261,22 @@ async fn test_sheet_formula_edge_cases() {
         Some(Value::Float(f)) if (f - 1.0).abs() < 1e-9
     ));
 }
+
+#[tokio::test]
+async fn test_sheet_set_formula_invalid_formula() {
+    let mut interp = Interpreter::new();
+    let sheet = Sheet::from_data(vec![vec![CellValue::Int(1)]]);
+    interp
+        .set_var("s", Value::Sheet(Box::new(sheet)))
+        .await
+        .expect("set sheet");
+
+    let program =
+        PipParser::parse_str(r#"dim s = sheet_set_formula(s, "A1", "=SUM(")"#).expect("parse");
+    let err = interp
+        .eval(program)
+        .await
+        .expect_err("expected error")
+        .to_string();
+    assert!(err.contains("Failed to set formula 'A1'"));
+}

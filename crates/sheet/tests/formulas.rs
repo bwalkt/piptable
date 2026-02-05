@@ -285,3 +285,24 @@ fn test_formula_row_column_operations() -> Result<(), Box<dyn std::error::Error>
 
     Ok(())
 }
+
+#[test]
+fn test_set_formula_invalid_returns_error() -> Result<(), Box<dyn std::error::Error>> {
+    let mut sheet = Sheet::from_data(vec![vec![0]]);
+    let err = sheet.set_formula("A1", "=SUM(").unwrap_err();
+    assert!(format!("{err}").contains("Formula error"));
+    Ok(())
+}
+
+#[test]
+fn test_formula_replaced_and_recalculated() -> Result<(), Box<dyn std::error::Error>> {
+    let mut sheet = Sheet::from_data(vec![vec![1, 2, 0]]);
+    sheet.set_formula("C1", "=A1+B1")?;
+    sheet.evaluate_formulas()?;
+    assert_eq!(sheet.get_a1("C1")?.as_float(), Some(3.0));
+
+    sheet.set_formula("C1", "=A1*B1")?;
+    sheet.evaluate_formulas()?;
+    assert_eq!(sheet.get_a1("C1")?.as_float(), Some(2.0));
+    Ok(())
+}
