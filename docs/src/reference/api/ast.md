@@ -12,7 +12,7 @@ The PipTable AST is defined in Rust and uses strongly-typed enums and structs to
 
 Join operations are represented as variants of the main `Expr` enum:
 
-```rust
+```rust,ignore
 pub enum Expr {
     // ... other variants ...
     
@@ -36,7 +36,7 @@ pub enum Expr {
 
 Specifies the type of join operation to perform:
 
-```rust
+```rust,ignore
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq)]
 pub enum JoinType {
     /// Inner join - only matching rows from both sides
@@ -64,7 +64,7 @@ pub enum JoinType {
 
 Specifies how tables should be joined:
 
-```rust
+```rust,ignore
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub enum JoinCondition {
     /// Join on same column name in both tables: `on "column_name"`
@@ -85,7 +85,7 @@ pub enum JoinCondition {
 ```vba
 employees join departments on "dept_id"
 ```
-```rust
+```rust,ignore
 JoinCondition::On("dept_id".to_string())
 ```
 
@@ -93,7 +93,7 @@ JoinCondition::On("dept_id".to_string())
 ```vba
 employees join departments on "department_id" = "id"
 ```
-```rust
+```rust,ignore
 JoinCondition::OnColumns {
     left: "department_id".to_string(),
     right: "id".to_string(),
@@ -106,7 +106,7 @@ JoinCondition::OnColumns {
 
 The parser constructs join AST nodes during the parsing phase:
 
-```rust
+```rust,ignore
 // Simplified parser logic
 fn build_join_expr(pair: Pair<Rule>) -> BuildResult<Expr> {
     let mut pairs = pair.into_inner();
@@ -162,7 +162,7 @@ join_key_pair = { string ~ "=" ~ string }
 
 Join AST nodes can be processed using the visitor pattern:
 
-```rust
+```rust,ignore
 impl<T> ExprVisitor<T> for MyVisitor {
     fn visit_join(
         &mut self, 
@@ -193,7 +193,7 @@ impl<T> ExprVisitor<T> for MyVisitor {
 
 Common patterns for analyzing join AST nodes:
 
-```rust
+```rust,ignore
 // Count join operations in an expression
 fn count_joins(expr: &Expr) -> usize {
     match expr {
@@ -285,7 +285,7 @@ Join AST nodes can be serialized to JSON for debugging or external processing:
 
 Join AST nodes implement Debug for readable output:
 
-```rust
+```rust,ignore
 impl fmt::Debug for Expr {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
@@ -304,7 +304,7 @@ impl fmt::Debug for Expr {
 
 Join operations are type-checked during analysis:
 
-```rust
+```rust,ignore
 impl TypeChecker {
     fn check_join(&mut self, 
                   left: &Expr, 
@@ -334,7 +334,7 @@ impl TypeChecker {
 
 Join operations affect the schema of the result:
 
-```rust
+```rust,ignore
 fn merge_schemas(
     left: &Schema, 
     right: &Schema, 
@@ -367,7 +367,7 @@ fn merge_schemas(
 
 Common errors related to join AST processing:
 
-```rust
+```rust,ignore
 #[derive(Debug, Error)]
 pub enum JoinError {
     #[error("Join column '{0}' not found in left table")]
@@ -402,7 +402,7 @@ AST validation rules specific to joins:
 
 Join AST nodes are translated to SQL for database execution:
 
-```rust
+```rust,ignore
 impl SqlGenerator {
     fn generate_join(&self, 
                      left: &Expr, 
@@ -437,7 +437,7 @@ impl SqlGenerator {
 
 Join AST nodes are executed by the interpreter:
 
-```rust
+```rust,ignore
 impl Interpreter {
     fn eval_join(&mut self, 
                  left: &Expr, 
@@ -474,7 +474,7 @@ impl Interpreter {
 
 Tools for debugging join AST structures:
 
-```rust
+```rust,ignore
 // Pretty-print join AST with indentation
 fn print_join_ast(expr: &Expr, indent: usize) {
     let prefix = "  ".repeat(indent);

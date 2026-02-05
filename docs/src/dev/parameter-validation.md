@@ -8,7 +8,7 @@ This document describes the validation rules for function parameters in PipTable
 
 ### Basic Parameter Declaration
 
-```
+```text
 param = { param_modifier? ~ ident }
 param_modifier = { ^"byval" | ^"byref" }
 ```
@@ -38,7 +38,7 @@ end function
 function update_data(ByVal multiplier, ByRef data)
     data = data * multiplier
 end function
-```
+```text
 
 ## Validation Rules
 
@@ -57,7 +57,7 @@ function example(x, y, user_id, _temp)
 ```vb
 function bad(if, then)      ' Keywords not allowed
 function bad2(x, x)         ' Duplicate names not allowed
-```
+```text
 
 ### 2. Parameter Modifiers
 
@@ -87,7 +87,7 @@ dim obj = { value: 42 }
 call increment(x)           ' Variable
 call increment(arr[0])      ' Array element  
 call increment(obj->value)  ' Object field
-```
+```text
 
 **Invalid ByRef Arguments:**
 ```vb
@@ -107,7 +107,7 @@ call increment(x + 1)       ' Expression result - ERROR
 function no_params()
 function one_param(x)
 function multi_params(a, b, c)
-```
+```text
 
 **Invalid Examples:**
 ```vb
@@ -124,17 +124,17 @@ These errors are detected during parsing:
 1. **Invalid parameter syntax**
    ```vb
    function bad(123abc)    ' Invalid identifier
-   ```
+```text
 
 2. **Invalid modifier**
    ```vb
    function bad(byvalue x) ' Unknown modifier
-   ```
+```
 
 3. **Missing parameter name**
    ```vb
    function bad(ByVal)     ' No parameter name
-   ```
+```text
 
 ### Runtime Errors
 
@@ -146,7 +146,7 @@ These errors are detected when the function is called:
        x = x + 1
    end function
    call increment(5)       ' Error: ByRef parameter expects variable
-   ```
+```
 
 2. **Wrong number of arguments**
    ```vb
@@ -154,7 +154,7 @@ These errors are detected when the function is called:
        return a + b
    end function
    dim result = add(1)     ' Error: Missing argument for parameter b
-   ```
+```text
 
 ## Implementation Notes
 
@@ -162,7 +162,7 @@ These errors are detected when the function is called:
 
 Parameters are represented in the AST as:
 
-```rust
+```text
 pub struct Param {
     pub name: String,
     pub mode: ParamMode,
@@ -199,16 +199,16 @@ Potential future parameter features:
 1. **Optional parameters with default values**
    ```vb
    function greet(Optional name = "World")
-   ```
+```text
 
 2. **Parameter arrays (variadic parameters)**
    ```vb
    function sum(ParamArray values)
-   ```
+```
 
 3. **Type hints for parameters**
    ```vb
    function calculate(x: Int, y: Float)
-   ```
+```text
 
 These features would require additional validation rules and AST modifications.

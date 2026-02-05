@@ -7,7 +7,7 @@ The new Sheet operations implemented in issue #137 are currently **Rust API only
 ### What's Available Now
 
 In Rust code, you can use:
-```rust
+```text
 // A1-style notation
 let value = sheet.get_a1("A1")?;
 sheet.set_a1("B2", "value")?;
@@ -80,7 +80,7 @@ dim combined = sheet1 join sheet2 on "id"
 To expose the new Sheet operations to DSL users, we would need:
 
 ### 1. Extend Value Enum
-```rust
+```text
 pub enum Value {
     // ... existing variants ...
     Sheet(Sheet),  // New variant
@@ -88,7 +88,7 @@ pub enum Value {
 ```
 
 ### 2. Add ArrayIndex Support for Sheets
-```rust
+```text
 // In interpreter's eval_expr for ArrayIndex
 (Value::Sheet(sheet), Value::String(notation)) => {
     // Handle A1 notation: sheet["A1"]
