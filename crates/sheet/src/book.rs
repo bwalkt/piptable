@@ -112,6 +112,12 @@ impl Book {
             .and_then(|name| self.sheets.get(name))
     }
 
+    /// Get the active sheet name
+    #[must_use]
+    pub fn active_sheet_name(&self) -> Option<&str> {
+        self.active_sheet.as_deref()
+    }
+
     /// Get the active sheet mutably
     pub fn active_sheet_mut(&mut self) -> Option<&mut Sheet> {
         let name = self.active_sheet.clone()?;

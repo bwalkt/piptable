@@ -4,7 +4,6 @@ use crate::sheet_conversions::{cell_to_value, value_to_cell, value_to_sheet};
 use piptable_core::{PipError, PipResult, Value};
 use piptable_sheet::{Book, CellValue, ConsolidateOptions, FileLoadOptions, Sheet};
 use std::collections::HashMap;
-use std::ptr;
 
 /// Convert a Value into a Sheet for Book operations.
 pub fn value_to_sheet_for_book(value: &Value) -> Result<Sheet, String> {
@@ -59,13 +58,7 @@ pub fn book_to_value_dict(book: &Book) -> Value {
 
 /// Resolve the active sheet name for a book, if any.
 pub fn active_sheet_name(book: &Book) -> Option<String> {
-    let active = book.active_sheet()?;
-    for (name, sheet) in book.sheets() {
-        if ptr::eq(sheet, active) {
-            return Some(name.to_string());
-        }
-    }
-    None
+    book.active_sheet_name().map(|name| name.to_string())
 }
 
 /// Parse consolidate options from a DSL object value.
