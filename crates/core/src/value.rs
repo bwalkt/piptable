@@ -179,6 +179,23 @@ impl Value {
             _ => None,
         }
     }
+
+    /// Try to get Book reference.
+    #[must_use]
+    pub fn as_book(&self) -> Option<&Book> {
+        match self {
+            Self::Book(b) => Some(b.as_ref()),
+            _ => None,
+        }
+    }
+
+    /// Try to get Book mutable reference.
+    pub fn as_book_mut(&mut self) -> Option<&mut Book> {
+        match self {
+            Self::Book(b) => Some(b.as_mut()),
+            _ => None,
+        }
+    }
 }
 
 impl Default for Value {
