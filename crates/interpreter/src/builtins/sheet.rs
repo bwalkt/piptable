@@ -42,6 +42,109 @@ fn values_to_cells(values: &[Value], line: usize, context: &str) -> PipResult<Ve
         .collect()
 }
 
+fn parse_clean_options(
+    operations_value: &Value,
+    fill_value: Option<&Value>,
+    line: usize,
+) -> PipResult<CleanOptions> {
+    let operations = match operations_value {
+        Value::String(op) => vec![op.clone()],
+        Value::Array(values) => {
+            let mut ops = Vec::with_capacity(values.len());
+            for value in values {
+                match value {
+                    Value::String(s) => ops.push(s.clone()),
+                    _ => {
+                        return Err(PipError::runtime(line, "Operations must be strings"));
+                    }
+                }
+            }
+            ops
+        }
+        _ => {
+            return Err(PipError::runtime(
+                line,
+                "Operations must be a string or array of strings",
+            ))
+        }
+    };
+
+    let mut options = CleanOptions::default();
+    let mut has_lower = false;
+    let mut has_upper = false;
+    let mut has_null_strategy = false;
+    for op in operations {
+        match op.as_str() {
+            "trim" => options.trim = true,
+            "lower" => {
+                if has_upper {
+                    return Err(PipError::runtime(
+                        line,
+                        "Cannot specify both 'lower' and 'upper' operations",
+                    ));
+                }
+                has_lower = true;
+                options.lower = true;
+            }
+            "upper" => {
+                if has_lower {
+                    return Err(PipError::runtime(
+                        line,
+                        "Cannot specify both 'lower' and 'upper' operations",
+                    ));
+                }
+                has_upper = true;
+                options.upper = true;
+            }
+            "normalize_whitespace" => options.normalize_whitespace = true,
+            "empty_to_null" => {
+                if has_null_strategy {
+                    return Err(PipError::runtime(
+                        line,
+                        "Only one null-handling strategy may be specified",
+                    ));
+                }
+                has_null_strategy = true;
+                options.null_strategy = NullStrategy::EmptyToNull;
+            }
+            "null_to_empty" => {
+                if has_null_strategy {
+                    return Err(PipError::runtime(
+                        line,
+                        "Only one null-handling strategy may be specified",
+                    ));
+                }
+                has_null_strategy = true;
+                options.null_strategy = NullStrategy::NullToEmpty;
+            }
+            "fill_nulls" => {
+                if has_null_strategy {
+                    return Err(PipError::runtime(
+                        line,
+                        "Only one null-handling strategy may be specified",
+                    ));
+                }
+                has_null_strategy = true;
+                let fill_value = fill_value.and_then(value_to_cell).ok_or_else(|| {
+                    PipError::runtime(line, "fill_nulls requires a fill value")
+                })?;
+                options.null_strategy = NullStrategy::FillWith(fill_value);
+            }
+            _ => {
+                return Err(PipError::runtime(
+                    line,
+                    format!(
+                        "Unknown operation '{}'. Supported: trim, lower, upper, normalize_whitespace, empty_to_null, null_to_empty, fill_nulls",
+                        op
+                    ),
+                ))
+            }
+        }
+    }
+
+    Ok(options)
+}
+
 /// Handle sheet manipulation built-in functions.
 pub async fn call_sheet_builtin(
     interpreter: &Interpreter,
@@ -367,107 +470,10 @@ pub async fn call_sheet_builtin(
                     "sheet_clean_data() takes 2-3 arguments (sheet, operations, fill_value?)",
                 )));
             }
-
-            let operations = match &args[1] {
-                Value::String(op) => vec![op.clone()],
-                Value::Array(values) => {
-                    let mut ops = Vec::with_capacity(values.len());
-                    for value in values {
-                        match value {
-                            Value::String(s) => ops.push(s.clone()),
-                            _ => {
-                                return Some(Err(PipError::runtime(
-                                    line,
-                                    "Operations must be strings",
-                                )))
-                            }
-                        }
-                    }
-                    ops
-                }
-                _ => {
-                    return Some(Err(PipError::runtime(
-                        line,
-                        "Operations must be a string or array of strings",
-                    )))
-                }
+            let options = match parse_clean_options(&args[1], args.get(2), line) {
+                Ok(options) => options,
+                Err(err) => return Some(Err(err)),
             };
-
-            let mut options = CleanOptions::default();
-            let mut has_lower = false;
-            let mut has_upper = false;
-            let mut has_null_strategy = false;
-            for op in operations {
-                match op.as_str() {
-                    "trim" => options.trim = true,
-                    "lower" => {
-                        if has_upper {
-                            return Some(Err(PipError::runtime(
-                                line,
-                                "Cannot specify both 'lower' and 'upper' operations",
-                            )));
-                        }
-                        has_lower = true;
-                        options.lower = true;
-                    }
-                    "upper" => {
-                        if has_lower {
-                            return Some(Err(PipError::runtime(
-                                line,
-                                "Cannot specify both 'lower' and 'upper' operations",
-                            )));
-                        }
-                        has_upper = true;
-                        options.upper = true;
-                    }
-                    "normalize_whitespace" => options.normalize_whitespace = true,
-                    "empty_to_null" => {
-                        if has_null_strategy {
-                            return Some(Err(PipError::runtime(
-                                line,
-                                "Only one null-handling strategy may be specified",
-                            )));
-                        }
-                        has_null_strategy = true;
-                        options.null_strategy = NullStrategy::EmptyToNull;
-                    }
-                    "null_to_empty" => {
-                        if has_null_strategy {
-                            return Some(Err(PipError::runtime(
-                                line,
-                                "Only one null-handling strategy may be specified",
-                            )));
-                        }
-                        has_null_strategy = true;
-                        options.null_strategy = NullStrategy::NullToEmpty;
-                    }
-                    "fill_nulls" => {
-                        if has_null_strategy {
-                            return Some(Err(PipError::runtime(
-                                line,
-                                "Only one null-handling strategy may be specified",
-                            )));
-                        }
-                        has_null_strategy = true;
-                        let fill_value = args.get(2).and_then(value_to_cell).ok_or_else(|| {
-                            PipError::runtime(line, "fill_nulls requires a fill value")
-                        });
-                        match fill_value {
-                            Ok(value) => options.null_strategy = NullStrategy::FillWith(value),
-                            Err(err) => return Some(Err(err)),
-                        }
-                    }
-                    _ => {
-                        return Some(Err(PipError::runtime(
-                            line,
-                            format!(
-                                "Unknown operation '{}'. Supported: trim, lower, upper, normalize_whitespace, empty_to_null, null_to_empty, fill_nulls",
-                                op
-                            ),
-                        )))
-                    }
-                }
-            }
 
             match &args[0] {
                 Value::Sheet(sheet) => {
@@ -483,6 +489,37 @@ pub async fn call_sheet_builtin(
                 _ => Some(Err(PipError::runtime(
                     line,
                     "First argument must be a sheet",
+                ))),
+            }
+        }
+
+        "sheet_clean_data_range" => {
+            if args.len() < 3 || args.len() > 4 {
+                return Some(Err(PipError::runtime(
+                    line,
+                    "sheet_clean_data_range() takes 3-4 arguments (sheet, range, operations, fill_value?)",
+                )));
+            }
+
+            let options = match parse_clean_options(&args[2], args.get(3), line) {
+                Ok(options) => options,
+                Err(err) => return Some(Err(err)),
+            };
+
+            match (&args[0], &args[1]) {
+                (Value::Sheet(sheet), Value::String(range)) => {
+                    let mut new_sheet = sheet.clone();
+                    match new_sheet.clean_data_range(range, &options) {
+                        Ok(()) => Some(Ok(Value::Sheet(new_sheet))),
+                        Err(e) => Some(Err(PipError::runtime(
+                            line,
+                            format!("Failed to clean data in range '{}': {}", range, e),
+                        ))),
+                    }
+                }
+                _ => Some(Err(PipError::runtime(
+                    line,
+                    "Arguments must be (sheet, range, operations, fill_value?)",
                 ))),
             }
         }
@@ -1001,6 +1038,63 @@ pub async fn call_sheet_builtin(
                 _ => Some(Err(PipError::runtime(
                     line,
                     "Arguments must be (sheet, string_operation)",
+                ))),
+            }
+        }
+
+        "sheet_map_range" => {
+            if args.len() != 3 {
+                return Some(Err(PipError::runtime(
+                    line,
+                    "sheet_map_range() takes exactly 3 arguments (sheet, range, operation)",
+                )));
+            }
+            match (&args[0], &args[1], &args[2]) {
+                (Value::Sheet(sheet), Value::String(range), Value::String(operation)) => {
+                    let mut new_sheet = sheet.clone();
+                    let result = match operation.as_str() {
+                        "upper" => new_sheet.map_range(range, |cell| {
+                            if let CellValue::String(s) = cell {
+                                CellValue::String(s.to_uppercase())
+                            } else {
+                                cell.clone()
+                            }
+                        }),
+                        "lower" => new_sheet.map_range(range, |cell| {
+                            if let CellValue::String(s) = cell {
+                                CellValue::String(s.to_lowercase())
+                            } else {
+                                cell.clone()
+                            }
+                        }),
+                        "trim" => new_sheet.map_range(range, |cell| {
+                            if let CellValue::String(s) = cell {
+                                CellValue::String(s.trim().to_string())
+                            } else {
+                                cell.clone()
+                            }
+                        }),
+                        _ => {
+                            return Some(Err(PipError::runtime(
+                                line,
+                                format!(
+                                    "Unknown operation '{}'. Supported: upper, lower, trim",
+                                    operation
+                                ),
+                            )))
+                        }
+                    };
+                    match result {
+                        Ok(()) => Some(Ok(Value::Sheet(new_sheet))),
+                        Err(e) => Some(Err(PipError::runtime(
+                            line,
+                            format!("Failed to map range '{}': {}", range, e),
+                        ))),
+                    }
+                }
+                _ => Some(Err(PipError::runtime(
+                    line,
+                    "Arguments must be (sheet, range, string_operation)",
                 ))),
             }
         }

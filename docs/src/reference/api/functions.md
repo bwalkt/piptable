@@ -81,6 +81,8 @@ Note: `len()` is formula-backed. For objects, use `len(keys(obj))` to count fiel
 | `sheet_remove_columns(sheet, columns)` | Remove specified columns | `sheet_remove_columns(data, ["debug"])` | ✅ Implemented |
 | `sheet_remove_empty_rows(sheet)` | Remove empty rows | `sheet_remove_empty_rows(data)` | ✅ Implemented |
 | `sheet_transpose(sheet)` | Transpose rows and columns | `sheet_transpose(data)` | ✅ Implemented |
+| `sheet_map(sheet, operation)` | Map all cells using a built-in operation | `sheet_map(data, "upper")` | ✅ Implemented |
+| `sheet_map_range(sheet, range, operation)` | Map cells in a range (A1 or R1C1) | `sheet_map_range(data, "A2:B4", "trim")` | ✅ Implemented |
 | `sheet_name_columns_by_row(sheet, row_index)` | Name columns using a header row | `sheet_name_columns_by_row(data, 0)` | ✅ Implemented |
 | `sheet_name_rows_by_column(sheet, col_index)` | Name rows using a key column | `sheet_name_rows_by_column(data, 0)` | ✅ Implemented |
 | `sheet_column_by_name(sheet, name)` | Get a column by name | `sheet_column_by_name(data, "price")` | ✅ Implemented |
@@ -89,10 +91,11 @@ Note: `len()` is formula-backed. For objects, use `len(keys(obj))` to count fiel
 | `sheet_remove_duplicates(sheet, [columns])` | Remove duplicate rows by key columns | `sheet_remove_duplicates(data, ["id"])` | ✅ Implemented |
 | `sheet_validate_column(sheet, name, rule, ...)` | Validate a column (email/phone/range/regex) | `sheet_validate_column(data, "email", "email")` | ✅ Implemented |
 | `sheet_clean_data(sheet, operations, [fill])` | Clean data in bulk | `sheet_clean_data(data, ["trim", "lower"])` | ✅ Implemented |
+| `sheet_clean_data_range(sheet, range, operations, [fill])` | Clean data in a range (A1 or R1C1) | `sheet_clean_data_range(data, "R2C1:R10C3", ["trim"])` | ✅ Implemented |
 | `sheet_set_formula(sheet, cell, formula)` | Store a formula in a cell | `sheet_set_formula(data, "C1", "=SUM(A1:B1)")` | ✅ Implemented |
 | `sheet_evaluate_formulas(sheet)` | Evaluate all formulas in a sheet | `sheet_evaluate_formulas(data)` | ✅ Implemented |
 
-**sheet_map operations:**
+**sheet_map / sheet_map_range operations:**
 - `"upper"` - Convert string cells to uppercase
 - `"lower"` - Convert string cells to lowercase  
 - `"trim"` - Trim whitespace from string cells
@@ -102,7 +105,7 @@ Note: `len()` is formula-backed. For objects, use `len(keys(obj))` to count fiel
 - Preserves the header row
 - Returns a new sheet with only matching rows
 
-**sheet_clean_data operations:**
+**sheet_clean_data / sheet_clean_data_range operations:**
 - `"trim"` - Trim whitespace
 - `"lower"` / `"upper"` - Normalize case (mutually exclusive)
 - `"normalize_whitespace"` - Collapse internal whitespace

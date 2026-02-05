@@ -213,54 +213,94 @@ impl Sheet {
                 if options.preserve_formulas && matches!(cell, CellValue::Formula(_)) {
                     continue;
                 }
-                let mut updated = match cell.cached_or_self() {
-                    CellValue::String(s) => {
-                        let mut out = s.clone();
-                        if options.trim {
-                            out = out.trim().to_string();
-                        }
-                        if options.normalize_whitespace {
-                            out = Self::normalize_whitespace(&out);
-                        }
-                        if options.upper {
-                            out = out.to_uppercase();
-                        } else if options.lower {
-                            out = out.to_lowercase();
-                        }
-                        CellValue::String(out)
-                    }
-                    _ => cell.clone(),
-                };
-
-                if matches!(options.null_strategy, NullStrategy::EmptyToNull) {
-                    if let CellValue::String(s) = &updated {
-                        if s.is_empty() {
-                            updated = CellValue::Null;
-                        }
-                    }
-                }
-
-                match &options.null_strategy {
-                    NullStrategy::NullToEmpty => {
-                        if matches!(updated.cached_or_self(), CellValue::Null) {
-                            updated = CellValue::String(String::new());
-                        }
-                    }
-                    NullStrategy::FillWith(value) => {
-                        if matches!(updated.cached_or_self(), CellValue::Null) {
-                            updated = value.clone();
-                        }
-                    }
-                    _ => {}
-                }
-
-                *cell = updated;
+                *cell = Self::clean_cell(cell, options);
             }
         }
 
         self.invalidate_row_names();
         self.rebuild_formula_engine()?;
         Ok(())
+    }
+
+    /// Clean data in-place for a specific range (A1 or absolute R1C1).
+    pub fn clean_data_range(&mut self, range: &str, options: &CleanOptions) -> Result<()> {
+        let ((start_row, start_col), (end_row, end_col)) =
+            crate::a1_notation::parse_range_notation(range)?;
+
+        if end_row >= self.row_count() {
+            return Err(SheetError::RowIndexOutOfBounds {
+                index: end_row,
+                count: self.row_count(),
+            });
+        }
+        if end_col >= self.col_count() {
+            return Err(SheetError::ColumnIndexOutOfBounds {
+                index: end_col,
+                count: self.col_count(),
+            });
+        }
+
+        for row_idx in start_row..=end_row {
+            if let Some(row) = self.data.get_mut(row_idx) {
+                for col_idx in start_col..=end_col {
+                    if let Some(cell) = row.get_mut(col_idx) {
+                        if options.preserve_formulas && matches!(cell, CellValue::Formula(_)) {
+                            continue;
+                        }
+                        *cell = Self::clean_cell(cell, options);
+                    }
+                }
+            }
+        }
+
+        self.invalidate_row_names();
+        self.rebuild_formula_engine()?;
+        Ok(())
+    }
+
+    fn clean_cell(cell: &CellValue, options: &CleanOptions) -> CellValue {
+        let mut updated = match cell.cached_or_self() {
+            CellValue::String(s) => {
+                let mut out = s.clone();
+                if options.trim {
+                    out = out.trim().to_string();
+                }
+                if options.normalize_whitespace {
+                    out = Self::normalize_whitespace(&out);
+                }
+                if options.upper {
+                    out = out.to_uppercase();
+                } else if options.lower {
+                    out = out.to_lowercase();
+                }
+                CellValue::String(out)
+            }
+            _ => cell.clone(),
+        };
+
+        if matches!(options.null_strategy, NullStrategy::EmptyToNull) {
+            if let CellValue::String(s) = &updated {
+                if s.is_empty() {
+                    updated = CellValue::Null;
+                }
+            }
+        }
+
+        match &options.null_strategy {
+            NullStrategy::NullToEmpty => {
+                if matches!(updated.cached_or_self(), CellValue::Null) {
+                    updated = CellValue::String(String::new());
+                }
+            }
+            NullStrategy::FillWith(value) => {
+                if matches!(updated.cached_or_self(), CellValue::Null) {
+                    updated = value.clone();
+                }
+            }
+            _ => {}
+        }
+
+        updated
     }
 
     // ===== Cell Access =====
@@ -950,6 +990,41 @@ impl Sheet {
         if let Err(err) = self.rebuild_formula_engine() {
             eprintln!("Warning: formula engine rebuild failed: {err}");
         }
+    }
+
+    /// Apply a function to a range of cells (A1 or absolute R1C1).
+    pub fn map_range<F>(&mut self, range: &str, f: F) -> Result<()>
+    where
+        F: Fn(&CellValue) -> CellValue,
+    {
+        let ((start_row, start_col), (end_row, end_col)) =
+            crate::a1_notation::parse_range_notation(range)?;
+
+        if end_row >= self.row_count() {
+            return Err(SheetError::RowIndexOutOfBounds {
+                index: end_row,
+                count: self.row_count(),
+            });
+        }
+        if end_col >= self.col_count() {
+            return Err(SheetError::ColumnIndexOutOfBounds {
+                index: end_col,
+                count: self.col_count(),
+            });
+        }
+
+        for row_idx in start_row..=end_row {
+            if let Some(row) = self.data.get_mut(row_idx) {
+                for col_idx in start_col..=end_col {
+                    if let Some(cell) = row.get_mut(col_idx) {
+                        *cell = f(cell);
+                    }
+                }
+            }
+        }
+
+        self.rebuild_formula_engine()?;
+        Ok(())
     }
 
     /// Apply a function to a specific column
@@ -2042,6 +2117,57 @@ mod tests {
 
         assert_eq!(sheet.get(0, 0).unwrap(), &CellValue::Int(2));
         assert_eq!(sheet.get(1, 1).unwrap(), &CellValue::Int(8));
+    }
+
+    #[test]
+    fn test_map_range_a1_and_r1c1() {
+        let mut sheet = Sheet::from_data(vec![vec![1, 2], vec![3, 4]]);
+
+        sheet
+            .map_range("A1:B1", |cell| {
+                if let Some(i) = cell.as_int() {
+                    CellValue::Int(i * 10)
+                } else {
+                    cell.clone()
+                }
+            })
+            .unwrap();
+
+        assert_eq!(sheet.get(0, 0).unwrap(), &CellValue::Int(10));
+        assert_eq!(sheet.get(0, 1).unwrap(), &CellValue::Int(20));
+        assert_eq!(sheet.get(1, 0).unwrap(), &CellValue::Int(3));
+
+        sheet
+            .map_range("R2C1:R2C2", |_cell| CellValue::Int(0))
+            .unwrap();
+        assert_eq!(sheet.get(1, 0).unwrap(), &CellValue::Int(0));
+        assert_eq!(sheet.get(1, 1).unwrap(), &CellValue::Int(0));
+    }
+
+    #[test]
+    fn test_clean_data_range() {
+        let mut sheet = Sheet::from_data(vec![
+            vec!["Name", "Note"],
+            vec!["  Alice  ", " Keep "],
+            vec!["  BOB  ", ""],
+        ]);
+
+        let mut options = CleanOptions::default();
+        options.trim = true;
+        options.lower = true;
+        options.null_strategy = NullStrategy::EmptyToNull;
+
+        sheet.clean_data_range("A2:A3", &options).unwrap();
+
+        assert_eq!(
+            sheet.get(1, 0).unwrap(),
+            &CellValue::String("alice".to_string())
+        );
+        assert_eq!(
+            sheet.get(2, 0).unwrap(),
+            &CellValue::String("bob".to_string())
+        );
+        assert_eq!(sheet.get(2, 1).unwrap(), &CellValue::String("".to_string()));
     }
 
     #[test]

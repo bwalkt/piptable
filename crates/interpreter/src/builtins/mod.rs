@@ -77,6 +77,7 @@ pub fn is_builtin(name: &str) -> bool {
             | "sheet_remove_duplicates"
             | "sheet_validate_column"
             | "sheet_clean_data"
+            | "sheet_clean_data_range"
             | "sheet_row_count"
             | "sheet_col_count"
             | "sheet_get_a1"
@@ -94,6 +95,7 @@ pub fn is_builtin(name: &str) -> bool {
             | "sheet_set_by_name"
             | "sheet_set_column_by_name"
             | "sheet_set_row_by_name"
+            | "sheet_map_range"
             | "sheet_map"
             | "sheet_filter_rows"
             // array
