@@ -402,7 +402,7 @@ mod tests {
         assert!(Value::Sheet(Box::new(sheet_with_data)).is_truthy()); // Non-empty sheet
         assert!(Value::Book(Box::new(
             Book::from_dict({
-                let mut m = HashMap::new();
+                let mut m = indexmap::IndexMap::new();
                 m.insert("Sheet1".to_string(), vec![vec![1]]);
                 m
             })
