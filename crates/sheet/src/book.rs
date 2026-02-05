@@ -203,6 +203,58 @@ impl Book {
         Ok(())
     }
 
+    /// Create a book from a dictionary of sheet name -> 2D data.
+    pub fn from_dict<T: Into<CellValue> + Clone>(
+        sheets: IndexMap<String, Vec<Vec<T>>>,
+    ) -> Result<Self> {
+        let mut book = Book::new();
+        for (name, data) in sheets {
+            let sheet = Sheet::from_data(data);
+            book.add_sheet(&name, sheet)?;
+        }
+        Ok(book)
+    }
+
+    /// Convert the book into a dictionary of sheet name -> 2D cell data.
+    #[must_use]
+    pub fn to_dict(&self) -> IndexMap<String, Vec<Vec<CellValue>>> {
+        self.sheets
+            .iter()
+            .map(|(name, sheet)| (name.clone(), sheet.data().to_vec()))
+            .collect()
+    }
+
+    /// Apply a function to each sheet.
+    pub fn for_each_sheet<F>(&self, mut f: F)
+    where
+        F: FnMut(&Sheet),
+    {
+        for sheet in self.sheets.values() {
+            f(sheet);
+        }
+    }
+
+    /// Apply a function to each sheet mutably.
+    pub fn for_each_sheet_mut<F>(&mut self, mut f: F)
+    where
+        F: FnMut(&mut Sheet),
+    {
+        for sheet in self.sheets.values_mut() {
+            f(sheet);
+        }
+    }
+
+    /// Apply a fallible function to each sheet mutably.
+    pub fn try_for_each_sheet_mut<F, E>(&mut self, mut f: F) -> std::result::Result<(), E>
+    where
+        F: FnMut(&mut Sheet) -> std::result::Result<(), E>,
+    {
+        for sheet in self.sheets.values_mut() {
+            f(sheet)?;
+        }
+        Ok(())
+    }
+
     // ===== Merge Operations =====
 
     /// Merge another book into this one
@@ -413,6 +465,25 @@ impl Book {
     /// Iterate over sheets mutably
     pub fn sheets_mut(&mut self) -> impl Iterator<Item = (&str, &mut Sheet)> {
         self.sheets.iter_mut().map(|(k, v)| (k.as_str(), v))
+    }
+}
+
+impl std::ops::Add for Book {
+    type Output = Book;
+
+    fn add(mut self, rhs: Book) -> Self::Output {
+        self.merge(rhs);
+        self
+    }
+}
+
+impl std::ops::Add<&Book> for &Book {
+    type Output = Book;
+
+    fn add(self, rhs: &Book) -> Self::Output {
+        let mut out = self.clone();
+        out.merge(rhs.clone());
+        out
     }
 }
 
@@ -643,6 +714,84 @@ mod tests {
         assert!(book1.has_sheet("Sheet1"));
         assert!(book1.has_sheet("Sheet1_1")); // Renamed
         assert!(book1.has_sheet("Sheet2"));
+    }
+
+    #[test]
+    fn test_from_dict_and_to_dict() {
+        let mut input = IndexMap::new();
+        input.insert("Sheet1".to_string(), vec![vec![1, 2], vec![3, 4]]);
+        input.insert("Sheet2".to_string(), vec![vec![5, 6], vec![7, 8]]);
+
+        let book = Book::from_dict(input.clone()).unwrap();
+        assert_eq!(book.sheet_count(), 2);
+        assert!(book.has_sheet("Sheet1"));
+        assert!(book.has_sheet("Sheet2"));
+
+        let output = book.to_dict();
+        assert_eq!(output.len(), 2);
+        assert_eq!(output.get("Sheet1").unwrap().len(), 2);
+        assert_eq!(output.get("Sheet2").unwrap().len(), 2);
+    }
+
+    #[test]
+    fn test_book_add_operator_merges() {
+        let mut book1 = Book::new();
+        book1.add_sheet("Sheet1", Sheet::new()).unwrap();
+
+        let mut book2 = Book::new();
+        book2.add_sheet("Sheet1", Sheet::new()).unwrap();
+        book2.add_sheet("Sheet2", Sheet::new()).unwrap();
+
+        let merged = book1 + book2;
+        assert_eq!(merged.sheet_count(), 3);
+        assert!(merged.has_sheet("Sheet1"));
+        assert!(merged.has_sheet("Sheet1_1"));
+        assert!(merged.has_sheet("Sheet2"));
+    }
+
+    #[test]
+    fn test_for_each_sheet_mut() {
+        let mut book = Book::new();
+        book.add_sheet("A", Sheet::from_data(vec![vec![1]]))
+            .unwrap();
+        book.add_sheet("B", Sheet::from_data(vec![vec![2]]))
+            .unwrap();
+
+        book.for_each_sheet_mut(|sheet| {
+            sheet.map(|cell| {
+                if let Some(i) = cell.as_int() {
+                    CellValue::Int(i + 1)
+                } else {
+                    cell.clone()
+                }
+            });
+        });
+
+        assert_eq!(
+            book.get_sheet("A").unwrap().get(0, 0).unwrap(),
+            &CellValue::Int(2)
+        );
+        assert_eq!(
+            book.get_sheet("B").unwrap().get(0, 0).unwrap(),
+            &CellValue::Int(3)
+        );
+    }
+
+    #[test]
+    fn test_try_for_each_sheet_mut() {
+        let mut book = Book::new();
+        book.add_sheet("A", Sheet::from_data(vec![vec![1]]))
+            .unwrap();
+        book.add_sheet("B", Sheet::from_data(vec![vec![2]]))
+            .unwrap();
+
+        let result: std::result::Result<(), &'static str> = book.try_for_each_sheet_mut(|sheet| {
+            if sheet.row_count() == 0 {
+                return Err("empty");
+            }
+            Ok(())
+        });
+        assert!(result.is_ok());
     }
 
     #[test]

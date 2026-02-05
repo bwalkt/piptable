@@ -43,6 +43,21 @@ print "Sheet names: " + str(report_book.sheet_names())
 print "Loaded workbook with " + str(len(report_book.sheets())) + " sheets"
 ```
 
+### Book Operations (Rust API)
+
+```text
+use piptable_sheet::{Book, Sheet};
+
+let mut book1 = Book::new();
+book1.add_sheet("Sheet1", Sheet::from_data(vec![vec![1, 2]]))?;
+
+let mut book2 = Book::new();
+book2.add_sheet("Sheet2", Sheet::from_data(vec![vec![3, 4]]))?;
+
+let merged = book1 + book2;
+let as_dict = merged.to_dict();
+```
+
 ## SQL Queries on Excel Files
 
 ### Important: Excel Table Naming in SQL
