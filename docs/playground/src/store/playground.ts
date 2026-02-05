@@ -175,7 +175,7 @@ dim extra = book_from_dict({
   ]
 })
 dim merged = book_merge(book, extra)
-print("Merged count: " + str(book_sheet_count(merged)))
+print("Merged count: " + str(merged.sheet_count()))
 
 dim consolidated = book_consolidate(merged)
 print("Consolidated rows: " + str(sheet_row_count(consolidated)))`

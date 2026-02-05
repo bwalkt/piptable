@@ -388,47 +388,35 @@ fn format_value(value: &Value) -> String {
 fn book_to_json(book: &piptable_sheet::Book) -> Result<serde_json::Value> {
     use piptable_sheet::CellValue;
     use serde_json::Value as JsonValue;
+    fn cell_to_json(cell: &CellValue) -> JsonValue {
+        match cell {
+            CellValue::Null => JsonValue::Null,
+            CellValue::Bool(b) => JsonValue::Bool(*b),
+            CellValue::Int(i) => JsonValue::Number((*i).into()),
+            CellValue::Float(f) => serde_json::Number::from_f64(*f)
+                .map(JsonValue::Number)
+                .unwrap_or(JsonValue::Null),
+            CellValue::String(s) => JsonValue::String(s.clone()),
+            CellValue::Formula(formula) => {
+                let mut obj = serde_json::Map::new();
+                obj.insert(
+                    "formula".to_string(),
+                    JsonValue::String(formula.source.clone()),
+                );
+                if let Some(cached) = &formula.cached {
+                    obj.insert("cached".to_string(), cell_to_json(cached.as_ref()));
+                }
+                JsonValue::Object(obj)
+            }
+        }
+    }
     let mut map = serde_json::Map::new();
     for (name, sheet) in book.sheets() {
         let rows: Vec<JsonValue> = sheet
             .data()
             .iter()
             .map(|row| {
-                let cells: Vec<JsonValue> = row
-                    .iter()
-                    .map(|cell| match cell {
-                        CellValue::Null => JsonValue::Null,
-                        CellValue::Bool(b) => JsonValue::Bool(*b),
-                        CellValue::Int(i) => JsonValue::Number((*i).into()),
-                        CellValue::Float(f) => serde_json::Number::from_f64(*f)
-                            .map(JsonValue::Number)
-                            .unwrap_or(JsonValue::Null),
-                        CellValue::String(s) => JsonValue::String(s.clone()),
-                        CellValue::Formula(formula) => {
-                            let mut obj = serde_json::Map::new();
-                            obj.insert(
-                                "formula".to_string(),
-                                JsonValue::String(formula.source.clone()),
-                            );
-                            if let Some(cached) = &formula.cached {
-                                obj.insert(
-                                    "cached".to_string(),
-                                    match cached.as_ref() {
-                                        CellValue::Null => JsonValue::Null,
-                                        CellValue::Bool(b) => JsonValue::Bool(*b),
-                                        CellValue::Int(i) => JsonValue::Number((*i).into()),
-                                        CellValue::Float(f) => serde_json::Number::from_f64(*f)
-                                            .map(JsonValue::Number)
-                                            .unwrap_or(JsonValue::Null),
-                                        CellValue::String(s) => JsonValue::String(s.clone()),
-                                        CellValue::Formula(_) => JsonValue::Null,
-                                    },
-                                );
-                            }
-                            JsonValue::Object(obj)
-                        }
-                    })
-                    .collect();
+                let cells: Vec<JsonValue> = row.iter().map(cell_to_json).collect();
                 JsonValue::Array(cells)
             })
             .collect();

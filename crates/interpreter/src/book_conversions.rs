@@ -11,8 +11,11 @@ pub fn value_to_sheet_for_book(value: &Value) -> Result<Sheet, String> {
     match value {
         Value::Sheet(sheet) => Ok(*sheet.clone()),
         Value::Array(rows) => {
-            let all_rows_are_arrays = rows.iter().all(|row| matches!(row, Value::Array(_)));
-            if all_rows_are_arrays {
+            let array_rows = rows
+                .iter()
+                .filter(|row| matches!(row, Value::Array(_)))
+                .count();
+            if array_rows == rows.len() {
                 let data: Vec<Vec<CellValue>> = rows
                     .iter()
                     .map(|row| {
@@ -23,6 +26,9 @@ pub fn value_to_sheet_for_book(value: &Value) -> Result<Sheet, String> {
                     })
                     .collect();
                 Ok(Sheet::from_data(data))
+            } else if array_rows > 0 {
+                Err("value_to_sheet_for_book: mixed row types (Value::Array and non-array rows) are not supported"
+                    .to_string())
             } else {
                 value_to_sheet(value)
             }

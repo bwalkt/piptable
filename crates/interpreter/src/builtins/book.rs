@@ -334,7 +334,7 @@ fn book_consolidate_with_options(args: Vec<Value>, line: usize) -> PipResult<Val
 }
 
 fn book_from_files(args: Vec<Value>, line: usize) -> PipResult<Value> {
-    book_from_files_impl(args, line, None)
+    book_from_files_impl("book_from_files", args, line, None)
 }
 
 fn book_from_files_with_options(args: Vec<Value>, line: usize) -> PipResult<Value> {
@@ -344,10 +344,16 @@ fn book_from_files_with_options(args: Vec<Value>, line: usize) -> PipResult<Valu
             "book_from_files_with_options() takes exactly 2 arguments (paths, options)",
         ));
     }
-    book_from_files_impl(vec![args[0].clone()], line, Some(&args[1]))
+    book_from_files_impl(
+        "book_from_files_with_options",
+        vec![args[0].clone()],
+        line,
+        Some(&args[1]),
+    )
 }
 
 fn book_from_files_impl(
+    func_name: &str,
     args: Vec<Value>,
     line: usize,
     options: Option<&Value>,
@@ -355,14 +361,14 @@ fn book_from_files_impl(
     if args.len() != 1 {
         return Err(PipError::runtime(
             line,
-            "book_from_files() takes exactly 1 argument (paths)",
+            format!("{func_name}() takes exactly 1 argument (paths)"),
         ));
     }
 
     if cfg!(target_arch = "wasm32") {
         return Err(PipError::runtime(
             line,
-            "book_from_files() is not supported in the playground",
+            format!("{func_name}() is not supported in the playground"),
         ));
     }
 
@@ -378,7 +384,7 @@ fn book_from_files_impl(
         _ => {
             return Err(PipError::runtime(
                 line,
-                "book_from_files() requires an array of paths",
+                format!("{func_name}() requires an array of paths"),
             ))
         }
     };

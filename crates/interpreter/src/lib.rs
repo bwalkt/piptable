@@ -3359,10 +3359,16 @@ impl Interpreter {
                 let index = args[0]
                     .as_int()
                     .ok_or_else(|| PipError::runtime(0, "Index must be an integer"))?;
-                if index < 0 {
-                    return Err(PipError::runtime(0, "Index cannot be negative"));
-                }
-                let sheet = book.get_sheet_by_index(index as usize).map_err(|e| {
+                let idx = if index < 0 {
+                    let adjusted = book.sheet_count() as i64 + index;
+                    if adjusted < 0 {
+                        return Err(PipError::runtime(0, "Book index out of bounds"));
+                    }
+                    adjusted as usize
+                } else {
+                    index as usize
+                };
+                let sheet = book.get_sheet_by_index(idx).map_err(|e| {
                     PipError::runtime(0, format!("Failed to get sheet by index: {}", e))
                 })?;
                 Ok(Value::Sheet(Box::new(sheet.clone())))

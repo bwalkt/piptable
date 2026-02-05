@@ -806,16 +806,7 @@ pub fn import_multi_files(paths: &[String], options: &ImportOptions) -> Result<V
             .map_err(|e| format!("Failed to add sheet: {}", e))?;
     }
 
-    if book.sheet_count() == 1 {
-        let sheet = book
-            .sheets()
-            .next()
-            .map(|(_, sheet)| sheet.clone())
-            .unwrap();
-        Ok(Value::Sheet(Box::new(sheet)))
-    } else {
-        Ok(Value::Book(Box::new(book)))
-    }
+    Ok(Value::Book(Box::new(book)))
 }
 
 /// Resolves whether to treat the first row as headers.

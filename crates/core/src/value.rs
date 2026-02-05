@@ -649,6 +649,10 @@ mod tests {
         };
         assert!(func.to_json().is_err());
 
+        // Book is not JSON-serializable
+        let book = Value::Book(Box::new(Book::new()));
+        assert!(book.to_json().is_err());
+
         // NaN is not JSON-serializable
         let nan = Value::Float(f64::NAN);
         assert!(nan.to_json().is_err());
@@ -687,6 +691,10 @@ mod tests {
     fn test_serialize_errors() {
         // Table cannot be serialized
         let v = Value::Table(vec![]);
+        assert!(serde_json::to_string(&v).is_err());
+
+        // Book cannot be serialized
+        let v = Value::Book(Box::new(Book::new()));
         assert!(serde_json::to_string(&v).is_err());
 
         // Function cannot be serialized
