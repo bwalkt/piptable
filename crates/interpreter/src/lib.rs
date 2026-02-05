@@ -1006,7 +1006,10 @@ impl Interpreter {
                 // Short-circuit evaluation for AND/OR
                 if matches!(op, BinaryOp::And | BinaryOp::Or) {
                     let left_val = self.eval_expr(left).await?;
-                    let allow_short_circuit = !matches!(left_val, Value::Sheet(_) | Value::Book(_));
+                    let allow_short_circuit = match op {
+                        BinaryOp::Or => !matches!(left_val, Value::Sheet(_)),
+                        _ => true,
+                    };
                     if allow_short_circuit {
                         if matches!(op, BinaryOp::And) {
                             if !left_val.is_truthy() {
