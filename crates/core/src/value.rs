@@ -357,7 +357,6 @@ impl Value {
 mod tests {
     #![allow(clippy::approx_constant)]
     use super::*;
-    use piptable_sheet::CellValue;
 
     // ========================================================================
     // is_null tests
@@ -401,10 +400,8 @@ mod tests {
         let mut sheet_with_data = Sheet::new();
         sheet_with_data.row_append(vec!["test"]).unwrap();
         assert!(Value::Sheet(Box::new(sheet_with_data)).is_truthy()); // Non-empty sheet
-        let mut sheet_data = Vec::new();
-        sheet_data.push(vec![CellValue::Int(1)]);
         let mut sheet = Sheet::new();
-        sheet.data_mut().append(&mut sheet_data);
+        sheet.row_append(vec!["test"]).unwrap();
         let mut book = Book::new();
         book.add_sheet("Sheet1", sheet).unwrap();
         assert!(Value::Book(Box::new(book)).is_truthy());
