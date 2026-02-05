@@ -400,15 +400,13 @@ mod tests {
         let mut sheet_with_data = Sheet::new();
         sheet_with_data.row_append(vec!["test"]).unwrap();
         assert!(Value::Sheet(Box::new(sheet_with_data)).is_truthy()); // Non-empty sheet
-        assert!(Value::Book(Box::new(
-            Book::from_dict({
-                let mut m = indexmap::IndexMap::new();
-                m.insert("Sheet1".to_string(), vec![vec![1]]);
-                m
-            })
-            .unwrap()
-        ))
-        .is_truthy());
+        let mut sheet_data = Vec::new();
+        sheet_data.push(vec![CellValue::Int(1)]);
+        let mut sheet = Sheet::new();
+        sheet.data_mut().append(&mut sheet_data);
+        let mut book = Book::new();
+        book.add_sheet("Sheet1", sheet).unwrap();
+        assert!(Value::Book(Box::new(book)).is_truthy());
         assert!(Value::Function {
             name: "f".to_string(),
             params: vec![],
