@@ -151,6 +151,7 @@ sheet.column_delete_multi_by_name(["col1", "col2"])
 
 ```rust
 map<F>(f: F)  // Apply function to all cells
+map_range<F>(range: &str, f: F) -> Result<()>  // Apply function to a range (A1 or R1C1)
 column_map<F>(col_index: usize, f: F) -> Result<()>
 column_map_by_name<F>(name: &str, f: F) -> Result<()>
 ```
@@ -169,6 +170,24 @@ sheet.column_map_by_name("price", |cell| match cell {
     CellValue::Int(i) => CellValue::Float(i as f64 * 1.1),
     other => other
 })
+```
+
+### Data Cleaning
+
+```rust
+clean_data(options: &CleanOptions) -> Result<()>
+clean_data_range(range: &str, options: &CleanOptions) -> Result<()>  // A1 or R1C1
+```
+
+**Examples:**
+```rust
+let mut options = CleanOptions::default();
+options.trim = true;
+options.lower = true;
+options.null_strategy = NullStrategy::EmptyToNull;
+
+sheet.clean_data(&options)?;
+sheet.clean_data_range("A2:C10", &options)?;
 ```
 
 ### Filter Operations

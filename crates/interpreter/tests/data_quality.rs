@@ -91,3 +91,80 @@ async fn test_sheet_clean_data_dsl() {
         _ => panic!("Expected sheet result"),
     }
 }
+
+#[tokio::test]
+async fn test_sheet_map_range_dsl() {
+    let mut sheet = Sheet::from_data(vec![
+        vec!["name", "note"],
+        vec![" alice ", "keep"],
+        vec![" bob ", "keep"],
+    ]);
+    sheet.name_columns_by_row(0).unwrap();
+
+    let mut interp = Interpreter::new();
+    interp
+        .set_var("s", Value::Sheet(Box::new(sheet)))
+        .await
+        .expect("set sheet");
+
+    let program = PipParser::parse_str(r#"dim out = sheet_map_range(s, "A2:A3", "trim")"#).unwrap();
+    interp.eval(program).await.unwrap();
+    let out = interp.get_var("out").await;
+    match out {
+        Some(Value::Sheet(result)) => {
+            assert_eq!(
+                result.get_by_name(1, "name").unwrap(),
+                &CellValue::String("alice".into())
+            );
+            assert_eq!(
+                result.get_by_name(2, "name").unwrap(),
+                &CellValue::String("bob".into())
+            );
+            assert_eq!(
+                result.get_by_name(1, "note").unwrap(),
+                &CellValue::String("keep".into())
+            );
+        }
+        _ => panic!("Expected sheet result"),
+    }
+}
+
+#[tokio::test]
+async fn test_sheet_clean_data_range_dsl() {
+    let mut sheet = Sheet::from_data(vec![
+        vec!["name", "note"],
+        vec![" Alice ", " Keep "],
+        vec![" BOB ", ""],
+    ]);
+    sheet.name_columns_by_row(0).unwrap();
+
+    let mut interp = Interpreter::new();
+    interp
+        .set_var("s", Value::Sheet(Box::new(sheet)))
+        .await
+        .expect("set sheet");
+
+    let program = PipParser::parse_str(
+        r#"dim out = sheet_clean_data_range(s, "A2:A3", ["trim", "lower", "empty_to_null"])"#,
+    )
+    .unwrap();
+    interp.eval(program).await.unwrap();
+    let out = interp.get_var("out").await;
+    match out {
+        Some(Value::Sheet(result)) => {
+            assert_eq!(
+                result.get_by_name(1, "name").unwrap(),
+                &CellValue::String("alice".into())
+            );
+            assert_eq!(
+                result.get_by_name(2, "name").unwrap(),
+                &CellValue::String("bob".into())
+            );
+            assert_eq!(
+                result.get_by_name(2, "note").unwrap(),
+                &CellValue::String("".into())
+            );
+        }
+        _ => panic!("Expected sheet result"),
+    }
+}

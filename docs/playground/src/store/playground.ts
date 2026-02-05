@@ -143,6 +143,8 @@ rows = sheet_name_columns_by_row(rows, 0)
 rows = sheet_remove_duplicates(rows, ["id"])
 dim invalid = sheet_validate_column(rows, "email", "email")
 rows = sheet_clean_data(rows, ["trim", "lower"])
+rows = sheet_clean_data_range(rows, "B2:C3", ["trim", "lower"])
+rows = sheet_map_range(rows, "C2:C3", "upper")
 
 print("Invalid rows: " + str(invalid))
 print(rows)`

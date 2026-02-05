@@ -58,9 +58,11 @@ sales = sheet_set_row_by_name(sales, "SKU-002", ["SKU-002", "Widget", 19.99])
 sales = sheet_remove_duplicates(sales, ["SKU"])
 dim invalid_emails = sheet_validate_column(sales, "Email", "email")
 sales = sheet_clean_data(sales, ["trim", "lower", "empty_to_null"])
+sales = sheet_clean_data_range(sales, "B2:C10", ["trim"])
 
 // Sheet transformations
 sales = sheet_transpose(sales)                    // Transpose rows/columns
+sales = sheet_map_range(sales, "A2:A10", "upper") // Range map (A1 or R1C1)
 sales = sheet_select_columns(sales, ["Name", "Price", "Stock"])
 sales = sheet_remove_columns(sales, ["TempCol", "DebugInfo"])
 sales = sheet_remove_empty_rows(sales)
