@@ -9,6 +9,8 @@
 //! - Integration with SQL and HTTP engines
 //! - Python UDF support (with `python` feature)
 
+/// Book conversion utilities used by interpreter methods.
+mod book_conversions;
 mod builtins;
 /// Converters between interpreter values and external representations.
 mod converters;
@@ -24,6 +26,9 @@ mod sql_builder;
 /// Python UDF integration for the interpreter.
 mod python;
 
+use crate::book_conversions::{
+    active_sheet_name, book_to_value_dict, consolidate_options_from_value, value_to_sheet_for_book,
+};
 use crate::formula::CachedFormulaEngine;
 use crate::sheet_conversions::{build_sheet_arrow_array, cell_to_value, infer_sheet_column_type};
 use async_recursion::async_recursion;
@@ -31,7 +36,7 @@ use piptable_core::{
     BinaryOp, Expr, ImportOptions, LValue, Literal, Param, ParamMode, PipError, PipResult, Program,
     Statement, UnaryOp, Value,
 };
-use piptable_sheet::{CellValue, Sheet};
+use piptable_sheet::{Book, CellValue, Sheet};
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 use tokio::sync::Mutex;
@@ -920,12 +925,17 @@ impl Interpreter {
                                     io::import_pdf_tables(&paths[0], &options).map_err(|e| {
                                         PipError::Import(format!("Line {}: {}", line, e))
                                     })?;
-                                let mut book = std::collections::HashMap::new();
+                                let mut book = Book::new();
                                 for (idx, sheet) in tables.into_iter().enumerate() {
                                     let name = format!("table_{}", idx + 1);
-                                    book.insert(name, Value::Sheet(Box::new(sheet)));
+                                    book.add_sheet(&name, sheet).map_err(|e| {
+                                        PipError::Import(format!(
+                                            "Line {}: Failed to add sheet: {}",
+                                            line, e
+                                        ))
+                                    })?;
                                 }
-                                Value::Object(book)
+                                Value::Book(Box::new(book))
                             }
                         }
                     } else {
@@ -996,15 +1006,21 @@ impl Interpreter {
                 // Short-circuit evaluation for AND/OR
                 if matches!(op, BinaryOp::And | BinaryOp::Or) {
                     let left_val = self.eval_expr(left).await?;
-                    if matches!(op, BinaryOp::And) {
-                        if !left_val.is_truthy() {
-                            return Ok(Value::Bool(false));
+                    let allow_short_circuit = match op {
+                        BinaryOp::Or => !matches!(left_val, Value::Sheet(_)),
+                        _ => true,
+                    };
+                    if allow_short_circuit {
+                        if matches!(op, BinaryOp::And) {
+                            if !left_val.is_truthy() {
+                                return Ok(Value::Bool(false));
+                            }
+                        } else if left_val.is_truthy() {
+                            return Ok(Value::Bool(true));
                         }
-                    } else if left_val.is_truthy() {
-                        return Ok(Value::Bool(true));
                     }
                     let right_val = self.eval_expr(right).await?;
-                    return Ok(Value::Bool(right_val.is_truthy()));
+                    return self.eval_binary_op(&left_val, *op, &right_val);
                 }
                 let left_val = self.eval_expr(left).await?;
                 let right_val = self.eval_expr(right).await?;
@@ -1120,6 +1136,29 @@ impl Interpreter {
                         .get(key)
                         .cloned()
                         .ok_or_else(|| PipError::runtime(0, format!("Key '{}' not found", key))),
+                    // Book access by sheet name
+                    (Value::Book(book), Value::String(key)) => {
+                        let sheet = book.get_sheet(key).map_err(|e| {
+                            PipError::runtime(0, format!("Sheet '{}' not found: {}", key, e))
+                        })?;
+                        Ok(Value::Sheet(Box::new(sheet.clone())))
+                    }
+                    // Book access by index
+                    (Value::Book(book), Value::Int(idx_int)) => {
+                        let idx = if *idx_int < 0 {
+                            let adjusted = book.sheet_count() as i64 + idx_int;
+                            if adjusted < 0 {
+                                return Err(PipError::runtime(0, "Book index out of bounds"));
+                            }
+                            adjusted as usize
+                        } else {
+                            *idx_int as usize
+                        };
+                        let sheet = book.get_sheet_by_index(idx).map_err(|e| {
+                            PipError::runtime(0, format!("Book index out of bounds: {}", e))
+                        })?;
+                        Ok(Value::Sheet(Box::new(sheet.clone())))
+                    }
                     // Sheet A1 notation access
                     (Value::Sheet(sheet), Value::String(notation)) => {
                         // Check if it's a range (contains colon)
@@ -1149,6 +1188,10 @@ impl Interpreter {
                     (Value::Sheet(_), _) => Err(PipError::runtime(
                         0,
                         "Sheet index must be string (A1 or R1C1 notation)",
+                    )),
+                    (Value::Book(_), _) => Err(PipError::runtime(
+                        0,
+                        "Book index must be string (sheet name) or integer index",
                     )),
                     _ => Err(PipError::runtime(
                         0,
@@ -1187,6 +1230,10 @@ impl Interpreter {
                         // Handle Sheet methods
                         self.call_sheet_method(sheet, method, arg_vals).await
                     }
+                    Value::Book(book) => {
+                        // Handle Book methods
+                        self.call_book_method(book, method, arg_vals).await
+                    }
                     Value::Table(_) => {
                         // Handle Table methods (if any)
                         Err(PipError::runtime(
@@ -1195,8 +1242,7 @@ impl Interpreter {
                         ))
                     }
                     Value::Object(_map) => {
-                        // Check if this is a Book (object with sheets as values)
-                        // For now, we'll assume Object methods are not supported
+                        // Object methods are not supported
                         Err(PipError::runtime(
                             0,
                             format!("Object method '{}' not yet implemented", method),
@@ -1413,7 +1459,15 @@ impl Interpreter {
             BinaryOp::Gt => self.eval_compare(left, right, |a, b| a > b),
             BinaryOp::Ge => self.eval_compare(left, right, |a, b| a >= b),
             BinaryOp::And => Ok(Value::Bool(left.is_truthy() && right.is_truthy())),
-            BinaryOp::Or => Ok(Value::Bool(left.is_truthy() || right.is_truthy())),
+            BinaryOp::Or => match (left, right) {
+                (Value::Sheet(left_sheet), Value::Sheet(right_sheet)) => {
+                    let merged = left_sheet
+                        .concat_columns(right_sheet)
+                        .map_err(|e| PipError::runtime(0, format!("Sheet concat failed: {}", e)))?;
+                    Ok(Value::Sheet(Box::new(merged)))
+                }
+                _ => Ok(Value::Bool(left.is_truthy() || right.is_truthy())),
+            },
             BinaryOp::Concat => {
                 let l = converters::value_to_string(left);
                 let r = converters::value_to_string(right);
@@ -1445,6 +1499,15 @@ impl Interpreter {
     /// Evaluates addition/concatenation for numeric and string values.
     fn eval_add(&self, left: &Value, right: &Value) -> PipResult<Value> {
         match (left, right) {
+            (Value::Book(left_book), Value::Book(right_book)) => {
+                let merged = left_book.as_ref() + right_book.as_ref();
+                Ok(Value::Book(Box::new(merged)))
+            }
+            (Value::Sheet(left_sheet), Value::Sheet(right_sheet)) => {
+                let merged = (left_sheet.as_ref() + right_sheet.as_ref())
+                    .map_err(|e| PipError::runtime(0, format!("Sheet append failed: {}", e)))?;
+                Ok(Value::Sheet(Box::new(merged)))
+            }
             (Value::Int(a), Value::Int(b)) => a
                 .checked_add(*b)
                 .map(Value::Int)
@@ -1741,8 +1804,25 @@ impl Interpreter {
                     ));
                 }
                 match &arg_vals[0] {
+                    Value::Book(book) => {
+                        let options = if arg_vals.len() == 2 {
+                            let name = arg_vals[1].as_str().ok_or_else(|| {
+                                PipError::runtime(
+                                    line,
+                                    "consolidate() source_column_name must be a string",
+                                )
+                            })?;
+                            piptable_sheet::ConsolidateOptions::default().with_source_column(name)
+                        } else {
+                            piptable_sheet::ConsolidateOptions::default()
+                        };
+                        let sheet = book
+                            .consolidate_with_options(options)
+                            .map_err(|e| PipError::runtime(line, e.to_string()))?;
+                        Ok(Value::Sheet(Box::new(sheet)))
+                    }
                     Value::Object(book_obj) => {
-                        // Convert object (book) to consolidated array
+                        // Convert object (legacy book) to consolidated array
                         let source_col = if arg_vals.len() == 2 {
                             match arg_vals[1].as_str() {
                                 Some(s) => Some(s.to_string()),
@@ -1759,10 +1839,7 @@ impl Interpreter {
                         converters::consolidate_book(book_obj, source_col.as_deref())
                             .map_err(|e| PipError::runtime(line, e))
                     }
-                    _ => Err(PipError::runtime(
-                        line,
-                        "consolidate() requires a book object (from multi-file import)",
-                    )),
+                    _ => Err(PipError::runtime(line, "consolidate() requires a book")),
                 }
             }
             #[cfg(feature = "python")]
@@ -2807,7 +2884,7 @@ impl Interpreter {
     }
 
     /// Apply a lambda expression with given arguments
-    async fn apply_lambda(
+    pub(crate) async fn apply_lambda(
         &mut self,
         lambda_params: &[String],
         lambda_body: &Expr,
@@ -3211,6 +3288,304 @@ impl Interpreter {
             )),
         }
     }
+
+    /// Call a method on a Book object
+    async fn call_book_method(
+        &mut self,
+        book: &Book,
+        method: &str,
+        args: Vec<Value>,
+    ) -> PipResult<Value> {
+        match method {
+            "name" => {
+                if !args.is_empty() {
+                    return Err(PipError::runtime(0, "name() takes no arguments"));
+                }
+                Ok(Value::String(book.name().to_string()))
+            }
+            "set_name" => {
+                if args.len() != 1 {
+                    return Err(PipError::runtime(0, "set_name() takes exactly 1 argument"));
+                }
+                let name = args[0]
+                    .as_str()
+                    .ok_or_else(|| PipError::runtime(0, "Book name must be a string"))?;
+                let mut new_book = book.clone();
+                new_book.set_name(name);
+                Ok(Value::Book(Box::new(new_book)))
+            }
+            "sheet_names" => {
+                if !args.is_empty() {
+                    return Err(PipError::runtime(0, "sheet_names() takes no arguments"));
+                }
+                let names = book
+                    .sheet_names()
+                    .into_iter()
+                    .map(|name| Value::String(name.to_string()))
+                    .collect();
+                Ok(Value::Array(names))
+            }
+            "sheet_count" => {
+                if !args.is_empty() {
+                    return Err(PipError::runtime(0, "sheet_count() takes no arguments"));
+                }
+                Ok(Value::Int(book.sheet_count() as i64))
+            }
+            "has_sheet" => {
+                if args.len() != 1 {
+                    return Err(PipError::runtime(0, "has_sheet() takes exactly 1 argument"));
+                }
+                let name = args[0]
+                    .as_str()
+                    .ok_or_else(|| PipError::runtime(0, "Sheet name must be a string"))?;
+                Ok(Value::Bool(book.has_sheet(name)))
+            }
+            "get_sheet" => {
+                if args.len() != 1 {
+                    return Err(PipError::runtime(0, "get_sheet() takes exactly 1 argument"));
+                }
+                let name = args[0]
+                    .as_str()
+                    .ok_or_else(|| PipError::runtime(0, "Sheet name must be a string"))?;
+                let sheet = book
+                    .get_sheet(name)
+                    .map_err(|e| PipError::runtime(0, format!("Failed to get sheet: {}", e)))?;
+                Ok(Value::Sheet(Box::new(sheet.clone())))
+            }
+            "get_sheet_by_index" => {
+                if args.len() != 1 {
+                    return Err(PipError::runtime(
+                        0,
+                        "get_sheet_by_index() takes exactly 1 argument",
+                    ));
+                }
+                let index = args[0]
+                    .as_int()
+                    .ok_or_else(|| PipError::runtime(0, "Index must be an integer"))?;
+                let idx = if index < 0 {
+                    let adjusted = book.sheet_count() as i64 + index;
+                    if adjusted < 0 {
+                        return Err(PipError::runtime(0, "Book index out of bounds"));
+                    }
+                    adjusted as usize
+                } else {
+                    index as usize
+                };
+                let sheet = book.get_sheet_by_index(idx).map_err(|e| {
+                    PipError::runtime(0, format!("Failed to get sheet by index: {}", e))
+                })?;
+                Ok(Value::Sheet(Box::new(sheet.clone())))
+            }
+            "active_sheet" => {
+                if !args.is_empty() {
+                    return Err(PipError::runtime(0, "active_sheet() takes no arguments"));
+                }
+                match book.active_sheet() {
+                    Some(sheet) => Ok(Value::Sheet(Box::new(sheet.clone()))),
+                    None => Ok(Value::Null),
+                }
+            }
+            "set_active_sheet" => {
+                if args.len() != 1 {
+                    return Err(PipError::runtime(
+                        0,
+                        "set_active_sheet() takes exactly 1 argument",
+                    ));
+                }
+                let name = args[0]
+                    .as_str()
+                    .ok_or_else(|| PipError::runtime(0, "Sheet name must be a string"))?;
+                let mut new_book = book.clone();
+                new_book.set_active_sheet(name).map_err(|e| {
+                    PipError::runtime(0, format!("Failed to set active sheet: {}", e))
+                })?;
+                Ok(Value::Book(Box::new(new_book)))
+            }
+            "add_sheet" => {
+                if args.len() != 2 {
+                    return Err(PipError::runtime(
+                        0,
+                        "add_sheet() takes exactly 2 arguments",
+                    ));
+                }
+                let name = args[0]
+                    .as_str()
+                    .ok_or_else(|| PipError::runtime(0, "Sheet name must be a string"))?;
+                let sheet = value_to_sheet_for_book(&args[1])
+                    .map_err(|e| PipError::runtime(0, format!("Invalid sheet data: {}", e)))?;
+                let mut new_book = book.clone();
+                new_book
+                    .add_sheet(name, sheet)
+                    .map_err(|e| PipError::runtime(0, format!("Failed to add sheet: {}", e)))?;
+                Ok(Value::Book(Box::new(new_book)))
+            }
+            "add_empty_sheet" => {
+                if args.len() != 1 {
+                    return Err(PipError::runtime(
+                        0,
+                        "add_empty_sheet() takes exactly 1 argument",
+                    ));
+                }
+                let name = args[0]
+                    .as_str()
+                    .ok_or_else(|| PipError::runtime(0, "Sheet name must be a string"))?;
+                let mut new_book = book.clone();
+                new_book
+                    .add_empty_sheet(name)
+                    .map_err(|e| PipError::runtime(0, format!("Failed to add sheet: {}", e)))?;
+                Ok(Value::Book(Box::new(new_book)))
+            }
+            "remove_sheet" => {
+                if args.len() != 1 {
+                    return Err(PipError::runtime(
+                        0,
+                        "remove_sheet() takes exactly 1 argument",
+                    ));
+                }
+                let name = args[0]
+                    .as_str()
+                    .ok_or_else(|| PipError::runtime(0, "Sheet name must be a string"))?;
+                let mut new_book = book.clone();
+                new_book
+                    .remove_sheet(name)
+                    .map_err(|e| PipError::runtime(0, format!("Failed to remove sheet: {}", e)))?;
+                Ok(Value::Book(Box::new(new_book)))
+            }
+            "rename_sheet" => {
+                if args.len() != 2 {
+                    return Err(PipError::runtime(
+                        0,
+                        "rename_sheet() takes exactly 2 arguments",
+                    ));
+                }
+                let old_name = args[0]
+                    .as_str()
+                    .ok_or_else(|| PipError::runtime(0, "Old name must be a string"))?;
+                let new_name = args[1]
+                    .as_str()
+                    .ok_or_else(|| PipError::runtime(0, "New name must be a string"))?;
+                let mut new_book = book.clone();
+                new_book
+                    .rename_sheet(old_name, new_name)
+                    .map_err(|e| PipError::runtime(0, format!("Failed to rename sheet: {}", e)))?;
+                Ok(Value::Book(Box::new(new_book)))
+            }
+            "merge" => {
+                if args.len() != 1 {
+                    return Err(PipError::runtime(0, "merge() takes exactly 1 argument"));
+                }
+                let Value::Book(other) = &args[0] else {
+                    return Err(PipError::runtime(0, "merge() requires a Book argument"));
+                };
+                let mut new_book = book.clone();
+                new_book.merge((**other).clone());
+                Ok(Value::Book(Box::new(new_book)))
+            }
+            "consolidate" => {
+                if !args.is_empty() {
+                    return Err(PipError::runtime(0, "consolidate() takes no arguments"));
+                }
+                let sheet = book
+                    .consolidate()
+                    .map_err(|e| PipError::runtime(0, format!("Failed to consolidate: {}", e)))?;
+                Ok(Value::Sheet(Box::new(sheet)))
+            }
+            "consolidate_with_options" => {
+                if args.len() != 1 {
+                    return Err(PipError::runtime(
+                        0,
+                        "consolidate_with_options() takes exactly 1 argument",
+                    ));
+                }
+                let options = consolidate_options_from_value(Some(&args[0]), 0)?;
+                let sheet = book
+                    .consolidate_with_options(options)
+                    .map_err(|e| PipError::runtime(0, format!("Failed to consolidate: {}", e)))?;
+                Ok(Value::Sheet(Box::new(sheet)))
+            }
+            "for_each_sheet" => {
+                if args.len() != 1 {
+                    return Err(PipError::runtime(
+                        0,
+                        "for_each_sheet() takes exactly 1 argument",
+                    ));
+                }
+                let Value::Lambda { params, body } = &args[0] else {
+                    return Err(PipError::runtime(0, "for_each_sheet() requires a lambda"));
+                };
+                if params.len() != 1 {
+                    return Err(PipError::runtime(
+                        0,
+                        "Lambda for for_each_sheet() must take exactly 1 parameter",
+                    ));
+                }
+
+                let mut results = Vec::new();
+                for (_, sheet) in book.sheets() {
+                    let value = Value::Sheet(Box::new(sheet.clone()));
+                    results.push(self.apply_lambda(params, body, &[value]).await?);
+                }
+                Ok(Value::Array(results))
+            }
+            "for_each_sheet_mut" | "try_for_each_sheet_mut" => {
+                if args.len() != 1 {
+                    return Err(PipError::runtime(
+                        0,
+                        "for_each_sheet_mut() takes exactly 1 argument",
+                    ));
+                }
+                let Value::Lambda { params, body } = &args[0] else {
+                    return Err(PipError::runtime(
+                        0,
+                        "for_each_sheet_mut() requires a lambda",
+                    ));
+                };
+                if params.len() != 1 {
+                    return Err(PipError::runtime(
+                        0,
+                        "Lambda for for_each_sheet_mut() must take exactly 1 parameter",
+                    ));
+                }
+
+                let active_name = active_sheet_name(book);
+                let mut updated = Book::with_name(book.name());
+                for (name, sheet) in book.sheets() {
+                    let value = Value::Sheet(Box::new(sheet.clone()));
+                    let result = self.apply_lambda(params, body, &[value]).await?;
+                    let new_sheet = value_to_sheet_for_book(&result).map_err(|e| {
+                        PipError::runtime(0, format!("Lambda must return a sheet: {}", e))
+                    })?;
+                    updated
+                        .add_sheet(name, new_sheet)
+                        .map_err(|e| PipError::runtime(0, format!("Failed to add sheet: {}", e)))?;
+                }
+                if let Some(name) = active_name {
+                    let _ = updated.set_active_sheet(&name);
+                }
+                Ok(Value::Book(Box::new(updated)))
+            }
+            "sheets" => {
+                if !args.is_empty() {
+                    return Err(PipError::runtime(0, "sheets() takes no arguments"));
+                }
+                let sheets = book
+                    .sheets()
+                    .map(|(_, sheet)| Value::Sheet(Box::new(sheet.clone())))
+                    .collect();
+                Ok(Value::Array(sheets))
+            }
+            "to_dict" => {
+                if !args.is_empty() {
+                    return Err(PipError::runtime(0, "to_dict() takes no arguments"));
+                }
+                Ok(book_to_value_dict(book))
+            }
+            _ => Err(PipError::runtime(
+                0,
+                format!("Unknown book method: {}", method),
+            )),
+        }
+    }
 }
 
 // Helper functions moved to separate modules:
@@ -3523,12 +3898,12 @@ export data to "{}""#,
         interp.eval(program).await.unwrap();
 
         let data = interp.get_var("tables").await.unwrap();
-        if let Value::Object(book) = &data {
-            assert_eq!(book.len(), 2);
-            assert!(book.contains_key("table_1"));
-            assert!(book.contains_key("table_2"));
+        if let Value::Book(book) = &data {
+            assert_eq!(book.sheet_count(), 2);
+            assert!(book.has_sheet("table_1"));
+            assert!(book.has_sheet("table_2"));
         } else {
-            panic!("Markdown import should return a book object");
+            panic!("Markdown import should return a book");
         }
     }
 
@@ -3550,16 +3925,13 @@ export data to "{}""#,
         interp.eval(program).await.unwrap();
 
         let data = interp.get_var("tables").await.unwrap();
-        if let Value::Object(book) = &data {
-            let sheet = match book.get("table_1") {
-                Some(Value::Sheet(sheet)) => sheet,
-                _ => panic!("Expected table_1 sheet"),
-            };
+        if let Value::Book(book) = &data {
+            let sheet = book.get_sheet("table_1").unwrap();
             let names = sheet.column_names().unwrap();
             assert_eq!(names[0], "Name");
             assert_eq!(names[1], "Qty");
         } else {
-            panic!("Markdown import should return a book object");
+            panic!("Markdown import should return a book");
         }
     }
 
@@ -3621,19 +3993,18 @@ export data to "{}""#,
         let program = PipParser::parse_str(&script).unwrap();
         interp.eval(program).await.unwrap();
 
-        // Verify data was loaded as a book (object with sheet names)
+        // Verify data was loaded as a book
         let data = interp.get_var("quarterly_data").await.unwrap();
-        assert!(matches!(&data, Value::Object(book) if book.len() == 2));
+        assert!(matches!(&data, Value::Book(book) if book.sheet_count() == 2));
 
         // Check that both sheets exist
-        if let Value::Object(book) = &data {
-            assert!(book.contains_key("q1"));
-            assert!(book.contains_key("q2"));
+        if let Value::Book(book) = &data {
+            assert!(book.has_sheet("q1"));
+            assert!(book.has_sheet("q2"));
 
             // Verify q1 sheet has correct data
-            if let Some(Value::Array(q1_data)) = book.get("q1") {
-                assert_eq!(q1_data.len(), 2);
-            }
+            let q1 = book.get_sheet("q1").unwrap();
+            assert_eq!(q1.row_count(), 3); // header + 2 data rows
         }
     }
 
@@ -3701,34 +4072,22 @@ combined = consolidate(monthly_data)
 
         // Verify consolidation worked
         let combined = interp.get_var("combined").await.unwrap();
-        assert!(matches!(&combined, Value::Array(arr) if arr.len() == 6)); // 2 + 2 rows + 2 headers
+        assert!(matches!(&combined, Value::Sheet(sheet) if sheet.row_count() == 5)); // header + 4 data rows
 
         // Check that all columns are present with nulls for missing values
-        if let Value::Array(arr) = &combined {
-            // All rows should have all columns
-            for row in arr {
-                if let Value::Object(obj) = row {
-                    assert!(obj.contains_key("product"));
-                    assert!(obj.contains_key("sales"));
-                    assert!(obj.contains_key("month"));
-                    assert!(obj.contains_key("returns"));
-                }
+        if let Value::Sheet(sheet) = &combined {
+            let records = sheet.to_records().unwrap();
+            for row in &records {
+                assert!(row.contains_key("product"));
+                assert!(row.contains_key("sales"));
+                assert!(row.contains_key("month"));
+                assert!(row.contains_key("returns"));
             }
 
-            // Check that each sheet's data has appropriate nulls
-            // The exact ordering depends on sheet name alphabetical order
-            // jan.csv comes before feb.csv alphabetically
-
-            // Rows from feb.csv should have null month
-            let has_null_month = arr.iter().any(|row| {
-                matches!(row, Value::Object(obj) if matches!(obj.get("month"), Some(Value::Null)))
-            });
+            let has_null_month = records.iter().any(|row| row["month"].is_null());
             assert!(has_null_month, "Should have rows with null month");
 
-            // Rows from jan.csv should have null returns
-            let has_null_returns = arr.iter().any(|row| {
-                matches!(row, Value::Object(obj) if matches!(obj.get("returns"), Some(Value::Null)))
-            });
+            let has_null_returns = records.iter().any(|row| row["returns"].is_null());
             assert!(has_null_returns, "Should have rows with null returns");
         }
     }
@@ -3757,31 +4116,19 @@ combined = consolidate(stores, "_store")
 
         // Verify source column was added
         let combined = interp.get_var("combined").await.unwrap();
-        assert!(matches!(&combined, Value::Array(arr) if arr.len() == 4)); // 2 data rows + 2 headers
+        assert!(matches!(&combined, Value::Sheet(sheet) if sheet.row_count() == 3)); // header + 2 data rows
 
-        if let Value::Array(arr) = &combined {
-            // Check that source column contains sheet names (skip header rows)
-            // Find first non-header data row (should have integer values)
-            let data_rows: Vec<_> = arr
+        if let Value::Sheet(sheet) = &combined {
+            let records = sheet.to_records().unwrap();
+            assert!(records.len() >= 2, "Should have at least 2 data rows");
+
+            let sources: Vec<String> = records
                 .iter()
-                .filter(|item| {
-                    if let Value::Object(obj) = item {
-                        obj.values().any(|v| matches!(v, Value::Int(_)))
-                    } else {
-                        false
-                    }
-                })
+                .filter_map(|row| row.get("_store"))
+                .map(|v| v.as_str())
                 .collect();
-
-            assert!(data_rows.len() >= 2, "Should have at least 2 data rows");
-
-            if let Value::Object(obj) = data_rows[0] {
-                assert!(obj.contains_key("_store"));
-                assert!(matches!(obj.get("_store"), Some(Value::String(s)) if s == "store1"));
-            }
-            if let Value::Object(obj) = data_rows[1] {
-                assert!(matches!(obj.get("_store"), Some(Value::String(s)) if s == "store2"));
-            }
+            assert!(sources.iter().any(|s| s == "store1"));
+            assert!(sources.iter().any(|s| s == "store2"));
         }
     }
 

@@ -182,6 +182,13 @@ pub fn value_to_toon(value: &Value) -> ToonValue {
                 ),
             }
         }
+        Value::Book(book) => ToonValue::Error {
+            code: "BOOK_UNSUPPORTED".to_string(),
+            msg: format!(
+                "Book with {} sheets cannot cross boundary directly",
+                book.sheet_count()
+            ),
+        },
         Value::Function { name, .. } => ToonValue::Error {
             code: "FUNCTION_UNSUPPORTED".to_string(),
             msg: format!("Function '{}' cannot cross WASM boundary", name),
@@ -225,7 +232,7 @@ pub fn toon_to_value(toon: &ToonValue) -> Value {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use piptable_sheet::Sheet;
+    use piptable_sheet::{Book, Sheet};
     use piptable_types::{Expr, Literal, Param, ParamMode};
     use std::collections::HashMap;
 
@@ -295,6 +302,10 @@ mod tests {
         let sheet = Sheet::from_data(vec![vec![1i64, 2i64]]);
         let toon = value_to_toon(&Value::Sheet(Box::new(sheet)));
         assert!(matches!(toon, ToonValue::Error { code, .. } if code == "SHEET_UNSUPPORTED"));
+
+        let book = Book::new();
+        let toon = value_to_toon(&Value::Book(Box::new(book)));
+        assert!(matches!(toon, ToonValue::Error { code, .. } if code == "BOOK_UNSUPPORTED"));
 
         let func = Value::Function {
             name: "f".to_string(),

@@ -1,7 +1,7 @@
 //! Runtime value types for piptable.
 
 use arrow::array::RecordBatch;
-use piptable_sheet::Sheet;
+use piptable_sheet::{Book, Sheet};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -38,6 +38,8 @@ pub enum Value {
 
     /// Sheet data (piptable_sheet::Sheet).
     Sheet(Box<Sheet>),
+    /// Book data (piptable_sheet::Book).
+    Book(Box<Book>),
 
     /// Function reference.
     Function {
@@ -70,6 +72,7 @@ impl Value {
             Self::Object(o) => !o.is_empty(),
             Self::Table(t) => !t.is_empty(),
             Self::Sheet(s) => s.row_count() > 0,
+            Self::Book(b) => b.sheet_count() > 0,
             Self::Function { .. } => true,
             Self::Lambda { .. } => true,
         }
@@ -88,6 +91,7 @@ impl Value {
             Self::Object(_) => "Object",
             Self::Table(_) => "Table",
             Self::Sheet(_) => "Sheet",
+            Self::Book(_) => "Book",
             Self::Function { .. } => "Function",
             Self::Lambda { .. } => "Lambda",
         }
@@ -172,6 +176,23 @@ impl Value {
     pub fn as_sheet_mut(&mut self) -> Option<&mut Sheet> {
         match self {
             Self::Sheet(s) => Some(s.as_mut()),
+            _ => None,
+        }
+    }
+
+    /// Try to get Book reference.
+    #[must_use]
+    pub fn as_book(&self) -> Option<&Book> {
+        match self {
+            Self::Book(b) => Some(b.as_ref()),
+            _ => None,
+        }
+    }
+
+    /// Try to get Book mutable reference.
+    pub fn as_book_mut(&mut self) -> Option<&mut Book> {
+        match self {
+            Self::Book(b) => Some(b.as_mut()),
             _ => None,
         }
     }
@@ -260,6 +281,9 @@ impl Serialize for Value {
             Self::Sheet(_) => Err(serde::ser::Error::custom(
                 "Sheet values are not JSON-serializable",
             )),
+            Self::Book(_) => Err(serde::ser::Error::custom(
+                "Book values are not JSON-serializable",
+            )),
             Self::Function { name, .. } => Err(serde::ser::Error::custom(format!(
                 "Function '{name}' is not JSON-serializable"
             ))),
@@ -338,6 +362,7 @@ impl Value {
             }
             Self::Table(_) => Err("Table values are not JSON-serializable"),
             Self::Sheet(_) => Err("Sheet values are not JSON-serializable"),
+            Self::Book(_) => Err("Book values are not JSON-serializable"),
             Self::Function { .. } => Err("Function values are not JSON-serializable"),
             Self::Lambda { .. } => Err("Lambda expressions are not JSON-serializable"),
         }
@@ -388,9 +413,15 @@ mod tests {
         assert!(Value::Object(map).is_truthy());
         assert!(!Value::Table(vec![]).is_truthy());
         assert!(!Value::Sheet(Box::new(Sheet::new())).is_truthy()); // Empty sheet
+        assert!(!Value::Book(Box::new(Book::new())).is_truthy()); // Empty book
         let mut sheet_with_data = Sheet::new();
         sheet_with_data.row_append(vec!["test"]).unwrap();
         assert!(Value::Sheet(Box::new(sheet_with_data)).is_truthy()); // Non-empty sheet
+        let mut sheet = Sheet::new();
+        sheet.row_append(vec!["test"]).unwrap();
+        let mut book = Book::new();
+        book.add_sheet("Sheet1", sheet).unwrap();
+        assert!(Value::Book(Box::new(book)).is_truthy());
         assert!(Value::Function {
             name: "f".to_string(),
             params: vec![],
@@ -415,6 +446,7 @@ mod tests {
         assert_eq!(Value::Object(HashMap::new()).type_name(), "Object");
         assert_eq!(Value::Table(vec![]).type_name(), "Table");
         assert_eq!(Value::Sheet(Box::new(Sheet::new())).type_name(), "Sheet");
+        assert_eq!(Value::Book(Box::new(Book::new())).type_name(), "Book");
         assert_eq!(
             Value::Function {
                 name: "f".to_string(),
@@ -630,6 +662,10 @@ mod tests {
         };
         assert!(func.to_json().is_err());
 
+        // Book is not JSON-serializable
+        let book = Value::Book(Box::new(Book::new()));
+        assert!(book.to_json().is_err());
+
         // NaN is not JSON-serializable
         let nan = Value::Float(f64::NAN);
         assert!(nan.to_json().is_err());
@@ -668,6 +704,10 @@ mod tests {
     fn test_serialize_errors() {
         // Table cannot be serialized
         let v = Value::Table(vec![]);
+        assert!(serde_json::to_string(&v).is_err());
+
+        // Book cannot be serialized
+        let v = Value::Book(Box::new(Book::new()));
         assert!(serde_json::to_string(&v).is_err());
 
         // Function cannot be serialized

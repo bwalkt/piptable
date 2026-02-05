@@ -3736,6 +3736,7 @@ dependencies = [
  "piptable-core",
  "piptable-interpreter",
  "piptable-parser",
+ "piptable-sheet",
  "rustyline",
  "serde_json",
  "tokio",

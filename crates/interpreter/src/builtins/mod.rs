@@ -2,6 +2,8 @@
 
 /// Array-related built-in functions.
 mod array;
+/// Book-related built-in functions.
+mod book;
 /// Core interpreter built-in functions.
 mod core;
 /// Math-related built-in functions.
@@ -47,6 +49,12 @@ pub async fn call_builtin(
 
     if let Some(result) =
         sheet::call_sheet_builtin(interpreter, &builtin_name, args.clone(), line).await
+    {
+        return Some(result);
+    }
+
+    if let Some(result) =
+        book::call_book_builtin(interpreter, &builtin_name, args.clone(), line).await
     {
         return Some(result);
     }
@@ -98,6 +106,26 @@ pub fn is_builtin(name: &str) -> bool {
             | "sheet_map_range"
             | "sheet_map"
             | "sheet_filter_rows"
+            // book
+            | "book_sheet_names"
+            | "book_sheet_count"
+            | "book_has_sheet"
+            | "book_get_sheet"
+            | "book_get_sheet_by_index"
+            | "book_active_sheet"
+            | "book_set_active_sheet"
+            | "book_add_sheet"
+            | "book_remove_sheet"
+            | "book_rename_sheet"
+            | "book_merge"
+            | "book_to_dict"
+            | "book_from_dict"
+            | "book_sheets"
+            | "book_add_empty_sheet"
+            | "book_consolidate"
+            | "book_consolidate_with_options"
+            | "book_from_files"
+            | "book_from_files_with_options"
             // array
             | "filter"
     )

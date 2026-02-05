@@ -149,6 +149,37 @@ rows = sheet_map_range(rows, "C2:C3", "upper")
 print("Invalid rows: " + str(invalid))
 print(rows)`
   },
+  book_ops: {
+    description: "Book operations",
+    code: `' Book operations
+dim book = book_from_dict({
+  "Q1": [
+    ["item", "qty"],
+    ["Apple", 10]
+  ],
+  "Q2": [
+    ["item", "qty"],
+    ["Banana", 5]
+  ]
+})
+
+print("Sheets: " + str(book.sheet_names()))
+dim q1 = book.get_sheet("Q1")
+q1 = sheet_name_columns_by_row(q1, 0)
+print("First item: " + str(sheet_get_by_name(q1, 1, "item")))
+
+dim extra = book_from_dict({
+  "Q3": [
+    ["item", "qty"],
+    ["Pear", 3]
+  ]
+})
+dim merged = book_merge(book, extra)
+print("Merged count: " + str(merged.sheet_count()))
+
+dim consolidated = book_consolidate(merged)
+print("Consolidated rows: " + str(sheet_row_count(consolidated)))`
+  },
   sheet_formulas: {
     description: "Sheet formulas",
     code: `' Sheet formulas

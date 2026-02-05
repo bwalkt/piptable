@@ -34,13 +34,28 @@ print "Loaded sheet with " + str(len(sales_data)) + " rows"
 import "financial_report.xlsx" into report_book
 
 ' Access sheets using Book API methods
-' Note: Direct sheet access from workbook variables is planned but not yet available
-' Currently, you can:
-' - Import specific sheets by name: import "file.xlsx" sheet "SheetName" into data
-' - Get sheet names: report_book.sheet_names()
-' - Access sheets: report_book.get_sheet("SheetName") or report_book.sheets()
 print "Sheet names: " + str(report_book.sheet_names())
-print "Loaded workbook with " + str(len(report_book.sheets())) + " sheets"
+dim summary = report_book.get_sheet("Summary")
+print "Loaded workbook with " + str(report_book.sheet_count()) + " sheets"
+```
+
+### Book Operations (DSL)
+```piptable
+' @title Book Operations in DSL
+' @description Merge books and manage sheets
+
+dim book1 = import "q1.xlsx" into book
+dim book2 = import "q2.xlsx" into book
+
+' Merge books with +
+dim combined = book1 + book2
+
+' Add a new sheet
+dim cleaned = sheet_clean_data(book_get_sheet(book1, "Sales"), ["trim"])
+dim updated = book_add_sheet(book1, "Sales_Clean", cleaned)
+
+' Convert to dictionary
+dim dict = book_to_dict(updated)
 ```
 
 ### Book Operations (Rust API)

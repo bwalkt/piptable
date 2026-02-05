@@ -3,8 +3,7 @@
 use piptable_core::{ImportOptions, Value};
 #[cfg(not(target_arch = "wasm32"))]
 use piptable_sheet::XlsxReadOptions;
-use piptable_sheet::{CellValue, CsvOptions, Sheet};
-use std::collections::HashMap;
+use piptable_sheet::{Book, CellValue, CsvOptions, Sheet};
 use std::path::Path;
 
 /// Convert a CellValue to a serde_json Value
@@ -784,7 +783,7 @@ pub fn import_sheet(
 
 /// Import multiple files based on options.
 pub fn import_multi_files(paths: &[String], options: &ImportOptions) -> Result<Value, String> {
-    let mut sheets = HashMap::new();
+    let mut book = Book::new();
 
     for path in paths {
         let path_obj = Path::new(path);
@@ -797,20 +796,17 @@ pub fn import_multi_files(paths: &[String], options: &ImportOptions) -> Result<V
         // Handle duplicate file stems by appending a suffix
         let mut name = base_name.clone();
         let mut counter = 1;
-        while sheets.contains_key(&name) {
+        while book.has_sheet(&name) {
             name = format!("{}_{}", base_name, counter);
             counter += 1;
         }
 
         let sheet = import_sheet(path, None, options)?;
-        sheets.insert(name, Value::Sheet(Box::new(sheet)));
+        book.add_sheet(&name, sheet)
+            .map_err(|e| format!("Failed to add sheet: {}", e))?;
     }
 
-    if sheets.len() == 1 {
-        Ok(sheets.into_values().next().unwrap())
-    } else {
-        Ok(Value::Object(sheets))
-    }
+    Ok(Value::Book(Box::new(book)))
 }
 
 /// Resolves whether to treat the first row as headers.
@@ -952,7 +948,7 @@ pub fn import_markdown_book(path: &str, options: &ImportOptions) -> Result<Value
             return Err(format!("No tables found in Markdown '{}'", path));
         }
 
-        let mut book = HashMap::new();
+        let mut book = Book::new();
         for (idx, mut sheet) in sheets.drain(..).enumerate() {
             if resolve_has_headers(options) && !sheet.data().is_empty() {
                 sheet
@@ -960,9 +956,10 @@ pub fn import_markdown_book(path: &str, options: &ImportOptions) -> Result<Value
                     .map_err(|e| format!("Failed to name columns: {}", e))?;
             }
             let name = format!("table_{}", idx + 1);
-            book.insert(name, Value::Sheet(Box::new(sheet)));
+            book.add_sheet(&name, sheet)
+                .map_err(|e| format!("Failed to add sheet: {}", e))?;
         }
 
-        Ok(Value::Object(book))
+        Ok(Value::Book(Box::new(book)))
     }
 }

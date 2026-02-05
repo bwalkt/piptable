@@ -21,6 +21,7 @@ pub fn value_to_string(val: &Value) -> String {
         Value::Object(_) => "[Object]".to_string(),
         Value::Table(_) => "[Table]".to_string(),
         Value::Sheet(_) => "[Sheet]".to_string(),
+        Value::Book(_) => "[Book]".to_string(),
         Value::Function { name, .. } => format!("[Function: {name}]"),
         Value::Lambda { params, .. } => format!("[Lambda: |{}|]", params.join(", ")),
     }

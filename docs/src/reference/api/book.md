@@ -2,7 +2,7 @@
 
 The Book API provides methods for working with collections of sheets, similar to Excel workbooks or multi-sheet spreadsheets.
 
-> Note: These Book operations are available in the Rust API. The DSL currently exposes only import/export into books.
+> Note: The DSL supports book objects (imported from multi-sheet files, PDFs, and Markdown tables) plus a set of book helpers and methods.
 
 ## Creating Books
 
@@ -19,13 +19,58 @@ Book::from_dict<T>(sheets: IndexMap<String, Vec<Vec<T>>>) -> Result<Book>
 **Examples:**
 ```piptable
 ' Create empty book
-dim workbook = new Book()
+dim workbook = book_from_dict({})
 
 ' Import multiple files into book
 dim all_data = import "sales_2023.csv,sales_2024.csv" into book
 
 ' Load Excel file with multiple sheets
 dim excel = import "data.xlsx" into book
+
+' Create from a dictionary (DSL)
+dim manual = book_from_dict({ "Sheet1": [[1, 2], [3, 4]] })
+```
+
+## DSL Book Functions
+
+These helpers are available in the DSL:
+
+| Function | Description | Example |
+|----------|-------------|---------|
+| `book_sheet_names(book)` | List sheet names | `book_sheet_names(excel)` |
+| `book_sheet_count(book)` | Count sheets | `book_sheet_count(excel)` |
+| `book_has_sheet(book, name)` | Check for a sheet | `book_has_sheet(excel, "Summary")` |
+| `book_get_sheet(book, name)` | Get a sheet by name | `book_get_sheet(excel, "Data")` |
+| `book_get_sheet_by_index(book, idx)` | Get a sheet by index | `book_get_sheet_by_index(excel, 0)` |
+| `book_active_sheet(book)` | Get active sheet | `book_active_sheet(excel)` |
+| `book_set_active_sheet(book, name)` | Set active sheet | `book_set_active_sheet(excel, "Summary")` |
+| `book_add_sheet(book, name, sheet)` | Add a sheet | `book_add_sheet(excel, "Extra", data)` |
+| `book_remove_sheet(book, name)` | Remove a sheet | `book_remove_sheet(excel, "Temp")` |
+| `book_rename_sheet(book, old, new)` | Rename a sheet | `book_rename_sheet(excel, "Sheet1", "Main")` |
+| `book_merge(book, other)` | Merge books | `book_merge(book1, book2)` |
+| `book_to_dict(book)` | Convert to a dictionary | `book_to_dict(excel)` |
+| `book_from_dict(map)` | Create a book from a dictionary | `book_from_dict({ "Sheet1": [[1,2]] })` |
+| `book_sheets(book)` | Get all sheets as an array | `book_sheets(excel)` |
+| `book_add_empty_sheet(book, name)` | Add an empty sheet | `book_add_empty_sheet(excel, "Temp")` |
+| `book_consolidate(book)` | Consolidate sheets | `book_consolidate(excel)` |
+| `book_consolidate_with_options(book, options)` | Consolidate with options | `book_consolidate_with_options(excel, {"add_source_column": true})` |
+| `book_from_files(paths)` | Load multiple files into a book | `book_from_files(["a.csv", "b.csv"])` |
+| `book_from_files_with_options(paths, options)` | Load files with options | `book_from_files_with_options(["a.csv"], {"has_headers": false})` |
+
+Note: DSL helpers that mutate a book (add/remove/rename/merge/set_active) return a new book value.
+
+## DSL Method Calls
+
+Book methods can also be called directly:
+
+```piptable
+dim names = excel.sheet_names()
+dim first = excel.get_sheet_by_index(0)
+dim renamed = excel.rename_sheet("Sheet1", "Main")
+
+' Indexing by name or index
+dim data = excel["Data"]
+dim first_sheet = excel[0]
 ```
 
 ## Basic Properties
@@ -88,20 +133,20 @@ set_active_sheet(name: &str) -> Result<()>
 
 **Examples:**
 ```piptable
-' Add new empty sheet
-dim new_sheet = book.add_empty_sheet("Analysis")
+' Add new sheet
+book = book.add_sheet("Analysis", [["col1"], ["value"]])
 
 ' Add existing sheet
-book.add_sheet("Import", data_sheet)
+book = book.add_sheet("Import", data_sheet)
 
 ' Remove sheet
-dim removed = book.remove_sheet("Temp")
+book = book.remove_sheet("Temp")
 
 ' Rename sheet
-book.rename_sheet("Sheet1", "MainData")
+book = book.rename_sheet("Sheet1", "MainData")
 
 ' Set active sheet
-book.set_active_sheet("Summary")
+book = book.set_active_sheet("Summary")
 ```
 
 ## Book Operations
@@ -119,13 +164,13 @@ The `+` operator returns a new book.
 **Examples:**
 ```piptable
 ' Merge two books
-book1.merge(book2)
+dim merged = book1.merge(book2)
 
 ' Merge multiple data files
-dim combined = new Book()
+dim combined = book_from_dict({})
 for each file in files
     dim data = import file into book
-    combined.merge(data)
+    combined = combined.merge(data)
 end for
 ```
 
@@ -141,12 +186,12 @@ Combines all sheets in a book into a single sheet by stacking rows.
 **ConsolidateOptions:**
 ```text
 ConsolidateOptions {
-    headers: bool,              // First row contains headers (default: true)
-    source_column: Option<String>, // Add column with source sheet name
+    add_source_column: bool,     // Add column with source sheet name (default: false)
+    source_column_name: String,  // Source column name (default: "_source")
 }
 ```
 
-### Bulk Sheet Operations (Rust only)
+### Bulk Sheet Operations
 
 ```text
 for_each_sheet<F>(&self, f: F)
@@ -154,18 +199,18 @@ for_each_sheet_mut<F>(&mut self, f: F)
 try_for_each_sheet_mut<F, E>(&mut self, f: F) -> Result<(), E>
 ```
 
-**Examples (Rust):**
-```text
-book.for_each_sheet(|sheet| {
-    println!("{} rows", sheet.row_count());
-});
+**Examples (DSL):**
+```piptable
+' Collect row counts
+dim f = sheet => sheet.row_count()
+dim counts = book.for_each_sheet(f)
 
-book.for_each_sheet_mut(|sheet| {
-    sheet.remove_empty_rows();
-});
+' Clean each sheet (returns a new book)
+dim clean = sheet => sheet_map(sheet, "trim")
+dim cleaned = book.for_each_sheet_mut(clean)
 ```
 
-### Dictionary Conversion (Rust only)
+### Dictionary Conversion
 
 ```text
 let book_dict = IndexMap::from([
@@ -180,14 +225,20 @@ let roundtrip = book.to_dict();
 **Examples:**
 ```piptable
 ' Simple consolidation
-dim all_data = book.consolidate()
+dim all_data = book_consolidate(book)
 
 ' Consolidate with source tracking
-dim options = ConsolidateOptions::new()
-    .with_source_column("source_sheet")
-    .with_headers(true)
-    
-dim combined = book.consolidate_with_options(options)
+dim combined = book_consolidate_with_options(book, {
+    "add_source_column": true,
+    "source_column_name": "source_sheet"
+})
+
+' Create a book from a dictionary (DSL)
+dim book = book_from_dict({
+    "Sheet1": [["A", "B"], [1, 2]],
+    "Sheet2": [["C", "D"], [3, 4]]
+})
+dim dict = book_to_dict(book)
 ```
 
 ## Iteration
@@ -200,14 +251,18 @@ sheets_mut() -> Iterator<Item = (&str, &mut Sheet)>
 **Examples:**
 ```piptable
 ' Process all sheets
-for each (name, sheet) in book.sheets()
-    print("Sheet: " + name + " has " + sheet.row_count() + " rows")
-end for
+for each name in book_sheet_names(book)
+    dim sheet = book_get_sheet(book, name)
+    print("Sheet: " + name + " has " + str(sheet.row_count()) + " rows")
+next
 
-' Modify all sheets
-for each (name, sheet) in book.sheets_mut()
-    sheet.column_append(["processed"])
-end for
+' Modify all sheets into a new book
+dim cleaned = book_from_dict({})
+for each name in book_sheet_names(book)
+    dim sheet = book_get_sheet(book, name)
+    sheet = sheet_map(sheet, "trim")
+    cleaned = book_add_sheet(cleaned, name, sheet)
+next
 ```
 
 ## Loading Options
@@ -215,25 +270,18 @@ end for
 When loading multiple files into a book:
 
 ```text
-LoadOptions {
-    headers: bool,           // Treat first row as headers
-    delimiter: Option<char>, // CSV delimiter
-    sheet_name_from: enum {  // How to name sheets
-        FileName,           // Use file name
-        FirstColumn,        // Use first column value
-        Custom(String),     // Use custom name
-    }
+FileLoadOptions {
+    has_headers: bool, // Treat first row as headers (default: true)
 }
 ```
 
 **Examples:**
 ```piptable
-' Load CSVs with custom delimiter
-dim options = LoadOptions::new()
-    .with_delimiter('|')
-    .with_headers(true)
-
-dim book = Book::from_files_with_options(files, options)
+' Load CSVs without headers
+dim book = book_from_files_with_options(
+    ["raw1.csv", "raw2.csv"],
+    { "has_headers": false }
+)
 ```
 
 ## Common Patterns
@@ -251,8 +299,9 @@ dim files = [
 dim sales_book = import files into book
 
 ' Consolidate into single sheet with source column
-dim all_sales = sales_book.consolidate_with_options({
-    "source_column": "month"
+dim all_sales = book_consolidate_with_options(sales_book, {
+    "add_source_column": true,
+    "source_column_name": "month"
 })
 
 ' Analyze consolidated data
@@ -298,10 +347,10 @@ export workbook to "quarterly_report_processed.xlsx"
 
 ```piptable
 ' Load reference data and transactions
-dim book = new Book()
-book.add_sheet("products", import "products.csv" into sheet)
-book.add_sheet("customers", import "customers.csv" into sheet)
-book.add_sheet("orders", import "orders.csv" into sheet)
+dim book = book_from_dict({})
+book = book.add_sheet("products", import "products.csv" into sheet)
+book = book.add_sheet("customers", import "customers.csv" into sheet)
+book = book.add_sheet("orders", import "orders.csv" into sheet)
 
 ' Validate foreign keys
 dim validation = query("

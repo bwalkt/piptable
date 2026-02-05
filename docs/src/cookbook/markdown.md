@@ -310,7 +310,7 @@ export price_table to "pricing_calculated.xlsx"
 ```piptable
 ' Process multiple markdown files
 dim files = ["jan.md", "feb.md", "mar.md", "apr.md"]
-dim all_data = new Book()
+dim all_data = book_from_dict({})
 
 for file in files
     dim month_data = import file into book
@@ -323,7 +323,7 @@ for file in files
     metrics.add_column("Month", month)
     
     ' Add to combined book
-    all_data.add_sheet(metrics, month)
+    all_data = all_data.add_sheet(month, metrics)
 next
 
 ' Export combined data

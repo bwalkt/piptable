@@ -172,11 +172,11 @@ dim elements = doc["elements"]
 ```piptable
 ' Process multiple files
 dim files = ["jan.csv", "feb.csv", "mar.csv"]
-dim all_data = new Book()
+dim all_data = book_from_dict({})
 
 for file in files
     dim month_data = import file into sheet
-    all_data.add_sheet(month_data, file.replace(".csv", ""))
+    all_data = all_data.add_sheet(file.replace(".csv", ""), month_data)
 next
 
 export all_data to "quarterly_report.xlsx"
@@ -195,6 +195,19 @@ dim data = import "/usr/share/data/report.xlsx" into book
 
 ' Home directory
 dim data = import "~/Documents/data.json" into sheet
+```
+
+### Book Helpers
+
+```piptable
+' Load multiple files into a single book
+dim book = book_from_files(["jan.csv", "feb.csv"])
+
+' Load with options (e.g., headerless CSV)
+dim book_no_headers = book_from_files_with_options(
+  ["raw1.csv", "raw2.csv"],
+  { "has_headers": false }
+)
 ```
 
 ### URLs
@@ -374,12 +387,12 @@ end function
 ' Import directory of files
 function import_directory(dir_path, pattern)
     dim files = list_files(dir_path, pattern)
-    dim book = new Book()
+    dim book = book_from_dict({})
     
     for file in files
         dim sheet = import file into sheet
         dim name = file_basename(file).replace(file_extension(file), "")
-        book.add_sheet(sheet, name)
+        book = book.add_sheet(name, sheet)
     next
     
     return book
