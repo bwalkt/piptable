@@ -1023,6 +1023,7 @@ impl Sheet {
             }
         }
 
+        self.invalidate_row_names();
         self.rebuild_formula_engine()?;
         Ok(())
     }

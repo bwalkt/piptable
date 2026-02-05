@@ -42,6 +42,39 @@ fn values_to_cells(values: &[Value], line: usize, context: &str) -> PipResult<Ve
         .collect()
 }
 
+fn string_map_operation(operation: &str) -> Option<fn(&CellValue) -> CellValue> {
+    fn upper(cell: &CellValue) -> CellValue {
+        if let CellValue::String(s) = cell {
+            CellValue::String(s.to_uppercase())
+        } else {
+            cell.clone()
+        }
+    }
+
+    fn lower(cell: &CellValue) -> CellValue {
+        if let CellValue::String(s) = cell {
+            CellValue::String(s.to_lowercase())
+        } else {
+            cell.clone()
+        }
+    }
+
+    fn trim(cell: &CellValue) -> CellValue {
+        if let CellValue::String(s) = cell {
+            CellValue::String(s.trim().to_string())
+        } else {
+            cell.clone()
+        }
+    }
+
+    match operation {
+        "upper" => Some(upper),
+        "lower" => Some(lower),
+        "trim" => Some(trim),
+        _ => None,
+    }
+}
+
 fn parse_clean_options(
     operations_value: &Value,
     fill_value: Option<&Value>,
@@ -995,38 +1028,12 @@ pub async fn call_sheet_builtin(
             match (&args[0], &args[1]) {
                 (Value::Sheet(sheet), Value::String(operation)) => {
                     let mut new_sheet = sheet.clone();
-                    match operation.as_str() {
-                        "upper" => {
-                            new_sheet.map(|cell| {
-                                if let CellValue::String(s) = cell {
-                                    CellValue::String(s.to_uppercase())
-                                } else {
-                                    cell.clone()
-                                }
-                            });
+                    match string_map_operation(operation) {
+                        Some(op) => {
+                            new_sheet.map(op);
                             Some(Ok(Value::Sheet(new_sheet)))
                         }
-                        "lower" => {
-                            new_sheet.map(|cell| {
-                                if let CellValue::String(s) = cell {
-                                    CellValue::String(s.to_lowercase())
-                                } else {
-                                    cell.clone()
-                                }
-                            });
-                            Some(Ok(Value::Sheet(new_sheet)))
-                        }
-                        "trim" => {
-                            new_sheet.map(|cell| {
-                                if let CellValue::String(s) = cell {
-                                    CellValue::String(s.trim().to_string())
-                                } else {
-                                    cell.clone()
-                                }
-                            });
-                            Some(Ok(Value::Sheet(new_sheet)))
-                        }
-                        _ => Some(Err(PipError::runtime(
+                        None => Some(Err(PipError::runtime(
                             line,
                             format!(
                                 "Unknown operation '{}'. Supported: upper, lower, trim",
@@ -1052,38 +1059,16 @@ pub async fn call_sheet_builtin(
             match (&args[0], &args[1], &args[2]) {
                 (Value::Sheet(sheet), Value::String(range), Value::String(operation)) => {
                     let mut new_sheet = sheet.clone();
-                    let result = match operation.as_str() {
-                        "upper" => new_sheet.map_range(range, |cell| {
-                            if let CellValue::String(s) = cell {
-                                CellValue::String(s.to_uppercase())
-                            } else {
-                                cell.clone()
-                            }
-                        }),
-                        "lower" => new_sheet.map_range(range, |cell| {
-                            if let CellValue::String(s) = cell {
-                                CellValue::String(s.to_lowercase())
-                            } else {
-                                cell.clone()
-                            }
-                        }),
-                        "trim" => new_sheet.map_range(range, |cell| {
-                            if let CellValue::String(s) = cell {
-                                CellValue::String(s.trim().to_string())
-                            } else {
-                                cell.clone()
-                            }
-                        }),
-                        _ => {
-                            return Some(Err(PipError::runtime(
-                                line,
-                                format!(
-                                    "Unknown operation '{}'. Supported: upper, lower, trim",
-                                    operation
-                                ),
-                            )))
-                        }
+                    let Some(op) = string_map_operation(operation) else {
+                        return Some(Err(PipError::runtime(
+                            line,
+                            format!(
+                                "Unknown operation '{}'. Supported: upper, lower, trim",
+                                operation
+                            ),
+                        )));
                     };
+                    let result = new_sheet.map_range(range, op);
                     match result {
                         Ok(()) => Some(Ok(Value::Sheet(new_sheet))),
                         Err(e) => Some(Err(PipError::runtime(
