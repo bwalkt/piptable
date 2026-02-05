@@ -752,8 +752,10 @@ mod tests {
     #[test]
     fn test_for_each_sheet_mut() {
         let mut book = Book::new();
-        book.add_sheet("A", Sheet::from_data(vec![vec![1]])).unwrap();
-        book.add_sheet("B", Sheet::from_data(vec![vec![2]])).unwrap();
+        book.add_sheet("A", Sheet::from_data(vec![vec![1]]))
+            .unwrap();
+        book.add_sheet("B", Sheet::from_data(vec![vec![2]]))
+            .unwrap();
 
         book.for_each_sheet_mut(|sheet| {
             sheet.map(|cell| {
@@ -765,15 +767,23 @@ mod tests {
             });
         });
 
-        assert_eq!(book.get_sheet("A").unwrap().get(0, 0).unwrap(), &CellValue::Int(2));
-        assert_eq!(book.get_sheet("B").unwrap().get(0, 0).unwrap(), &CellValue::Int(3));
+        assert_eq!(
+            book.get_sheet("A").unwrap().get(0, 0).unwrap(),
+            &CellValue::Int(2)
+        );
+        assert_eq!(
+            book.get_sheet("B").unwrap().get(0, 0).unwrap(),
+            &CellValue::Int(3)
+        );
     }
 
     #[test]
     fn test_try_for_each_sheet_mut() {
         let mut book = Book::new();
-        book.add_sheet("A", Sheet::from_data(vec![vec![1]])).unwrap();
-        book.add_sheet("B", Sheet::from_data(vec![vec![2]])).unwrap();
+        book.add_sheet("A", Sheet::from_data(vec![vec![1]]))
+            .unwrap();
+        book.add_sheet("B", Sheet::from_data(vec![vec![2]]))
+            .unwrap();
 
         let result: std::result::Result<(), &'static str> = book.try_for_each_sheet_mut(|sheet| {
             if sheet.row_count() == 0 {

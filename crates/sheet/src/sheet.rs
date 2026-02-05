@@ -2259,12 +2259,18 @@ mod tests {
     #[test]
     fn test_concat_columns_and_operators() {
         let mut left = Sheet::from_data(vec![
-            vec![CellValue::String("A".to_string()), CellValue::String("B".to_string())],
+            vec![
+                CellValue::String("A".to_string()),
+                CellValue::String("B".to_string()),
+            ],
             vec![CellValue::Int(1), CellValue::Int(2)],
         ]);
         left.name_columns_by_row(0).unwrap();
         let mut right = Sheet::from_data(vec![
-            vec![CellValue::String("B".to_string()), CellValue::String("C".to_string())],
+            vec![
+                CellValue::String("B".to_string()),
+                CellValue::String("C".to_string()),
+            ],
             vec![CellValue::Int(3), CellValue::Int(4)],
         ]);
         right.name_columns_by_row(0).unwrap();
