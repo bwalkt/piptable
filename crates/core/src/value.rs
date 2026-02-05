@@ -400,14 +400,15 @@ mod tests {
         let mut sheet_with_data = Sheet::new();
         sheet_with_data.row_append(vec!["test"]).unwrap();
         assert!(Value::Sheet(Box::new(sheet_with_data)).is_truthy()); // Non-empty sheet
-        assert!(
-            Value::Book(Box::new(Book::from_dict({
+        assert!(Value::Book(Box::new(
+            Book::from_dict({
                 let mut m = HashMap::new();
                 m.insert("Sheet1".to_string(), vec![vec![1]]);
                 m
-            }).unwrap()))
-            .is_truthy()
-        );
+            })
+            .unwrap()
+        ))
+        .is_truthy());
         assert!(Value::Function {
             name: "f".to_string(),
             params: vec![],

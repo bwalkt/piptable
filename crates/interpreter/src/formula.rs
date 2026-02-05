@@ -428,10 +428,7 @@ fn core_to_formula(value: &Value, line: usize) -> PipResult<FormulaValue> {
             line,
             "Formula arguments cannot be objects",
         )),
-        Value::Book(_) => Err(PipError::runtime(
-            line,
-            "Formula arguments cannot be books",
-        )),
+        Value::Book(_) => Err(PipError::runtime(line, "Formula arguments cannot be books")),
         Value::Table(_) => Err(PipError::runtime(
             line,
             "Formula arguments cannot be tables",

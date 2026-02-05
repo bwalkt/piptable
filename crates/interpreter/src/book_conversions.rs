@@ -42,11 +42,7 @@ pub fn book_to_value_dict(book: &Book) -> Value {
             .data()
             .iter()
             .map(|row| {
-                let values: Vec<Value> = row
-                    .iter()
-                    .cloned()
-                    .map(cell_to_value)
-                    .collect();
+                let values: Vec<Value> = row.iter().cloned().map(cell_to_value).collect();
                 Value::Array(values)
             })
             .collect();
@@ -85,9 +81,9 @@ pub fn consolidate_options_from_value(
     let mut options = ConsolidateOptions::default();
 
     if let Some(add_source) = map.get("add_source_column") {
-        let flag = add_source.as_bool().ok_or_else(|| {
-            PipError::runtime(line, "add_source_column must be a boolean")
-        })?;
+        let flag = add_source
+            .as_bool()
+            .ok_or_else(|| PipError::runtime(line, "add_source_column must be a boolean"))?;
         options.add_source_column = flag;
     }
 

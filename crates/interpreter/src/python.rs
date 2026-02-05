@@ -327,7 +327,10 @@ fn value_to_py(py: Python<'_>, value: &Value) -> PyResult<PyObject> {
         Value::Book(book) => {
             let dict = PyDict::new(py);
             for (name, sheet) in book.sheets() {
-                dict.set_item(name, value_to_py(py, &Value::Sheet(Box::new(sheet.clone())))?)?;
+                dict.set_item(
+                    name,
+                    value_to_py(py, &Value::Sheet(Box::new(sheet.clone())))?,
+                )?;
             }
             Ok(dict.into_any().unbind())
         }
