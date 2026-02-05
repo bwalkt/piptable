@@ -202,7 +202,7 @@ sheet1 | sheet2  // Concatenate columns (Result<Sheet>)
 **Notes:**
 - `append` stacks rows (aligns by column names when available).
 - `concat_columns` requires equal row counts; duplicate column names are suffixed.
- - Operators are available in the Rust API.
+- Operators are available in the Rust API.
 
 **Examples (Rust):**
 ```text
