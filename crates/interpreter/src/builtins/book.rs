@@ -115,11 +115,18 @@ fn book_get_sheet_by_index(args: Vec<Value>, line: usize) -> PipResult<Value> {
     let index = args[1]
         .as_int()
         .ok_or_else(|| PipError::runtime(line, "Index must be an integer"))?;
-    if index < 0 {
-        return Err(PipError::runtime(line, "Index cannot be negative"));
-    }
+    let index_usize = if index < 0 {
+        let adjusted = book.sheet_count() as i64 + index;
+        if adjusted < 0 {
+            return Err(PipError::runtime(line, "Book index out of bounds"));
+        }
+        usize::try_from(adjusted)
+            .map_err(|_| PipError::runtime(line, "Index out of range for usize"))?
+    } else {
+        usize::try_from(index).map_err(|_| PipError::runtime(line, "Index is too large"))?
+    };
     let sheet = book
-        .get_sheet_by_index(index as usize)
+        .get_sheet_by_index(index_usize)
         .map_err(|e| PipError::runtime(line, format!("Failed to get sheet by index: {}", e)))?;
     Ok(Value::Sheet(Box::new(sheet.clone())))
 }

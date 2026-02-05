@@ -14,6 +14,10 @@ pub fn value_to_sheet_for_book(value: &Value) -> Result<Sheet, String> {
                 .iter()
                 .filter(|row| matches!(row, Value::Array(_)))
                 .count();
+            let object_rows = rows
+                .iter()
+                .filter(|row| matches!(row, Value::Object(_)))
+                .count();
             if array_rows == rows.len() {
                 let data: Vec<Vec<CellValue>> = rows
                     .iter()
@@ -28,8 +32,10 @@ pub fn value_to_sheet_for_book(value: &Value) -> Result<Sheet, String> {
             } else if array_rows > 0 {
                 Err("value_to_sheet_for_book: mixed row types (Value::Array and non-array rows) are not supported"
                     .to_string())
-            } else {
+            } else if object_rows == rows.len() {
                 value_to_sheet(value)
+            } else {
+                Err("value_to_sheet_for_book: rows must be arrays or objects".to_string())
             }
         }
         _ => Err(format!(
