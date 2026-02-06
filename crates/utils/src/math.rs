@@ -274,7 +274,11 @@ mod tests {
 
     #[test]
     fn test_max_with_non_numeric_ignored() {
-        let values = vec![Value::Int(5), Value::String("ignored".to_string()), Value::Int(3)];
+        let values = vec![
+            Value::Int(5),
+            Value::String("ignored".to_string()),
+            Value::Int(3),
+        ];
         let result = max(&values);
         assert!(matches!(result, Value::Float(f) if (f - 5.0).abs() < 1e-9));
     }

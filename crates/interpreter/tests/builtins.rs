@@ -400,10 +400,7 @@ async fn test_abs_float() {
 #[tokio::test]
 async fn test_abs_zero() {
     let (interp, _) = run_script("dim x = abs(0)").await;
-    assert!(matches!(
-        interp.get_var("x").await,
-        Some(Value::Int(0))
-    ));
+    assert!(matches!(interp.get_var("x").await, Some(Value::Int(0))));
 }
 
 #[tokio::test]

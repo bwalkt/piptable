@@ -32,7 +32,9 @@ fn test_engine_compile_invalid_formula() {
 #[test]
 fn test_engine_sum_with_multiple_ranges() {
     let mut engine = FormulaEngine::new();
-    let compiled = engine.compile("=SUM(A1:A2, B1:B2)").expect("compile formula");
+    let compiled = engine
+        .compile("=SUM(A1:A2, B1:B2)")
+        .expect("compile formula");
 
     let mut ranges = HashMap::new();
     ranges.insert(
@@ -197,7 +199,9 @@ fn test_engine_abs_cell_reference() {
 #[test]
 fn test_engine_nested_functions() {
     let mut engine = FormulaEngine::new();
-    let compiled = engine.compile("=SUM(ABS(-1), ABS(-2), ABS(-3))").expect("compile formula");
+    let compiled = engine
+        .compile("=SUM(ABS(-1), ABS(-2), ABS(-3))")
+        .expect("compile formula");
     let ctx = EvalContext::default();
 
     let value = engine.evaluate(&compiled, &ctx).expect("evaluate");
@@ -215,7 +219,11 @@ fn test_engine_max_with_mixed_types() {
     let mut ranges = HashMap::new();
     ranges.insert(
         CellRange::new(CellAddress::new(0, 0), CellAddress::new(2, 0)),
-        vec![Value::Int(5), Value::String("text".to_string()), Value::Int(10)],
+        vec![
+            Value::Int(5),
+            Value::String("text".to_string()),
+            Value::Int(10),
+        ],
     );
     let ctx = EvalContext::with_ranges(ranges);
 
