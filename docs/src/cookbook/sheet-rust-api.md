@@ -464,6 +464,21 @@ fn reorganize_data() -> Result<(), Box<dyn std::error::Error>> {
 }
 ```
 
+## SSF Number Formatting
+
+Piptable exposes SSF-style format strings for consistent number and date formatting:
+
+```rust
+use piptable_formatting::ssf_format;
+use piptable_primitives::Value;
+
+let pct = ssf_format("0.0%", &Value::Float(0.125), None);
+assert_eq!(pct, "12.5%");
+
+let date = ssf_format("mm/dd/yyyy", &Value::Float(44562.0), None);
+assert_eq!(date, "01/01/2022");
+```
+
 ## Complete Sales Analysis Example
 
 A comprehensive example combining multiple operations:

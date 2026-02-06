@@ -449,4 +449,40 @@ mod tests {
         let value = Value::String("hello".to_string());
         assert_eq!(ssf_format("@", &value, None), "hello");
     }
+
+    #[test]
+    /// Verifies boolean formatting.
+    fn test_ssf_format_bool() {
+        let value = Value::Bool(true);
+        assert_eq!(ssf_format("0", &value, None), "TRUE");
+    }
+
+    #[test]
+    /// Verifies array formatting returns #VALUE!.
+    fn test_ssf_format_array_error() {
+        let value = Value::Array(vec![Value::Int(1)]);
+        assert_eq!(ssf_format("0", &value, None), "#VALUE!");
+    }
+
+    #[test]
+    /// Verifies percent formatting.
+    fn test_ssf_format_percent() {
+        let value = Value::Float(0.125);
+        assert_eq!(ssf_format("0.0%", &value, None), "12.5%");
+    }
+
+    #[test]
+    /// Verifies color extraction is skipped without tokens.
+    fn test_ssf_format_color_none() {
+        let value = Value::Float(1.0);
+        assert_eq!(ssf_format_color("0.0", &value), None);
+    }
+
+    #[test]
+    /// Verifies quoted semicolons are ignored when splitting sections.
+    fn test_ssf_format_quoted_semicolons() {
+        let value = Value::String("x".to_string());
+        let formatted = ssf_format(r#""a;b";"c""#, &value, None);
+        assert_eq!(formatted, "x");
+    }
 }

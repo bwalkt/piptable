@@ -101,6 +101,16 @@ dim count_short = count(sales, "A1:A10")
 dim cached = sheet_get_a1_eval(sales, "B1")
 ```
 
+### Single Cell vs Range References
+
+Formula evaluation treats `A1` as a single cell lookup. If you want range
+semantics (for example, to force array-style handling), use `A1:A1`:
+
+```piptable
+dim cell_value = sheet_eval_formula(sales, "A1")
+dim range_value = sheet_eval_formula(sales, "A1:A1")
+```
+
 R1C1 notation is also supported in formulas:
 
 ```piptable
