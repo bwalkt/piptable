@@ -176,6 +176,43 @@ async fn test_avg() {
     }
 }
 
+#[tokio::test]
+async fn test_len_book_and_values() {
+    let script = r#"
+        dim book = book_from_dict({
+            "One": [["col"], [1]],
+            "Two": [["col"], [2]]
+        })
+        dim count = book_sheet_count(book)
+        dim names = keys(book)
+        dim sheets = values(book)
+    "#;
+    let (interp, _) = run_script(script).await;
+    assert!(matches!(interp.get_var("count").await, Some(Value::Int(2))));
+    match interp.get_var("names").await {
+        Some(Value::Array(items)) => assert_eq!(items.len(), 2),
+        _ => panic!("Expected names array"),
+    }
+    match interp.get_var("sheets").await {
+        Some(Value::Array(items)) => assert_eq!(items.len(), 2),
+        _ => panic!("Expected sheets array"),
+    }
+}
+
+#[tokio::test]
+async fn test_len_sheet_header_offset() {
+    let script = r#"
+        dim book = book_from_dict({
+            "One": [["name", "age"], ["A", 1], ["B", 2]]
+        })
+        dim sheet = book_get_sheet(book, "One")
+        sheet = sheet_name_columns_by_row(sheet, 0)
+        dim count = len(sheet)
+    "#;
+    let (interp, _) = run_script(script).await;
+    assert!(matches!(interp.get_var("count").await, Some(Value::Int(2))));
+}
+
 /// Verifies that calling `keys(obj)` on an object returns an array of its field names.
 ///
 /// Asserts that an object with two fields produces an array containing two elements.

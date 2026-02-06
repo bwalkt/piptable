@@ -358,3 +358,170 @@ pub fn consolidate_book(
 
     Ok(Value::Array(all_records))
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use arrow::datatypes::DataType;
+    use piptable_sheet::CellValue;
+    use piptable_core::{Expr, Literal, Param, ParamMode};
+
+    #[test]
+    fn test_value_to_string_variants() {
+        let mut book = piptable_sheet::Book::new();
+        let mut sheet = Sheet::new();
+        sheet.row_append(vec![1]).expect("append row");
+        book.add_sheet("Sheet1", sheet).expect("add sheet");
+
+        let value_fn = Value::Function {
+            name: "f".to_string(),
+            params: vec![Param {
+                name: "x".to_string(),
+                mode: ParamMode::ByVal,
+                default: None,
+                is_param_array: false,
+            }],
+            is_async: false,
+        };
+        let value_lambda = Value::Lambda {
+            params: vec!["x".to_string()],
+            body: Expr::Literal(Literal::Null),
+        };
+
+        assert_eq!(value_to_string(&Value::Null), "null");
+        assert_eq!(value_to_string(&Value::Bool(true)), "true");
+        assert_eq!(value_to_string(&Value::Int(7)), "7");
+        assert_eq!(value_to_string(&Value::Float(1.25)), "1.25");
+        assert_eq!(value_to_string(&Value::String("hi".to_string())), "hi");
+        assert_eq!(value_to_string(&Value::Array(vec![])), "[Array]");
+        assert_eq!(value_to_string(&Value::Object(HashMap::new())), "[Object]");
+        assert_eq!(value_to_string(&Value::Table(vec![])), "[Table]");
+        assert_eq!(
+            value_to_string(&Value::Sheet(Box::new(Sheet::new()))),
+            "[Sheet]"
+        );
+        assert_eq!(
+            value_to_string(&Value::Book(Box::new(book))),
+            "[Book]"
+        );
+        assert_eq!(value_to_string(&value_fn), "[Function: f]");
+        assert_eq!(value_to_string(&value_lambda), "[Lambda: |x|]");
+    }
+
+    #[test]
+    fn test_value_to_number() {
+        assert_eq!(value_to_number(&Value::Int(9)), Some(9.0));
+        assert_eq!(value_to_number(&Value::Float(2.5)), Some(2.5));
+        assert_eq!(value_to_number(&Value::Bool(true)), None);
+    }
+
+    #[test]
+    fn test_matches_like_patterns() {
+        assert!(matches_like("alpha", "alpha"));
+        assert!(matches_like("alpha", "a%"));
+        assert!(matches_like("alpha", "%ha"));
+        assert!(matches_like("alpha", "%ph%"));
+        assert!(matches_like("alpha", "a%ha"));
+        assert!(matches_like("alpha", "%"));
+        assert!(!matches_like("alpha", "b%"));
+        assert!(!matches_like("alpha", "%zz"));
+    }
+
+    #[test]
+    fn test_sheet_to_arrow_types() {
+        let data = vec![
+            vec![
+                CellValue::String("name".to_string()),
+                CellValue::String("count".to_string()),
+                CellValue::String("ratio".to_string()),
+                CellValue::String("flag".to_string()),
+                CellValue::String("empty".to_string()),
+                CellValue::String("mixed".to_string()),
+            ],
+            vec![
+                CellValue::String("Alice".to_string()),
+                CellValue::Int(1),
+                CellValue::Float(1.5),
+                CellValue::Bool(true),
+                CellValue::Null,
+                CellValue::Int(9),
+            ],
+            vec![
+                CellValue::String("Bob".to_string()),
+                CellValue::Int(2),
+                CellValue::Float(2.5),
+                CellValue::Bool(false),
+                CellValue::Null,
+                CellValue::String("x".to_string()),
+            ],
+        ];
+        let mut sheet = Sheet::from_data(data);
+        sheet.name_columns_by_row(0).expect("set column names");
+
+        let batch = sheet_to_arrow(&sheet, 1).expect("record batch");
+        let schema = batch.schema();
+        let fields = schema.fields();
+
+        assert_eq!(fields[0].data_type(), &DataType::Utf8);
+        assert_eq!(fields[1].data_type(), &DataType::Int64);
+        assert_eq!(fields[2].data_type(), &DataType::Float64);
+        assert_eq!(fields[3].data_type(), &DataType::Boolean);
+        assert_eq!(fields[4].data_type(), &DataType::Utf8);
+        assert_eq!(fields[5].data_type(), &DataType::Utf8);
+    }
+
+    #[test]
+    fn test_sheet_to_arrow_requires_column_names() {
+        let sheet = Sheet::from_data(vec![vec![CellValue::Int(1)]]);
+        let err = sheet_to_arrow(&sheet, 0).expect_err("missing column names");
+        assert!(err.to_string().contains("column names"));
+    }
+
+    #[test]
+    fn test_consolidate_book_errors_and_header_skip() {
+        let mut book: HashMap<String, Value> = HashMap::new();
+        book.insert(
+            "BadRows".to_string(),
+            Value::Array(vec![Value::Int(1)]),
+        );
+        let err = consolidate_book(&book, None).expect_err("non-object rows");
+        assert!(err.contains("non-object rows"));
+
+        let mut book: HashMap<String, Value> = HashMap::new();
+        book.insert("Other".to_string(), Value::Bool(true));
+        let err = consolidate_book(&book, None).expect_err("non-sheet value");
+        assert!(err.contains("Cannot consolidate"));
+
+        let mut sheet = Sheet::from_data(vec![vec![CellValue::Int(1)]]);
+        let mut book: HashMap<String, Value> = HashMap::new();
+        book.insert("Sheet".to_string(), Value::Sheet(Box::new(sheet.clone())));
+        let err = consolidate_book(&book, None).expect_err("missing column names");
+        assert!(err.contains("no column names"));
+
+        sheet
+            .row_append(vec![CellValue::String("col".to_string())])
+            .expect("append row");
+        sheet.name_columns_by_row(1).expect("name columns");
+        let mut book: HashMap<String, Value> = HashMap::new();
+        book.insert("Sheet".to_string(), Value::Sheet(Box::new(sheet)));
+        let err = consolidate_book(&book, Some("col")).expect_err("source conflict");
+        assert!(err.contains("conflicts"));
+
+        let mut rows = Vec::new();
+        let mut header = HashMap::new();
+        header.insert("a".to_string(), Value::String("a".to_string()));
+        header.insert("b".to_string(), Value::String("b".to_string()));
+        rows.push(Value::Object(header));
+        let mut data = HashMap::new();
+        data.insert("a".to_string(), Value::Int(1));
+        data.insert("b".to_string(), Value::String("x".to_string()));
+        rows.push(Value::Object(data));
+        let mut book: HashMap<String, Value> = HashMap::new();
+        book.insert("Sheet1".to_string(), Value::Array(rows));
+        let consolidated = consolidate_book(&book, Some("source")).expect("consolidate");
+        match consolidated {
+            Value::Array(records) => assert_eq!(records.len(), 1),
+            _ => panic!("expected array"),
+        }
+    }
+}
