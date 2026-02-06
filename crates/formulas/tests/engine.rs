@@ -182,12 +182,9 @@ fn test_engine_abs_cell_reference() {
     let mut engine = FormulaEngine::new();
     let compiled = engine.compile("=ABS(A1)").expect("compile formula");
 
-    let mut ranges = HashMap::new();
-    ranges.insert(
-        CellRange::new(CellAddress::new(0, 0), CellAddress::new(0, 0)),
-        vec![Value::Int(-42)],
-    );
-    let ctx = EvalContext::with_ranges(ranges);
+    let mut cells = HashMap::new();
+    cells.insert(CellAddress::new(0, 0), Value::Int(-42));
+    let ctx = EvalContext::with_cells(cells);
 
     let value = engine.evaluate(&compiled, &ctx).expect("evaluate");
     match value {
@@ -277,12 +274,9 @@ fn test_engine_average_with_single_value() {
     let mut engine = FormulaEngine::new();
     let compiled = engine.compile("=AVERAGE(A1)").expect("compile formula");
 
-    let mut ranges = HashMap::new();
-    ranges.insert(
-        CellRange::new(CellAddress::new(0, 0), CellAddress::new(0, 0)),
-        vec![Value::Int(42)],
-    );
-    let ctx = EvalContext::with_ranges(ranges);
+    let mut cells = HashMap::new();
+    cells.insert(CellAddress::new(0, 0), Value::Int(42));
+    let ctx = EvalContext::with_cells(cells);
 
     let value = engine.evaluate(&compiled, &ctx).expect("evaluate");
     match value {
@@ -340,12 +334,9 @@ fn test_engine_max_single_value() {
     let mut engine = FormulaEngine::new();
     let compiled = engine.compile("=MAX(A1)").expect("compile formula");
 
-    let mut ranges = HashMap::new();
-    ranges.insert(
-        CellRange::new(CellAddress::new(0, 0), CellAddress::new(0, 0)),
-        vec![Value::Int(42)],
-    );
-    let ctx = EvalContext::with_ranges(ranges);
+    let mut cells = HashMap::new();
+    cells.insert(CellAddress::new(0, 0), Value::Int(42));
+    let ctx = EvalContext::with_cells(cells);
 
     let value = engine.evaluate(&compiled, &ctx).expect("evaluate");
     match value {
@@ -359,12 +350,9 @@ fn test_engine_min_single_value() {
     let mut engine = FormulaEngine::new();
     let compiled = engine.compile("=MIN(A1)").expect("compile formula");
 
-    let mut ranges = HashMap::new();
-    ranges.insert(
-        CellRange::new(CellAddress::new(0, 0), CellAddress::new(0, 0)),
-        vec![Value::Int(42)],
-    );
-    let ctx = EvalContext::with_ranges(ranges);
+    let mut cells = HashMap::new();
+    cells.insert(CellAddress::new(0, 0), Value::Int(42));
+    let ctx = EvalContext::with_cells(cells);
 
     let value = engine.evaluate(&compiled, &ctx).expect("evaluate");
     match value {
