@@ -60,4 +60,23 @@ mod tests {
             assert!((serial - serial2).abs() < 0.001);
         }
     }
+
+    /// Verifies time fraction round-tripping.
+    #[test]
+    fn test_excel_date_with_time_fraction() {
+        // 2022-01-01 12:00:00 UTC
+        let serial = 44562.5;
+        let dt = excel_date_to_datetime(serial).expect("datetime");
+        let back = datetime_to_excel_date(dt);
+        assert!((serial - back).abs() < 0.001);
+    }
+
+    /// Verifies format patterns.
+    #[test]
+    fn test_format_date_patterns() {
+        let dt = DateTime::from_timestamp(1_640_995_200, 0).expect("timestamp"); // 2022-01-01
+        assert_eq!(format_date(dt, "mm/dd/yyyy"), "01/01/2022");
+        assert_eq!(format_date(dt, "dd/mm/yyyy"), "01/01/2022");
+        assert_eq!(format_date(dt, "yyyy-mm-dd"), "2022-01-01");
+    }
 }

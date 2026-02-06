@@ -70,6 +70,21 @@ dim wildcard_price = xlookup("App*", ["Apple", "Apricot"], [1, 2], "N/A", 2)
 dim ci_wildcard = xlookup("app*", ["Apple", "Apricot"], [1, 2], "N/A", 2, 1, true)
 print("Total: " + str(total))`
   },
+  formula_cell_vs_range: {
+    description: "Single-cell vs range formulas",
+    code: `' Cell vs Range References
+dim sheet = [
+  [1],
+  [2],
+  [3]
+]
+
+dim cell = sheet_eval_formula(sheet, "A1")
+dim range = sheet_eval_formula(sheet, "A1:A1")
+
+print("Cell: " + str(cell))
+print("Range: " + str(range))`
+  },
   array_filter: {
     description: "Array filter built-in",
     code: `' Array FILTER
