@@ -3,6 +3,7 @@
 use chrono::{Local, TimeZone, Utc};
 use piptable_primitives::{ErrorValue, Value};
 use piptable_utils::datetime::datetime_to_excel_date;
+use piptable_utils::math as shared_math;
 
 fn local_to_excel(local_dt: Option<chrono::DateTime<Local>>) -> Value {
     match local_dt {
@@ -313,43 +314,17 @@ fn coerce_to_text(value: &Value) -> Result<String, ErrorValue> {
 
 /// Sum function - adds all numeric values
 pub fn sum(values: &[Value]) -> Value {
-    let mut total = 0.0;
-    walk_values(values, &mut |value| {
-        if let Some(num) = to_number(value) {
-            total += num;
-        }
-    });
-    Value::Float(total)
+    shared_math::sum(values)
 }
 
 /// Average function - calculates mean of numeric values
 pub fn average(values: &[Value]) -> Value {
-    let mut total = 0.0;
-    let mut count = 0;
-
-    walk_values(values, &mut |value| {
-        if let Some(num) = to_number(value) {
-            total += num;
-            count += 1;
-        }
-    });
-
-    if count == 0 {
-        Value::Error(ErrorValue::Div0)
-    } else {
-        Value::Float(total / count as f64)
-    }
+    shared_math::average(values)
 }
 
 /// Count function - counts non-empty cells
 pub fn count(values: &[Value]) -> Value {
-    let mut count = 0usize;
-    walk_values(values, &mut |value| {
-        if to_number(value).is_some() {
-            count += 1;
-        }
-    });
-    Value::Int(count as i64)
+    shared_math::count(values)
 }
 
 /// CONCATENATE implementation.
@@ -1049,42 +1024,12 @@ mod tests {
 
 /// Max function - finds maximum value
 pub fn max(values: &[Value]) -> Value {
-    let mut max_val: Option<f64> = None;
-
-    walk_values(values, &mut |value| {
-        let Some(num) = to_number(value) else {
-            return;
-        };
-        max_val = Some(match max_val {
-            None => num,
-            Some(m) => m.max(num),
-        });
-    });
-
-    match max_val {
-        Some(v) => Value::Float(v),
-        None => Value::Error(ErrorValue::Value),
-    }
+    shared_math::max(values)
 }
 
 /// Min function - finds minimum value  
 pub fn min(values: &[Value]) -> Value {
-    let mut min_val: Option<f64> = None;
-
-    walk_values(values, &mut |value| {
-        let Some(num) = to_number(value) else {
-            return;
-        };
-        min_val = Some(match min_val {
-            None => num,
-            Some(m) => m.min(num),
-        });
-    });
-
-    match min_val {
-        Some(v) => Value::Float(v),
-        None => Value::Error(ErrorValue::Value),
-    }
+    shared_math::min(values)
 }
 
 /// IF implementation.
@@ -1695,11 +1640,7 @@ pub fn not_implemented(_: &[Value]) -> Value {
 
 /// ABS function - returns absolute value
 pub fn abs(values: &[Value]) -> Value {
-    let value = values.first().unwrap_or(&Value::Empty);
-    match to_number(value) {
-        Some(n) => Value::Float(n.abs()),
-        None => Value::Error(ErrorValue::Value),
-    }
+    shared_math::abs(values)
 }
 
 /// ROUND function - rounds to specified decimal places

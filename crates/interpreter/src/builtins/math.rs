@@ -2,6 +2,60 @@
 
 use crate::Interpreter;
 use piptable_core::{PipError, PipResult, Value};
+use piptable_primitives::Value as FormulaValue;
+use piptable_utils::math as shared_math;
+
+fn core_to_formula_value(value: &Value) -> Option<FormulaValue> {
+    match value {
+        Value::Null => Some(FormulaValue::Empty),
+        Value::Bool(b) => Some(FormulaValue::Bool(*b)),
+        Value::Int(i) => Some(FormulaValue::Int(*i)),
+        Value::Float(f) => Some(FormulaValue::Float(*f)),
+        Value::String(s) => Some(FormulaValue::String(s.clone())),
+        Value::Array(items) => {
+            let mut converted = Vec::with_capacity(items.len());
+            for item in items {
+                converted.push(core_to_formula_value(item)?);
+            }
+            Some(FormulaValue::Array(converted))
+        }
+        _ => None,
+    }
+}
+
+fn formula_to_core_value(value: FormulaValue) -> Value {
+    match value {
+        FormulaValue::Empty => Value::Null,
+        FormulaValue::Bool(b) => Value::Bool(b),
+        FormulaValue::Int(i) => Value::Int(i),
+        FormulaValue::Float(f) => Value::Float(f),
+        FormulaValue::String(s) => Value::String(s),
+        FormulaValue::Error(err) => Value::String(format!("#{:?}!", err)),
+        FormulaValue::Array(items) => {
+            Value::Array(items.into_iter().map(formula_to_core_value).collect())
+        }
+    }
+}
+
+fn formula_result_to_core(
+    result: FormulaValue,
+    line: usize,
+    func: &str,
+    empty_message: Option<&'static str>,
+) -> PipResult<Value> {
+    match result {
+        FormulaValue::Error(err) => {
+            if let Some(message) = empty_message {
+                return Err(PipError::runtime(line, message));
+            }
+            Err(PipError::runtime(
+                line,
+                format!("{func}() returned error: {err:?}"),
+            ))
+        }
+        other => Ok(formula_to_core_value(other)),
+    }
+}
 
 /// Handle mathematical built-in functions.
 pub async fn call_math_builtin(
@@ -38,46 +92,14 @@ pub async fn call_math_builtin(
                     "sum() takes exactly 1 argument",
                 )));
             }
-            match &args[0] {
-                Value::Array(arr) => {
-                    let mut sum_int: i64 = 0;
-                    let mut sum_float: f64 = 0.0;
-                    let mut has_float = false;
-                    for val in arr {
-                        match val {
-                            Value::Int(n) => {
-                                if has_float {
-                                    sum_float += *n as f64;
-                                } else {
-                                    sum_int = sum_int.saturating_add(*n);
-                                }
-                            }
-                            Value::Float(f) => {
-                                if !has_float {
-                                    sum_float = sum_int as f64;
-                                    has_float = true;
-                                }
-                                sum_float += f;
-                            }
-                            _ => {
-                                return Some(Err(PipError::runtime(
-                                    line,
-                                    format!("sum() found non-numeric value: {}", val.type_name()),
-                                )));
-                            }
-                        }
-                    }
-                    Some(Ok(if has_float {
-                        Value::Float(sum_float)
-                    } else {
-                        Value::Int(sum_int)
-                    }))
-                }
-                _ => Some(Err(PipError::runtime(
+            let Some(formula_val) = core_to_formula_value(&args[0]) else {
+                return Some(Err(PipError::runtime(
                     line,
                     format!("sum() expects array, got {}", args[0].type_name()),
-                ))),
-            }
+                )));
+            };
+            let result = shared_math::sum(&[formula_val]);
+            Some(formula_result_to_core(result, line, "sum", None))
         }
 
         "avg" | "average" => {
@@ -87,32 +109,19 @@ pub async fn call_math_builtin(
                     "avg() takes exactly 1 argument",
                 )));
             }
-            match &args[0] {
-                Value::Array(arr) if !arr.is_empty() => {
-                    let mut sum: f64 = 0.0;
-                    for val in arr {
-                        match val {
-                            Value::Int(n) => sum += *n as f64,
-                            Value::Float(f) => sum += f,
-                            _ => {
-                                return Some(Err(PipError::runtime(
-                                    line,
-                                    format!("avg() found non-numeric value: {}", val.type_name()),
-                                )));
-                            }
-                        }
-                    }
-                    Some(Ok(Value::Float(sum / arr.len() as f64)))
-                }
-                Value::Array(_) => Some(Err(PipError::runtime(
-                    line,
-                    "avg() cannot average empty array",
-                ))),
-                _ => Some(Err(PipError::runtime(
+            let Some(formula_val) = core_to_formula_value(&args[0]) else {
+                return Some(Err(PipError::runtime(
                     line,
                     format!("avg() expects array, got {}", args[0].type_name()),
-                ))),
-            }
+                )));
+            };
+            let result = shared_math::average(&[formula_val]);
+            Some(formula_result_to_core(
+                result,
+                line,
+                "avg",
+                Some("avg() cannot average empty array"),
+            ))
         }
 
         "min" => {
@@ -140,27 +149,23 @@ pub async fn call_math_builtin(
                 )));
             }
 
-            let mut min_val = values[0].clone();
-            for val in values.iter().skip(1) {
-                match (&min_val, val) {
-                    (Value::Int(a), Value::Int(b)) if b < a => min_val = val.clone(),
-                    (Value::Float(a), Value::Float(b)) if b < a => min_val = val.clone(),
-                    (Value::Int(a), Value::Float(b)) if *b < *a as f64 => {
-                        min_val = val.clone();
-                    }
-                    (Value::Float(a), Value::Int(b)) if (*b as f64) < *a => {
-                        min_val = val.clone();
-                    }
-                    (Value::Int(_) | Value::Float(_), Value::Int(_) | Value::Float(_)) => {}
-                    _ => {
-                        return Some(Err(PipError::runtime(
-                            line,
-                            "min() requires all numeric values",
-                        )));
-                    }
-                }
+            let mut converted = Vec::with_capacity(values.len());
+            for value in values {
+                let Some(formula_val) = core_to_formula_value(&value) else {
+                    return Some(Err(PipError::runtime(
+                        line,
+                        "min() requires numeric values",
+                    )));
+                };
+                converted.push(formula_val);
             }
-            Some(Ok(min_val))
+            let result = shared_math::min(&converted);
+            Some(formula_result_to_core(
+                result,
+                line,
+                "min",
+                Some("min() cannot find min of empty array"),
+            ))
         }
 
         "max" => {
@@ -188,27 +193,23 @@ pub async fn call_math_builtin(
                 )));
             }
 
-            let mut max_val = values[0].clone();
-            for val in values.iter().skip(1) {
-                match (&max_val, val) {
-                    (Value::Int(a), Value::Int(b)) if b > a => max_val = val.clone(),
-                    (Value::Float(a), Value::Float(b)) if b > a => max_val = val.clone(),
-                    (Value::Int(a), Value::Float(b)) if *b > *a as f64 => {
-                        max_val = val.clone();
-                    }
-                    (Value::Float(a), Value::Int(b)) if (*b as f64) > *a => {
-                        max_val = val.clone();
-                    }
-                    (Value::Int(_) | Value::Float(_), Value::Int(_) | Value::Float(_)) => {}
-                    _ => {
-                        return Some(Err(PipError::runtime(
-                            line,
-                            "max() requires all numeric values",
-                        )));
-                    }
-                }
+            let mut converted = Vec::with_capacity(values.len());
+            for value in values {
+                let Some(formula_val) = core_to_formula_value(&value) else {
+                    return Some(Err(PipError::runtime(
+                        line,
+                        "max() requires numeric values",
+                    )));
+                };
+                converted.push(formula_val);
             }
-            Some(Ok(max_val))
+            let result = shared_math::max(&converted);
+            Some(formula_result_to_core(
+                result,
+                line,
+                "max",
+                Some("max() cannot find max of empty array"),
+            ))
         }
 
         _ => None,
