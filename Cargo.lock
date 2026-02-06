@@ -3829,6 +3829,7 @@ dependencies = [
  "piptable-primitives",
  "piptable-sheet",
  "piptable-sql",
+ "piptable-utils",
  "pyo3",
  "rust_xlsxwriter",
  "serde",

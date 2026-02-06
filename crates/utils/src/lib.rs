@@ -9,8 +9,10 @@ use piptable_primitives::Value;
 pub mod cell_data;
 pub mod datetime;
 pub mod formatting;
+pub mod math;
 
 pub use cell_data::*;
+pub use math::*;
 pub use piptable_primitives::address::*;
 
 /// Format a value for display, honoring an optional SSF-style format string.

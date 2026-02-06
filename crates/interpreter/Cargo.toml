@@ -17,6 +17,7 @@ piptable-parser = { workspace = true }
 piptable-sheet = { workspace = true }
 piptable-formulas = { workspace = true }
 piptable-primitives = { workspace = true }
+piptable-utils = { workspace = true }
 indexmap = { workspace = true }
 async-trait = { workspace = true }
 thiserror = { workspace = true }
