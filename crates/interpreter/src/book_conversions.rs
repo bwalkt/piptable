@@ -174,8 +174,7 @@ mod tests {
     #[test]
     fn test_active_sheet_name() {
         let mut book = Book::new();
-        book.add_sheet("Sheet1", Sheet::new())
-            .expect("add sheet");
+        book.add_sheet("Sheet1", Sheet::new()).expect("add sheet");
         book.set_active_sheet("Sheet1").expect("set active");
         assert_eq!(active_sheet_name(&book), Some("Sheet1".to_string()));
     }
@@ -188,8 +187,8 @@ mod tests {
             "source_column_name".to_string(),
             Value::String("source".to_string()),
         );
-        let parsed = consolidate_options_from_value(Some(&Value::Object(opts)), 0)
-            .expect("options");
+        let parsed =
+            consolidate_options_from_value(Some(&Value::Object(opts)), 0).expect("options");
         assert!(parsed.add_source_column);
         assert_eq!(parsed.source_column_name, "source");
     }
@@ -197,9 +196,12 @@ mod tests {
     #[test]
     fn test_consolidate_options_type_error() {
         let mut opts = HashMap::new();
-        opts.insert("add_source_column".to_string(), Value::String("nope".to_string()));
-        let err = consolidate_options_from_value(Some(&Value::Object(opts)), 0)
-            .expect_err("type error");
+        opts.insert(
+            "add_source_column".to_string(),
+            Value::String("nope".to_string()),
+        );
+        let err =
+            consolidate_options_from_value(Some(&Value::Object(opts)), 0).expect_err("type error");
         assert!(err.to_string().contains("add_source_column"));
     }
 
@@ -207,8 +209,7 @@ mod tests {
     fn test_file_load_options_parse() {
         let mut opts = HashMap::new();
         opts.insert("has_headers".to_string(), Value::Bool(false));
-        let parsed = file_load_options_from_value(Some(&Value::Object(opts)), 0)
-            .expect("options");
+        let parsed = file_load_options_from_value(Some(&Value::Object(opts)), 0).expect("options");
         assert!(!parsed.has_headers);
     }
 
@@ -216,8 +217,8 @@ mod tests {
     fn test_file_load_options_type_error() {
         let mut opts = HashMap::new();
         opts.insert("has_headers".to_string(), Value::String("no".to_string()));
-        let err = file_load_options_from_value(Some(&Value::Object(opts)), 0)
-            .expect_err("type error");
+        let err =
+            file_load_options_from_value(Some(&Value::Object(opts)), 0).expect_err("type error");
         assert!(err.to_string().contains("has_headers"));
     }
 
