@@ -146,7 +146,10 @@ async fn test_book_get_sheet_by_index_negative() {
     "#;
 
     let (interp, _) = run_script(script).await;
-    assert!(matches!(interp.get_var("last").await, Some(Value::Sheet(_))));
+    assert!(matches!(
+        interp.get_var("last").await,
+        Some(Value::Sheet(_))
+    ));
 }
 
 #[tokio::test]

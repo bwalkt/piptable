@@ -363,8 +363,8 @@ pub fn consolidate_book(
 mod tests {
     use super::*;
     use arrow::datatypes::DataType;
-    use piptable_sheet::CellValue;
     use piptable_core::{Expr, Literal, Param, ParamMode};
+    use piptable_sheet::CellValue;
 
     #[test]
     fn test_value_to_string_variants() {
@@ -400,10 +400,7 @@ mod tests {
             value_to_string(&Value::Sheet(Box::new(Sheet::new()))),
             "[Sheet]"
         );
-        assert_eq!(
-            value_to_string(&Value::Book(Box::new(book))),
-            "[Book]"
-        );
+        assert_eq!(value_to_string(&Value::Book(Box::new(book))), "[Book]");
         assert_eq!(value_to_string(&value_fn), "[Function: f]");
         assert_eq!(value_to_string(&value_lambda), "[Lambda: |x|]");
     }
@@ -480,10 +477,7 @@ mod tests {
     #[test]
     fn test_consolidate_book_errors_and_header_skip() {
         let mut book: HashMap<String, Value> = HashMap::new();
-        book.insert(
-            "BadRows".to_string(),
-            Value::Array(vec![Value::Int(1)]),
-        );
+        book.insert("BadRows".to_string(), Value::Array(vec![Value::Int(1)]));
         let err = consolidate_book(&book, None).expect_err("non-object rows");
         assert!(err.contains("non-object rows"));
 
