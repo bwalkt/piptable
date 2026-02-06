@@ -129,3 +129,111 @@ pub fn file_load_options_from_value(
 
     Ok(options)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use piptable_sheet::CellValue;
+
+    #[test]
+    fn test_value_to_sheet_for_book_array_rows() {
+        let value = Value::Array(vec![
+            Value::Array(vec![Value::Int(1), Value::String("a".to_string())]),
+            Value::Array(vec![Value::Int(2), Value::String("b".to_string())]),
+        ]);
+        let sheet = value_to_sheet_for_book(&value).expect("sheet");
+        assert_eq!(sheet.row_count(), 2);
+    }
+
+    #[test]
+    fn test_value_to_sheet_for_book_object_rows() {
+        let mut row = HashMap::new();
+        row.insert("a".to_string(), Value::Int(1));
+        let value = Value::Array(vec![Value::Object(row)]);
+        let sheet = value_to_sheet_for_book(&value).expect("sheet");
+        assert_eq!(sheet.row_count(), 2);
+    }
+
+    #[test]
+    fn test_value_to_sheet_for_book_mixed_rows_error() {
+        let value = Value::Array(vec![
+            Value::Array(vec![Value::Int(1)]),
+            Value::Object(HashMap::new()),
+        ]);
+        let err = value_to_sheet_for_book(&value).expect_err("mixed row types");
+        assert!(err.contains("mixed row types"));
+    }
+
+    #[test]
+    fn test_value_to_sheet_for_book_scalar_rows_error() {
+        let value = Value::Array(vec![Value::Int(1), Value::Int(2)]);
+        let err = value_to_sheet_for_book(&value).expect_err("scalar rows");
+        assert!(err.contains("rows must be arrays or objects"));
+    }
+
+    #[test]
+    fn test_active_sheet_name() {
+        let mut book = Book::new();
+        book.add_sheet("Sheet1", Sheet::new()).expect("add sheet");
+        book.set_active_sheet("Sheet1").expect("set active");
+        assert_eq!(active_sheet_name(&book), Some("Sheet1".to_string()));
+    }
+
+    #[test]
+    fn test_consolidate_options_parse() {
+        let mut opts = HashMap::new();
+        opts.insert("add_source_column".to_string(), Value::Bool(true));
+        opts.insert(
+            "source_column_name".to_string(),
+            Value::String("source".to_string()),
+        );
+        let parsed =
+            consolidate_options_from_value(Some(&Value::Object(opts)), 0).expect("options");
+        assert!(parsed.add_source_column);
+        assert_eq!(parsed.source_column_name, "source");
+    }
+
+    #[test]
+    fn test_consolidate_options_type_error() {
+        let mut opts = HashMap::new();
+        opts.insert(
+            "add_source_column".to_string(),
+            Value::String("nope".to_string()),
+        );
+        let err =
+            consolidate_options_from_value(Some(&Value::Object(opts)), 0).expect_err("type error");
+        assert!(err.to_string().contains("add_source_column"));
+    }
+
+    #[test]
+    fn test_file_load_options_parse() {
+        let mut opts = HashMap::new();
+        opts.insert("has_headers".to_string(), Value::Bool(false));
+        let parsed = file_load_options_from_value(Some(&Value::Object(opts)), 0).expect("options");
+        assert!(!parsed.has_headers);
+    }
+
+    #[test]
+    fn test_file_load_options_type_error() {
+        let mut opts = HashMap::new();
+        opts.insert("has_headers".to_string(), Value::String("no".to_string()));
+        let err =
+            file_load_options_from_value(Some(&Value::Object(opts)), 0).expect_err("type error");
+        assert!(err.to_string().contains("has_headers"));
+    }
+
+    #[test]
+    fn test_book_to_value_dict_round_trip_shape() {
+        let mut sheet = Sheet::new();
+        sheet.row_append(vec![CellValue::Int(1)]).expect("row");
+        let mut book = Book::new();
+        book.add_sheet("Sheet1", sheet).expect("add sheet");
+        let value = book_to_value_dict(&book);
+        match value {
+            Value::Object(map) => {
+                assert!(map.contains_key("Sheet1"));
+            }
+            _ => panic!("expected object"),
+        }
+    }
+}

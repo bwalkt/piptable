@@ -134,3 +134,53 @@ async fn test_book_for_each_sheet_mut() {
     let (interp, _) = run_script(script).await;
     assert!(matches!(interp.get_var("count").await, Some(Value::Int(2))));
 }
+
+#[tokio::test]
+async fn test_book_get_sheet_by_index_negative() {
+    let script = r#"
+        dim book = book_from_dict({
+            "A": [["col"], [1]],
+            "B": [["col"], [2]]
+        })
+        dim last = book_get_sheet_by_index(book, -1)
+    "#;
+
+    let (interp, _) = run_script(script).await;
+    assert!(matches!(
+        interp.get_var("last").await,
+        Some(Value::Sheet(_))
+    ));
+}
+
+#[tokio::test]
+async fn test_book_get_sheet_by_index_out_of_bounds() {
+    let script = r#"
+        dim book = book_from_dict({
+            "A": [["col"], [1]]
+        })
+        dim s = book_get_sheet_by_index(book, 5)
+    "#;
+    let err = run_script_err(script).await;
+    assert!(err.contains("index"));
+}
+
+#[tokio::test]
+async fn test_book_add_sheet_invalid_data() {
+    let script = r#"
+        dim book = book_from_dict({})
+        book = book_add_sheet(book, "Bad", [1, 2, 3])
+    "#;
+    let err = run_script_err(script).await;
+    assert!(err.contains("Invalid sheet data"));
+}
+
+#[tokio::test]
+async fn test_book_from_dict_invalid_value() {
+    let script = r#"
+        dim book = book_from_dict({
+            "Bad": 123
+        })
+    "#;
+    let err = run_script_err(script).await;
+    assert!(err.contains("Invalid sheet data"));
+}

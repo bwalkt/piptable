@@ -108,3 +108,33 @@ async fn test_type_error_add_string_int() {
         err
     );
 }
+
+#[tokio::test]
+async fn test_math_builtin_errors() {
+    let err = run_script_err(r#"dim x = abs("nope")"#).await;
+    assert!(err.contains("abs() expects number"));
+
+    let err = run_script_err("dim x = abs(1, 2)").await;
+    assert!(err.contains("abs() takes exactly 1 argument"));
+}
+
+#[tokio::test]
+async fn test_string_builtin_errors() {
+    let err = run_script_err(r#"dim x = int("nope")"#).await;
+    assert!(err.contains("Cannot convert"));
+
+    let err = run_script_err(r#"dim x = float("nope")"#).await;
+    assert!(err.contains("Cannot convert"));
+
+    let err = run_script_err("dim x = str(1, 2)").await;
+    assert!(err.contains("str() takes exactly 1 argument"));
+}
+
+#[tokio::test]
+async fn test_core_builtin_errors() {
+    let err = run_script_err("dim x = keys(1)").await;
+    assert!(err.contains("keys() expects object"));
+
+    let err = run_script_err("dim x = values(1)").await;
+    assert!(err.contains("values() expects object"));
+}
