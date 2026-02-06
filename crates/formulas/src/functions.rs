@@ -5,6 +5,26 @@ use piptable_primitives::{ErrorValue, Value};
 use piptable_utils::datetime::datetime_to_excel_date;
 use piptable_utils::math as shared_math;
 
+/// Convert an optional local `DateTime<Local>` into an Excel serial date `Value`.
+///
+/// If `local_dt` is `Some(dt)`, the datetime is converted to UTC and then to an Excel
+/// serial date (returned as `Value::Float`). If `local_dt` is `None`, returns
+/// `Value::Error(ErrorValue::Value)`.
+///
+/// # Examples
+///
+/// ```
+/// // None yields a Value error
+/// let v = local_to_excel(None);
+/// assert_eq!(v, Value::Error(ErrorValue::Value));
+///
+/// // A present datetime yields a float serial date
+/// let v2 = local_to_excel(Some(chrono::Local::now()));
+/// match v2 {
+///     Value::Float(_) => {},
+///     other => panic!("expected Float, got {:?}", other),
+/// }
+/// ```
 fn local_to_excel(local_dt: Option<chrono::DateTime<Local>>) -> Value {
     match local_dt {
         Some(dt) => Value::Float(datetime_to_excel_date(dt.with_timezone(&Utc))),
@@ -312,17 +332,45 @@ fn coerce_to_text(value: &Value) -> Result<String, ErrorValue> {
     }
 }
 
-/// Sum function - adds all numeric values
+/// Compute the sum of numeric values in the given slice.
+///
+/// # Examples
+///
+/// ```
+/// use piptable_primitives::Value;
+/// let s = crate::sum(&[Value::Int(1), Value::Int(2)]);
+/// assert_eq!(s, Value::Int(3));
+/// ```
 pub fn sum(values: &[Value]) -> Value {
     shared_math::sum(values)
 }
 
-/// Average function - calculates mean of numeric values
+/// Computes the arithmetic mean of the provided values.
+///
+/// The function evaluates numeric entries (including those inside arrays), returns the average as `Value::Float`, and propagates the first `Value::Error` encountered or an error when no numeric values are present.
+///
+/// # Examples
+///
+/// ```
+/// let vals = [Value::Int(1), Value::Int(2), Value::Int(3)];
+/// let result = average(&vals);
+/// assert_eq!(result, Value::Float(2.0));
+/// ```
 pub fn average(values: &[Value]) -> Value {
     shared_math::average(values)
 }
 
-/// Count function - counts non-empty cells
+/// Counts non-empty cells in the given values.
+///
+/// Returns `Value::Int` containing the number of non-empty cells found. Arrays are traversed recursively.
+///
+/// # Examples
+///
+/// ```
+/// use piptable_primitives::Value;
+/// let v = vec![Value::Int(1), Value::Empty, Value::String("x".into())];
+/// assert_eq!(count(&v), Value::Int(2));
+/// ```
 pub fn count(values: &[Value]) -> Value {
     shared_math::count(values)
 }
@@ -1022,12 +1070,46 @@ mod tests {
     }
 }
 
-/// Max function - finds maximum value
+/// Finds the maximum numeric value in a collection of spreadsheet `Value`s.
+///
+/// The function searches the provided values (recursing into arrays) and returns the largest numeric `Value`. If an `ErrorValue` is encountered it is propagated as the result.
+///
+/// # Examples
+///
+/// ```
+/// use piptable_primitives::Value;
+/// let v = max(&[Value::Int(1), Value::Int(3), Value::Int(2)]);
+/// assert_eq!(v, Value::Int(3));
+/// ```
 pub fn max(values: &[Value]) -> Value {
     shared_math::max(values)
 }
 
-/// Min function - finds minimum value  
+/// Returns the smallest value among the provided spreadsheet `Value` inputs.
+
+///
+
+/// If any argument is an error `Value`, that error is returned. If no numeric values are present, an appropriate error `Value` is returned.
+
+///
+
+/// # Examples
+
+///
+
+/// ```
+
+/// use piptable_primitives::Value;
+
+/// use your_crate::min;
+
+///
+
+/// let v = min(&[Value::Int(3), Value::Int(1), Value::Int(2)]);
+
+/// assert_eq!(v, Value::Int(1));
+
+/// ```
 pub fn min(values: &[Value]) -> Value {
     shared_math::min(values)
 }
@@ -1638,7 +1720,17 @@ pub fn not_implemented(_: &[Value]) -> Value {
     Value::Error(ErrorValue::NA)
 }
 
-/// ABS function - returns absolute value
+/// Compute the absolute value for a numeric input or an array of numeric inputs.
+///
+/// Returns a `Value` containing the absolute numeric result, or an error `Value` if any input cannot be coerced to a valid number. For arrays, numeric elements are processed recursively and the first encountered error is propagated.
+///
+/// # Examples
+///
+/// ```
+/// use crate::Value;
+/// let v = abs(&[Value::Int(-3)]);
+/// assert_eq!(v, Value::Int(3));
+/// ```
 pub fn abs(values: &[Value]) -> Value {
     shared_math::abs(values)
 }
