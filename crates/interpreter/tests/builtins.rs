@@ -270,3 +270,252 @@ dim v = values(obj)"#,
         _ => panic!("Expected array"),
     }
 }
+
+#[tokio::test]
+async fn test_sum_array() {
+    let (interp, _) = run_script("dim x = sum([1, 2, 3, 4])").await;
+    assert!(matches!(
+        interp.get_var("x").await,
+        Some(Value::Float(f)) if (f - 10.0).abs() < 1e-9
+    ));
+}
+
+#[tokio::test]
+async fn test_sum_mixed_types_in_array() {
+    let (interp, _) = run_script(r#"dim x = sum([1, 2.5, "text", 3])"#).await;
+    assert!(matches!(
+        interp.get_var("x").await,
+        Some(Value::Float(f)) if (f - 6.5).abs() < 1e-9
+    ));
+}
+
+#[tokio::test]
+async fn test_sum_empty_array() {
+    let (interp, _) = run_script("dim x = sum([])").await;
+    assert!(matches!(
+        interp.get_var("x").await,
+        Some(Value::Float(f)) if f.abs() < 1e-9
+    ));
+}
+
+#[tokio::test]
+async fn test_sum_nested_arrays() {
+    let (interp, _) = run_script("dim x = sum([[1, 2], [3, 4]])").await;
+    assert!(matches!(
+        interp.get_var("x").await,
+        Some(Value::Float(f)) if (f - 10.0).abs() < 1e-9
+    ));
+}
+
+#[tokio::test]
+async fn test_avg_basic() {
+    let (interp, _) = run_script("dim x = avg([10, 20, 30, 40])").await;
+    assert!(matches!(
+        interp.get_var("x").await,
+        Some(Value::Float(f)) if (f - 25.0).abs() < 1e-9
+    ));
+}
+
+#[tokio::test]
+async fn test_avg_single_value() {
+    let (interp, _) = run_script("dim x = avg([42])").await;
+    assert!(matches!(
+        interp.get_var("x").await,
+        Some(Value::Float(f)) if (f - 42.0).abs() < 1e-9
+    ));
+}
+
+#[tokio::test]
+async fn test_avg_alias() {
+    let (interp, _) = run_script("dim x = average([10, 20, 30])").await;
+    assert!(matches!(
+        interp.get_var("x").await,
+        Some(Value::Float(f)) if (f - 20.0).abs() < 1e-9
+    ));
+}
+
+#[tokio::test]
+async fn test_min_array() {
+    let (interp, _) = run_script("dim x = min([5, 2, 8, 1, 9])").await;
+    assert!(matches!(
+        interp.get_var("x").await,
+        Some(Value::Float(f)) if (f - 1.0).abs() < 1e-9
+    ));
+}
+
+#[tokio::test]
+async fn test_min_negative_numbers() {
+    let (interp, _) = run_script("dim x = min([-5, -10, -3])").await;
+    assert!(matches!(
+        interp.get_var("x").await,
+        Some(Value::Float(f)) if (f - (-10.0)).abs() < 1e-9
+    ));
+}
+
+#[tokio::test]
+async fn test_min_single_value() {
+    let (interp, _) = run_script("dim x = min([42])").await;
+    assert!(matches!(
+        interp.get_var("x").await,
+        Some(Value::Float(f)) if (f - 42.0).abs() < 1e-9
+    ));
+}
+
+#[tokio::test]
+async fn test_max_array() {
+    let (interp, _) = run_script("dim x = max([5, 2, 8, 1, 9])").await;
+    assert!(matches!(
+        interp.get_var("x").await,
+        Some(Value::Float(f)) if (f - 9.0).abs() < 1e-9
+    ));
+}
+
+#[tokio::test]
+async fn test_max_negative_numbers() {
+    let (interp, _) = run_script("dim x = max([-5, -10, -3])").await;
+    assert!(matches!(
+        interp.get_var("x").await,
+        Some(Value::Float(f)) if (f - (-3.0)).abs() < 1e-9
+    ));
+}
+
+#[tokio::test]
+async fn test_max_single_value() {
+    let (interp, _) = run_script("dim x = max([42])").await;
+    assert!(matches!(
+        interp.get_var("x").await,
+        Some(Value::Float(f)) if (f - 42.0).abs() < 1e-9
+    ));
+}
+
+#[tokio::test]
+async fn test_abs_float() {
+    let (interp, _) = run_script("dim x = abs(-3.14)").await;
+    assert!(matches!(
+        interp.get_var("x").await,
+        Some(Value::Float(f)) if (f - 3.14).abs() < 1e-9
+    ));
+}
+
+#[tokio::test]
+async fn test_abs_zero() {
+    let (interp, _) = run_script("dim x = abs(0)").await;
+    assert!(matches!(
+        interp.get_var("x").await,
+        Some(Value::Int(0))
+    ));
+}
+
+#[tokio::test]
+async fn test_min_with_multiple_args() {
+    let (interp, _) = run_script("dim x = min(10, 5, 20, 3)").await;
+    assert!(matches!(
+        interp.get_var("x").await,
+        Some(Value::Float(f)) if (f - 3.0).abs() < 1e-9
+    ));
+}
+
+#[tokio::test]
+async fn test_max_with_multiple_args() {
+    let (interp, _) = run_script("dim x = max(10, 5, 20, 3)").await;
+    assert!(matches!(
+        interp.get_var("x").await,
+        Some(Value::Float(f)) if (f - 20.0).abs() < 1e-9
+    ));
+}
+
+#[tokio::test]
+async fn test_sum_with_floats() {
+    let (interp, _) = run_script("dim x = sum([1.5, 2.5, 3.0])").await;
+    assert!(matches!(
+        interp.get_var("x").await,
+        Some(Value::Float(f)) if (f - 7.0).abs() < 1e-9
+    ));
+}
+
+#[tokio::test]
+async fn test_avg_with_mixed_types() {
+    let (interp, _) = run_script(r#"dim x = avg([10, 20, "text", 30])"#).await;
+    assert!(matches!(
+        interp.get_var("x").await,
+        Some(Value::Float(f)) if (f - 20.0).abs() < 1e-9
+    ));
+}
+
+#[tokio::test]
+async fn test_min_with_zero() {
+    let (interp, _) = run_script("dim x = min([0, 5, -5])").await;
+    assert!(matches!(
+        interp.get_var("x").await,
+        Some(Value::Float(f)) if (f - (-5.0)).abs() < 1e-9
+    ));
+}
+
+#[tokio::test]
+async fn test_max_with_zero() {
+    let (interp, _) = run_script("dim x = max([0, -5, -10])").await;
+    assert!(matches!(
+        interp.get_var("x").await,
+        Some(Value::Float(f)) if f.abs() < 1e-9
+    ));
+}
+
+#[tokio::test]
+async fn test_sum_with_nested_and_mixed() {
+    let (interp, _) = run_script(r#"dim x = sum([1, [2, 3], "text", 4])"#).await;
+    assert!(matches!(
+        interp.get_var("x").await,
+        Some(Value::Float(f)) if (f - 10.0).abs() < 1e-9
+    ));
+}
+
+#[tokio::test]
+async fn test_abs_with_positive_int() {
+    let (interp, _) = run_script("dim x = abs(5)").await;
+    assert!(matches!(interp.get_var("x").await, Some(Value::Int(5))));
+}
+
+#[tokio::test]
+async fn test_avg_with_floats_and_ints() {
+    let (interp, _) = run_script("dim x = avg([1, 2.0, 3, 4.0])").await;
+    assert!(matches!(
+        interp.get_var("x").await,
+        Some(Value::Float(f)) if (f - 2.5).abs() < 1e-9
+    ));
+}
+
+#[tokio::test]
+async fn test_min_float_precision() {
+    let (interp, _) = run_script("dim x = min([1.1, 1.2, 1.05])").await;
+    assert!(matches!(
+        interp.get_var("x").await,
+        Some(Value::Float(f)) if (f - 1.05).abs() < 1e-9
+    ));
+}
+
+#[tokio::test]
+async fn test_max_float_precision() {
+    let (interp, _) = run_script("dim x = max([1.1, 1.2, 1.25])").await;
+    assert!(matches!(
+        interp.get_var("x").await,
+        Some(Value::Float(f)) if (f - 1.25).abs() < 1e-9
+    ));
+}
+
+#[tokio::test]
+async fn test_sum_large_array() {
+    let (interp, _) = run_script("dim x = sum([1, 2, 3, 4, 5, 6, 7, 8, 9, 10])").await;
+    assert!(matches!(
+        interp.get_var("x").await,
+        Some(Value::Float(f)) if (f - 55.0).abs() < 1e-9
+    ));
+}
+
+#[tokio::test]
+async fn test_avg_large_array() {
+    let (interp, _) = run_script("dim x = avg([1, 2, 3, 4, 5, 6, 7, 8, 9, 10])").await;
+    assert!(matches!(
+        interp.get_var("x").await,
+        Some(Value::Float(f)) if (f - 5.5).abs() < 1e-9
+    ));
+}
